@@ -372,6 +372,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-set-role="canEditBoard ? handleSetRole : null"
 					:on-set-wip="canEditBoard ? handleSetWip : null"
 					:on-set-color="canEditBoard ? handleSetColor : null"
+					:on-set-description="canEditBoard ? handleSetDescription : null"
 					:on-card-focus="(cardId) => { focusedCardId = cardId }"
 					:on-card-hover="(cardId) => { hoveredCardId = cardId }"
 					:selection-mode="bulk.selectionMode.value"
@@ -2363,6 +2364,12 @@ async function handleSetWip(stackId, wipLimit) {
 
 async function handleSetColor(stackId, color) {
 	await updateStack.mutateAsync({ stackId, data: { color } })
+}
+
+// Column description (#10474). '' is sent as-is — the server trims it and
+// treats an empty value as "no description", which is how the field is cleared.
+async function handleSetDescription(stackId, description) {
+	await updateStack.mutateAsync({ stackId, data: { description } })
 }
 
 // ── Multi-select / bulk actions ───────────────────────────────────────────────

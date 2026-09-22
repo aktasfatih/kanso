@@ -20,6 +20,19 @@ async function openColumnMenu(page) {
 	return dialog
 }
 
+/**
+ * Submit the WIP-limit field. The menu holds MORE THAN ONE submittable field
+ * (the column description arrived in #10474), and every one of them renders a
+ * control whose accessible name is "Submit" — so the button is looked up inside
+ * the WIP field's own <form>, not anywhere in the menu.
+ */
+async function submitWipField(page, dialog) {
+	const wipForm = dialog.locator('form', {
+		has: page.getByRole('spinbutton', { name: /wip limit/i }),
+	})
+	await wipForm.getByRole('button', { name: /^submit$/i }).click()
+}
+
 test.describe('Column controls (role + WIP limit)', () => {
 	const state = { boardId: 0, boardUrl: '' }
 
@@ -74,8 +87,8 @@ test.describe('Column controls (role + WIP limit)', () => {
 		const wipInput = dialog.getByRole('spinbutton', { name: /wip limit/i })
 		await expect(wipInput).toBeVisible({ timeout: 6_000 })
 		await wipInput.fill('3')
-		// Submit via the NcActionInput's submit button inside the dialog
-		await dialog.getByRole('button', { name: /^submit$/i }).click()
+		// Submit via the NcActionInput's own submit button
+		await submitWipField(page, dialog)
 
 		// Close menu if still open
 		await page.keyboard.press('Escape')
@@ -101,7 +114,7 @@ test.describe('Column controls (role + WIP limit)', () => {
 		const wipInput = dialog.getByRole('spinbutton', { name: /wip limit/i })
 		await expect(wipInput).toBeVisible({ timeout: 6_000 })
 		await wipInput.fill('0')
-		await dialog.getByRole('button', { name: /^submit$/i }).click()
+		await submitWipField(page, dialog)
 
 		await page.keyboard.press('Escape')
 

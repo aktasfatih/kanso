@@ -468,6 +468,18 @@ class ImportService {
 			$stack->setRole((int)($row['role'] ?? Stack::ROLE_NONE));
 			$stack->setWipLimit(isset($row['wipLimit']) && $row['wipLimit'] !== null ? (int)$row['wipLimit'] : null);
 			$stack->setColor($this->nullableStr($row, 'color'));
+			// Same normalisation rule as a write (blank → null), then the cap: the
+			// column description rides EVERY board payload, so an untrusted
+			// document does not get to make that payload arbitrarily large. A
+			// document is truncated rather than rejected - one over-long blurb
+			// must not fail a whole board's import.
+			$description = StackService::normalizeDescription($this->nullableStr($row, 'description'));
+			if ($description !== null && mb_strlen($description) > StackService::MAX_DESCRIPTION_LENGTH) {
+				$description = StackService::normalizeDescription(
+					mb_substr($description, 0, StackService::MAX_DESCRIPTION_LENGTH)
+				);
+			}
+			$stack->setDescription($description);
 			$stack->setDeletedAt(0);
 			$new = $this->stackMapper->insert($stack);
 			if (isset($row['id'])) {

@@ -26,7 +26,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		     Deliberately NOT forwarded:
 		     - onRenameStack / onDeleteStack / onRestoreStack / onSetRole /
-		       onSetWip / onSetColor — stack-level edits. A stack is one board
+		       onSetWip / onSetColor / onSetDescription — stack-level edits. A stack is one board
 		       column rendered once per lane, so these would appear N times for a
 		       single column and edit shared state from a lane-local affordance.
 		       Column structure is edited on the flat board. (Stack drag is

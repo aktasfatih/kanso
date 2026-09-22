@@ -110,7 +110,7 @@ test.describe('Board export / import', () => {
 			title: b.title,
 			color: b.color,
 			estimateScale: b.estimateScale,
-			stacks: b.stacks.map((s) => ({ title: s.title, role: s.role, wipLimit: s.wipLimit })).sort((a, z) => a.title.localeCompare(z.title)),
+			stacks: b.stacks.map((s) => ({ title: s.title, role: s.role, wipLimit: s.wipLimit, description: s.description })).sort((a, z) => a.title.localeCompare(z.title)),
 			labels: b.labels.map((l) => ({ title: l.title, color: l.color })).sort((a, z) => a.title.localeCompare(z.title)),
 			cards: cards.sort(bySortThenTitle),
 		}
@@ -122,6 +122,9 @@ test.describe('Board export / import', () => {
 
 		const todo = await kanso('POST', '/stacks', { boardId: srcBoardId, title: 'To do' })
 		const done = await kanso('POST', '/stacks', { boardId: srcBoardId, title: 'Done' })
+		// A column description (#10474) rides the document like every other stack
+		// field, so the normalized comparison below covers its round trip.
+		await kanso('PATCH', `/stacks/${todo.id}`, { description: 'Only cards with a reproducer.' })
 
 		const label = await kanso('POST', '/labels', { boardId: srcBoardId, title: 'Priority', color: 'e11d48' })
 
@@ -165,6 +168,9 @@ test.describe('Board export / import', () => {
 		expect(alpha.checklist.length).toBe(2)
 		expect(alpha.comments.length).toBe(1)
 		expect(alpha.labelIds.length).toBe(1)
+		// …and so did the COLUMN description (#10474).
+		expect(original.board.stacks.find((s) => s.title === 'To do').description)
+			.toBe('Only cards with a reproducer.')
 
 		// #10060: the attachments ride along — manifested on the card AND present
 		// in the archive at exactly the path the manifest advertises.
@@ -200,6 +206,9 @@ test.describe('Board export / import', () => {
 		// Re-export the imported board and compare the normalized shapes.
 		const reexport = (await exportArchive(importedBoardId, AUTH)).doc
 		expect(normalize(reexport)).toEqual(normalize(original))
+		// Explicitly: the imported copy's column kept its description.
+		expect(reexport.board.stacks.find((s) => s.title === 'To do').description)
+			.toBe('Only cards with a reproducer.')
 
 		// Fresh ids everywhere (the imported board owns brand-new stacks/cards).
 		const srcCardIds = new Set(original.board.cards.map((c) => c.id))

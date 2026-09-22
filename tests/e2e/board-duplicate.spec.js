@@ -16,6 +16,9 @@ test.describe('Duplicate board (#3543)', () => {
 		state.boardId = board.id
 		const todo = await api.send('POST', '/stacks', { boardId: board.id, title: 'To do' })
 		await api.send('POST', '/stacks', { boardId: board.id, title: 'Done' })
+		// A column description (#10474) is board structure, so a duplicate must
+		// carry it even in the structural-only clone below.
+		await api.send('PATCH', `/stacks/${todo.id}`, { description: 'Only cards with a reproducer.' })
 		await api.send('POST', '/labels', { boardId: board.id, title: 'Priority', color: 'e11d48' })
 		await api.send('POST', '/cards', { stackId: todo.id, title: 'Alpha' })
 		await api.send('POST', '/cards', { stackId: todo.id, title: 'Beta' })
@@ -67,6 +70,8 @@ test.describe('Duplicate board (#3543)', () => {
 		expect(copy.board.stacks.map((s) => s.title).sort()).toEqual(['Done', 'To do'])
 		expect(copy.board.labels.map((l) => l.title)).toEqual(['Priority'])
 		expect(copy.board.cards.map((c) => c.title).sort()).toEqual(['Alpha', 'Beta'])
+		expect(copy.board.stacks.find((s) => s.title === 'To do').description)
+			.toBe('Only cards with a reproducer.')
 
 		// Fresh board id (owned by the caller), distinct from the source.
 		expect(copy.board.title).not.toBe(title)
@@ -84,6 +89,9 @@ test.describe('Duplicate board (#3543)', () => {
 			const doc = (await exportArchive(res.boardId)).doc
 			expect(doc.board.cards).toHaveLength(0)
 			expect(doc.board.stacks).toHaveLength(2)
+			// Structure includes the column description (#10474).
+			expect(doc.board.stacks.find((s) => s.title === 'To do').description)
+				.toBe('Only cards with a reproducer.')
 		} finally {
 			await api.send('DELETE', `/boards/${res.boardId}`).catch(() => {})
 		}

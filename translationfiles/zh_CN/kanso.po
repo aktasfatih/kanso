@@ -273,7 +273,7 @@ msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] "%n 张卡片"
 
-#: src/components/StackColumn.vue:983
+#: src/components/StackColumn.vue:1053
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] ""
@@ -619,12 +619,12 @@ msgstr "已通过"
 msgid "Archive"
 msgstr "归档"
 
-#: src/components/StackColumn.vue:196
+#: src/components/StackColumn.vue:218
 msgid "Archive %n card"
 msgid_plural "Archive %n cards"
 msgstr[0] ""
 
-#: src/components/StackColumn.vue:195
+#: src/components/StackColumn.vue:217
 msgid "Archive %n visible card"
 msgid_plural "Archive %n visible cards"
 msgstr[0] ""
@@ -1406,6 +1406,10 @@ msgstr "列自动化"
 #: src/components/StackColumn.vue
 msgid "Column deleted"
 msgstr "列已删除"
+
+#: src/components/StackColumn.vue
+msgid "Column description"
+msgstr ""
 
 #: src/components/StackColumn.vue
 msgid "Column name"
@@ -4855,12 +4859,12 @@ msgstr "密钥（请立即复制，只显示一次）"
 msgid "Select"
 msgstr "下拉选择"
 
-#: src/components/StackColumn.vue:184
+#: src/components/StackColumn.vue:206
 msgid "Select %n card"
 msgid_plural "Select %n cards"
 msgstr[0] ""
 
-#: src/components/StackColumn.vue:183
+#: src/components/StackColumn.vue:205
 msgid "Select %n visible card"
 msgid_plural "Select %n visible cards"
 msgstr[0] ""
@@ -5687,6 +5691,10 @@ msgstr "周"
 #: src/components/CardDetail.vue
 msgid "Weekly"
 msgstr "每周"
+
+#: src/components/StackColumn.vue
+msgid "What belongs in this column?"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "What changes are needed? (posted as a comment)"

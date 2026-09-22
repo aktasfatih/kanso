@@ -116,6 +116,7 @@ class ExportServiceTest extends TestCase {
 		$stack->setRole(Stack::ROLE_IN_PROGRESS);
 		$stack->setWipLimit(3);
 		$stack->setColor('ff0000');
+		$stack->setDescription('Work actively being pushed forward.');
 		$this->stackMapper->method('findByBoard')->with(7)->willReturn([$stack]);
 
 		$label = new Label();
@@ -246,7 +247,19 @@ class ExportServiceTest extends TestCase {
 		self::assertTrue($board['newCardsOnTop']);
 
 		self::assertCount(1, $board['stacks']);
-		self::assertSame(['id' => 11, 'title' => 'Doing', 'sortKey' => 'm', 'archived' => false, 'role' => Stack::ROLE_IN_PROGRESS, 'wipLimit' => 3, 'color' => 'ff0000'], $board['stacks'][0]);
+		self::assertSame(
+			[
+				'id' => 11,
+				'title' => 'Doing',
+				'sortKey' => 'm',
+				'archived' => false,
+				'role' => Stack::ROLE_IN_PROGRESS,
+				'wipLimit' => 3,
+				'color' => 'ff0000',
+				'description' => 'Work actively being pushed forward.',
+			],
+			$board['stacks'][0]
+		);
 
 		self::assertSame([['id' => 21, 'title' => 'Bug', 'color' => 'e11']], $board['labels']);
 		self::assertSame([['id' => 31, 'title' => 'QA', 'color' => '00f']], $board['reviewTypes']);

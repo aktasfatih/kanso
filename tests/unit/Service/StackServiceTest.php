@@ -255,6 +255,107 @@ class StackServiceTest extends TestCase {
 		$this->service->update(5, null, null, null, -2, 'alice');
 	}
 
+	// ── column description (#10474) ───────────────────────────────────────────
+
+	public function testUpdateSetsAndClearsDescription(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::exactly(2))
+			->method('recordChange')
+			->with(1, Change::ENTITY_STACK, 5, Change::ACTION_UPDATE, 'alice')
+			->willReturn(new Change());
+
+		// Positional: id, title, archived, role, wipLimit, uid, color, description.
+		$set = $this->service->update(5, null, null, null, null, 'alice', null, '  Only cards with a reproducer.  ');
+		// Trimmed, stored verbatim otherwise - plain text, never markdown.
+		self::assertSame('Only cards with a reproducer.', $set->getDescription());
+		// And it rides the JSON payload, which is what the board endpoint (and
+		// therefore the client and the MCP) actually reads.
+		self::assertSame('Only cards with a reproducer.', $set->jsonSerialize()['description']);
+
+		$cleared = $this->service->update(5, null, null, null, null, 'alice', null, '');
+		self::assertNull($cleared->getDescription());
+		self::assertNull($cleared->jsonSerialize()['description']);
+	}
+
+	public function testUpdateLeavesDescriptionAloneWhenOmitted(): void {
+		$stack = $this->stack();
+		$stack->setDescription('Waiting on the customer.');
+		$this->stackMapper->method('find')->with(5)->willReturn($stack);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$updated = $this->service->update(5, 'Renamed', null, null, null, 'alice');
+		self::assertSame('Waiting on the customer.', $updated->getDescription());
+	}
+
+	public function testUpdateRejectsOverLongDescription(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(
+			5,
+			null,
+			null,
+			null,
+			null,
+			'alice',
+			null,
+			str_repeat('x', StackService::MAX_DESCRIPTION_LENGTH + 1)
+		);
+	}
+
+	public function testUpdateAcceptsDescriptionExactlyAtTheCap(): void {
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$atCap = str_repeat('x', StackService::MAX_DESCRIPTION_LENGTH);
+		$updated = $this->service->update(5, null, null, null, null, 'alice', null, $atCap);
+		self::assertSame($atCap, $updated->getDescription());
+	}
+
+	/**
+	 * A member without EDIT cannot annotate a column: the description is a board
+	 * mutation like any other stack field, and the assert runs BEFORE the field
+	 * is applied, so nothing is written and no change row is appended.
+	 */
+	public function testUpdateDeniesDescriptionToANonEditor(): void {
+		$board = $this->board();
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'mallory', PermissionService::PERMISSION_EDIT)
+			->willThrowException(new NotPermittedException());
+		$this->stackMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(5, null, null, null, null, 'mallory', null, 'Mine now');
+	}
+
+	/**
+	 * And an EXTERNAL member holding EDIT is denied too (#3744): a description
+	 * says what the column is FOR, which is board structure, not card work.
+	 */
+	public function testUpdateDeniesDescriptionToAnExternalEditor(): void {
+		$this->viewerRole = ViewerContext::ROLE_EXTERNAL;
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stackMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(5, null, null, null, null, 'bob', null, 'External note');
+	}
+
 	public function testUpdateAssertsEditPermission(): void {
 		$board = $this->board();
 		$this->stackMapper->method('find')->with(5)->willReturn($this->stack());

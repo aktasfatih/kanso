@@ -281,7 +281,7 @@ msgstr[0] "%n karta"
 msgstr[1] "%n karty"
 msgstr[2] "%n kart"
 
-#: src/components/StackColumn.vue:983
+#: src/components/StackColumn.vue:1053
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] ""
@@ -665,14 +665,14 @@ msgstr "Zatwierdzone"
 msgid "Archive"
 msgstr "Zarchiwizuj"
 
-#: src/components/StackColumn.vue:196
+#: src/components/StackColumn.vue:218
 msgid "Archive %n card"
 msgid_plural "Archive %n cards"
 msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: src/components/StackColumn.vue:195
+#: src/components/StackColumn.vue:217
 msgid "Archive %n visible card"
 msgid_plural "Archive %n visible cards"
 msgstr[0] ""
@@ -1458,6 +1458,10 @@ msgstr "Automatyzacje kolumn"
 #: src/components/StackColumn.vue
 msgid "Column deleted"
 msgstr "Kolumna usunięta"
+
+#: src/components/StackColumn.vue
+msgid "Column description"
+msgstr ""
 
 #: src/components/StackColumn.vue
 msgid "Column name"
@@ -4921,14 +4925,14 @@ msgstr "Sekret (skopiuj go teraz, jest pokazywany tylko raz)"
 msgid "Select"
 msgstr "Lista wyboru"
 
-#: src/components/StackColumn.vue:184
+#: src/components/StackColumn.vue:206
 msgid "Select %n card"
 msgid_plural "Select %n cards"
 msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: src/components/StackColumn.vue:183
+#: src/components/StackColumn.vue:205
 msgid "Select %n visible card"
 msgid_plural "Select %n visible cards"
 msgstr[0] ""
@@ -5761,6 +5765,10 @@ msgstr "Tydzień"
 #: src/components/CardDetail.vue
 msgid "Weekly"
 msgstr "Co tydzień"
+
+#: src/components/StackColumn.vue
+msgid "What belongs in this column?"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "What changes are needed? (posted as a comment)"
