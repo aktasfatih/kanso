@@ -313,6 +313,12 @@ msgid_plural "%n days ago"
 msgstr[0] "il y a %n jour"
 msgstr[1] "il y a %n jours"
 
+#: src/components/BoardAttachmentsModal.vue:14
+msgid "%n file"
+msgid_plural "%n files"
+msgstr[0] ""
+msgstr[1] ""
+
 #: src/components/CardDetail.vue:4442
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
@@ -777,6 +783,10 @@ msgstr "Ajout de la pièce jointe…"
 msgid "Attachments"
 msgstr "Pièces jointes"
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Attachments on this board"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Auto-archive"
 msgstr "Archivage automatique"
@@ -904,6 +914,11 @@ msgstr "Actions du tableau"
 #: src/views/BoardView.vue
 msgid "Board analytics"
 msgstr "Statistiques du tableau"
+
+#: src/components/BoardAttachmentsModal.vue
+#: src/views/BoardView.vue
+msgid "Board attachments"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Board background"
@@ -2073,7 +2088,12 @@ msgid "Down vs previous period"
 msgstr "En baisse par rapport à la période précédente"
 
 #: src/admin-backup.js
+#: src/components/BoardAttachmentsModal.vue
 msgid "Download"
+msgstr ""
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "Download {file}"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -2599,6 +2619,10 @@ msgstr "Échec du chargement des tâches. Veuillez réessayer."
 msgid "Failed to load templates."
 msgstr "Échec du chargement des modèles."
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Failed to load the board's attachments."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the calendar feed config."
 msgstr "Échec du chargement de la configuration du flux de calendrier."
@@ -2944,6 +2968,10 @@ msgstr "Type de champ"
 #: src/App.vue
 msgid "File an issue"
 msgstr "Signaler un problème"
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "Files attached to any card on this board are listed here."
+msgstr ""
 
 #: src/components/BoardFilterBar.vue
 msgid "Filter"
@@ -3791,6 +3819,10 @@ msgstr "Aucune carte archivée"
 msgid "No archived cards match “{query}”."
 msgstr "Aucune carte archivée ne correspond à « {query} »."
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "No attachments yet"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "No auto-archive rules yet."
 msgstr "Aucune règle d'archivage automatique pour l'instant."
@@ -4167,6 +4199,10 @@ msgstr "Ouvrir Kanso"
 #: src/views/BoardView.vue
 msgid "Open project chat in a new tab"
 msgstr "Ouvrir la discussion du projet dans un nouvel onglet"
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "Open the card this file is attached to"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Open the recurring card"
@@ -5030,6 +5066,10 @@ msgstr "Afficher les observateurs"
 msgid "Showing the {count} most recent tasks you completed in the last {days} days."
 msgstr "Affichage des {count} tâches les plus récentes que vous avez terminées ces {days} derniers jours."
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Showing the {shown} most recent of {total} files."
+msgstr ""
+
 #: src/views/ViewPage.vue
 msgid "Showing the first {shown} of {total} matching cards — refine your filter to see the rest."
 msgstr "Affichage des {shown} premières cartes sur {total} correspondantes — affinez votre filtre pour voir les autres."
@@ -5575,6 +5615,7 @@ msgstr "Jusqu'au"
 msgid "Until date"
 msgstr "Jusqu'à une date"
 
+#: src/components/BoardAttachmentsModal.vue
 #: src/components/ManageTemplatesModal.vue
 msgid "Untitled"
 msgstr "Sans titre"

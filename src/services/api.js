@@ -442,6 +442,14 @@ export const deleteCardAttachment = (cardId, attachmentId) =>
 export const cardAttachmentUrl = (cardId, attachmentId) =>
 	url(`/api/cards/${cardId}/attachments/${attachmentId}`)
 
+// Every attachment on a BOARD the viewer may see (#10670) - the board-wide
+// "All attachments" listing. Metadata only, hard-capped server-side: answers
+// {items, total, capped}, each item carrying the owning card's id and title.
+// Downloads still go through cardAttachmentUrl() above - there is no separate
+// board-scoped byte path.
+export const fetchBoardAttachments = (boardId) =>
+	axios.get(url(`/api/boards/${boardId}/attachments`)).then((r) => r.data)
+
 // INLINE image URL (#3525). Server serves Content-Disposition: inline ONLY for
 // the raster-image allow-list (png/jpeg/gif/webp), everything else 404s. Used
 // as the src of an embedded pasted image; the markdown sanitiser only permits

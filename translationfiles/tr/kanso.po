@@ -313,6 +313,12 @@ msgid_plural "%n days ago"
 msgstr[0] "%n gün önce"
 msgstr[1] "%n gün önce"
 
+#: src/components/BoardAttachmentsModal.vue:14
+msgid "%n file"
+msgid_plural "%n files"
+msgstr[0] ""
+msgstr[1] ""
+
 #: src/components/CardDetail.vue:4442
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
@@ -777,6 +783,10 @@ msgstr "İliştiriliyor…"
 msgid "Attachments"
 msgstr "Ekler"
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Attachments on this board"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Auto-archive"
 msgstr "Otomatik arşivleme"
@@ -904,6 +914,11 @@ msgstr "Pano işlemleri"
 #: src/views/BoardView.vue
 msgid "Board analytics"
 msgstr "Pano analitiği"
+
+#: src/components/BoardAttachmentsModal.vue
+#: src/views/BoardView.vue
+msgid "Board attachments"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Board background"
@@ -2073,7 +2088,12 @@ msgid "Down vs previous period"
 msgstr "Önceki döneme göre düşüş"
 
 #: src/admin-backup.js
+#: src/components/BoardAttachmentsModal.vue
 msgid "Download"
+msgstr ""
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "Download {file}"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -2599,6 +2619,10 @@ msgstr "Görevler yüklenemedi. Lütfen tekrar dene."
 msgid "Failed to load templates."
 msgstr "Şablonlar yüklenemedi."
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Failed to load the board's attachments."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the calendar feed config."
 msgstr "Takvim akışı yapılandırması yüklenemedi."
@@ -2944,6 +2968,10 @@ msgstr "Alan türü"
 #: src/App.vue
 msgid "File an issue"
 msgstr "Sorun bildir"
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "Files attached to any card on this board are listed here."
+msgstr ""
 
 #: src/components/BoardFilterBar.vue
 msgid "Filter"
@@ -3791,6 +3819,10 @@ msgstr "Arşivlenmiş kart yok"
 msgid "No archived cards match “{query}”."
 msgstr "“{query}” ile eşleşen arşivlenmiş kart yok."
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "No attachments yet"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "No auto-archive rules yet."
 msgstr "Henüz otomatik arşivleme kuralı yok."
@@ -4167,6 +4199,10 @@ msgstr "Kanso'yu aç"
 #: src/views/BoardView.vue
 msgid "Open project chat in a new tab"
 msgstr "Proje sohbetini yeni sekmede aç"
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "Open the card this file is attached to"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Open the recurring card"
@@ -5030,6 +5066,10 @@ msgstr "İzleyicileri göster"
 msgid "Showing the {count} most recent tasks you completed in the last {days} days."
 msgstr "Son {days} günde tamamlanan en son {count} görev gösteriliyor."
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Showing the {shown} most recent of {total} files."
+msgstr ""
+
 #: src/views/ViewPage.vue
 msgid "Showing the first {shown} of {total} matching cards — refine your filter to see the rest."
 msgstr "Eşleşen {total} karttan ilk {shown} tanesi gösteriliyor — kalanını görmek için filtreni daralt."
@@ -5575,6 +5615,7 @@ msgstr "Şu tarihe kadar"
 msgid "Until date"
 msgstr "Belirli bir tarihe kadar"
 
+#: src/components/BoardAttachmentsModal.vue
 #: src/components/ManageTemplatesModal.vue
 msgid "Untitled"
 msgstr "Adsız"

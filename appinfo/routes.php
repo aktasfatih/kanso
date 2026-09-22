@@ -297,6 +297,12 @@ return [
 		// can be embedded in a description/comment without opening an XSS/SSRF hole.
 		['name' => 'cardAttachment#inline', 'url' => '/api/cards/{cardId}/attachments/{attachmentId}/inline', 'verb' => 'GET'],
 		['name' => 'cardAttachment#destroy', 'url' => '/api/cards/{cardId}/attachments/{attachmentId}', 'verb' => 'DELETE'],
+		// Board-wide attachment listing (#10670) - the "All attachments" view.
+		// Board-READ gated and card-visibility scoped inside the query, served by
+		// the denormalized board_id index; hard-capped, answers {items, total,
+		// capped}. Read-only: uploads, downloads and deletes stay on the
+		// card-scoped routes above, so there is only ever one byte path.
+		['name' => 'cardAttachment#board', 'url' => '/api/boards/{boardId}/attachments', 'verb' => 'GET'],
 
 		// Manual time tracking on a card (#3536): list (READ), add a manual entry
 		// (EDIT) and delete an entry (EDIT). Seconds + optional note; the per-card

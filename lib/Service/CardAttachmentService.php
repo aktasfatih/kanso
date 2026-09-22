@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -88,6 +89,16 @@ class CardAttachmentService {
 	 */
 	private const MAX_DETAIL_LENGTH = 10000;
 
+	/**
+	 * Hard cap on ONE page of the board-wide attachment listing (#10670).
+	 *
+	 * The board payload deliberately carries card SUMMARIES only, and this
+	 * listing must not become the back door that undoes that: a board with
+	 * thousands of files answers a bounded page and reports `capped`, rather
+	 * than serializing every row it owns into one response.
+	 */
+	public const BOARD_PAGE_LIMIT = 200;
+
 	public function __construct(
 		private CardAttachmentMapper $attachmentMapper,
 		private CardMapper $cardMapper,
@@ -101,7 +112,52 @@ class CardAttachmentService {
 		private ChangeDetailMapper $changeDetailMapper,
 		private IConfig $config,
 		private LoggerInterface $logger,
+		private BoardAccess $boardAccess,
 	) {
+	}
+
+	/**
+	 * Every attachment on the BOARD the viewer may see (metadata + the owning
+	 * card's title), newest first. Requires READ on the board.
+	 *
+	 * Two gates, both needed:
+	 *  - board READ ({@see PermissionService::assertPermission()}) - a non-member
+	 *    is refused before any attachment row is read;
+	 *  - the card-visibility rule, applied IN THE QUERY through the
+	 *    {@see \OCA\Kanso\Access\ViewerContext} resolved here, so a member still
+	 *    never sees the files of a card that is hidden from them.
+	 *
+	 * The viewer is resolved with the SAME resolver every other board-scoped read
+	 * uses ({@see BoardAccess::contextFor()}) - this endpoint adds no guard of its
+	 * own, so it cannot drift from the rule.
+	 *
+	 * Cost is independent of how many cards the board has: one indexed page query
+	 * plus one count, never a per-card lookup.
+	 *
+	 * @param int $limit requested page size; clamped to [1, {@see self::BOARD_PAGE_LIMIT}]
+	 * @param int $offset rows to skip (negatives read as 0)
+	 * @return array{items: list<array{attachment: CardAttachment, cardTitle: string}>, total: int, capped: bool}
+	 * @throws DoesNotExistException if the board does not exist or is deleted
+	 * @throws NotPermittedException if the actor may not read the board
+	 */
+	public function listForBoard(int $boardId, string $actorUid, int $limit = self::BOARD_PAGE_LIMIT, int $offset = 0): array {
+		$board = $this->loadBoard($boardId);
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$viewer = $this->boardAccess->contextFor($board, $actorUid);
+
+		$limit = max(1, min($limit, self::BOARD_PAGE_LIMIT));
+		$offset = max(0, $offset);
+
+		$items = $this->attachmentMapper->findByBoard($boardId, $viewer, $limit, $offset);
+		$total = $this->attachmentMapper->countByBoard($boardId, $viewer);
+
+		return [
+			'items' => $items,
+			'total' => $total,
+			// True when this page does not reach the end of what the viewer may
+			// see - the UI says so instead of silently showing a truncated list.
+			'capped' => ($offset + count($items)) < $total,
+		];
 	}
 
 	/**

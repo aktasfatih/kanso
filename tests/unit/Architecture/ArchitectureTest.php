@@ -32,9 +32,18 @@ class ArchitectureTest extends TestCase {
 	 * #3743) entries migrate out; a NEW file addressing the table - i.e. a
 	 * raw card query bypassing CardMapper + the visibility scope - fails the
 	 * scan. Migrations are exempt (schema DDL, not queries).
+	 *
+	 * The ONE deliberate addition since it was frozen is
+	 * Db/CardAttachmentMapper.php (#10670): the board-wide attachment listing
+	 * joins `kanso_cards` for exactly the reason this rule exists - to drop
+	 * trashed cards and to run CardVisibilityScope::applyForViewer() over the
+	 * joined card, the same shape as the sibling per-card mappers already on
+	 * this list. It is a scoped site, not a bypass; anything that lands here
+	 * WITHOUT the scope is still the failure this test is for.
 	 */
 	private const KANSO_CARDS_QUERY_ALLOWLIST = [
 		'Db/CardAssigneeMapper.php',
+		'Db/CardAttachmentMapper.php',
 		'Db/CardContactMapper.php',
 		'Db/CardLabelMapper.php',
 		'Db/CardLinkMapper.php',
