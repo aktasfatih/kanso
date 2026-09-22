@@ -833,21 +833,44 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<CloseIcon :size="12" />
 						</button>
 					</span>
-					<div v-if="unassignedParticipants.length > 0" class="card-modal__attr">
+					<!-- The assign control, built like the label picker below it: one
+					     pill that is ALWAYS present, and a popover listing every
+					     participant with the assigned ones ticked, toggled in place.
+					     It used to be a one-shot chooser that closed on the first pick
+					     and, worse, disappeared entirely once no unassigned candidate
+					     was left (`v-if="unassignedParticipants.length"`). On a board
+					     nobody else is a member of - the common personal board, one
+					     participant - assigning yourself removed the only assignee
+					     control on the card, which read as "one assignee is the
+					     maximum" and was the actual multi-assign dead-end (#10603).
+					     Staying open also makes adding a 2nd and 3rd person one click
+					     each instead of reopening the picker every time. -->
+					<div class="card-modal__attr">
 						<button
 							class="card-modal__pill card-modal__pill--dashed"
+							data-pill="assign"
 							:aria-expanded="openPicker === 'assign'"
 							@click="togglePicker('assign')">
 							<AccountPlusIcon :size="14" />
-							{{ t('kanso', 'Assign') }}
+							{{ cardAssigneeIds.length > 0 ? t('kanso', 'Add assignee') : t('kanso', 'Assign') }}
 						</button>
 						<div v-if="openPicker === 'assign'" class="card-modal__popover">
+							<!-- Only once the participants query has actually answered - while
+							     it is still in flight an empty list is "not loaded yet", not
+							     "nobody has access". -->
+							<div
+								v-if="assignCandidates.length === 0 && !participants.isPending.value"
+								class="card-modal__popover-empty">
+								{{ t('kanso', 'Nobody has access to this board yet.') }}
+							</div>
 							<button
-								v-for="p in unassignedParticipants"
+								v-for="p in assignCandidates"
 								:key="p.uid"
 								class="card-modal__assign-option"
+								:class="{ 'card-modal__assign-option--active': p.assigned }"
+								:aria-pressed="p.assigned"
 								:disabled="toggleAssignee.isPending.value"
-								@click="handleToggleAssignee(p.uid, true)">
+								@click="handleToggleAssignee(p.uid, !p.assigned)">
 								<NcAvatar
 									:user="p.uid"
 									:display-name="p.displayName"
@@ -855,7 +878,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:hide-status="true"
 									:disable-tooltip="true" />
 								<span :title="p.displayName">{{ p.displayName }}</span>
+								<CheckIcon v-if="p.assigned" :size="16" class="card-modal__assign-check" />
 							</button>
+							<!-- Everyone in the list is already on the card: say so, rather
+							     than leaving an empty-looking list that reads as a cap. It
+							     speaks about the LIST, not about the board: the participants
+							     payload is capped server-side (ParticipantService), so
+							     "everyone with access" would be a claim this cannot make. -->
+							<div
+								v-if="assignCandidates.length > 0 && unassignedParticipants.length === 0"
+								class="card-modal__popover-empty">
+								{{ t('kanso', 'Everyone shown here is already assigned to this card.') }}
+							</div>
 						</div>
 					</div>
 					<span v-if="assigneeError" class="card-modal__save-error">{{ assigneeError }}</span>
@@ -2481,6 +2515,7 @@ import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutli
 import CrosshairsGpsIcon from 'vue-material-design-icons/CrosshairsGps.vue'
 import AccountBoxIcon from 'vue-material-design-icons/AccountBox.vue'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
+import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CommentMultipleOutlineIcon from 'vue-material-design-icons/CommentMultipleOutline.vue'
 import HistoryIcon from 'vue-material-design-icons/History.vue'
 import CommentOutlineIcon from 'vue-material-design-icons/CommentOutline.vue'
@@ -2966,9 +3001,26 @@ const unassignedParticipants = computed(() => {
 	return list.filter((p) => !assigned.has(p.uid))
 })
 
+/**
+ * Every participant, tagged with whether this card already has them. The
+ * picker renders ALL of them (assigned ones ticked and toggleable) rather
+ * than only the unassigned remainder, so the list can never run dry and take
+ * the control with it. The server's order (display name) is kept as-is on
+ * purpose: re-sorting the assigned ones to the top would move rows under the
+ * pointer between clicks, which is exactly when a second assignee is added.
+ */
+const assignCandidates = computed(() => {
+	const list = Array.isArray(participants.data.value) ? participants.data.value : []
+	const assigned = new Set(cardAssigneeIds.value)
+	return list.map((p) => ({ ...p, assigned: assigned.has(p.uid) }))
+})
+
+// NB: this deliberately leaves `openPicker` alone. The picker is a multi-select
+// (same as the label one), so it stays open across picks - closing it after the
+// first assignee is what made a second one feel unreachable (#10603). It closes
+// on Escape / a click outside, like every other attribute-bar popover.
 async function handleToggleAssignee(uid, assign) {
 	assigneeError.value = ''
-	openPicker.value = null
 	try {
 		await toggleAssignee.mutateAsync({
 			cardId: Number(props.cardId),
@@ -7349,6 +7401,16 @@ async function handleToggleProject(projectId) {
 .card-modal__assign-option:disabled {
 	opacity: 0.5;
 	cursor: default;
+}
+/* Already on the card. Marked like the label toggles above: the row stays in
+   the list (clicking it unassigns) instead of vanishing. */
+.card-modal__assign-option--active {
+	background: var(--color-background-dark);
+	font-weight: 600;
+}
+.card-modal__assign-check {
+	margin-left: auto;
+	color: var(--color-primary-element);
 }
 /* Contacts picker (#3530) */
 .card-modal__contact-search {

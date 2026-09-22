@@ -303,13 +303,13 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n riga di dati rilevata"
 msgstr[1] "%n righe di dati rilevate"
 
-#: src/components/CardDetail.vue:4392
+#: src/components/CardDetail.vue:4444
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n giorno fa"
 msgstr[1] "%n giorni fa"
 
-#: src/components/CardDetail.vue:4390
+#: src/components/CardDetail.vue:4442
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n ora fa"
@@ -333,7 +333,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4388
+#: src/components/CardDetail.vue:4440
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuto fa"
@@ -357,13 +357,13 @@ msgid_plural "%n points"
 msgstr[0] "%n punto"
 msgstr[1] "%n punti"
 
-#: src/components/CardDetail.vue:1030
+#: src/components/CardDetail.vue:1064
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n progetto"
 msgstr[1] "%n progetti"
 
-#: src/components/CardDetail.vue:2044
+#: src/components/CardDetail.vue:2078
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -465,6 +465,10 @@ msgstr "Aggiungi una sotto-scheda…"
 #: src/components/CardDetail.vue
 msgid "Add an item…"
 msgstr "Aggiungi un elemento…"
+
+#: src/components/CardDetail.vue
+msgid "Add assignee"
+msgstr ""
 
 #: src/views/ProjectView.vue
 msgid "Add card"
@@ -1767,7 +1771,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:2162
-#: src/components/CardDetail.vue:4581
+#: src/components/CardDetail.vue:4633
 msgid "day"
 msgid_plural "days"
 msgstr[0] "giorno"
@@ -2298,6 +2302,10 @@ msgstr[1] "Ogni %n anni"
 
 #: templates/admin-backup.php
 msgid "Everyone in the administrators group gets the message."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Everyone shown here is already assigned to this card."
 msgstr ""
 
 #: src/views/BoardView.vue
@@ -3192,7 +3200,7 @@ msgstr "Corsivo"
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6351
+#: src/components/CardDetail.vue:6403
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3508,7 +3516,7 @@ msgid "Mon"
 msgstr "Lun"
 
 #: src/components/BoardSettingsModal.vue:2164
-#: src/components/CardDetail.vue:4583
+#: src/components/CardDetail.vue:4635
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mese"
@@ -3962,6 +3970,10 @@ msgstr "Ancora nessuna discussione. Chi osserva questa scheda riceve una notific
 #: src/composables/useSwimlanes.js
 msgid "No type"
 msgstr "Senza tipo"
+
+#: src/components/CardDetail.vue
+msgid "Nobody has access to this board yet."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
@@ -4941,7 +4953,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr "Mostra il pannello della discussione"
 
-#: src/components/CardDetail.vue:6357
+#: src/components/CardDetail.vue:6409
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostra il pannello della discussione (%n commento)"
@@ -5644,7 +5656,7 @@ msgid "Wed"
 msgstr "Mer"
 
 #: src/components/BoardSettingsModal.vue:2163
-#: src/components/CardDetail.vue:4582
+#: src/components/CardDetail.vue:4634
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "settimana"
@@ -5733,7 +5745,7 @@ msgid "wrote"
 msgstr "ha scritto"
 
 #: src/components/BoardSettingsModal.vue:2165
-#: src/components/CardDetail.vue:4584
+#: src/components/CardDetail.vue:4636
 msgid "year"
 msgid_plural "years"
 msgstr[0] "anno"

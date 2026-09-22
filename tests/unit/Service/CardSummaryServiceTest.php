@@ -114,6 +114,29 @@ class CardSummaryServiceTest extends TestCase {
 	}
 
 	/**
+	 * A card with SEVERAL assignees serializes all of them, in mapper order
+	 * (#10603). The summary is what every board surface renders its avatar
+	 * stack from, so a truncation here - `[0]`, a slice, a scalar - would hide
+	 * the 2nd assignee everywhere at once while the card itself still had them.
+	 */
+	public function testSerializeCarriesEveryAssigneeOnACard(): void {
+		$card = new Card();
+		$card->setId(3);
+		$card->setBoardId(1);
+		$card->setStackId(2);
+		$card->setTitle('Shared task');
+
+		$this->cardAssigneeMapper->method('findUserIdsByBoard')
+			->with(1)
+			->willReturn([3 => ['bob', 'carol', 'dave']]);
+
+		$viewer = ViewerContext::forMember('alice', 1, ViewerContext::ROLE_INTERNAL, true);
+		$out = $this->service->serialize(1, [$card], $viewer);
+
+		self::assertSame(['bob', 'carol', 'dave'], $out[0]['assigneeIds']);
+	}
+
+	/**
 	 * The board-set path (#10298) must produce the SAME row shape as the
 	 * board-scoped one - the cross-board Views feed and the board payload are
 	 * required to be byte-identical per card, so a second assembler would be a
