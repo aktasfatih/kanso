@@ -18,10 +18,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
 	<!-- A <span> root, not a <div>: the list row and the timeline pane mount this
-	     inside inline containers. -->
+	     inside inline containers. role="group" is load-bearing, not decoration: a
+	     bare <span> maps to role="generic", and ARIA PROHIBITS aria-label on
+	     generic, so without the role the label below is computed away and the
+	     stack ships with no accessible name at all. Not role="img" - that would
+	     collapse the stack into one label and hide the individual assignee names. -->
 	<span
 		v-if="ids.length"
 		class="assignee-stack"
+		role="group"
 		:aria-label="t('kanso', 'Assignees')">
 		<NcAvatar
 			v-for="uid in visibleIds"
@@ -61,9 +66,18 @@ const visibleIds = computed(() => ids.value.slice(0, props.max))
 const overflowCount = computed(() => Math.max(0, ids.value.length - props.max))
 
 /* The badge is a plain span, so it has to be told the avatar's size - and the
- * label has to shrink with it or "+12" overflows a 20px circle. */
+ * label has to shrink with it or "+12" crowds a 20px circle.
+ *
+ * min-width, NOT width: the circle is sized in px (from `size`) while the label
+ * is sized in rem, so they do not scale together - raise the browser/OS font
+ * size for accessibility and a fixed-width circle spills its text sideways over
+ * the neighbouring avatar (which sits at margin-left: -6px). A min-width lets
+ * the badge grow into a pill instead of overflowing, while still rendering as a
+ * plain circle at the ordinary "+1".."+9" widths. The label stays in rem so it
+ * keeps honouring the user's font preference; pinning it to px would hide this
+ * overflow by ignoring that preference, which is the worse a11y trade. */
 const overflowStyle = computed(() => ({
-	width: `${props.size}px`,
+	minWidth: `${props.size}px`,
 	height: `${props.size}px`,
 	fontSize: props.size >= 24 ? '0.65rem' : '0.6rem',
 }))
@@ -95,8 +109,22 @@ const overflowStyle = computed(() => ({
 	align-items: center;
 	justify-content: center;
 	flex-shrink: 0;
-	aspect-ratio: 1;
-	border-radius: 50%;
+	/* No `aspect-ratio: 1` and no `border-radius: 50%`: both assume a fixed
+	 * square. The width is content-driven above a `min-width` of one avatar
+	 * diameter, so a 999px radius is what keeps it a circle at that minimum and
+	 * a stadium (never an ellipse) once a wide label pushes it out. box-sizing
+	 * is stated rather than inherited so the min-width IS the avatar diameter,
+	 * border and padding included, and the stack keeps its rhythm.
+	 *
+	 * 1px of side padding, measured in the app rather than guessed: at
+	 * Nextcloud's 15px root the widest label leaves ~1.8px of slack per side on
+	 * the smallest (compact, 20px) avatar, so 1px is the value that keeps every
+	 * default-font badge - "+9" everywhere, and "+12" at sizes 22 and 24 - a
+	 * plain circle, while still giving the label a gutter on the sizes where it
+	 * genuinely has to expand. */
+	box-sizing: border-box;
+	padding: 0 1px;
+	border-radius: 999px;
 	background: var(--color-background-dark);
 	border: 2px solid var(--color-main-background);
 	color: var(--color-text-maxcontrast);
