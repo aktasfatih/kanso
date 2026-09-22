@@ -10,12 +10,14 @@ import {
 	deleteAcl as apiDeleteAcl,
 } from '../services/api.js'
 import { boardQueryKey } from './useBoard.js'
+import { participantsQueryKey } from './queryKeys.js'
 
 /**
  * ACL mutations and a debounced sharee search helper for a given board.
  *
  * All mutations invalidate the board query on settled - same low-frequency,
- * server-authoritative pattern as useLabels.
+ * server-authoritative pattern as useLabels - AND the board's participant list,
+ * because who can be assigned a card is derived from exactly these rules.
  */
 export function useAcl(boardId) {
 	const queryClient = useQueryClient()
@@ -34,21 +36,45 @@ export function useAcl(boardId) {
 
 	// ── Mutations ──────────────────────────────────────────────────────────────
 
+	// Every ACL mutation settles through here. The board query is the obvious
+	// half; the participant list is the half that used to be missed. It is a
+	// SEPARATE cache entry (useAssignees owns it, with a deliberate 3-minute
+	// staleTime) and the sharing dialog was its only blind spot: nothing else in
+	// the app changes who has access, so nothing else could invalidate it. Sharing
+	// a board therefore left the sharer's own tab serving the pre-share list until
+	// a hard reload - in the assignee picker, in the BoardFilterBar assignee/owner
+	// facets and in the @-mention autocomplete, all three of which read this one
+	// key. Revokes had the mirror-image staleness.
+	//
+	// All three mutations invalidate it, not just the add: a revoke must drop the
+	// user from the picker, and a permission/role change settles the same way so
+	// the three stay symmetric (the payload is uid + displayName, so that one is a
+	// cheap no-op refetch on a rare admin action rather than a correctness fix).
+	//
+	// Not covered here, deliberately: the RECIPIENT's already-open tabs. The
+	// server does append a Change::ENTITY_ACL row (AclService::create), but
+	// useBoardDelta only consumes ENTITY_CARD rows, so a share still lands in
+	// their other tabs on the next full board read. That is its own change.
+	function invalidateAcl() {
+		queryClient.invalidateQueries({ queryKey: getBoardKey() })
+		queryClient.invalidateQueries({ queryKey: participantsQueryKey(rawBoardId()) })
+	}
+
 	const addAcl = useMutation({
 		mutationFn: (data) => apiCreateAcl(rawBoardId(), data),
-		onSettled: () => queryClient.invalidateQueries({ queryKey: getBoardKey() }),
+		onSettled: invalidateAcl,
 	})
 
 	const patchAcl = useMutation({
 		// role is optional; undefined is dropped from the JSON body and the
 		// server keeps the stored board side (internal/external) untouched.
 		mutationFn: ({ aclId, permission, role }) => apiUpdateAcl(rawBoardId(), aclId, permission, role),
-		onSettled: () => queryClient.invalidateQueries({ queryKey: getBoardKey() }),
+		onSettled: invalidateAcl,
 	})
 
 	const removeAcl = useMutation({
 		mutationFn: ({ aclId }) => apiDeleteAcl(rawBoardId(), aclId),
-		onSettled: () => queryClient.invalidateQueries({ queryKey: getBoardKey() }),
+		onSettled: invalidateAcl,
 	})
 
 	// ── Debounced sharee search ────────────────────────────────────────────────

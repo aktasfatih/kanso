@@ -9,7 +9,7 @@ import {
 	unassignUser as apiUnassignUser,
 } from '../services/api.js'
 import { boardQueryKey } from './useBoard.js'
-import { invalidateCrossBoardFeeds } from './queryKeys.js'
+import { invalidateCrossBoardFeeds, participantsQueryKey } from './queryKeys.js'
 
 /**
  * Resolve a boardId argument that may be a plain value, a Vue ref (.value),
@@ -48,13 +48,18 @@ export function useAssignees(boardId) {
 	}
 
 	// ── Participants query ──────────────────────────────────────────────────────
-	// staleTime: 3 minutes - participants list changes rarely.
+	// staleTime: 3 minutes - participants list changes rarely. That is a cache
+	// policy, not a freshness mechanism: the one action that DOES change the list
+	// is a share add/change/revoke, and useAcl invalidates participantsQueryKey on
+	// settle, so the picker repaints on the share itself rather than waiting out
+	// the window. Do not shorten this staleTime to chase freshness - that would
+	// only blur the symptom and cost a refetch every three minutes.
 	// Key/fetch/enabled are all reactive to boardId: on the full-page card route the
 	// board id is undefined at setup and only resolves once the card loads, so a
 	// non-reactive read would freeze this query on the unresolved value and never
 	// refetch (a broken assignee picker). Guarded so it doesn't fire until known.
 	const participants = useQuery({
-		queryKey: computed(() => ['participants', resolveBoardId(boardId)]),
+		queryKey: computed(() => participantsQueryKey(resolveBoardId(boardId))),
 		queryFn: () => apiFetchParticipants(resolveBoardId(boardId)),
 		enabled: computed(() => isUsableBoardId(resolveBoardId(boardId))),
 		staleTime: 3 * 60 * 1000,
