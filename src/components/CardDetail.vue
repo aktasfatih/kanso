@@ -871,13 +871,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								class="card-modal__popover-empty">
 								{{ t('kanso', 'Nobody has access to this board yet.') }}
 							</div>
+							<!-- A row carries `aria-busy` for its in-flight window, never
+							     `disabled` (#10705). Disabling the element that currently HAS
+							     focus is one of the few things the browser undoes for you: it
+							     blurs it, and focus falls back towards `<body>` - so a
+							     keyboard user had to tab all the way back into this popover
+							     after every single pick, once per person added. `aria-busy`
+							     says the same thing to assistive tech and leaves the row in
+							     the focus order; the double-submit `disabled` was covering is
+							     handled in handleToggleAssignee instead. -->
 							<button
 								v-for="p in assignCandidates"
 								:key="p.uid"
 								class="card-modal__assign-option"
 								:class="{ 'card-modal__assign-option--active': p.assigned }"
 								:aria-pressed="p.assigned"
-								:disabled="toggleAssignee.isPending.value"
+								:aria-busy="assigneeTogglePending === p.uid ? 'true' : undefined"
 								@click="handleToggleAssignee(p.uid, !p.assigned)">
 								<NcAvatar
 									:user="p.uid"
@@ -996,6 +1005,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<div v-if="boardLabels.length === 0" class="card-modal__popover-empty">
 								{{ t('kanso', 'No labels on this board yet.') }}
 							</div>
+							<!-- Same rule as the assign rows above (#10705): `aria-busy`,
+							     never `disabled`, so activating a label by keyboard does not
+							     blur the row the user is standing on. -->
 							<button
 								v-for="label in boardLabels"
 								:key="label.id"
@@ -1006,7 +1018,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								}"
 								:style="label.color ? { '--label-color': cssColor(label.color) } : {}"
 								:aria-pressed="cardLabelIds.has(label.id)"
-								:disabled="toggleLabel.isPending.value"
+								:aria-busy="labelTogglePending === label.id ? 'true' : undefined"
 								@click="handleToggleLabel(label)">
 								{{ label.title }}
 							</button>
@@ -2929,7 +2941,23 @@ const cardLabelIds = computed(() => {
 const { toggleLabel, createLabel } = useLabels(boardId)
 const labelToggleError = ref('')
 
+// The id of the label whose toggle is in flight, or null when idle (#10705).
+// Two jobs, both of which `:disabled` on the rows used to do — badly, because
+// disabling the focused row blurs it:
+//   1. it drives `aria-busy` on that one row, so the in-flight state is still
+//      announced without taking the row out of the focus order;
+//   2. it serialises the picker. Set SYNCHRONOUSLY on entry (before the first
+//      await), so a keyboard user leaning on Enter can't fire a second write
+//      into the window — a mutation's own `isPending` flips through the query
+//      client's batched notifier and is NOT guaranteed to be true by the time
+//      the next key event is handled. Serialising also keeps the optimistic
+//      rollback honest: onError restores a snapshot taken before ITS mutation,
+//      which a concurrent second toggle would have made stale.
+const labelTogglePending = ref(null)
+
 async function handleToggleLabel(label) {
+	if (labelTogglePending.value !== null) return
+	labelTogglePending.value = label.id
 	const assign = !cardLabelIds.value.has(label.id)
 	labelToggleError.value = ''
 	try {
@@ -2943,6 +2971,8 @@ async function handleToggleLabel(label) {
 			: t('kanso', 'Label {label} removed', { label: label.title }))
 	} catch (err) {
 		labelToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update label.')
+	} finally {
+		labelTogglePending.value = null
 	}
 }
 
@@ -3027,11 +3057,20 @@ const assignCandidates = computed(() => {
 	return list.map((p) => ({ ...p, assigned: assigned.has(p.uid) }))
 })
 
+// The uid whose toggle is in flight, or null when idle — the assignee twin of
+// labelTogglePending, and there for the same two reasons (#10705): it drives
+// `aria-busy` on the one row being written, and it serialises the picker in
+// place of the `disabled` that used to blur the focused row. Set before the
+// first await so a held-down Enter cannot slip a second write past it.
+const assigneeTogglePending = ref(null)
+
 // NB: this deliberately leaves `openPicker` alone. The picker is a multi-select
 // (same as the label one), so it stays open across picks - closing it after the
 // first assignee is what made a second one feel unreachable (#10603). It closes
 // on Escape / a click outside, like every other attribute-bar popover.
 async function handleToggleAssignee(uid, assign) {
+	if (assigneeTogglePending.value !== null) return
+	assigneeTogglePending.value = uid
 	assigneeError.value = ''
 	try {
 		await toggleAssignee.mutateAsync({
@@ -3045,6 +3084,8 @@ async function handleToggleAssignee(uid, assign) {
 			: t('kanso', '{user} unassigned', { user: who }))
 	} catch (err) {
 		assigneeError.value = err?.response?.data?.error || t('kanso', 'Failed to update assignee.')
+	} finally {
+		assigneeTogglePending.value = null
 	}
 }
 
@@ -7413,6 +7454,13 @@ async function handleToggleProject(projectId) {
 .card-modal__assign-option:disabled {
 	opacity: 0.5;
 	cursor: default;
+}
+/* Write in flight (#10705). The row keeps focus and stays in the tab order -
+   only `aria-busy` marks it - so this is the whole visual cue that the pick
+   has not been confirmed yet, matching the checklist rows' pending look. */
+.card-modal__assign-option[aria-busy='true'],
+.card-modal__label-toggle[aria-busy='true'] {
+	opacity: 0.65;
 }
 /* Already on the card. Marked like the label toggles above: the row stays in
    the list (clicking it unassigns) instead of vanishing. */
