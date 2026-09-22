@@ -69,6 +69,10 @@ test.describe('Kanso admin backup settings', () => {
 		'#kanso-backup-account-hint',
 		'#kanso-backup-notify-hint',
 		'#kanso-backup-stored-hint',
+		// What deleting a stored backup costs, and what an orphaned row means
+		// (#10675) — held to the same cap as everything else on this page.
+		'#kanso-backup-delete-hint',
+		'#kanso-backup-orphan-hint',
 	]
 
 	// Fields and copy that only mean something when the archives go into Files.
@@ -78,6 +82,10 @@ test.describe('Kanso admin backup settings', () => {
 		'#kanso-backup-path',
 		'#kanso-backup-destination-hint-files',
 	]
+	// NOT in the list above, deliberately: #kanso-backup-delete-hint-files and
+	// its app-data twin follow the SAVED destination the listing reports, not the
+	// dropdown — they sit beside a button that acts on what is persisted, right
+	// now. Everything else here is forward-looking copy about the next run.
 
 	const gotoPanel = async (page) => {
 		await ncLogin(page, ADMIN)

@@ -7,6 +7,13 @@
 // and lists the stored backups with a download link — which is the ONLY way to
 // reach them when the destination is Kanso's app data. Everything talks to the
 // admin-gated /api/admin/backup endpoints.
+//
+// The list also DELETES. Retention only prunes boards that still exist during a
+// run that happens, so a deleted board's archives — full exports carrying every
+// private card and attachment — are never cleaned up again, and under app data
+// there is no other way to reach the files at all. Hence a per-row delete, and
+// hence the confirm below names the file and says it is the only copy: there is
+// nowhere to un-delete it from.
 
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
@@ -51,6 +58,8 @@ function boot() {
 	const filesConfig = document.getElementById('kanso-backup-files-config')
 	const appdataHint = document.getElementById('kanso-backup-destination-hint-appdata')
 	const filesHint = document.getElementById('kanso-backup-destination-hint-files')
+	const deleteHintAppData = document.getElementById('kanso-backup-delete-hint-appdata')
+	const deleteHintFiles = document.getElementById('kanso-backup-delete-hint-files')
 	const path = document.getElementById('kanso-backup-path')
 	const account = document.getElementById('kanso-backup-account')
 	const retention = document.getElementById('kanso-backup-retention')
@@ -98,6 +107,27 @@ function boot() {
 		toggle(filesConfig, false)
 	}
 
+	// The delete hint follows the SAVED destination, not the dropdown — which is
+	// why it is not part of applyDestination() above. Those hints describe what
+	// the next RUN will do, so tracking the unsaved selection is right for them.
+	// This one sits next to a button that acts NOW, against whatever is
+	// persisted: picking "In a Files folder" without saving and being told the
+	// file goes to a trashbin, while Delete hard-deletes from app data, is
+	// exactly the wrong way round. The listing endpoint returns the authoritative
+	// destination, so that is what drives it.
+	const applyDeleteHint = (destinationOfRecord) => {
+		if (!destinationOfRecord) {
+			return
+		}
+		const appdata = destinationOfRecord === DEST_APPDATA
+		if (deleteHintAppData) {
+			deleteHintAppData.style.display = appdata ? '' : 'none'
+		}
+		if (deleteHintFiles) {
+			deleteHintFiles.style.display = appdata ? 'none' : ''
+		}
+	}
+
 	const applyLastRun = (config) => {
 		if (!config || !lastRun) {
 			return
@@ -127,7 +157,22 @@ function boot() {
 				return td
 			}
 			row.appendChild(cell(file.name))
-			row.appendChild(cell(file.boardId ? '#' + file.boardId : '—'))
+
+			// The board column doubles as the orphan marker: these rows were
+			// always listed, but nothing said which of them belong to a board
+			// that is gone — and those are exactly the ones retention will never
+			// touch again.
+			const board = cell(file.boardId ? '#' + file.boardId : '—')
+			if (file.orphaned) {
+				row.dataset.orphaned = '1'
+				const badge = document.createElement('span')
+				badge.className = 'kanso-backup-orphan'
+				badge.textContent = ' ' + t('kanso', '(orphaned)')
+				badge.title = t('kanso', 'The board this backup came from no longer exists.')
+				board.appendChild(badge)
+			}
+			row.appendChild(board)
+
 			row.appendChild(cell(formatSize(file.size)))
 			row.appendChild(cell(formatTime(file.mtime)))
 
@@ -140,6 +185,14 @@ function boot() {
 			// must stream rather than be assembled in the browser.
 			link.setAttribute('download', file.name)
 			actions.appendChild(link)
+
+			const remove = document.createElement('button')
+			remove.type = 'button'
+			remove.className = 'kanso-backup-delete'
+			remove.textContent = t('kanso', 'Delete')
+			remove.addEventListener('click', () => deleteFile(file.name, remove))
+			actions.appendChild(remove)
+
 			row.appendChild(actions)
 
 			fileRows.appendChild(row)
@@ -181,8 +234,40 @@ function boot() {
 		try {
 			const { data } = await axios.get(url('/api/admin/backup/files'))
 			renderFiles((data && data.files) || [])
+			applyDeleteHint(data && data.destination)
 		} catch (e) {
 			showFilesError()
+		}
+	}
+
+	// Removing an archive is not undoable from here — under app data it is a
+	// hard delete, and under a Files folder it lands in the backup account's
+	// trashbin rather than anywhere this panel can reach. So the confirm names
+	// the exact file and says what it costs, instead of asking "Are you sure?".
+	// What it does NOT say is "the only copy of that board": retention defaults
+	// to 7, so a board usually has several archives sitting in this very table,
+	// and an admin reading an overstatement next to six sibling rows stops
+	// believing the rest of the panel.
+	//
+	// The list is reloaded from the server either way rather than having the row
+	// spliced out (or left in place) locally: a failure raised after the file was
+	// already unlinked would otherwise leave a phantom row, and the server is the
+	// authority on what is stored.
+	const deleteFile = async (name, button) => {
+		const question = t('kanso', 'Delete {name}? This file is removed for good — Kanso keeps no second copy of it.', { name })
+		if (!window.confirm(question)) {
+			return
+		}
+		button.disabled = true
+		try {
+			await axios.delete(url('/api/admin/backup/files'), { params: { name } })
+			await loadFiles()
+			showSuccess(t('kanso', 'Backup deleted'))
+		} catch (e) {
+			showError(t('kanso', 'Could not delete the backup'))
+			// Whatever the server actually has, rather than what this panel
+			// assumes it has: the delete may have got as far as the unlink.
+			await loadFiles()
 		}
 	}
 

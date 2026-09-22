@@ -32,6 +32,10 @@ msgstr ""
 msgid "(empty)"
 msgstr ""
 
+#: src/admin-backup.js
+msgid "(orphaned)"
+msgstr ""
+
 #: lib/Notification/Notifier.php
 msgid "{actor} assigned you a step on {card}"
 msgstr ""
@@ -829,6 +833,10 @@ msgid "Backup completed"
 msgstr ""
 
 #: src/admin-backup.js
+msgid "Backup deleted"
+msgstr ""
+
+#: src/admin-backup.js
 msgid "Backup failed"
 msgstr ""
 
@@ -838,6 +846,10 @@ msgstr ""
 
 #: src/admin-backup.js
 msgid "Backups are disabled"
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Backups in the other location stay where they are; switch back to see them."
 msgstr ""
 
 #: templates/admin-backup.php
@@ -1536,6 +1548,10 @@ msgstr ""
 msgid "Could not copy to clipboard."
 msgstr ""
 
+#: src/admin-backup.js
+msgid "Could not delete the backup"
+msgstr ""
+
 #: src/composables/useBoardActions.js
 msgid "Could not delete the board."
 msgstr ""
@@ -1793,6 +1809,7 @@ msgid "Default (no filter)"
 msgstr ""
 
 #: src/App.vue
+#: src/admin-backup.js
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 #: src/components/ManageTemplatesModal.vue
@@ -1813,6 +1830,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Delete \"{title}\"?"
+msgstr ""
+
+#: src/admin-backup.js
+msgid "Delete {name}? This file is removed for good — Kanso keeps no second copy of it."
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -1912,6 +1933,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "deleted this card"
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Deleting a backup removes that file for good; Kanso keeps no second copy of it."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -3094,6 +3119,10 @@ msgstr ""
 msgid "https://cloud.example.com/call/abc123"
 msgstr ""
 
+#: templates/admin-backup.php
+msgid "If the board was only just deleted, its backup may be the only way to get it back."
+msgstr ""
+
 #: src/views/PublicBoard.vue
 msgid "Image"
 msgstr ""
@@ -3190,6 +3219,10 @@ msgstr ""
 msgid "Issue intake"
 msgstr ""
 
+#: templates/admin-backup.php
+msgid "It is not in anyone's Files, so there is nowhere to undo it from."
+msgstr ""
+
 #: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
 msgid "Italic"
@@ -3258,6 +3291,10 @@ msgstr ""
 
 #: templates/admin-backup.php
 msgid "Kanso keeps the files itself. Nothing goes into anyone's Files folder."
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Kanso never clears those on its own."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -4163,6 +4200,10 @@ msgstr ""
 
 #: src/components/MarkdownEditor.vue
 msgid "Ordered list"
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Orphaned means the board a backup came from no longer exists."
 msgstr ""
 
 #: src/components/BoardTimelineView.vue
@@ -5215,6 +5256,10 @@ msgstr ""
 msgid "The backups then live in that account's Files."
 msgstr ""
 
+#: src/admin-backup.js
+msgid "The board this backup came from no longer exists."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "The chat link must be a http:// or https:// URL."
 msgstr ""
@@ -5225,6 +5270,10 @@ msgstr ""
 
 #: src/views/BoardList.vue
 msgid "The Deck app is not installed on this server, so there is nothing to import."
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "The file goes to that account's trashbin and keeps using space until that is emptied."
 msgstr ""
 
 #: templates/admin-backup.php

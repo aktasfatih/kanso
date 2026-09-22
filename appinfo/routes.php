@@ -72,6 +72,11 @@ return [
 		// controller - see its docblock.
 		['name' => 'backupAdmin#files', 'url' => '/api/admin/backup/files', 'verb' => 'GET'],
 		['name' => 'backupAdmin#download', 'url' => '/api/admin/backup/download', 'verb' => 'GET'],
+		// Removing ONE stored backup. The filename travels as a query parameter
+		// rather than a path segment, exactly like the download it mirrors: it is
+		// allow-listed by BackupService::isBackupName() before it reaches storage,
+		// so it never addresses a path. Same admin gate as everything else here.
+		['name' => 'backupAdmin#delete', 'url' => '/api/admin/backup/files', 'verb' => 'DELETE'],
 
 		['name' => 'board#index', 'url' => '/api/boards', 'verb' => 'GET'],
 		['name' => 'board#create', 'url' => '/api/boards', 'verb' => 'POST'],

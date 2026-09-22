@@ -74,7 +74,21 @@ class FilesBackupTarget implements BackupTarget {
 		if (!$this->folder->nodeExists($name)) {
 			return;
 		}
-		$this->folder->get($name)->delete();
+		$node = $this->folder->get($name);
+		if (!$node instanceof File) {
+			// A NON-FILE wearing a backup filename. This used to be unreachable -
+			// the only caller was the retention sweep, which harvests its names
+			// from listFiles(), and that skips everything that is not a File. The
+			// admin delete (#10675) hands this method a client-supplied name
+			// instead, so a DIRECTORY called `kanso-board-7-20260804-153000.zip`
+			// in the configured folder would otherwise be deleted recursively,
+			// with everything inside it, while listFiles() kept it off the panel
+			// so nobody could see what was destroyed. Kanso only removes files it
+			// would itself have written; anything else is left exactly alone.
+			// (write() and read() carry the same guard.)
+			throw new NotFoundException('Backup ' . $name . ' is not a file');
+		}
+		$node->delete();
 	}
 
 	#[\Override]

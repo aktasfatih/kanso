@@ -33,6 +33,10 @@ msgstr "\"overwrite.cli.url\" is niet ingesteld in config.php – links in herin
 msgid "(empty)"
 msgstr "(leeg)"
 
+#: src/admin-backup.js
+msgid "(orphaned)"
+msgstr ""
+
 #: lib/Notification/Notifier.php
 msgid "{actor} assigned you a step on {card}"
 msgstr "{actor} heeft je een stap toegewezen op {card}"
@@ -830,6 +834,10 @@ msgid "Backup completed"
 msgstr "Back-up voltooid"
 
 #: src/admin-backup.js
+msgid "Backup deleted"
+msgstr ""
+
+#: src/admin-backup.js
 msgid "Backup failed"
 msgstr "Back-up mislukt"
 
@@ -840,6 +848,10 @@ msgstr "Back-upinstellingen opgeslagen"
 #: src/admin-backup.js
 msgid "Backups are disabled"
 msgstr "Back-ups zijn uitgeschakeld"
+
+#: templates/admin-backup.php
+msgid "Backups in the other location stay where they are; switch back to see them."
+msgstr ""
 
 #: templates/admin-backup.php
 msgid "Backups to keep per board"
@@ -1537,6 +1549,10 @@ msgstr "Kan niet naar het klembord kopiëren"
 msgid "Could not copy to clipboard."
 msgstr "Kan niet naar het klembord kopiëren."
 
+#: src/admin-backup.js
+msgid "Could not delete the backup"
+msgstr ""
+
 #: src/composables/useBoardActions.js
 msgid "Could not delete the board."
 msgstr "Kan het bord niet verwijderen."
@@ -1794,6 +1810,7 @@ msgid "Default (no filter)"
 msgstr "Standaard (geen filter)"
 
 #: src/App.vue
+#: src/admin-backup.js
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 #: src/components/ManageTemplatesModal.vue
@@ -1815,6 +1832,10 @@ msgstr "\"{title}\" en alle kaarten erin voor iedereen verwijderen? Dit kan niet
 #: src/components/BoardSettingsModal.vue
 msgid "Delete \"{title}\"?"
 msgstr "\"{title}\" verwijderen?"
+
+#: src/admin-backup.js
+msgid "Delete {name}? This file is removed for good — Kanso keeps no second copy of it."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Delete and stop recurrence"
@@ -1914,6 +1935,10 @@ msgstr "Verwijderde kaarten"
 #: src/components/CardDetail.vue
 msgid "deleted this card"
 msgstr "heeft deze kaart verwijderd"
+
+#: templates/admin-backup.php
+msgid "Deleting a backup removes that file for good; Kanso keeps no second copy of it."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/BoardList.vue
@@ -3095,6 +3120,10 @@ msgstr "Uren"
 msgid "https://cloud.example.com/call/abc123"
 msgstr "https://cloud.example.com/call/abc123"
 
+#: templates/admin-backup.php
+msgid "If the board was only just deleted, its backup may be the only way to get it back."
+msgstr ""
+
 #: src/views/PublicBoard.vue
 msgid "Image"
 msgstr ""
@@ -3191,6 +3220,10 @@ msgstr "naar {column}"
 msgid "Issue intake"
 msgstr "Issue-opname"
 
+#: templates/admin-backup.php
+msgid "It is not in anyone's Files, so there is nowhere to undo it from."
+msgstr ""
+
 #: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
 msgid "Italic"
@@ -3259,6 +3292,10 @@ msgstr "Kanso-export (.zip)"
 
 #: templates/admin-backup.php
 msgid "Kanso keeps the files itself. Nothing goes into anyone's Files folder."
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Kanso never clears those on its own."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -4165,6 +4202,10 @@ msgstr "Oranje"
 #: src/components/MarkdownEditor.vue
 msgid "Ordered list"
 msgstr "Genummerde lijst"
+
+#: templates/admin-backup.php
+msgid "Orphaned means the board a backup came from no longer exists."
+msgstr ""
 
 #: src/components/BoardTimelineView.vue
 msgid "Outside the visible range — click Fit to show"
@@ -5216,6 +5257,10 @@ msgstr ""
 msgid "The backups then live in that account's Files."
 msgstr ""
 
+#: src/admin-backup.js
+msgid "The board this backup came from no longer exists."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "The chat link must be a http:// or https:// URL."
 msgstr "De chatlink moet een http:// of https:// URL zijn."
@@ -5227,6 +5272,10 @@ msgstr "De CSV heeft een koprij en minstens één gegevensrij nodig."
 #: src/views/BoardList.vue
 msgid "The Deck app is not installed on this server, so there is nothing to import."
 msgstr "De Deck-app is niet geïnstalleerd op deze server, dus er valt niets te importeren."
+
+#: templates/admin-backup.php
+msgid "The file goes to that account's trashbin and keeps using space until that is emptied."
+msgstr ""
 
 #: templates/admin-backup.php
 msgid "The files use that account's quota, and each write shows up in its activity."

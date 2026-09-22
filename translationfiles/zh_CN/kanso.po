@@ -32,6 +32,10 @@ msgstr "config.php 中未设置 “overwrite.cli.url” — 后台任务生成�
 msgid "(empty)"
 msgstr "（空）"
 
+#: src/admin-backup.js
+msgid "(orphaned)"
+msgstr ""
+
 #: lib/Notification/Notifier.php
 msgid "{actor} assigned you a step on {card}"
 msgstr "{actor} 在 {card} 上为你指派了一个步骤"
@@ -805,6 +809,10 @@ msgid "Backup completed"
 msgstr "备份已完成"
 
 #: src/admin-backup.js
+msgid "Backup deleted"
+msgstr ""
+
+#: src/admin-backup.js
 msgid "Backup failed"
 msgstr "备份失败"
 
@@ -815,6 +823,10 @@ msgstr "备份设置已保存"
 #: src/admin-backup.js
 msgid "Backups are disabled"
 msgstr "备份已禁用"
+
+#: templates/admin-backup.php
+msgid "Backups in the other location stay where they are; switch back to see them."
+msgstr ""
 
 #: templates/admin-backup.php
 msgid "Backups to keep per board"
@@ -1512,6 +1524,10 @@ msgstr "无法复制到剪贴板"
 msgid "Could not copy to clipboard."
 msgstr "无法复制到剪贴板。"
 
+#: src/admin-backup.js
+msgid "Could not delete the backup"
+msgstr ""
+
 #: src/composables/useBoardActions.js
 msgid "Could not delete the board."
 msgstr "无法删除该看板。"
@@ -1768,6 +1784,7 @@ msgid "Default (no filter)"
 msgstr "默认（不筛选）"
 
 #: src/App.vue
+#: src/admin-backup.js
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 #: src/components/ManageTemplatesModal.vue
@@ -1789,6 +1806,10 @@ msgstr "为所有人删除“{title}”及其全部卡片？此操作无法撤�
 #: src/components/BoardSettingsModal.vue
 msgid "Delete \"{title}\"?"
 msgstr "删除“{title}”？"
+
+#: src/admin-backup.js
+msgid "Delete {name}? This file is removed for good — Kanso keeps no second copy of it."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Delete and stop recurrence"
@@ -1888,6 +1909,10 @@ msgstr "已删除的卡片"
 #: src/components/CardDetail.vue
 msgid "deleted this card"
 msgstr "删除了这张卡片"
+
+#: templates/admin-backup.php
+msgid "Deleting a backup removes that file for good; Kanso keeps no second copy of it."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/BoardList.vue
@@ -3065,6 +3090,10 @@ msgstr "小时"
 msgid "https://cloud.example.com/call/abc123"
 msgstr "https://cloud.example.com/call/abc123"
 
+#: templates/admin-backup.php
+msgid "If the board was only just deleted, its backup may be the only way to get it back."
+msgstr ""
+
 #: src/views/PublicBoard.vue
 msgid "Image"
 msgstr ""
@@ -3161,6 +3190,10 @@ msgstr "到 {column}"
 msgid "Issue intake"
 msgstr "Issue 接入"
 
+#: templates/admin-backup.php
+msgid "It is not in anyone's Files, so there is nowhere to undo it from."
+msgstr ""
+
 #: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
 msgid "Italic"
@@ -3228,6 +3261,10 @@ msgstr "Kanso 导出文件（.zip）"
 
 #: templates/admin-backup.php
 msgid "Kanso keeps the files itself. Nothing goes into anyone's Files folder."
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Kanso never clears those on its own."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -4133,6 +4170,10 @@ msgstr "橙色"
 #: src/components/MarkdownEditor.vue
 msgid "Ordered list"
 msgstr "有序列表"
+
+#: templates/admin-backup.php
+msgid "Orphaned means the board a backup came from no longer exists."
+msgstr ""
 
 #: src/components/BoardTimelineView.vue
 msgid "Outside the visible range — click Fit to show"
@@ -5181,6 +5222,10 @@ msgstr ""
 msgid "The backups then live in that account's Files."
 msgstr ""
 
+#: src/admin-backup.js
+msgid "The board this backup came from no longer exists."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "The chat link must be a http:// or https:// URL."
 msgstr "聊天链接必须是 http:// 或 https:// 开头的 URL。"
@@ -5192,6 +5237,10 @@ msgstr "CSV 需要一行表头和至少一行数据。"
 #: src/views/BoardList.vue
 msgid "The Deck app is not installed on this server, so there is nothing to import."
 msgstr "此服务器上未安装 Deck 应用，因此没有可导入的内容。"
+
+#: templates/admin-backup.php
+msgid "The file goes to that account's trashbin and keeps using space until that is emptied."
+msgstr ""
 
 #: templates/admin-backup.php
 msgid "The files use that account's quota, and each write shows up in its activity."
