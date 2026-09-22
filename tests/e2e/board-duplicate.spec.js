@@ -44,7 +44,7 @@ test.describe('Duplicate board (#3543)', () => {
 		// The duplicate action lives in the General tab's board-actions block,
 		// next to Export.
 		const dupBtn = page.locator('[data-test="board-duplicate"]')
-		await expect(dupBtn).toBeVisible({ timeout: 8_000 })
+		await expect(dupBtn).toBeVisible()
 
 		// "Copy cards too" defaults on; assert and keep it on for this run.
 		const withCards = page.locator('[data-test="board-duplicate-with-cards"]')

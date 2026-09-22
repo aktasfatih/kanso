@@ -64,7 +64,7 @@ test.describe('Editing an API-authored recurrence rule (#10045)', () => {
 
 		const recurring = page.locator('#bs-automation-recurring')
 		const item = recurring.locator('.automation__rule-item').filter({ hasText: 'Send the invoice' })
-		await expect(item).toBeVisible({ timeout: 8_000 })
+		await expect(item).toBeVisible()
 		await item.getByRole('button', { name: /^Edit$/ }).click()
 
 		// The schedule half of the editor is read-only: the raw rule is shown with
@@ -132,7 +132,7 @@ test.describe('Saving a rule whose schedule was not touched (#10045)', () => {
 
 		const recurring = page.locator('#bs-automation-recurring')
 		const item = recurring.locator('.automation__rule-item').filter({ hasText: 'Write the update' })
-		await expect(item).toBeVisible({ timeout: 8_000 })
+		await expect(item).toBeVisible()
 		await item.getByRole('button', { name: /^Edit$/ }).click()
 
 		// This rule IS editable — it is only spelled more verbosely than the
@@ -190,7 +190,7 @@ test.describe('Editing a rule the recurrence editor fully models (#10045)', () =
 
 		const recurring = page.locator('#bs-automation-recurring')
 		const item = recurring.locator('.automation__rule-item').filter({ hasText: 'Take the bins out' })
-		await expect(item).toBeVisible({ timeout: 8_000 })
+		await expect(item).toBeVisible()
 		await item.getByRole('button', { name: /^Edit$/ }).click()
 
 		// The real controls, populated from the stored rule — no read-only note.

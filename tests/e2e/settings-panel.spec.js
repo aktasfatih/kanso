@@ -40,7 +40,7 @@ test.describe('Settings panel (right-docked drawer)', () => {
 
 		// Panel must be visible
 		const panel = page.locator('.bs-modal')
-		await expect(panel).toBeVisible({ timeout: 5_000 })
+		await expect(panel).toBeVisible()
 
 		// ── Positioning assertions ────────────────────────────────────────────
 		const viewport = page.viewportSize()
@@ -79,7 +79,7 @@ test.describe('Settings panel (right-docked drawer)', () => {
 		await page.getByRole('button', { name: 'More' }).click()
 		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		const panel = page.locator('.bs-modal')
-		await expect(panel).toBeVisible({ timeout: 5_000 })
+		await expect(panel).toBeVisible()
 
 		// Click the close (×) button inside the settings modal header
 		await page.locator('.bs-modal__close').click()
@@ -100,7 +100,7 @@ test.describe('Settings panel (right-docked drawer)', () => {
 		// menu; selecting it dismisses the menu but leaves the docked panel open).
 		await moreBtn.click()
 		await settingsItem.click()
-		await expect(panel).toBeVisible({ timeout: 5_000 })
+		await expect(panel).toBeVisible()
 
 		// Second invocation closes (the same handler still toggles). Re-open the
 		// menu — its item is hidden while the menu is dismissed — then invoke again.

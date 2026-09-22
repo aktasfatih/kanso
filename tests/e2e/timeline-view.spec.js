@@ -57,7 +57,7 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await page.getByText('Timeline', { exact: true }).click()
 
 		// A ranged card → a bar; a due-only card → a milestone diamond.
-		await expect(page.locator('.timeline__bar', { hasText: 'Ranged task' })).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.timeline__bar', { hasText: 'Ranged task' })).toBeVisible()
 		await expect(page.locator('.timeline__milestone', { hasText: 'Milestone task' })).toBeVisible()
 
 		// Geometry: a 6-day range at week zoom (12px/day) is a visible bar, much
@@ -83,7 +83,7 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		// the board poll re-render).
 		await page.locator('.timeline__lane', { hasText: 'Ranged task' }).dispatchEvent('click')
 		await expect(page).toHaveURL(new RegExp(`/board/${state.boardId}/card/`), { timeout: 8_000 })
-		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.card-modal')).toBeVisible()
 	})
 
 	test('chrome: jump-to-today scrolls, legend renders, groups collapse, track fills the viewport', async ({ page }) => {
@@ -95,7 +95,7 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByText('Timeline', { exact: true }).click()
 
-		await expect(page.locator('.timeline__bar', { hasText: 'Ranged task' })).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.timeline__bar', { hasText: 'Ranged task' })).toBeVisible()
 
 		// Legend renders with all five swatches.
 		const legend = page.locator('.timeline__legend')
@@ -164,12 +164,12 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 
 		// The track must be present (there are already scheduled cards on this board).
 		const track = page.locator('.timeline__inner')
-		await expect(track).toBeVisible({ timeout: 8_000 })
+		await expect(track).toBeVisible()
 
 		// Expand the unscheduled footer and locate the draggable row for our card.
 		await page.locator('.timeline__unscheduled summary').click()
 		const footerRow = page.locator('.timeline__unscheduled-row', { hasText: dragTitle })
-		await expect(footerRow).toBeVisible({ timeout: 8_000 })
+		await expect(footerRow).toBeVisible()
 
 		// Drop near the horizontal centre of the visible track (position→day math is
 		// sensitive, so we assert "got scheduled", never an exact calendar day).
@@ -191,7 +191,7 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		const scheduledMarker = page.locator(
 			`.timeline__milestone:has-text("${dragTitle}"), .timeline__bar:has-text("${dragTitle}")`,
 		)
-		await expect(scheduledMarker.first()).toBeVisible({ timeout: 10_000 })
+		await expect(scheduledMarker.first()).toBeVisible()
 		// …and it left the unscheduled footer.
 		await expect(page.locator('.timeline__unscheduled-row', { hasText: dragTitle }))
 			.toHaveCount(0, { timeout: 10_000 })
@@ -206,11 +206,11 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByText('Timeline', { exact: true }).click()
-		await expect(page.locator('.timeline__inner')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.timeline__inner')).toBeVisible()
 		// It appears on the track and is no longer offered as unscheduled.
 		await expect(page.locator(
 			`.timeline__milestone:has-text("${dragTitle}"), .timeline__bar:has-text("${dragTitle}")`,
-		).first()).toBeVisible({ timeout: 8_000 })
+		).first()).toBeVisible()
 	})
 
 	// #4129: a single card with a huge date range (e.g. 2018→2030) must NOT blow up
@@ -248,7 +248,7 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 			await page.getByText('Timeline', { exact: true }).click()
 
 			// The track mounts (there's a scheduled card).
-			await expect(page.locator('.timeline__inner')).toBeVisible({ timeout: 8_000 })
+			await expect(page.locator('.timeline__inner')).toBeVisible()
 
 			// Bounded width: with a ~12-year raw domain the OLD code produced a track
 			// of ~52000px+ (4380 days × 12px/day at week zoom). The windowed render
@@ -287,8 +287,8 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 			// The axis now spans the outlier years: a month label containing "2018" and
 			// one containing "2030" should be visible in the axis.
 			const monthLabels = page.locator('.timeline__axis-month')
-			await expect(monthLabels.filter({ hasText: '2018' }).first()).toBeVisible({ timeout: 5_000 })
-			await expect(monthLabels.filter({ hasText: '2030' }).first()).toBeVisible({ timeout: 5_000 })
+			await expect(monthLabels.filter({ hasText: '2018' }).first()).toBeVisible()
+			await expect(monthLabels.filter({ hasText: '2030' }).first()).toBeVisible()
 
 			// Fit mode keeps the track width bounded — no multi-thousand-px blowup. It
 			// auto-fits px/day toward the viewport but floors at a minimum so bars never
@@ -301,11 +301,11 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 			// ── Clicking an edge chevron also triggers Fit ────────────────────────────
 			// Reset to default window by clicking Day zoom (which turns off Fit).
 			await page.getByRole('button', { name: 'Day', exact: true }).click()
-			await expect(page.locator('.timeline__edge--start')).toBeVisible({ timeout: 5_000 })
+			await expect(page.locator('.timeline__edge--start')).toBeVisible()
 			// Click the earlier-chevron edge affordance — it should activate Fit.
 			await page.locator('.timeline__edge--start').click()
 			await expect(page.locator('.timeline__edge--start')).toHaveCount(0, { timeout: 5_000 })
-			await expect(monthLabels.filter({ hasText: '2018' }).first()).toBeVisible({ timeout: 5_000 })
+			await expect(monthLabels.filter({ hasText: '2018' }).first()).toBeVisible()
 		} finally {
 			await api.delete(`/boards/${board.id}`).catch(() => {})
 		}
@@ -320,7 +320,7 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByText('Timeline', { exact: true }).click()
 
-		await expect(page.locator('.timeline__bar', { hasText: 'Ranged task' })).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.timeline__bar', { hasText: 'Ranged task' })).toBeVisible()
 		// The shared board's dates are all near today, well inside the window.
 		await expect(page.locator('.timeline__edge--start')).toHaveCount(0)
 		await expect(page.locator('.timeline__edge--end')).toHaveCount(0)
@@ -383,7 +383,7 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 			await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 			await page.locator('.board-view__display-menu button').first().click()
 			await page.getByText('Timeline', { exact: true }).click()
-			await expect(page.locator('.timeline__bar').first()).toBeVisible({ timeout: 8_000 })
+			await expect(page.locator('.timeline__bar').first()).toBeVisible()
 
 			// The one-time keyboard-shortcut hint (#3413) is `position: fixed` at
 			// right:16px/bottom:16px, z-index 2000, so it lands squarely on the
@@ -491,12 +491,12 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		await page.getByText('Timeline', { exact: true }).click()
 
 		const lane = page.locator('.timeline__lane', { hasText: 'Ranged task' })
-		await expect(lane).toBeVisible({ timeout: 8_000 })
+		await expect(lane).toBeVisible()
 		// The lane is a focusable button now — focus it and activate with Enter.
 		await lane.focus()
 		await lane.press('Enter')
 		await expect(page).toHaveURL(new RegExp(`/board/${state.boardId}/card/`), { timeout: 8_000 })
-		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.card-modal')).toBeVisible()
 	})
 })
 
@@ -519,7 +519,7 @@ test.describe('Timeline dependency arrows (#5896)', () => {
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByText('Timeline', { exact: true }).click()
-		await expect(page.locator('.timeline__bar', { hasText: 'Blocker task' })).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.timeline__bar', { hasText: 'Blocker task' })).toBeVisible()
 	}
 
 	// Track-local geometry of every bar and every connector, read in one pass.
@@ -599,7 +599,7 @@ test.describe('Timeline dependency arrows (#5896)', () => {
 		// Two dated blocked cards → two connectors. The undated one is blocked too
 		// but has no bar to point at, so it is silently skipped (its red "blocked"
 		// chip on the card tile stays the fallback signal).
-		await expect(page.locator('.timeline__dep')).toHaveCount(2, { timeout: 8_000 })
+		await expect(page.locator('.timeline__dep')).toHaveCount(2)
 
 		const { bars, arrows } = await readGeometry(page)
 		const blockerBar = bars.find((b) => b.title.includes('Blocker task'))
@@ -630,7 +630,7 @@ test.describe('Timeline dependency arrows (#5896)', () => {
 
 	test('arrows follow the bars across zoom and disappear with a collapsed group', async ({ page }) => {
 		await openTimeline(page)
-		await expect(page.locator('.timeline__dep')).toHaveCount(2, { timeout: 8_000 })
+		await expect(page.locator('.timeline__dep')).toHaveCount(2)
 
 		const before = await readGeometry(page)
 
@@ -653,7 +653,7 @@ test.describe('Timeline dependency arrows (#5896)', () => {
 
 		// Expanding restores them, still anchored to the bars.
 		await page.locator('.timeline__group-row').first().click()
-		await expect(page.locator('.timeline__dep')).toHaveCount(2, { timeout: 8_000 })
+		await expect(page.locator('.timeline__dep')).toHaveCount(2)
 		const restored = await readGeometry(page)
 		const restoredBlocker = restored.bars.find((b) => b.title.includes('Blocker task'))
 		for (const arrow of restored.arrows) {
@@ -663,7 +663,7 @@ test.describe('Timeline dependency arrows (#5896)', () => {
 
 	test('the toolbar toggle hides and restores the arrows, and clicking one opens the blocked card', async ({ page }) => {
 		await openTimeline(page)
-		await expect(page.locator('.timeline__dep')).toHaveCount(2, { timeout: 8_000 })
+		await expect(page.locator('.timeline__dep')).toHaveCount(2)
 
 		const toggle = page.getByRole('button', { name: 'Dependencies' })
 		await expect(toggle).toBeVisible()
@@ -680,7 +680,7 @@ test.describe('Timeline dependency arrows (#5896)', () => {
 			new RegExp(`/board/${state.boardId}/card/${state.overlapping}`),
 			{ timeout: 8_000 },
 		)
-		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.card-modal')).toBeVisible()
 	})
 
 	test('adding and removing a relation updates the timeline through the normal sync path', async ({ page }) => {
@@ -688,7 +688,7 @@ test.describe('Timeline dependency arrows (#5896)', () => {
 		// channel, whose slow fallback tick is 30s - so give this one room.
 		test.slow()
 		await openTimeline(page)
-		await expect(page.locator('.timeline__dep')).toHaveCount(2, { timeout: 8_000 })
+		await expect(page.locator('.timeline__dep')).toHaveCount(2)
 
 		// A third dated card, newly blocked by the same blocker.
 		const stack = (await api.get(`/boards/${state.boardId}`)).stacks[0]

@@ -46,7 +46,7 @@ async function openCardFieldsPane(page, boardId) {
 	// The rail entry is "Card fields" — it covers the built-in sections as well
 	// as the user-defined ones now.
 	await page.getByRole('tab', { name: /card fields/i }).click()
-	await expect(page.locator('#bs-pane-card-fields')).toBeVisible({ timeout: 8_000 })
+	await expect(page.locator('#bs-pane-card-fields')).toBeVisible()
 }
 
 const FILE_NAME = 'kept-on-purpose.txt'
@@ -120,11 +120,11 @@ test.describe('Built-in card sections (#5894)', () => {
 		const checklistSection = modal.locator('.card-modal__checklist')
 
 		// --- Baseline: the tile badge and the modal section both show 1/2 ---
-		await expect(tile).toBeVisible({ timeout: 10_000 })
+		await expect(tile).toBeVisible()
 		await expect(tile.locator('.card-tile__checklist')).toHaveText('1/2')
 
 		await tile.click()
-		await expect(modal).toBeVisible({ timeout: 10_000 })
+		await expect(modal).toBeVisible()
 		await expect(checklistSection).toBeVisible()
 		await expect(checklistSection.locator('.card-modal__checklist-count')).toHaveText('1 / 2')
 		await expect(checklistSection.getByText(STEP_DONE)).toBeVisible()
@@ -143,7 +143,7 @@ test.describe('Built-in card sections (#5894)', () => {
 		await expect(tile.locator('.card-tile__checklist')).toHaveCount(0, { timeout: 10_000 })
 		// Gone from the card modal, including its add-an-item row.
 		await tile.click()
-		await expect(modal).toBeVisible({ timeout: 10_000 })
+		await expect(modal).toBeVisible()
 		await expect(checklistSection).toHaveCount(0)
 		await expect(modal.getByText(STEP_OPEN)).toHaveCount(0)
 		await page.keyboard.press('Escape')
@@ -160,10 +160,10 @@ test.describe('Built-in card sections (#5894)', () => {
 		await expect(featureInput(page, 'checklist')).toBeChecked({ timeout: 8_000 })
 		await page.keyboard.press('Escape')
 
-		await expect(tile.locator('.card-tile__checklist')).toHaveText('1/2', { timeout: 10_000 })
+		await expect(tile.locator('.card-tile__checklist')).toHaveText('1/2')
 		await tile.click()
-		await expect(modal).toBeVisible({ timeout: 10_000 })
-		await expect(checklistSection).toBeVisible({ timeout: 8_000 })
+		await expect(modal).toBeVisible()
+		await expect(checklistSection).toBeVisible()
 		await expect(checklistSection.locator('.card-modal__checklist-count')).toHaveText('1 / 2')
 		await expect(checklistSection.getByText(STEP_DONE)).toBeVisible()
 		await expect(checklistSection.getByText(STEP_OPEN)).toBeVisible()
@@ -178,13 +178,13 @@ test.describe('Built-in card sections (#5894)', () => {
 
 		// --- Baseline: both sections and the tile badges are present ---
 		const tile = page.locator('.card-tile', { hasText: 'Loaded card' })
-		await expect(tile).toBeVisible({ timeout: 10_000 })
+		await expect(tile).toBeVisible()
 		await expect(tile.locator('.card-tile__timer-running')).toBeVisible()
 		await expect(tile.locator('.card-tile__cover')).toBeVisible()
 
 		await tile.click()
 		const modal = page.locator('.card-modal')
-		await expect(modal).toBeVisible({ timeout: 10_000 })
+		await expect(modal).toBeVisible()
 		await expect(modal.getByText('Attachments', { exact: true })).toBeVisible()
 		await expect(modal.getByText('Time tracking', { exact: true })).toBeVisible()
 		await expect(modal.getByText(FILE_NAME)).toBeVisible()
@@ -213,7 +213,7 @@ test.describe('Built-in card sections (#5894)', () => {
 
 		// --- Gone from the card modal ---
 		await tile.click()
-		await expect(modal).toBeVisible({ timeout: 10_000 })
+		await expect(modal).toBeVisible()
 		await expect(modal.getByText('Attachments', { exact: true })).toHaveCount(0)
 		await expect(modal.getByText('Time tracking', { exact: true })).toHaveCount(0)
 		await expect(modal.getByText(FILE_NAME)).toHaveCount(0)
@@ -239,7 +239,7 @@ test.describe('Built-in card sections (#5894)', () => {
 		// contact controls are gone from the modal.
 		await expect(tile.locator('.card-tile__cover')).toHaveCount(0, { timeout: 10_000 })
 		await tile.click()
-		await expect(modal).toBeVisible({ timeout: 10_000 })
+		await expect(modal).toBeVisible()
 		await expect(modal.getByText('Cover', { exact: true })).toHaveCount(0)
 		await expect(modal.getByText('Code', { exact: true })).toHaveCount(0)
 		await expect(modal.getByText('Link contact', { exact: true })).toHaveCount(0)
@@ -263,11 +263,11 @@ test.describe('Built-in card sections (#5894)', () => {
 		}
 		await page.keyboard.press('Escape')
 
-		await expect(tile).toBeVisible({ timeout: 10_000 })
-		await expect(tile.locator('.card-tile__cover')).toBeVisible({ timeout: 10_000 })
+		await expect(tile).toBeVisible()
+		await expect(tile.locator('.card-tile__cover')).toBeVisible()
 		await tile.click()
-		await expect(modal).toBeVisible({ timeout: 10_000 })
-		await expect(modal.getByText('Attachments', { exact: true })).toBeVisible({ timeout: 8_000 })
+		await expect(modal).toBeVisible()
+		await expect(modal.getByText('Attachments', { exact: true })).toBeVisible()
 		await expect(modal.getByText('Time tracking', { exact: true })).toBeVisible()
 		await expect(modal.getByText('Code', { exact: true })).toBeVisible()
 		// The file that was uploaded before anything was switched off is still listed.

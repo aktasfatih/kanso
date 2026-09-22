@@ -50,7 +50,7 @@ test.describe('Board settings create rows fit the drawer', () => {
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 		await page.getByRole('button', { name: 'More' }).click()
 		await page.getByRole('menuitem', { name: /board settings/i }).click()
-		await expect(page.locator('.bs-modal')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.bs-modal')).toBeVisible()
 	}
 
 	/**
@@ -59,7 +59,7 @@ test.describe('Board settings create rows fit the drawer', () => {
 	 */
 	async function measure(page, paneSelector, btnSelector) {
 		const btn = page.locator(btnSelector)
-		await expect(btn).toBeVisible({ timeout: 8_000 })
+		await expect(btn).toBeVisible()
 		return page.evaluate(([paneSel, bSel]) => {
 			const paneEl = document.querySelector(paneSel)
 			const btnEl = document.querySelector(bSel)
@@ -162,7 +162,7 @@ test.describe('Board settings create rows fit the drawer', () => {
 		await page.getByRole('button', { name: /create review type/i }).click()
 
 		const item = page.locator('.rt-settings__list .label-settings__item', { hasText: 'Security' })
-		await expect(item).toHaveCount(1, { timeout: 8_000 })
+		await expect(item).toHaveCount(1)
 		await expect(page.locator('#bs-pane-review-types .label-settings__error')).toHaveCount(0)
 	})
 })

@@ -35,18 +35,18 @@ test.describe('Card cover colour', () => {
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const tile = page.locator('.card-tile').filter({ hasText: 'Cover Card' })
-		await expect(tile).toBeVisible({ timeout: 5000 })
+		await expect(tile).toBeVisible()
 		// No cover band before a colour is set.
 		await expect(tile.locator('.card-tile__cover')).toHaveCount(0)
 
 		// Open the card modal.
 		await tile.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open the Cover picker in the attribute bar.
 		await page.getByRole('button', { name: /^Cover$/ }).click()
 		const swatches = page.locator('.card-modal__cover-swatch')
-		await expect(swatches.first()).toBeVisible({ timeout: 5000 })
+		await expect(swatches.first()).toBeVisible()
 
 		// Pick the first swatch (Red, e74c3c) and wait for the persisting PATCH.
 		const [patchSet] = await Promise.all([
@@ -66,14 +66,14 @@ test.describe('Card cover colour', () => {
 		await page.waitForSelector('.card-modal', { state: 'hidden', timeout: 5000 }).catch(() => {})
 
 		const coverBand = tile.locator('.card-tile__cover')
-		await expect(coverBand).toBeVisible({ timeout: 6_000 })
+		await expect(coverBand).toBeVisible()
 
 		// Reopen the modal and clear the cover.
 		await tile.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 		await page.getByRole('button', { name: /^Cover$/ }).click()
 		const clearBtn = page.getByRole('button', { name: /^No cover$/ })
-		await expect(clearBtn).toBeVisible({ timeout: 5000 })
+		await expect(clearBtn).toBeVisible()
 		const [patchClear] = await Promise.all([
 			page.waitForResponse(
 				(r) => /\/api\/cards\/\d+/.test(r.url()) && r.request().method() === 'PATCH',

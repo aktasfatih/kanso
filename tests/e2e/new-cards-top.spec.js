@@ -38,11 +38,11 @@ test.describe('New cards on top', () => {
 		await page.getByRole('button', { name: 'More' }).click()
 		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		const generalTab = page.getByRole('tab', { name: 'General' })
-		await expect(generalTab).toBeVisible({ timeout: 10_000 })
+		await expect(generalTab).toBeVisible()
 		await generalTab.click()
 
 		const toggle = page.getByText('Add new cards to the top of a column')
-		await expect(toggle).toBeVisible({ timeout: 10_000 })
+		await expect(toggle).toBeVisible()
 
 		// Click the toggle and wait for the board-settings PATCH so the flag is
 		// actually persisted server-side before we create cards (the ordering is

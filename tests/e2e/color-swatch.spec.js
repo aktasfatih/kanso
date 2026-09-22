@@ -26,7 +26,7 @@ test.describe('Colour-pick swatch shape', () => {
 		// consolidated ⋯ More overflow menu, so open that first.
 		await page.getByRole('button', { name: 'More' }).click()
 		await page.getByRole('menuitem', { name: 'Board settings' }).click()
-		await page.waitForSelector('.label-settings__swatch', { timeout: 10_000 })
+		await page.waitForSelector('.label-settings__swatch', { timeout: 15_000 })
 
 		const box = await page.locator('.label-settings__swatch').first().boundingBox()
 		expect(box).toBeTruthy()

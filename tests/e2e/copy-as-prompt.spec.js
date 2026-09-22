@@ -121,22 +121,22 @@ test.describe('Copy as prompt', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open the overflow (⋯) actions menu in the card modal header.
 		const menuTrigger = page.locator('.card-modal__actions-menu button').first()
-		await expect(menuTrigger).toBeVisible({ timeout: 5000 })
+		await expect(menuTrigger).toBeVisible()
 		await menuTrigger.click()
 
 		// Click the "Copy as prompt" item (rendered in a portal by NcActions).
 		const copyItem = page.getByRole('menuitem', { name: 'Copy as prompt' })
-		await expect(copyItem).toBeVisible({ timeout: 5000 })
+		await expect(copyItem).toBeVisible()
 		await copyItem.click()
 
 		// A success toast should confirm the copy. Its MESSAGE is the assertion —
 		// "a toast appeared" would also be satisfied by the error toast this very
 		// action raises when the clipboard is unavailable.
-		await expect(toast(page, 'Card copied as prompt.')).toBeVisible({ timeout: 6000 })
+		await expect(toast(page, 'Card copied as prompt.')).toBeVisible()
 
 		// Read the clipboard back and assert it contains the title + comment body.
 		const clip = await page.evaluate(() => navigator.clipboard.readText())

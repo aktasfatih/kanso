@@ -51,29 +51,29 @@ test.describe('CardTile compact layout', () => {
 	test('priority badge, checklist badge, and label chip are all visible and on the same row', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const tile = page.locator('.card-tile').filter({ hasText: 'Meta Row Card' })
-		await expect(tile).toBeVisible({ timeout: 5000 })
+		await expect(tile).toBeVisible()
 
 		// Assert priority badge is visible
 		const priorityBadge = tile.locator('.card-tile__priority')
-		await expect(priorityBadge).toBeVisible({ timeout: 5000 })
+		await expect(priorityBadge).toBeVisible()
 
 		// Assert checklist badge is visible (0/2 initially since no items are checked)
 		const checklistBadge = tile.locator('.card-tile__checklist')
-		await expect(checklistBadge).toBeVisible({ timeout: 5000 })
+		await expect(checklistBadge).toBeVisible()
 		await expect(checklistBadge).toHaveText(/0\/2/)
 
 		// Assert label chip is visible
 		const labelChip = tile.locator('.card-tile__label-chip')
-		await expect(labelChip).toBeVisible({ timeout: 5000 })
+		await expect(labelChip).toBeVisible()
 
 		// Assert all badges are on roughly the same row:
 		// The priority badge and checklist badge should be inside .card-tile__meta
 		// so their Y positions must be within ~30px of each other.
 		const metaRow = tile.locator('.card-tile__meta')
-		await expect(metaRow).toBeVisible({ timeout: 5000 })
+		await expect(metaRow).toBeVisible()
 
 		const priorityBox = await priorityBadge.boundingBox()
 		const checklistBox = await checklistBadge.boundingBox()
@@ -91,15 +91,15 @@ test.describe('CardTile compact layout', () => {
 	test('tile opens card modal on click', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const tile = page.locator('.card-tile').filter({ hasText: 'Meta Row Card' })
-		await expect(tile).toBeVisible({ timeout: 5000 })
+		await expect(tile).toBeVisible()
 		await tile.click()
 
 		// Card modal should appear
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
-		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 5000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+		await expect(page.locator('.card-modal')).toBeVisible()
 
 		// Close it
 		await page.keyboard.press('Escape')
@@ -109,13 +109,13 @@ test.describe('CardTile compact layout', () => {
 	test('assignee avatars are pushed to the right of the meta row', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const tile = page.locator('.card-tile').filter({ hasText: 'Meta Row Card' })
-		await expect(tile).toBeVisible({ timeout: 5000 })
+		await expect(tile).toBeVisible()
 
 		const assignees = tile.locator('.card-tile__assignees')
-		await expect(assignees).toBeVisible({ timeout: 5000 })
+		await expect(assignees).toBeVisible()
 
 		// Assignees should be inside the meta row
 		const metaRow = tile.locator('.card-tile__meta')

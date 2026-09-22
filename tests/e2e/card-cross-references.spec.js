@@ -74,12 +74,12 @@ test.describe('Card cross-references (KAN-123 → title link)', () => {
 		await ncLogin(page)
 		await page.goto(state.sourceUrl)
 
-		await page.waitForSelector('.card-modal__desc-rendered', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal__desc-rendered', { timeout: 15_000 })
 
 		// The reference is rendered as a class="kanso-cardref" anchor whose visible
 		// text is the TARGET card's title, not the raw KAN-<n> text.
 		const refLink = page.locator('.card-modal__desc-rendered a.kanso-cardref')
-		await expect(refLink).toBeVisible({ timeout: 5000 })
+		await expect(refLink).toBeVisible()
 		await expect(refLink).toHaveText(TARGET_TITLE)
 		await expect(refLink).toHaveAttribute('data-kanso-card-id', String(state.targetCardId))
 		// It is an internal ref: no external href / new-tab wiring.

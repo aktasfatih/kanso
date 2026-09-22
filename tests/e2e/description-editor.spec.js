@@ -25,16 +25,16 @@ test.describe('Description formatting toolbar', () => {
 	test('toolbar Bold wraps the selection and the WYSIWYG editor shows <strong>', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Enter description edit via the empty-state placeholder.
 		await page.locator('.card-modal__desc-placeholder').click()
 
 		// Wait for the Tiptap WYSIWYG editor to appear.
 		const editor = page.locator('.card-modal__section .kanso-md-editor')
-		await expect(editor).toBeVisible({ timeout: 6000 })
+		await expect(editor).toBeVisible()
 		const prose = editor.locator('.ProseMirror')
-		await expect(prose).toBeVisible({ timeout: 4000 })
+		await expect(prose).toBeVisible()
 
 		// Type text into the ProseMirror contenteditable using keyboard input, so
 		// Tiptap's ProseMirror document model receives and processes the keystrokes
@@ -46,22 +46,22 @@ test.describe('Description formatting toolbar', () => {
 		// Select all the text, then click Bold in the toolbar.
 		await page.keyboard.press('Control+A')
 		const boldBtn = editor.locator('.kanso-md-editor__tb-btn[title="Bold"]')
-		await expect(boldBtn).toBeVisible({ timeout: 4000 })
+		await expect(boldBtn).toBeVisible()
 		await boldBtn.click()
 
 		// The ProseMirror node should now contain a <strong> element — the live
 		// WYSIWYG renders markdown richly inline (no Preview toggle needed).
-		await expect(prose.locator('strong')).toBeVisible({ timeout: 4000 })
+		await expect(prose.locator('strong')).toBeVisible()
 		await expect(prose.locator('strong')).toHaveText('hello world')
 
 		// Save → the stored markdown re-renders in the read view (same render path,
 		// proving the stored value is markdown, not a rich-HTML blob).
 		// Also verify the API persisted it (the desc-view shows after save, not the placeholder).
 		await page.locator('.card-modal__desc-actions button', { hasText: 'Save' }).click()
-		await expect(page.locator('.card-modal__desc-rendered')).toBeVisible({ timeout: 8000 })
-		await expect(page.locator('.card-modal__desc-rendered strong')).toHaveText('hello world', { timeout: 8000 })
+		await expect(page.locator('.card-modal__desc-rendered')).toBeVisible()
+		await expect(page.locator('.card-modal__desc-rendered strong')).toHaveText('hello world')
 		// Confirm the desc-view is shown (placeholder hidden) — means save persisted.
-		await expect(page.locator('.card-modal__desc-view')).toBeVisible({ timeout: 5000 })
+		await expect(page.locator('.card-modal__desc-view')).toBeVisible()
 	})
 
 	// Regression guard: the editor root's opening tag must be syntactically closed.
@@ -78,12 +78,12 @@ test.describe('Description formatting toolbar', () => {
 
 		await ncLogin(page)
 		await page.goto(cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
-		await page.waitForSelector('.card-modal__desc-placeholder, .card-modal__desc-view', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+		await page.waitForSelector('.card-modal__desc-placeholder, .card-modal__desc-view', { timeout: 15_000 })
 
 		await page.locator('.card-modal__desc-placeholder').click()
 		const editor = page.locator('.card-modal__section .kanso-md-editor')
-		await expect(editor).toBeVisible({ timeout: 6000 })
+		await expect(editor).toBeVisible()
 
 		// Read the real attribute list off the root rather than eyeballing the markup.
 		// The DOM lower-cases attribute names, so compare case-insensitively.
@@ -98,7 +98,7 @@ test.describe('Description formatting toolbar', () => {
 
 		// And the binding that shares that tag still works: Escape cancels the edit.
 		const prose = editor.locator('.ProseMirror')
-		await expect(prose).toBeVisible({ timeout: 4000 })
+		await expect(prose).toBeVisible()
 		await prose.click()
 		await prose.press('Escape')
 		await expect(editor).toBeHidden({ timeout: 2000 })
@@ -113,15 +113,15 @@ test.describe('Description formatting toolbar', () => {
 
 		await ncLogin(page)
 		await page.goto(cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 		// Also wait for the card to be fully loaded (not in skeleton state)
-		await page.waitForSelector('.card-modal__desc-placeholder, .card-modal__desc-view', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal__desc-placeholder, .card-modal__desc-view', { timeout: 15_000 })
 
 		await page.locator('.card-modal__desc-placeholder').click()
 		const editor = page.locator('.card-modal__section .kanso-md-editor')
-		await expect(editor).toBeVisible({ timeout: 6000 })
+		await expect(editor).toBeVisible()
 		const prose = editor.locator('.ProseMirror')
-		await expect(prose).toBeVisible({ timeout: 4000 })
+		await expect(prose).toBeVisible()
 		await prose.click()
 		await page.keyboard.type('draft text ')
 
@@ -140,7 +140,7 @@ test.describe('Description formatting toolbar', () => {
 			await prose.press('@')
 			dropdownVisible = await dropdown.isVisible({ timeout: 1200 }).catch(() => false)
 		}
-		await expect(dropdown).toBeVisible({ timeout: 4000 })
+		await expect(dropdown).toBeVisible()
 
 		// Escape must dismiss ONLY the dropdown — the modal stays open, draft intact.
 		await prose.press('Escape')
@@ -159,12 +159,12 @@ test.describe('Description formatting toolbar', () => {
 	test('Bulleted list button prefixes each selected paragraph with a bullet', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Prior test saved a description → edit via the desc view area.
 		await page.locator('.card-modal__desc-view').click()
 		const editor = page.locator('.card-modal__section .kanso-md-editor')
-		await expect(editor).toBeVisible({ timeout: 6000 })
+		await expect(editor).toBeVisible()
 		const prose = editor.locator('.ProseMirror')
 
 		// Clear and type two lines.
@@ -179,11 +179,11 @@ test.describe('Description formatting toolbar', () => {
 		// Select all, then click the Bullet list toolbar button.
 		await page.keyboard.press('Control+A')
 		const listBtn = editor.locator('.kanso-md-editor__tb-btn[title="Bullet list"]')
-		await expect(listBtn).toBeVisible({ timeout: 4000 })
+		await expect(listBtn).toBeVisible()
 		await listBtn.click()
 
 		// The ProseMirror should now contain a <ul> with <li> items.
-		await expect(prose.locator('ul li')).toHaveCount(2, { timeout: 4000 })
+		await expect(prose.locator('ul li')).toHaveCount(2)
 		const items = prose.locator('ul li')
 		await expect(items.nth(0)).toContainText('one')
 		await expect(items.nth(1)).toContainText('two')

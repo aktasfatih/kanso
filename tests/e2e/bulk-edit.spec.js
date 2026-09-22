@@ -50,7 +50,7 @@ test.describe('Bulk edit cards (multi-select)', () => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
-		await expect(page.locator('.card-tile', { hasText: 'Alpha' })).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.card-tile', { hasText: 'Alpha' })).toBeVisible()
 
 		// Enter multi-select mode via the consolidated ⋯ More overflow menu.
 		await page.getByRole('button', { name: 'More' }).click()
@@ -94,9 +94,9 @@ test.describe('Bulk edit cards (multi-select)', () => {
 		// menuitems) — the button-only "Move to…" picker below is still a menu.
 		await page.getByRole('button', { name: 'More actions' }).click()
 		const more = page.getByRole('dialog', { name: 'More actions' })
-		await expect(more.getByRole('button', { name: 'Remove label Bug' })).toBeVisible({ timeout: 10_000 })
+		await expect(more.getByRole('button', { name: 'Remove label Bug' })).toBeVisible()
 		await expect(more.getByRole('button', { name: 'Remove label Chore' })).toBeVisible()
-		await expect(more.getByRole('button', { name: /^Assign to / }).first()).toBeVisible({ timeout: 10_000 })
+		await expect(more.getByRole('button', { name: /^Assign to / }).first()).toBeVisible()
 		await expect(more.getByRole('button', { name: 'Clear due date' })).toBeVisible()
 		await expect(more.getByRole('button', { name: 'Archive selected' })).toBeVisible()
 		await expect(more.getByRole('button', { name: 'Delete selected' })).toBeVisible()
@@ -140,7 +140,7 @@ test.describe('Bulk edit cards (multi-select)', () => {
 			await page.locator('.stack-column').filter({ hasText: name })
 				.locator('.stack-column__actions button').first().click()
 			const dialog = page.locator('[role="dialog"]').first()
-			await expect(dialog).toBeVisible({ timeout: 6_000 })
+			await expect(dialog).toBeVisible()
 			return dialog
 		}
 
@@ -185,7 +185,7 @@ test.describe('Bulk edit cards (multi-select)', () => {
 
 			const menu = await openColumnMenu(page, 'Sprint')
 			const selectAll = menu.getByRole('button', { name: `Select ${CARD_COUNT} cards` })
-			await expect(selectAll).toBeVisible({ timeout: 8_000 })
+			await expect(selectAll).toBeVisible()
 			await selectAll.click()
 
 			// Multi-select is now on and the WHOLE column is selected.
@@ -231,11 +231,11 @@ test.describe('Bulk edit cards (multi-select)', () => {
 			// form the filter bar writes): the entry must name the VISIBLE count …
 			await page.goto(`${sel.boardUrl}?fl=${sel.labelId}`)
 			await page.waitForSelector('.board-view__header', { timeout: 15_000 })
-			await expect(page.locator('.card-tile')).toHaveCount(1, { timeout: 10_000 })
+			await expect(page.locator('.card-tile')).toHaveCount(1)
 
 			const menu = await openColumnMenu(page, 'Sprint')
 			const visibleEntry = menu.getByRole('button', { name: 'Select 1 visible card' })
-			await expect(visibleEntry).toBeVisible({ timeout: 8_000 })
+			await expect(visibleEntry).toBeVisible()
 			await expect(menu.getByRole('button', { name: `Select ${CARD_COUNT} cards` })).toHaveCount(0)
 			await expect(menu.getByRole('button', { name: /^Select all/ })).toHaveCount(0)
 

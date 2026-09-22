@@ -40,11 +40,11 @@ test.describe('Card picker click-outside dismiss (#3665)', () => {
 
 	async function openCardModal(page) {
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 		const tile = page.locator('.card-tile').filter({ hasText: 'Picker Outside Card' })
-		await expect(tile).toBeVisible({ timeout: 5000 })
+		await expect(tile).toBeVisible()
 		await tile.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 	}
 
 	test('open Assign → click a neutral spot in the modal → popover closes', async ({ page }) => {
@@ -52,7 +52,7 @@ test.describe('Card picker click-outside dismiss (#3665)', () => {
 		await openCardModal(page)
 
 		const assignPill = page.locator('.card-modal__attrbar button.card-modal__pill', { hasText: 'Assign' })
-		await expect(assignPill).toBeVisible({ timeout: 5000 })
+		await expect(assignPill).toBeVisible()
 		await assignPill.click()
 
 		// Popover is open.
@@ -77,7 +77,7 @@ test.describe('Card picker click-outside dismiss (#3665)', () => {
 		await page.locator('.card-modal__popover .card-modal__popover-opt', { hasText: /^High$/ }).click()
 
 		// Selection applied…
-		await expect(attrbar.locator('.card-modal__pill--priority-3')).toBeVisible({ timeout: 5000 })
+		await expect(attrbar.locator('.card-modal__pill--priority-3')).toBeVisible()
 		// …and the popover closed as part of the same click.
 		await expect(page.locator('.card-modal__popover')).toHaveCount(0)
 	})
@@ -87,7 +87,7 @@ test.describe('Card picker click-outside dismiss (#3665)', () => {
 		await openCardModal(page)
 
 		const duePill = page.locator('.card-modal__attrbar button[data-pill="due"]')
-		await expect(duePill).toBeVisible({ timeout: 5000 })
+		await expect(duePill).toBeVisible()
 		await duePill.click()
 
 		const dateInput = page.locator('.card-modal__popover .card-modal__date-input').first()

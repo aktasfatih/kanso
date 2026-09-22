@@ -76,7 +76,7 @@ async function pickListView(page) {
 	await page.waitForTimeout(150)
 	await page.keyboard.press('Escape')
 	await page.waitForTimeout(200)
-	await expect(page.locator('.board-list-row').first()).toBeVisible({ timeout: 8_000 })
+	await expect(page.locator('.board-list-row').first()).toBeVisible()
 	// The virtualizer lays rows out absolutely and re-positions them once the
 	// group heights settle; take bounding boxes only after that.
 	await page.waitForTimeout(600)
@@ -151,7 +151,7 @@ test.describe('Drag a sub-card out of its parent (list view)', () => {
 		// UA and UB are UP's children; U1 therefore renders UP with two indented
 		// rows under it, then UT. (The exact sibling order is whatever the previous
 		// run left, so it is asserted after the drag, not before.)
-		await expect(page.locator('.board-list-row--child')).toHaveCount(2, { timeout: 8_000 })
+		await expect(page.locator('.board-list-row--child')).toHaveCount(2)
 		expect(await parentOf('UB')).toBe(state.ids.UP)
 
 		// UB onto UA's TOP edge: still inside UP's children, so this is an ordinary
@@ -185,7 +185,7 @@ test.describe('Drag a sub-card out of its parent (list view)', () => {
 
 		expect(await parentOf('UA')).toBe(state.ids.UP)
 		await expect(page.locator('.board-list-row--child').filter({ hasText: 'UA' }))
-			.toBeVisible({ timeout: 8_000 })
+			.toBeVisible()
 
 		// UA onto UT's BOTTOM edge — a top-level slot, so UA leaves UP.
 		await dragWithMouse(page, row(page, 'UA'), row(page, 'UT'), {
@@ -257,13 +257,13 @@ test.describe('Drag a sub-card out of its parent (list view)', () => {
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		const tile = (title) => page.locator('.card-tile').filter({ hasText: title })
-		await expect(tile('UP')).toBeVisible({ timeout: 8_000 })
+		await expect(tile('UP')).toBeVisible()
 
 		expect(await parentOf('UB')).toBe(state.ids.UP)
-		await expect(tile('UB').locator('.card-tile__subcard')).toBeVisible({ timeout: 8_000 })
+		await expect(tile('UB').locator('.card-tile__subcard')).toBeVisible()
 		// …including one whose parent lives in another column — the tile is all the
 		// board has to go on there.
-		await expect(tile('UX').locator('.card-tile__subcard')).toBeVisible({ timeout: 8_000 })
+		await expect(tile('UX').locator('.card-tile__subcard')).toBeVisible()
 		// UT and UZ never had a parent; UP is one.
 		await expect(tile('UT').locator('.card-tile__subcard')).toHaveCount(0)
 		await expect(tile('UZ').locator('.card-tile__subcard')).toHaveCount(0)
@@ -279,10 +279,10 @@ test.describe('Drag a sub-card out of its parent (list view)', () => {
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		await page.locator('.card-tile').filter({ hasText: 'UB' }).click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const parentLink = page.locator('.card-modal__parent-link')
-		await expect(parentLink).toHaveText('UP', { timeout: 8_000 })
+		await expect(parentLink).toHaveText('UP')
 
 		await page.getByTitle('Detach from parent').click()
 

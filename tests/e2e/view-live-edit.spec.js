@@ -138,7 +138,7 @@ test.describe('View live edit (#9859)', () => {
 			// entirely and both cards now sit under Feature.
 			await expect(bugGroup).toHaveCount(0, { timeout: 10_000 })
 			await expect(featureGroup).toHaveCount(1)
-			await expect(page.locator('.board-list-group__count')).toHaveText('2', { timeout: 10_000 })
+			await expect(page.locator('.board-list-group__count')).toHaveText('2')
 			await expect(bugRow).toBeVisible()
 			await expect(featureRow).toBeVisible()
 
@@ -185,7 +185,7 @@ test.describe('View live edit (#9859)', () => {
 			await page.locator('.card-modal__attr button', { hasText: 'Label' }).first().click()
 			await page.locator('.card-modal__label-toggle', { hasText: `vlive-extra ${ts}` }).click()
 			await expect(page.locator('.card-modal__label-chip', { hasText: `vlive-extra ${ts}` }))
-				.toBeVisible({ timeout: 8000 })
+				.toBeVisible()
 			await feedRefetch
 
 			await page.keyboard.press('Escape') // close the label popover
@@ -193,7 +193,7 @@ test.describe('View live edit (#9859)', () => {
 			await expect(page.locator('.card-modal-modal')).toHaveCount(0, { timeout: 10_000 })
 
 			// The chip is now on the tile in the View — no reload.
-			await expect(extraChip).toHaveCount(1, { timeout: 10_000 })
+			await expect(extraChip).toHaveCount(1)
 			expect(await page.evaluate(() => window.__kansoNoReload)).toBe(true)
 		} finally {
 			await api.delete(`/views/${viewId}`).catch(() => {})

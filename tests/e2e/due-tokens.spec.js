@@ -40,7 +40,7 @@ test.describe('Composer due-date tokens', () => {
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		const composer = page.locator('.stack-column').first().locator('.card-composer__input')
-		await expect(composer).toBeVisible({ timeout: 10_000 })
+		await expect(composer).toBeVisible()
 
 		await composer.fill('Ship it !tomorrow')
 		await composer.press('Enter')
@@ -61,7 +61,7 @@ test.describe('Composer due-date tokens', () => {
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		const composer = page.locator('.stack-column').first().locator('.card-composer__input')
-		await expect(composer).toBeVisible({ timeout: 10_000 })
+		await expect(composer).toBeVisible()
 
 		await composer.fill('Fix the !important bug')
 		await composer.press('Enter')

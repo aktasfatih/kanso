@@ -48,7 +48,7 @@ test.describe('Stack colour', () => {
 			.first()
 
 		const red = (await redItem.count()) ? redItem : redFallback
-		await expect(red).toBeVisible({ timeout: 10_000 })
+		await expect(red).toBeVisible()
 
 		// Click "Red" and wait for the PATCH that persists the colour so the
 		// assertion below isn't racing an in-flight request on slow infra.
@@ -64,6 +64,6 @@ test.describe('Stack colour', () => {
 		// Persisted as the bare-hex preset …
 		await expect.poll(() => stackColor(state.boardId, state.stackId), { timeout: 10_000 }).toBe('e74c3c')
 		// … and the header shows the coloured accent.
-		await expect(page.locator('.stack-column__header--colored').first()).toBeVisible({ timeout: 6_000 })
+		await expect(page.locator('.stack-column__header--colored').first()).toBeVisible()
 	})
 })

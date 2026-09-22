@@ -51,7 +51,7 @@ test.describe('Human-readable card identifiers', () => {
 	test('the KAN-<n> reference shows on the card tile', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const firstRef = `${state.prefix}-1`
 		const secondRef = `${state.prefix}-2`
@@ -59,7 +59,7 @@ test.describe('Human-readable card identifiers', () => {
 		const firstTileRef = page.locator('.card-tile')
 			.filter({ hasText: 'First reference card' })
 			.locator('.card-tile__ref')
-		await expect(firstTileRef).toBeVisible({ timeout: 5000 })
+		await expect(firstTileRef).toBeVisible()
 		await expect(firstTileRef).toHaveText(firstRef)
 
 		const secondTileRef = page.locator('.card-tile')
@@ -71,19 +71,19 @@ test.describe('Human-readable card identifiers', () => {
 	test('the reference shows in the card modal header and is copyable', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const firstRef = `${state.prefix}-1`
 
 		const tile = page.locator('.card-tile').filter({ hasText: 'First reference card' })
-		await expect(tile).toBeVisible({ timeout: 5000 })
+		await expect(tile).toBeVisible()
 		await tile.click()
 
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// The copyable reference button lives in the modal breadcrumb.
 		const refButton = page.locator('.card-modal__ref')
-		await expect(refButton).toBeVisible({ timeout: 5000 })
+		await expect(refButton).toBeVisible()
 		await expect(refButton).toHaveText(firstRef)
 
 		// Clicking copies it - a success toast appears (clipboard itself is not

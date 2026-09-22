@@ -41,7 +41,7 @@ test.describe('Column description', () => {
 			.locator('.v-popper__popper--shown')
 			.getByRole('textbox', { name: /column description/i })
 			.first()
-		await expect(field).toBeVisible({ timeout: 10_000 })
+		await expect(field).toBeVisible()
 
 		await field.fill(DESCRIPTION)
 
@@ -67,7 +67,7 @@ test.describe('Column description', () => {
 
 		// … and a human reads it straight off the column header.
 		const subtitle = page.locator('.stack-column__description').first()
-		await expect(subtitle).toBeVisible({ timeout: 10_000 })
+		await expect(subtitle).toBeVisible()
 		await expect(subtitle).toHaveText(DESCRIPTION)
 
 		// PLAIN TEXT, never markup: markup set as a description is shown as the

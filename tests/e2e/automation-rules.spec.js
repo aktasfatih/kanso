@@ -135,7 +135,7 @@ test.describe('Automation rules (#3400)', () => {
 
 		// The card-rules "Add rule" form: pick In-progress role + add-label, then submit.
 		const roleSelect = page.locator(`#auto-role-${state.boardId}`)
-		await expect(roleSelect).toBeVisible({ timeout: 8_000 })
+		await expect(roleSelect).toBeVisible()
 		await roleSelect.selectOption(String(ROLE_IN_PROGRESS))
 		await page.locator(`#auto-action-${state.boardId}`).selectOption('add_label')
 		await page.locator(`#auto-label-${state.boardId}`).selectOption(String(state.labelId))
@@ -143,7 +143,7 @@ test.describe('Automation rules (#3400)', () => {
 
 		// It shows up in the rules list with the readable description.
 		await expect(page.locator('.automation__rule-desc', { hasText: /add label "Auto-tagged"/ }).first())
-			.toBeVisible({ timeout: 8_000 })
+			.toBeVisible()
 
 		// And it survives a reload (server round-trip via GET automation-rules).
 		const rules = await api.send('GET', `/boards/${state.boardId}/automation-rules`)

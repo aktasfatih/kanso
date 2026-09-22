@@ -62,7 +62,7 @@ test.describe('My tasks (#3441)', () => {
 		await expect(row).toBeVisible({ timeout: 15_000 })
 
 		await row.click()
-		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.card-modal')).toBeVisible()
 		await expect(page).toHaveURL(new RegExp(`/board/${state.boardId}/card/${state.assignedCardId}`))
 	})
 
@@ -103,7 +103,7 @@ test.describe('My tasks (#3441)', () => {
 		await row.focus()
 		await page.keyboard.press('Space')
 
-		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.card-modal')).toBeVisible()
 		await expect(page).toHaveURL(new RegExp(`/board/${state.boardId}/card/${state.assignedCardId}`))
 	})
 
@@ -120,7 +120,7 @@ test.describe('My tasks (#3441)', () => {
 		await page.locator('li[role="option"]', { hasText: state.emptyBoardTitle }).first().click()
 
 		const empty = page.locator('.my-cards-view .empty-content')
-		await expect(empty).toBeVisible({ timeout: 10_000 })
+		await expect(empty).toBeVisible()
 		await expect(empty).toContainText('No tasks on this board')
 		await expect(empty).not.toContainText('No tasks assigned to you')
 	})
@@ -161,9 +161,7 @@ test.describe('My tasks (#3441)', () => {
 		const tasksEntry = page.locator('.app-navigation-entry-wrapper', {
 			has: page.locator('.app-navigation-entry-link', { hasText: 'My Tasks' }),
 		})
-		await expect(tasksEntry.locator('.app-navigation-entry__counter-wrapper')).toHaveText('200+', {
-			timeout: 10_000,
-		})
+		await expect(tasksEntry.locator('.app-navigation-entry__counter-wrapper')).toHaveText('200+')
 	})
 
 	// ---- recently done: the opt-in second feed (#10061) --------------------

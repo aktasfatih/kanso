@@ -28,10 +28,10 @@ test.describe('Compact multi-review attribute bar', () => {
 	test('3+ reviews render as compact chips on a single row', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const pills = page.locator('.card-modal__review-pill')
-		await expect(pills).toHaveCount(3, { timeout: 8000 })
+		await expect(pills).toHaveCount(3)
 
 		// Compact mode engaged: every pill carries the modifier and the reviewer
 		// name / state text are hidden (moved to the avatar tooltip + icon).

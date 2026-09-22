@@ -90,15 +90,15 @@ test.describe('Inbox feed', () => {
 		await expect(errorEl).toBeHidden({ timeout: 5000 })
 
 		const itemList = page.locator('.inbox-view__list')
-		await expect(itemList).toBeVisible({ timeout: 10_000 })
+		await expect(itemList).toBeVisible()
 
 		// At least one item referencing the card title
 		const cardTitleEl = itemList.locator('.inbox-view__item-card', { hasText: 'Inbox Test Card' }).first()
-		await expect(cardTitleEl).toBeVisible({ timeout: 8000 })
+		await expect(cardTitleEl).toBeVisible()
 
 		// Comment snippet must appear somewhere in the item
 		const bodyEl = itemList.locator('.inbox-view__item-body', { hasText: state.commentBody.slice(0, 20) }).first()
-		await expect(bodyEl).toBeVisible({ timeout: 5000 })
+		await expect(bodyEl).toBeVisible()
 	})
 
 	test('clicking an inbox item navigates to the card modal', async ({ page }) => {
@@ -108,7 +108,7 @@ test.describe('Inbox feed', () => {
 
 		// Click the first item that mentions our card
 		const item = page.locator('.inbox-view__item').filter({ has: page.locator('.inbox-view__item-card', { hasText: 'Inbox Test Card' }) }).first()
-		await expect(item).toBeVisible({ timeout: 8000 })
+		await expect(item).toBeVisible()
 		await item.click()
 
 		// Hash URL should now include the board and card segments
@@ -118,7 +118,7 @@ test.describe('Inbox feed', () => {
 		)
 
 		// Card modal must open
-		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.card-modal')).toBeVisible()
 	})
 
 	test('pressing Enter on a focused inbox item opens the card (#3511)', async ({ page }) => {
@@ -127,7 +127,7 @@ test.describe('Inbox feed', () => {
 		await page.waitForSelector('.inbox-view__list', { timeout: 15_000 })
 
 		const item = page.locator('.inbox-view__item').filter({ has: page.locator('.inbox-view__item-card', { hasText: 'Inbox Test Card' }) }).first()
-		await expect(item).toBeVisible({ timeout: 8000 })
+		await expect(item).toBeVisible()
 
 		// Focus the row and activate it by keyboard (was broken: the enter+space
 		// modifier chain required both keys at once, so Enter alone did nothing).
@@ -138,7 +138,7 @@ test.describe('Inbox feed', () => {
 			(url) => url.hash.includes(`/board/${state.boardId}`) && url.hash.includes(`/card/${state.cardId}`),
 			{ timeout: 10_000 },
 		)
-		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.card-modal')).toBeVisible()
 	})
 
 	test('the feed surfaces card-status events, not only comments (#3457)', async ({ page }) => {
@@ -153,7 +153,7 @@ test.describe('Inbox feed', () => {
 		const statusItem = list.locator('.inbox-view__item', { hasText: 'requested a review on' })
 			.filter({ has: page.locator('.inbox-view__item-card', { hasText: 'Inbox Test Card' }) })
 			.first()
-		await expect(statusItem).toBeVisible({ timeout: 8000 })
+		await expect(statusItem).toBeVisible()
 	})
 
 	test('the feed and the empty state are mutually exclusive', async ({ page }) => {
@@ -167,7 +167,7 @@ test.describe('Inbox feed', () => {
 		await page.goto(state.inboxUrl)
 		await page.waitForSelector('.inbox-view', { timeout: 15_000 })
 
-		await expect(page.locator('.inbox-view__list')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.inbox-view__list')).toBeVisible()
 		await expect(page.locator('.inbox-view .empty-content')).toHaveCount(0, { timeout: 5000 })
 	})
 })

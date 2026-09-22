@@ -39,7 +39,7 @@ test.describe('Command Palette', () => {
 	async function goToBoard(page) {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 	}
 
 	// ── Tests ──────────────────────────────────────────────────────────────────
@@ -56,7 +56,7 @@ test.describe('Command Palette', () => {
 
 		// Palette should appear
 		const palette = page.locator('.command-palette')
-		await expect(palette).toBeVisible({ timeout: 5000 })
+		await expect(palette).toBeVisible()
 
 		// Input should be auto-focused
 		const input = palette.locator('.command-palette__input')
@@ -71,12 +71,12 @@ test.describe('Command Palette', () => {
 		await page.keyboard.press('Control+k')
 
 		const palette = page.locator('.command-palette')
-		await expect(palette).toBeVisible({ timeout: 5000 })
+		await expect(palette).toBeVisible()
 
 		// The test board should appear in the Boards section
 		const results = palette.locator('#command-palette-results')
 		const boardResult = results.locator('.command-palette__result').filter({ hasText: state.boardTitle })
-		await expect(boardResult).toBeVisible({ timeout: 5000 })
+		await expect(boardResult).toBeVisible()
 	})
 
 	test('typing a board name filters boards in results', async ({ page }) => {
@@ -87,14 +87,14 @@ test.describe('Command Palette', () => {
 		await page.keyboard.press('Control+k')
 
 		const palette = page.locator('.command-palette')
-		await expect(palette).toBeVisible({ timeout: 5000 })
+		await expect(palette).toBeVisible()
 
 		// Type the distinctive board name prefix
 		await palette.locator('.command-palette__input').fill('CmdK')
 
 		const results = palette.locator('#command-palette-results')
 		const boardResult = results.locator('.command-palette__result').filter({ hasText: state.boardTitle })
-		await expect(boardResult).toBeVisible({ timeout: 5000 })
+		await expect(boardResult).toBeVisible()
 	})
 
 	test('typing a card title shows a card result', async ({ page }) => {
@@ -105,7 +105,7 @@ test.describe('Command Palette', () => {
 		await page.keyboard.press('Control+k')
 
 		const palette = page.locator('.command-palette')
-		await expect(palette).toBeVisible({ timeout: 5000 })
+		await expect(palette).toBeVisible()
 
 		// "Quartz" is unique to the card we created
 		await palette.locator('.command-palette__input').fill('Quartz')
@@ -113,7 +113,7 @@ test.describe('Command Palette', () => {
 		const results = palette.locator('#command-palette-results')
 		const cardResult = results.locator('.command-palette__result').filter({ hasText: 'Quartz timepiece sync' })
 		// Server search has a debounce, give it a generous timeout
-		await expect(cardResult).toBeVisible({ timeout: 8000 })
+		await expect(cardResult).toBeVisible()
 	})
 
 	test('pressing Enter on the first board result navigates to that board', async ({ page }) => {
@@ -124,7 +124,7 @@ test.describe('Command Palette', () => {
 		await page.keyboard.press('Control+k')
 
 		const palette = page.locator('.command-palette')
-		await expect(palette).toBeVisible({ timeout: 5000 })
+		await expect(palette).toBeVisible()
 
 		// Type the board title to get a unique match
 		await palette.locator('.command-palette__input').fill('CmdK')
@@ -132,7 +132,7 @@ test.describe('Command Palette', () => {
 		const results = palette.locator('#command-palette-results')
 		await expect(
 			results.locator('.command-palette__result').filter({ hasText: state.boardTitle }),
-		).toBeVisible({ timeout: 5000 })
+		).toBeVisible()
 
 		// Arrow down to highlight first result, then Enter
 		await page.keyboard.press('ArrowDown')
@@ -153,7 +153,7 @@ test.describe('Command Palette', () => {
 		await page.keyboard.press('Control+k')
 
 		const palette = page.locator('.command-palette')
-		await expect(palette).toBeVisible({ timeout: 5000 })
+		await expect(palette).toBeVisible()
 
 		await page.keyboard.press('Escape')
 
@@ -165,7 +165,7 @@ test.describe('Command Palette', () => {
 
 		// Focus the add-stack input (or search input) - any real text input
 		const searchInput = page.locator('.search-box__input')
-		await expect(searchInput).toBeVisible({ timeout: 5000 })
+		await expect(searchInput).toBeVisible()
 		await searchInput.focus()
 
 		await page.keyboard.press('Control+k')

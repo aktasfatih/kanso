@@ -60,7 +60,7 @@ test.describe('Board attachments view', () => {
 	test('lists every board attachment and opens the owning card', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(boardUrl(boardId))
-		await page.waitForSelector('.board-view__header', { timeout: 10_000 })
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
 		await page.getByRole('button', { name: 'More' }).click()
 		await page.getByRole('menuitem', { name: 'Board attachments' }).click()
@@ -68,7 +68,7 @@ test.describe('Board attachments view', () => {
 		// Both files are listed, each next to the card it hangs off.
 		const specRow = page.locator('.board-attachments__row', { hasText: 'board-listing-spec.txt' })
 		const logoRow = page.locator('.board-attachments__row', { hasText: 'board-listing-logo.txt' })
-		await expect(specRow).toHaveCount(1, { timeout: 10_000 })
+		await expect(specRow).toHaveCount(1)
 		await expect(logoRow).toHaveCount(1)
 		await expect(specRow).toContainText('Spec card')
 		await expect(logoRow).toContainText('Design card')
@@ -80,7 +80,7 @@ test.describe('Board attachments view', () => {
 
 		// Clicking a row opens the card the file is attached to.
 		await specRow.locator('.board-attachments__open').click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 		await expect(page).toHaveURL(new RegExp(`/board/${boardId}/card/${firstCardId}$`))
 	})
 })

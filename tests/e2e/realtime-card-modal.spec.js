@@ -96,9 +96,9 @@ test.describe('Realtime card modal freshness', () => {
 
 			// Wait for the Tiptap editor to appear inside the description section.
 			const editorSection = page.locator('.card-modal__section .kanso-md-editor')
-			await expect(editorSection).toBeVisible({ timeout: 8000 })
+			await expect(editorSection).toBeVisible()
 			const prose = editorSection.locator('.ProseMirror')
-			await expect(prose).toBeVisible({ timeout: 4000 })
+			await expect(prose).toBeVisible()
 
 			// Clear the seeded text and type the local draft.
 			await prose.click()

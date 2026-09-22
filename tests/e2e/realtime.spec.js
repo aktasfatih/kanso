@@ -98,7 +98,7 @@ test.describe('Realtime sync', () => {
 			// Push must beat the 60s safety-net poll by a wide margin
 			await expect(
 				testerPage.locator('.card-tile').filter({ hasText: 'push-card' }),
-			).toBeVisible({ timeout: 4_000 })
+			).toBeVisible()
 		} finally {
 			await adminCtx.close()
 			await testerCtx.close()

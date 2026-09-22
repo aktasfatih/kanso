@@ -61,12 +61,12 @@ test.describe('A failed inline save keeps the editor open with the typed text (#
 
 		await page.locator('.card-modal__title').click()
 		const titleInput = page.locator('.card-modal__title-input')
-		await expect(titleInput).toBeVisible({ timeout: 5_000 })
+		await expect(titleInput).toBeVisible()
 		await titleInput.fill('a title worth keeping')
 		await titleInput.press('Enter')
 
 		// Editor still open, draft intact, failure explained next to it.
-		await expect(page.locator('[data-title-error]')).toHaveText(FORCED, { timeout: 10_000 })
+		await expect(page.locator('[data-title-error]')).toHaveText(FORCED)
 		await expect(titleInput).toBeVisible()
 		await expect(titleInput).toHaveValue('a title worth keeping')
 
@@ -84,7 +84,7 @@ test.describe('A failed inline save keeps the editor open with the typed text (#
 
 		await page.locator('.card-modal__title').click()
 		const titleInput = page.locator('.card-modal__title-input')
-		await expect(titleInput).toBeVisible({ timeout: 5_000 })
+		await expect(titleInput).toBeVisible()
 		await titleInput.fill('renamed cleanly')
 		await titleInput.press('Enter')
 
@@ -112,12 +112,12 @@ test.describe('A failed inline save keeps the editor open with the typed text (#
 
 		await row.locator('.card-modal__checklist-item-title').click()
 		const itemInput = row.locator('.card-modal__checklist-item-input')
-		await expect(itemInput).toBeVisible({ timeout: 5_000 })
+		await expect(itemInput).toBeVisible()
 		await itemInput.fill('step text worth keeping')
 		await itemInput.press('Enter')
 
 		await expect(page.locator('.card-modal__checklist .card-modal__save-error'))
-			.toHaveText(FORCED, { timeout: 10_000 })
+			.toHaveText(FORCED)
 		await expect(itemInput).toBeVisible()
 		await expect(itemInput).toHaveValue('step text worth keeping')
 	})
@@ -141,14 +141,14 @@ test.describe('A failed inline save keeps the editor open with the typed text (#
 		// The pencil is the first non-danger icon button on the comment.
 		await thread.locator('.card-modal__comment-icon-btn:not(.card-modal__comment-icon-btn--danger)').first().click()
 		const editTa = thread.locator('.card-modal__comment-edit-textarea')
-		await expect(editTa).toBeVisible({ timeout: 5_000 })
+		await expect(editTa).toBeVisible()
 
 		const longBody = 'A long reply that took real effort to write. '.repeat(8).trim()
 		await editTa.fill(longBody)
 		await editTa.press('Control+Enter')
 
 		await expect(page.locator('.card-modal__discussion .card-modal__save-error'))
-			.toHaveText(FORCED, { timeout: 10_000 })
+			.toHaveText(FORCED)
 		await expect(editTa).toBeVisible()
 		await expect(editTa).toHaveValue(longBody)
 

@@ -13,7 +13,7 @@ async function templateTitles(boardId) {
 async function openManager(page) {
 	await page.locator('.card-composer__templates button').first().click()
 	await page.getByRole('menuitem', { name: 'Manage templates…' }).click()
-	await page.waitForSelector('.manage-templates', { timeout: 8_000 })
+	await page.waitForSelector('.manage-templates', { timeout: 15_000 })
 }
 
 // #3634 — manage card templates: view / edit / delete / unmark / create the
@@ -42,7 +42,7 @@ test.describe('Manage card templates (#3634)', () => {
 	test('lists the board templates, edits one, creates a new one, deletes one', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		// ── List ────────────────────────────────────────────────────────────────
 		await openManager(page)
@@ -51,7 +51,7 @@ test.describe('Manage card templates (#3634)', () => {
 		// ── Edit: open the template in the card modal, rename, save ───────────────
 		await page.locator('.manage-templates__row', { hasText: 'Seed template' })
 			.getByRole('button', { name: 'Edit template' }).click()
-		await page.waitForSelector('.card-modal__title', { timeout: 8_000 })
+		await page.waitForSelector('.card-modal__title', { timeout: 15_000 })
 		await page.locator('.card-modal__title').click()
 		const titleInput = page.locator('.card-modal__title-input')
 		await titleInput.fill('Renamed template')
@@ -71,7 +71,7 @@ test.describe('Manage card templates (#3634)', () => {
 		// ── Create a new template from the modal ──────────────────────────────────
 		await page.getByRole('button', { name: 'New template' }).click()
 		// It opens the fresh template in the card modal for editing…
-		await page.waitForSelector('.card-modal__title', { timeout: 8_000 })
+		await page.waitForSelector('.card-modal__title', { timeout: 15_000 })
 		// …and the board now has two templates, both hidden from the live board.
 		await expect
 			.poll(() => templateTitles(state.boardId).then((t) => t.length), { timeout: 8_000 })
@@ -104,22 +104,22 @@ test.describe('Manage card templates (#3634)', () => {
 	test('the template manager is reachable from list view', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		// Switch to List view.
 		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
 		await page.keyboard.press('Escape')
-		await page.waitForSelector('.board-list-group', { timeout: 10_000 })
+		await page.waitForSelector('.board-list-group', { timeout: 15_000 })
 
 		// The picker must be the list's own, not a leftover kanban column.
 		const picker = page.locator('.board-list-table .card-composer__templates button').first()
-		await expect(picker).toBeVisible({ timeout: 8_000 })
+		await expect(picker).toBeVisible()
 		await picker.click()
 
 		// …and it must carry the route to the manager, which must actually open.
 		await page.getByRole('menuitem', { name: 'Manage templates…' }).click()
-		await page.waitForSelector('.manage-templates', { timeout: 8_000 })
+		await page.waitForSelector('.manage-templates', { timeout: 15_000 })
 		await expect(page.locator('.manage-templates__row')).toHaveCount(1)
 	})
 })

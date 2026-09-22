@@ -315,7 +315,7 @@ test.describe('Card view: discussion panel placement (#10408)', () => {
 		// comments.spec.js uses).
 		const posted = 'Posted from the bottom layout ' + Date.now()
 		const prose = composer.locator('.kanso-md-editor .ProseMirror').first()
-		await expect(prose).toBeVisible({ timeout: 10_000 })
+		await expect(prose).toBeVisible()
 		await prose.click()
 		await page.keyboard.type(posted)
 		const post = composer.locator('.card-modal__composer-actions button').first()
@@ -325,7 +325,7 @@ test.describe('Card view: discussion panel placement (#10408)', () => {
 		// until the mutation settles, so an unscoped text match hits both.
 		await expect(
 			page.locator('.card-modal__comment-body').filter({ hasText: posted }),
-		).toBeVisible({ timeout: 10_000 })
+		).toBeVisible()
 	})
 
 	// ── THE trap: a collapse persisted in side mode must not survive the switch ──

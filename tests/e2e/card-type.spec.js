@@ -53,16 +53,16 @@ test.describe('Card types', () => {
 	test('set type to Bug via the card modal UI; assert tile shows the type icon', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const cardTile = page.locator('.card-tile').filter({ hasText: 'Bug Type Card' })
-		await expect(cardTile).toBeVisible({ timeout: 5000 })
+		await expect(cardTile).toBeVisible()
 		await cardTile.click()
 
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const pill = typePill(page)
-		await expect(pill).toBeVisible({ timeout: 5000 })
+		await expect(pill).toBeVisible()
 		await pill.click()
 
 		// Pick "Bug" from the type popover
@@ -70,7 +70,7 @@ test.describe('Card types', () => {
 
 		// The pill should pick up the --type-bug modifier
 		await expect(page.locator('.card-modal__attrbar .card-modal__pill--type-bug'))
-			.toBeVisible({ timeout: 5000 })
+			.toBeVisible()
 
 		await page.keyboard.press('Escape')
 		await page.waitForSelector('.card-modal', { state: 'hidden', timeout: 5000 }).catch(() => {})
@@ -79,26 +79,26 @@ test.describe('Card types', () => {
 		const typeIcon = page.locator('.card-tile')
 			.filter({ hasText: 'Bug Type Card' })
 			.locator('.card-tile__type--bug')
-		await expect(typeIcon).toBeVisible({ timeout: 5000 })
+		await expect(typeIcon).toBeVisible()
 	})
 
 	test('set type to Feature on the second card; assert its tile icon', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const featureTile = page.locator('.card-tile').filter({ hasText: 'Feature Type Card' })
-		await expect(featureTile).toBeVisible({ timeout: 5000 })
+		await expect(featureTile).toBeVisible()
 		await featureTile.click()
 
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const pill = typePill(page)
-		await expect(pill).toBeVisible({ timeout: 5000 })
+		await expect(pill).toBeVisible()
 		await pill.click()
 		await page.locator('.card-modal__popover .card-modal__popover-opt', { hasText: 'Feature' }).click()
 		await expect(page.locator('.card-modal__attrbar .card-modal__pill--type-feature'))
-			.toBeVisible({ timeout: 5000 })
+			.toBeVisible()
 
 		await page.keyboard.press('Escape')
 		await page.waitForSelector('.card-modal', { state: 'hidden', timeout: 5000 }).catch(() => {})
@@ -106,29 +106,29 @@ test.describe('Card types', () => {
 		const featureIcon = page.locator('.card-tile')
 			.filter({ hasText: 'Feature Type Card' })
 			.locator('.card-tile__type--feature')
-		await expect(featureIcon).toBeVisible({ timeout: 5000 })
+		await expect(featureIcon).toBeVisible()
 	})
 
 	test('filter to Bug only - Feature card is hidden; clear filter restores it', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// Both cards visible initially
 		await expect(page.locator('.card-tile').filter({ hasText: 'Bug Type Card' }))
-			.toBeVisible({ timeout: 5000 })
+			.toBeVisible()
 		await expect(page.locator('.card-tile').filter({ hasText: 'Feature Type Card' }))
-			.toBeVisible({ timeout: 5000 })
+			.toBeVisible()
 
 		// Open the filter popover and drill into the Type dimension (#3785).
 		const filterMenu = page.locator('.board-filter-bar__filter button').first()
-		await expect(filterMenu).toBeVisible({ timeout: 5000 })
+		await expect(filterMenu).toBeVisible()
 		await filterMenu.click()
 		await page.locator('.board-filter-bar__dim-row[data-dim="types"]').click()
 
 		// Check the "Bug" type filter
 		const bugFilter = page.locator('.board-filter-bar__type-item--bug')
-		await expect(bugFilter).toBeVisible({ timeout: 5000 })
+		await expect(bugFilter).toBeVisible()
 		await bugFilter.click()
 
 		await page.keyboard.press('Escape')
@@ -136,7 +136,7 @@ test.describe('Card types', () => {
 
 		// Bug card visible; Feature card hidden
 		await expect(page.locator('.card-tile').filter({ hasText: 'Bug Type Card' }))
-			.toBeVisible({ timeout: 5000 })
+			.toBeVisible()
 		await expect(page.locator('.card-tile').filter({ hasText: 'Feature Type Card' }))
 			.not.toBeVisible({ timeout: 5000 })
 
@@ -144,34 +144,34 @@ test.describe('Card types', () => {
 		await filterMenu.click()
 		await page.locator('.board-filter-bar__dim-row[data-dim="types"]').click()
 		const bugAgain = page.locator('.board-filter-bar__type-item--bug')
-		await expect(bugAgain).toBeVisible({ timeout: 5000 })
+		await expect(bugAgain).toBeVisible()
 		await bugAgain.click()
 		await page.keyboard.press('Escape')
 		await page.waitForTimeout(300)
 
 		// Both visible again
 		await expect(page.locator('.card-tile').filter({ hasText: 'Bug Type Card' }))
-			.toBeVisible({ timeout: 5000 })
+			.toBeVisible()
 		await expect(page.locator('.card-tile').filter({ hasText: 'Feature Type Card' }))
-			.toBeVisible({ timeout: 5000 })
+			.toBeVisible()
 	})
 
 	test('type persists after page reload', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// The Bug Type Card tile should still carry the bug type icon
 		const bugIcon = page.locator('.card-tile')
 			.filter({ hasText: 'Bug Type Card' })
 			.locator('.card-tile__type--bug')
-		await expect(bugIcon).toBeVisible({ timeout: 8000 })
+		await expect(bugIcon).toBeVisible()
 
 		// The modal pill should still carry the --type-bug modifier
 		const bugTile = page.locator('.card-tile').filter({ hasText: 'Bug Type Card' })
 		await bugTile.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 		await expect(page.locator('.card-modal__attrbar .card-modal__pill--type-bug'))
-			.toBeVisible({ timeout: 5000 })
+			.toBeVisible()
 	})
 })

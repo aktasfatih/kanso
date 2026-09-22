@@ -66,15 +66,15 @@ test.describe('My Work freshness (#3766)', () => {
 		// (the nav badges keep it mounted) — no navigation, no reload.
 		const feedRefetch = page.waitForResponse(
 			(r) => r.url().includes('/api/my-cards') && r.ok(),
-			{ timeout: 10_000 },
+			{ timeout: 15_000 },
 		)
 		await page.locator('.card-modal__popover .card-modal__assign-option').first().click()
-		await expect(page.locator('.card-modal__assignee-pill', { hasText: me })).toBeVisible({ timeout: 8000 })
+		await expect(page.locator('.card-modal__assignee-pill', { hasText: me })).toBeVisible()
 		await feedRefetch
 
 		// Client-side navigation to My Tasks — the new assignment is there.
 		await gotoHash(page, '#/my-tasks')
-		await expect(row).toBeVisible({ timeout: 10_000 })
+		await expect(row).toBeVisible()
 		expect(await page.evaluate(() => window.__kansoNoReload)).toBe(true)
 
 		// Unassign from the modal (opened from the feed row) — the card must
@@ -83,7 +83,7 @@ test.describe('My Work freshness (#3766)', () => {
 		await page.waitForSelector('.card-modal__content', { timeout: 15_000 })
 		const unassignDone = page.waitForResponse(
 			(r) => r.url().includes(`/api/cards/${state.taskCardId}/assignees/`) && r.request().method() === 'DELETE',
-			{ timeout: 10_000 },
+			{ timeout: 15_000 },
 		)
 		await page.locator('.card-modal__assignee-pill', { hasText: me })
 			.locator('.card-modal__pill-x').first().click()
@@ -114,15 +114,15 @@ test.describe('My Work freshness (#3766)', () => {
 
 		const feedRefetch = page.waitForResponse(
 			(r) => r.url().includes('/api/reviews/mine') && r.ok(),
-			{ timeout: 10_000 },
+			{ timeout: 15_000 },
 		)
 		await page.locator('.card-modal__popover .card-modal__assign-option').first().click()
-		await expect(page.locator('.card-modal__review-pill--pending')).toBeVisible({ timeout: 8000 })
+		await expect(page.locator('.card-modal__review-pill--pending')).toBeVisible()
 		await feedRefetch
 
 		// Client-side navigation to My Reviews — the new request is there.
 		await gotoHash(page, '#/reviews')
-		await expect(row).toBeVisible({ timeout: 10_000 })
+		await expect(row).toBeVisible()
 		expect(await page.evaluate(() => window.__kansoNoReload)).toBe(true)
 	})
 })

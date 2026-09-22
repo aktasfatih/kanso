@@ -79,7 +79,7 @@ test.describe('Card templates (per-board)', () => {
 	test('the composer "from template" picker creates a card from the template in the UI', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		const liveBefore = (await stackTitles(state.boardId, state.todoId)).length
 
@@ -108,7 +108,7 @@ test.describe('Card templates (per-board)', () => {
 
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		// Group the board by label → the flat stacks row is replaced by lanes.
 		await page.locator('.board-view__display-menu button').first().click()

@@ -333,7 +333,7 @@ test.describe('Issue intake settings UI', () => {
 		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		await page.getByRole('tab', { name: /automation/i }).click()
 		// The GitHub group auto-expands while the webhook is active.
-		await expect(page.locator('#bs-webhook-intake-stack')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('#bs-webhook-intake-stack')).toBeVisible()
 	}
 
 	test('picking a stack and a label filter persists', async ({ page }) => {

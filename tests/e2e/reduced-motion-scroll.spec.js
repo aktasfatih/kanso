@@ -117,7 +117,7 @@ test.describe('JS scrolls honour prefers-reduced-motion (#10475)', () => {
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByText('Timeline', { exact: true }).click()
-		await expect(page.locator('.timeline__pane-head')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.timeline__pane-head')).toBeVisible()
 	}
 
 	/** Load the card by deep link to a comment far down the thread. */

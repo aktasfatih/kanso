@@ -103,6 +103,42 @@ await page.goto(boardUrl(board.id))
 A spec that logs in as a non-admin (its `peer`) must also opt out of the shared
 session with `test.use({ storageState: { cookies: [], origins: [] } })`.
 
+## Wait budgets — don't hand-roll a short one
+
+`playwright.config.js` gives every assertion 15s (`expect: { timeout: 15_000 }`)
+and every test 240s. Those numbers are sized for a **saturated** self-hosted
+runner pool, where a round-trip that costs ~0.3s on a dev box measurably costs
+1.8-3x more. A hand-written `{ timeout: 5000 }` on a wait that expects something
+to **appear** silently opts back out of that headroom — which is how three runs
+of the same commit once tripped seven different specs, none of them twice.
+
+So, for a **positive** wait (`toBeVisible`, `toHaveText`, `toHaveValue`,
+`toHaveCount(n>0)`, `waitForSelector`, `waitForResponse`, `waitForFunction`):
+
+```js
+await expect(tile).toBeVisible()                      // ✅ inherits the 15s global
+await expect(tile).toBeVisible({ timeout: 5000 })     // ❌ guard fails the build
+await page.waitForSelector('.card-modal', { timeout: 15_000 })  // ✅ see below
+```
+
+`page.waitFor*` is **not** covered by `expect.timeout` — with `actionTimeout`
+unset it would fall through to the 240s test cap — so those keep an explicit
+`{ timeout: 15_000 }` rather than dropping the option.
+
+None of this applies to a **negative** wait (`not.toBeVisible`,
+`toHaveCount(0)`, `state: 'hidden'`) or to `waitForTimeout`: there a short
+budget is load-bearing, because the assertion only passes by spending it.
+Lengthening those just makes the suite slower.
+
+`npm run lint:e2e-timeouts` enforces this (it runs in CI's `build-frontend`
+job, so it fails in minutes rather than costing a ~1.7h e2e cycle). A
+deliberately short positive budget is fine if you say why:
+
+```js
+// short-budget-ok: the banner auto-dismisses at 3s, so a longer wait can't pass
+await expect(banner).toBeVisible({ timeout: 2000 })
+```
+
 ## Isolation & parallelism
 
 The suite runs **serial by default** (`workers: 1`). Every spec acts as the same

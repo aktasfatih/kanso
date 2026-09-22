@@ -26,7 +26,7 @@ async function openRuleEditor(page, boardId, cardTitle) {
 	await page.getByRole('button', { name: /Recurring cards/ }).click()
 	const recurring = page.locator('#bs-automation-recurring')
 	const item = recurring.locator('.automation__rule-item').filter({ hasText: cardTitle })
-	await expect(item).toBeVisible({ timeout: 8_000 })
+	await expect(item).toBeVisible()
 	await item.getByRole('button', { name: /^Edit$/ }).click()
 	return recurring
 }

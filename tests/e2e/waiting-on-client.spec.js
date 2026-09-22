@@ -69,13 +69,13 @@ test.describe.serial('Waiting on client (#3746)', () => {
 	test('tile shows the amber chip; the waiting filter isolates the card; completing the step clears both', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const waitTile = page.locator('.card-tile').filter({ hasText: 'Ball With Client' })
 		const plainTile = page.locator('.card-tile').filter({ hasText: 'Ball With Us' })
 
 		// Chip on the waiting card only.
-		await expect(waitTile.locator('.card-tile__waiting')).toBeVisible({ timeout: 10_000 })
+		await expect(waitTile.locator('.card-tile__waiting')).toBeVisible()
 		await expect(waitTile.locator('.card-tile__waiting')).toContainText('Waiting on client')
 		await expect(plainTile.locator('.card-tile__waiting')).toHaveCount(0)
 

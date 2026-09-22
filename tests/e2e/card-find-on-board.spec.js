@@ -55,14 +55,14 @@ test.describe('Find the card on board (#10062)', () => {
 		await expect(targetTile(page)).toHaveCount(0)
 
 		await openCardMenu(page, cardUrl(state.targetId))
-		await expect(findAction(page)).toBeVisible({ timeout: 8000 })
+		await expect(findAction(page)).toBeVisible()
 		await findAction(page).click()
 
 		// The modal closed and we are back on the board.
 		await expect(page.locator('.card-modal')).toHaveCount(0, { timeout: 10_000 })
 
 		// The tile is now mounted, on screen, and wearing the "here it is" ring.
-		await expect(targetTile(page)).toBeVisible({ timeout: 10_000 })
+		await expect(targetTile(page)).toBeVisible()
 		await expect(targetTile(page)).toBeInViewport({ timeout: 10_000 })
 		await expect(targetTile(page)).toHaveClass(/card-tile--revealed/)
 
@@ -118,7 +118,7 @@ test.describe('Find the card on board (#10062)', () => {
 		await openCardMenu(page, cardUrl(state.targetId, '?fp=4'))
 		await findAction(page).click()
 
-		await expect(toast(page, /hidden by the current filter/i)).toBeVisible({ timeout: 10_000 })
+		await expect(toast(page, /hidden by the current filter/i)).toBeVisible()
 		await expect(targetTile(page)).toHaveCount(0)
 	})
 

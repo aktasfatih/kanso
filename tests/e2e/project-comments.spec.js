@@ -23,11 +23,11 @@ test.describe('Project discussion log (owner-only comments)', () => {
 	test('post a comment with markdown, assert it renders and persists across reload', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
-		await expect(page.locator('.project-view')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.project-view')).toBeVisible()
 
 		// The discussion section + its composer are present.
 		const composer = page.locator('.project-view__composer')
-		await expect(composer).toBeVisible({ timeout: 8_000 })
+		await expect(composer).toBeVisible()
 
 		// Post a comment carrying markdown (bold text).
 		const ta = composer.locator('.project-view__comment-textarea')
@@ -36,7 +36,7 @@ test.describe('Project discussion log (owner-only comments)', () => {
 
 		// The rendered comment body appears with the markdown turned into HTML.
 		const body = page.locator('.project-view__comment-body').first()
-		await expect(body).toBeVisible({ timeout: 8_000 })
+		await expect(body).toBeVisible()
 		await expect(body.locator('strong')).toHaveText('note')
 		// Raw asterisks must NOT be present as literal text.
 		await expect(body).not.toContainText('**note**')
@@ -48,47 +48,47 @@ test.describe('Project discussion log (owner-only comments)', () => {
 
 		// Persists across a full reload (database-first, not just optimistic UI).
 		await page.reload()
-		await expect(page.locator('.project-view')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.project-view')).toBeVisible()
 		const bodyAfter = page.locator('.project-view__comment-body').first()
-		await expect(bodyAfter.locator('strong')).toHaveText('note', { timeout: 8_000 })
+		await expect(bodyAfter.locator('strong')).toHaveText('note')
 	})
 
 	test('post a one-level reply under the top-level comment', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
-		await expect(page.locator('.project-view__comment')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.project-view__comment')).toBeVisible()
 
 		// Open the reply box on the top-level comment.
 		const replyBtn = page.locator('.project-view__comment-group > .project-view__comment .project-view__comment-link-btn').first()
-		await expect(replyBtn).toBeVisible({ timeout: 5_000 })
+		await expect(replyBtn).toBeVisible()
 		await replyBtn.click()
 
 		const replyTa = page.locator('.project-view__reply-compose .project-view__comment-textarea').first()
-		await expect(replyTa).toBeVisible({ timeout: 4_000 })
+		await expect(replyTa).toBeVisible()
 		await replyTa.fill('A **reply** note')
 		await replyTa.press('Control+Enter')
 
 		// The reply appears nested under the top-level comment, rendered as markdown.
 		const replies = page.locator('.project-view__replies .project-view__comment--reply')
-		await expect(replies).toHaveCount(1, { timeout: 8_000 })
-		await expect(replies.locator('.project-view__comment-body strong').first()).toBeVisible({ timeout: 4_000 })
+		await expect(replies).toHaveCount(1)
+		await expect(replies.locator('.project-view__comment-body strong').first()).toBeVisible()
 	})
 
 	test('edit the top-level comment and assert the "edited" marker appears', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
 		const topComment = page.locator('.project-view__comment-group > .project-view__comment').first()
-		await expect(topComment).toBeVisible({ timeout: 10_000 })
+		await expect(topComment).toBeVisible()
 
 		const editBtn = topComment.locator('.project-view__comment-icon-btn:not(.project-view__comment-icon-btn--danger)').first()
 		await editBtn.click()
 
 		const editTa = topComment.locator('.project-view__comment-textarea')
-		await expect(editTa).toBeVisible({ timeout: 4_000 })
+		await expect(editTa).toBeVisible()
 		await editTa.fill('Updated **note** body')
 		await editTa.press('Control+Enter')
 
-		await expect(topComment.locator('.project-view__comment-edited')).toBeVisible({ timeout: 8_000 })
+		await expect(topComment.locator('.project-view__comment-edited')).toBeVisible()
 	})
 
 	test('delete the top-level comment removes it and its reply', async ({ page }) => {
@@ -103,8 +103,8 @@ test.describe('Project discussion log (owner-only comments)', () => {
 
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
-		await expect(page.locator('.project-view__comment-group > .project-view__comment')).toHaveCount(1, { timeout: 10_000 })
-		await expect(page.locator('.project-view__comment--reply')).toHaveCount(1, { timeout: 5_000 })
+		await expect(page.locator('.project-view__comment-group > .project-view__comment')).toHaveCount(1)
+		await expect(page.locator('.project-view__comment--reply')).toHaveCount(1)
 
 		const topComment = page.locator('.project-view__comment-group > .project-view__comment').first()
 		await topComment.locator('.project-view__comment-icon-btn--danger').click()
@@ -126,14 +126,14 @@ test.describe('Project discussion log (owner-only comments)', () => {
 
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
-		await expect(page.locator('.project-view__composer')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.project-view__composer')).toBeVisible()
 
 		const ta = page.locator('.project-view__composer .project-view__comment-textarea')
 		await ta.fill('Safe text <img src=x onerror=alert(1)> end')
 		await page.locator('.project-view__composer').getByRole('button', { name: /^Post$/ }).click()
 
 		const body = page.locator('.project-view__comment-body').first()
-		await expect(body).toBeVisible({ timeout: 8_000 })
+		await expect(body).toBeVisible()
 		expect(alertFired).toBe(false)
 		expect(await body.locator('img').count()).toBe(0)
 		await expect(body).toContainText('<img src=x onerror=alert(1)>')

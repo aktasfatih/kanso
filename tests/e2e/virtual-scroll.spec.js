@@ -107,10 +107,10 @@ test.describe('Virtualized card list', () => {
 	test('only a subset of 30 tiles rendered in DOM (virtualization proof)', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		// Wait for at least one card tile to appear
-		await page.waitForSelector('.card-tile-wrap', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile-wrap', { timeout: 15_000 })
 
 		// Count how many card-tile-wrap elements are in the DOM
 		const tileCount = await page.locator('.card-tile-wrap').count()
@@ -127,15 +127,15 @@ test.describe('Virtualized card list', () => {
 	test('drag first visible tile toward bottom, drop after initially-offscreen tile, order persists on reload', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
-		await page.waitForSelector('.card-tile-wrap', { timeout: 10_000 })
+		await page.waitForSelector('.stack-column', { timeout: 15_000 })
+		await page.waitForSelector('.card-tile-wrap', { timeout: 15_000 })
 
 		const column = page.locator('.stack-column').first()
 		const cardList = column.locator('.stack-column__cards')
 
 		// Get first visible card
 		const firstCard = column.locator('.card-tile-wrap .card-tile').first()
-		await expect(firstCard).toBeVisible({ timeout: 5000 })
+		await expect(firstCard).toBeVisible()
 
 		const firstCardTitle = await firstCard.innerText()
 		console.log('First card title:', firstCardTitle.trim())
@@ -156,7 +156,7 @@ test.describe('Virtualized card list', () => {
 		// The last visible tile after scrolling should be a card that was NOT
 		// in the initial render window - confirming virtualization scrolled correctly.
 		const lastVisibleCard = column.locator('.card-tile-wrap .card-tile').last()
-		await expect(lastVisibleCard).toBeVisible({ timeout: 5000 })
+		await expect(lastVisibleCard).toBeVisible()
 		const lastCardTitle = await lastVisibleCard.innerText()
 		console.log('Last visible card title after scroll:', lastCardTitle.trim())
 
@@ -166,8 +166,8 @@ test.describe('Virtualized card list', () => {
 
 		// Reload and verify the board state is consistent (server persisted the move)
 		await page.reload()
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
-		await page.waitForSelector('.card-tile-wrap', { timeout: 10_000 })
+		await page.waitForSelector('.stack-column', { timeout: 15_000 })
+		await page.waitForSelector('.card-tile-wrap', { timeout: 15_000 })
 
 		// After reload: virtualization still working (subset in DOM)
 		const reloadCount = await page.locator('.card-tile-wrap').count()

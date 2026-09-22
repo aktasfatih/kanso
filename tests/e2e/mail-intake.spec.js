@@ -39,7 +39,7 @@ test.describe('Email intake configuration', () => {
 		await page.getByRole('button', { name: 'More' }).click()
 		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		await page.getByRole('tab', { name: /automation/i }).click()
-		await expect(page.locator('#bs-pane-automation')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('#bs-pane-automation')).toBeVisible()
 
 		await page.getByRole('button', { name: /Email intake/i }).click()
 		const body = page.locator('#bs-automation-mail-intake')
@@ -70,7 +70,7 @@ test.describe('Email intake configuration', () => {
 			),
 			body.getByRole('button', { name: /^Save$/ }).click(),
 		])
-		await expect(body.getByText(/Saved\./)).toBeVisible({ timeout: 8_000 })
+		await expect(body.getByText(/Saved\./)).toBeVisible()
 
 		// The credential must not travel back to the browser in any form.
 		const payload = await saveResponse.text()
@@ -94,7 +94,7 @@ test.describe('Email intake configuration', () => {
 		// whole reason an empty field means "unchanged" rather than "clear".
 		await body.locator('#bs-mail-folder').fill('Archive')
 		await body.getByRole('button', { name: /^Save$/ }).click()
-		await expect(body.getByText(/Saved\./)).toBeVisible({ timeout: 8_000 })
+		await expect(body.getByText(/Saved\./)).toBeVisible()
 
 		const config = await api.get(`/boards/${state.boardId}/mail-intake`)
 		expect(config.hasPassword).toBe(true)
@@ -127,7 +127,7 @@ test.describe('Email intake configuration', () => {
 		const body = await openIntakePanel(page)
 
 		await body.getByRole('button', { name: /Remove mailbox/i }).click()
-		await expect(body.getByText(/Mailbox removed\./)).toBeVisible({ timeout: 8_000 })
+		await expect(body.getByText(/Mailbox removed\./)).toBeVisible()
 
 		const config = await api.get(`/boards/${state.boardId}/mail-intake`)
 		// A board with no mailbox reports null rather than 404 - the form renders

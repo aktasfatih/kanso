@@ -10,7 +10,7 @@ async function openBoardsPage(page) {
 
 async function openTileMenu(page, boardId, title) {
 	const tile = page.locator('.board-tile', { hasText: title }).first()
-	await expect(tile).toBeVisible({ timeout: 10_000 })
+	await expect(tile).toBeVisible()
 	await tile.locator(`[data-test="board-options-menu-${boardId}"] button`).first().click()
 }
 
@@ -68,7 +68,7 @@ test.describe('Boards page — tile options menu board actions', () => {
 
 		// The confirm dialog opens; Cancel keeps the board.
 		const dialog = page.locator('[data-test="tile-delete-confirm"]')
-		await expect(dialog).toBeVisible({ timeout: 6_000 })
+		await expect(dialog).toBeVisible()
 		await dialog.getByRole('button', { name: 'Cancel' }).click()
 		await expect(dialog).toHaveCount(0, { timeout: 6_000 })
 		await expect(page.locator('.board-tile', { hasText: title }).first()).toBeVisible()
@@ -76,7 +76,7 @@ test.describe('Boards page — tile options menu board actions', () => {
 		// Delete again and confirm — the tile disappears from the grid.
 		await openTileMenu(page, board.id, title)
 		await page.locator(`[data-test="tile-delete-${board.id}"]`).first().click()
-		await expect(dialog).toBeVisible({ timeout: 6_000 })
+		await expect(dialog).toBeVisible()
 		await page.locator('[data-test="tile-delete-confirm-yes"]').click()
 		await expect(page.locator('.board-tile', { hasText: title })).toHaveCount(0, { timeout: 15_000 })
 
@@ -107,6 +107,6 @@ test.describe('Boards page — tile options menu board actions', () => {
 
 		// Back on Active it is restored.
 		await page.getByRole('button', { name: 'Active' }).click()
-		await expect(page.locator('.board-tile', { hasText: title }).first()).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.board-tile', { hasText: title }).first()).toBeVisible()
 	})
 })

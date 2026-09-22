@@ -36,7 +36,7 @@ test.describe('Name length caps differ per entity', () => {
 		await page.getByRole('button', { name: 'New project' }).click()
 
 		const title = page.locator('#project-title')
-		await expect(title).toBeVisible({ timeout: 10_000 })
+		await expect(title).toBeVisible()
 		await expect(title).toHaveAttribute('maxlength', String(PROJECT_CAP))
 
 		// fill() goes through the real input pipeline, so maxlength applies.
@@ -63,7 +63,7 @@ test.describe('Name length caps differ per entity', () => {
 		await page.getByRole('button', { name: 'Create board' }).first().click()
 
 		const name = page.getByPlaceholder('New board name…')
-		await expect(name).toBeVisible({ timeout: 10_000 })
+		await expect(name).toBeVisible()
 		await expect(name).toHaveAttribute('maxlength', String(BOARD_CAP))
 
 		await name.fill(overlong('b'))

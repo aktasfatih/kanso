@@ -15,6 +15,8 @@
     "l10n:sync": "node scripts/l10n.mjs sync",
     "l10n:check": "npm run l10n:extract && npm run l10n:sync && npm run l10n:compile && git diff --exit-code translationfiles/ l10n/",
     "lint:info-xml": "node scripts/validate-info-xml.mjs",
+    "lint:e2e-timeouts": "node scripts/check-e2e-timeouts.mjs",
+    "test:e2e-timeouts": "node --test scripts/check-e2e-timeouts.test.mjs",
     "test:l10n": "node --test scripts/l10n.lint.test.mjs",
     "test:unit": "node --test tests/unit/*.test.mjs",
     "check:push": "node tests/e2e/push-health.js",

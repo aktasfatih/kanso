@@ -65,7 +65,7 @@ test.describe('Review types', () => {
 
 		// The QA type should appear in the list
 		const item = page.locator('.rt-settings__list .label-settings__item', { hasText: 'QA' })
-		await expect(item).toHaveCount(1, { timeout: 8_000 })
+		await expect(item).toHaveCount(1)
 
 		// Its swatch should be colored blue (3498db = rgb(52,152,219))
 		const swatchBg = await item.locator('.label-settings__swatch')
@@ -95,7 +95,7 @@ test.describe('Review types', () => {
 
 		// The new type should appear in the list without error
 		const item = page.locator('.rt-settings__list .label-settings__item', { hasText: 'Legal' })
-		await expect(item).toHaveCount(1, { timeout: 8_000 })
+		await expect(item).toHaveCount(1)
 		await expect(page.locator('.label-settings__error')).toHaveCount(0)
 
 		// Verify the server stored bare hex (no leading #)
@@ -109,7 +109,7 @@ test.describe('Review types', () => {
 	test('type selector appears in the request-review popover', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 12_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open the request-review popover - the "Request" pill lives in the
 		// reviews cluster (.card-modal__attr-right) at the end of the attribute bar.
@@ -117,7 +117,7 @@ test.describe('Review types', () => {
 
 		// The type selector row should be visible with at least the QA type
 		const selector = page.locator('.card-modal__review-type-selector')
-		await expect(selector).toBeVisible({ timeout: 6_000 })
+		await expect(selector).toBeVisible()
 		await expect(selector.locator('.card-modal__review-type-option', { hasText: 'QA' })).toHaveCount(1)
 		// "Review" (no-type) option should also be present
 		await expect(selector.locator('.card-modal__review-type-option', { hasText: 'Review' })).toHaveCount(1)
@@ -133,15 +133,15 @@ test.describe('Review types', () => {
 		await api.raw('PUT', `/cards/${state.cardId}/reviews/${me}`, { reviewTypeId: state.reviewTypeId })
 
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 12_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// A pending review chip should be present
 		const chip = page.locator('.card-modal__review-pill--pending')
-		await expect(chip).toBeVisible({ timeout: 8_000 })
+		await expect(chip).toBeVisible()
 
 		// And the type badge with the "QA" label should appear inside it
 		const typeBadge = chip.locator('.card-modal__review-type-badge')
-		await expect(typeBadge).toBeVisible({ timeout: 6_000 })
+		await expect(typeBadge).toBeVisible()
 		await expect(typeBadge).toContainText('QA')
 	})
 })

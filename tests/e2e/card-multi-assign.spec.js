@@ -91,7 +91,7 @@ test.describe('Adding a second assignee from the card modal (#10603)', () => {
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 		await page.locator('.card-tile').filter({ hasText: title }).click()
-		await page.waitForSelector('.card-modal__attrbar', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 	}
 
 	/** The assignee name pills in the attribute bar (not the contact ones). */
@@ -111,7 +111,7 @@ test.describe('Adding a second assignee from the card modal (#10603)', () => {
 
 		// First assignee.
 		await popover.locator('.card-modal__assign-option', { hasText: state.extras[0] }).click()
-		await expect(assigneePill(page, state.extras[0])).toBeVisible({ timeout: 10_000 })
+		await expect(assigneePill(page, state.extras[0])).toBeVisible()
 
 		// …and the picker is STILL open, so the second one is one click away.
 		// This is the whole bug: it used to close here, and on a board with no
@@ -120,11 +120,11 @@ test.describe('Adding a second assignee from the card modal (#10603)', () => {
 
 		// Second assignee, from the same open picker.
 		await popover.locator('.card-modal__assign-option', { hasText: state.extras[1] }).click()
-		await expect(assigneePill(page, state.extras[1])).toBeVisible({ timeout: 10_000 })
+		await expect(assigneePill(page, state.extras[1])).toBeVisible()
 
 		// Third — myself, still without reopening anything.
 		await popover.locator('.card-modal__assign-option', { hasText: me }).first().click()
-		await expect(page.locator('.card-modal__attrbar .card-modal__assignee-pill')).toHaveCount(3, { timeout: 10_000 })
+		await expect(page.locator('.card-modal__attrbar .card-modal__assignee-pill')).toHaveCount(3)
 
 		// Assigned rows stay listed and are marked as assigned (they toggle off),
 		// rather than disappearing from the list - visually and for a screen reader.
@@ -141,7 +141,7 @@ test.describe('Adding a second assignee from the card modal (#10603)', () => {
 		await page.keyboard.press('Escape') // close picker
 		await page.keyboard.press('Escape') // close card
 		const tile = page.locator('.card-tile').filter({ hasText: 'Pair up on this' })
-		await expect(tile.locator('.assignee-stack__avatar')).toHaveCount(3, { timeout: 10_000 })
+		await expect(tile.locator('.assignee-stack__avatar')).toHaveCount(3)
 	})
 
 	test('removing one of several assignees leaves the others alone', async ({ page }) => {
@@ -149,11 +149,11 @@ test.describe('Adding a second assignee from the card modal (#10603)', () => {
 		await openCard(page, 'Three on this one')
 
 		const pills = page.locator('.card-modal__attrbar .card-modal__assignee-pill')
-		await expect(pills).toHaveCount(3, { timeout: 10_000 })
+		await expect(pills).toHaveCount(3)
 
 		// Drop the first extra; the other two must survive.
 		await pills.filter({ hasText: state.extras[0] }).getByTitle('Remove assignee').click()
-		await expect(pills).toHaveCount(2, { timeout: 10_000 })
+		await expect(pills).toHaveCount(2)
 		await expect(assigneePill(page, state.extras[1])).toBeVisible()
 		await expect(assigneePill(page, me)).toBeVisible()
 

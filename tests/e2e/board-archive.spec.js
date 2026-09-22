@@ -42,14 +42,14 @@ test.describe('Board archiving', () => {
 
 		// Persisted archived + landed on the board list.
 		await expect.poll(() => boardArchived(state.boardId), { timeout: 8_000 }).toBe(true)
-		await page.waitForSelector('.board-grid, .board-list-segmented', { timeout: 10_000 })
+		await page.waitForSelector('.board-grid, .board-list-segmented', { timeout: 15_000 })
 
 		// The board is no longer an active tile …
 		await expect(page.locator('.board-tile__title', { hasText: state.title })).toHaveCount(0)
 		// … but shows once the Archived segment of the toggle is selected.
 		await page.getByRole('button', { name: /Archived/ }).click()
 		const row = page.locator('.board-list__archived-row', { hasText: state.title })
-		await expect(row).toBeVisible({ timeout: 6_000 })
+		await expect(row).toBeVisible()
 
 		// Unarchive restores it to active. The standalone Unarchive button is
 		// folded into the tile's options (⋯) menu (#3750).
@@ -58,6 +58,6 @@ test.describe('Board archiving', () => {
 		await expect.poll(() => boardArchived(state.boardId), { timeout: 8_000 }).toBe(false)
 		// Back on the Active segment, the board reappears as a tile.
 		await page.getByRole('button', { name: 'Active', exact: true }).click()
-		await expect(page.locator('.board-tile__title', { hasText: state.title })).toBeVisible({ timeout: 6_000 })
+		await expect(page.locator('.board-tile__title', { hasText: state.title })).toBeVisible()
 	})
 })

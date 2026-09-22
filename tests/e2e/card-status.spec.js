@@ -47,12 +47,12 @@ test.describe('Card status (#3481)', () => {
 		// generic statuses, so the column section is addressed explicitly.
 		await page.locator('.card-modal__status-chip--btn').click()
 		await page.locator('.card-modal__status-wrap .card-modal__popover-opt--column', { hasText: 'In progress' }).click()
-		await expect(page.locator('.card-modal__status-chip--in_progress')).toBeVisible({ timeout: 6_000 })
+		await expect(page.locator('.card-modal__status-chip--in_progress')).toBeVisible()
 
 		// Close the modal → the board tile shows the In-progress chip.
 		await page.keyboard.press('Escape')
 		const tile = page.locator('.card-tile', { hasText: 'Manual status card' })
-		await expect(tile.locator('.card-tile__inprogress')).toBeVisible({ timeout: 8_000 })
+		await expect(tile.locator('.card-tile__inprogress')).toBeVisible()
 	})
 
 	test('setting a card Done from the card view moves it into the Done-role column (#54)', async ({ page }) => {
@@ -68,7 +68,7 @@ test.describe('Card status (#3481)', () => {
 		// Mark it Done from the card's status control, via the Done-role column.
 		await page.locator('.card-modal__status-chip--btn').click()
 		await page.locator('.card-modal__status-wrap .card-modal__popover-opt--column', { hasText: 'Done' }).click()
-		await expect(page.locator('.card-modal__status-chip--done')).toBeVisible({ timeout: 6_000 })
+		await expect(page.locator('.card-modal__status-chip--done')).toBeVisible()
 
 		// The status change carries the card into the Done-role column (#54), and it
 		// is stamped done - status and board position stay in sync.

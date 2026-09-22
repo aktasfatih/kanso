@@ -30,7 +30,7 @@ test.describe('Board settings enable switches (public link + calendar feed)', ()
 		await page.getByRole('button', { name: 'More' }).click()
 		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		await page.getByRole('tab', { name: /automation/i }).click()
-		await expect(page.locator('#bs-pane-automation')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('#bs-pane-automation')).toBeVisible()
 
 		// --- Calendar feed (#3541) ---
 		await page.getByRole('button', { name: /Calendar feed/i }).click() // expand the group
@@ -39,18 +39,18 @@ test.describe('Board settings enable switches (public link + calendar feed)', ()
 		// Flip the switch — before the fix this was a no-op.
 		await calBody.getByText('Enable calendar feed').click()
 		// Enabled → the "Feed active" badge appears (only rendered when enabled).
-		await expect(page.getByText('Feed active')).toBeVisible({ timeout: 8_000 })
+		await expect(page.getByText('Feed active')).toBeVisible()
 
 		// --- Public link (#3531) ---
 		// The public-link control moved out of Automation and into the
 		// Sharing pane (220f7d7), so switch tabs before toggling it.
 		await page.getByRole('tab', { name: /sharing/i }).click()
-		await expect(page.locator('#bs-pane-sharing')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('#bs-pane-sharing')).toBeVisible()
 		await page.getByRole('button', { name: /Public link/i }).click() // expand the group
 		const pubBody = page.locator('#bs-sharing-public-link')
 		await expect(pubBody).toBeVisible()
 		await pubBody.getByText('Enable public link').click()
-		await expect(page.getByText('Link active')).toBeVisible({ timeout: 8_000 })
+		await expect(page.getByText('Link active')).toBeVisible()
 
 		// --- Link expiry (#10466) ---
 		// The expiry column was persisted and ENFORCED from day one, but nothing

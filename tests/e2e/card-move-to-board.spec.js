@@ -53,14 +53,14 @@ test.describe('Move card to another board (card ⋯ menu)', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open the ⋯ menu and click "Move to board…".
 		await page.locator('.card-modal__actions-menu button').first().click()
 		await page.getByRole('menuitem', { name: 'Move to board…' }).click()
 
 		// The move dialog opens (reuses the copy picker); pick the target board+column.
-		await page.waitForSelector('.card-modal__copy-dialog', { timeout: 8_000 })
+		await page.waitForSelector('.card-modal__copy-dialog', { timeout: 15_000 })
 		await page.locator('.card-modal__copy-field select').first()
 			.selectOption({ label: 'Move-Dst E2E' })
 		await page.locator('.card-modal__copy-field select').nth(1)

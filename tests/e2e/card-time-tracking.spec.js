@@ -140,7 +140,7 @@ test.describe('Card time tracking', () => {
 		await ncLogin(page)
 		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`
 		await page.goto(cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Fill the duration + note and submit the add-time form.
 		await page.fill('.card-modal__time-duration', '1h 30m')
@@ -149,16 +149,16 @@ test.describe('Card time tracking', () => {
 
 		// The entry row appears with the formatted duration + note.
 		const row = page.locator('.card-modal__link-row', { hasText: 'UI logged' })
-		await expect(row).toHaveCount(1, { timeout: 8000 })
+		await expect(row).toHaveCount(1)
 		await expect(row).toContainText('1h 30m')
 
 		// Reopen the card fresh; the per-card total (from the detail payload) shows.
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${boardId}`)
 		await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
 		await page.goto(cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 		await expect(page.locator('.card-modal__time-entry-duration', { hasText: '1h 30m' }))
-			.toHaveCount(1, { timeout: 8000 })
+			.toHaveCount(1)
 
 		// Clean up so the shared card resets.
 		const entries = await api('GET', `/cards/${cardId}/time-entries`)

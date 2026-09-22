@@ -71,9 +71,9 @@ test.describe('Description save conflict', () => {
 			// version from what is on screen right now.
 			await page.locator('.card-modal__desc-view').click()
 			const editorSection = page.locator('.card-modal__section .kanso-md-editor')
-			await expect(editorSection).toBeVisible({ timeout: 8000 })
+			await expect(editorSection).toBeVisible()
 			const prose = editorSection.locator('.ProseMirror')
-			await expect(prose).toBeVisible({ timeout: 4000 })
+			await expect(prose).toBeVisible()
 			await prose.click()
 			await page.keyboard.press('Control+A')
 			await page.keyboard.type('the peer rewrote the whole thing')
@@ -129,7 +129,7 @@ test.describe('Description save conflict', () => {
 			for (const text of ['solo edit one', 'solo edit two']) {
 				await page.locator('.card-modal__desc-view').click()
 				const prose = page.locator('.card-modal__section .kanso-md-editor .ProseMirror')
-				await expect(prose).toBeVisible({ timeout: 8000 })
+				await expect(prose).toBeVisible()
 				await prose.click()
 				await page.keyboard.press('Control+A')
 				await page.keyboard.type(text)

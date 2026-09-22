@@ -80,7 +80,7 @@ test.describe('Card column in the breadcrumb (#10064)', () => {
 		// their only full entry point (the header button never reaches "not started").
 		await page.locator('.card-modal__status-chip--btn').click()
 		await page.locator('.card-modal__status-wrap .card-modal__popover-opt--status', { hasText: 'In progress' }).click()
-		await expect(page.locator('.card-modal__status-chip--in_progress')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.card-modal__status-chip--in_progress')).toBeVisible()
 
 		// A role-less board has no in-progress column to move to, so the card stays put.
 		let card = await api.get(`/cards/${state.statusCardId}`)
@@ -104,7 +104,7 @@ test.describe('Card column in the breadcrumb (#10064)', () => {
 		expect(Number(card.doneAt)).toBe(0)
 
 		// The breadcrumb follows the move; the chip still reads the status.
-		await expect(page.locator('.card-modal__crumb--column')).toHaveText('Working column', { timeout: 8_000 })
+		await expect(page.locator('.card-modal__crumb--column')).toHaveText('Working column')
 		await expect(page.locator('.card-modal__status-chip--btn')).toContainText('IN PROGRESS')
 	})
 

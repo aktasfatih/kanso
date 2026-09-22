@@ -74,19 +74,19 @@ test.describe('Checklist', () => {
 	test('add two checklist items via UI, toggle one done, assert progress and persistence', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// Open the card modal by clicking the card tile
 		const cardTile = page.locator('.card-tile').filter({ hasText: 'Card With Checklist' })
-		await expect(cardTile).toBeVisible({ timeout: 5000 })
+		await expect(cardTile).toBeVisible()
 		await cardTile.click()
 
 		// Wait for the card modal to open
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Checklist section should be visible
 		const checklistSection = page.locator('.card-modal__checklist')
-		await expect(checklistSection).toBeVisible({ timeout: 5000 })
+		await expect(checklistSection).toBeVisible()
 
 		// Add first item "Buy groceries" via the add input
 		const addInput = page.locator('.card-modal__checklist-add-input')
@@ -95,14 +95,14 @@ test.describe('Checklist', () => {
 
 		// Wait for the item to appear in the list
 		await expect(page.locator('.card-modal__checklist-item').filter({ hasText: 'Buy groceries' }))
-			.toBeVisible({ timeout: 5000 })
+			.toBeVisible()
 
 		// Add second item "Write tests"
 		await addInput.fill('Write tests')
 		await addInput.press('Enter')
 
 		await expect(page.locator('.card-modal__checklist-item').filter({ hasText: 'Write tests' }))
-			.toBeVisible({ timeout: 5000 })
+			.toBeVisible()
 
 		// Assert progress shows 0/2 initially
 		await expect(page.locator('.card-modal__checklist-count'))
@@ -133,7 +133,7 @@ test.describe('Checklist', () => {
 		await expect(
 			page.locator('.card-tile').filter({ hasText: 'Card With Checklist' })
 				.locator('.card-tile__checklist'),
-		).toHaveText(/1\/2/, { timeout: 1500 })
+		).toHaveText(/1\/2/)
 
 		// Close the modal by pressing Escape or clicking outside
 		await page.keyboard.press('Escape')
@@ -151,7 +151,7 @@ test.describe('Checklist', () => {
 		// URL rather than page.reload() so the check is independent of the
 		// post-Escape route).
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// Tile badge should still show 1/2 after reload
 		const tileAfterReload = page.locator('.card-tile').filter({ hasText: 'Card With Checklist' })
@@ -160,7 +160,7 @@ test.describe('Checklist', () => {
 
 		// Open the card again and verify modal progress is also 1/2
 		await tileAfterReload.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 		await expect(page.locator('.card-modal__checklist-count'))
 			.toHaveText('1 / 2', { timeout: 15_000 })
 
@@ -178,12 +178,12 @@ test.describe('Checklist', () => {
 	test('complete all items - badge turns success color, progress bar turns green', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// Open card modal
 		const cardTile = page.locator('.card-tile').filter({ hasText: 'Card With Checklist' })
 		await cardTile.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Ensure the checklist has hydrated before interacting: on a cold-start
 		// slow runner the item row/checkbox can lag, which previously hung the
@@ -242,18 +242,18 @@ test.describe('Checklist steps', () => {
 	test('assign a step, set an overdue due date, complete it - done_at stamps and my-steps tracks it', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const cardTile = page.locator('.card-tile').filter({ hasText: 'Card With Steps' })
 		await cardTile.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Add the step.
 		const addInput = page.locator('.card-modal__checklist-add-input')
 		await addInput.fill('Send contract')
 		await addInput.press('Enter')
 		const item = page.locator('.card-modal__checklist-item').filter({ hasText: 'Send contract' })
-		await expect(item).toBeVisible({ timeout: 10_000 })
+		await expect(item).toBeVisible()
 		// The row renders from the optimistic create with a NEGATIVE placeholder id
 		// and is not addressable on the server until the POST resolves — the app
 		// keeps the step pickers disabled for that window (asserted by the test
@@ -274,7 +274,7 @@ test.describe('Checklist steps', () => {
 		await assignRes
 
 		// The assignee avatar renders on the row.
-		await expect(item.locator('.card-modal__step-assignee')).toBeVisible({ timeout: 10_000 })
+		await expect(item.locator('.card-modal__step-assignee')).toBeVisible()
 
 		// The step now surfaces in the cross-board my-steps feed (open + assigned).
 		const openSteps = await api.get('/my-steps')
@@ -292,8 +292,8 @@ test.describe('Checklist steps', () => {
 		await item.locator('.card-modal__step-btn[title="Set step due date"]').click()
 		await item.locator('.card-modal__date-input').fill('2020-01-01T09:00')
 		await dueRes
-		await expect(item.locator('.card-modal__step-due')).toBeVisible({ timeout: 10_000 })
-		await expect(item.locator('.card-modal__step-due--overdue')).toBeVisible({ timeout: 10_000 })
+		await expect(item.locator('.card-modal__step-due')).toBeVisible()
+		await expect(item.locator('.card-modal__step-due--overdue')).toBeVisible()
 
 		// …and the signal reaches the BOARD (#10696): the tile's existing checklist
 		// badge tints, so a card carrying a late step stops looking identical to one
@@ -308,13 +308,13 @@ test.describe('Checklist steps', () => {
 		// the query cache — and with it the optimistic patch — fully intact.
 		await page.goto(state.boardUrl)
 		await page.reload()
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 		await expect(stepsTile.locator('.card-tile__checklist--overdue')).toBeVisible({ timeout: 15_000 })
 
 		// Reopen the card for the rest of the flow.
 		await stepsTile.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
-		await expect(item).toBeVisible({ timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+		await expect(item).toBeVisible()
 
 		// Complete the step → done_at stamps server-side and the overdue accent
 		// is suppressed on the done row.
@@ -326,13 +326,13 @@ test.describe('Checklist steps', () => {
 		// this too is the server's answer.
 		await page.goto(state.boardUrl)
 		await page.reload()
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 		await expect(stepsTile.locator('.card-tile__checklist')).toBeVisible({ timeout: 15_000 })
 		await expect(stepsTile.locator('.card-tile__checklist--overdue')).toHaveCount(0, { timeout: 15_000 })
 
 		await stepsTile.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
-		await expect(item).toBeVisible({ timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+		await expect(item).toBeVisible()
 
 		const items = await api.get(`/cards/${state.cardId}/checklist`)
 		const step = items.find((i) => i.title === 'Send contract')
@@ -390,9 +390,9 @@ test.describe('Checklist steps', () => {
 
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 		await page.locator('.card-tile').filter({ hasText: 'Card With Steps' }).click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// A settled row to drag against — added BEFORE the latency is injected.
 		const addInput = page.locator('.card-modal__checklist-add-input')
@@ -419,7 +419,7 @@ test.describe('Checklist steps', () => {
 		await addInput.press('Enter')
 
 		const item = page.locator('.card-modal__checklist-item').filter({ hasText: 'Deferred step' }).last()
-		await expect(item).toBeVisible({ timeout: 10_000 })
+		await expect(item).toBeVisible()
 		await expect(item).toHaveAttribute('data-item-id', /^-\d+$/)
 		const placeholderId = await item.getAttribute('data-item-id')
 
@@ -478,7 +478,7 @@ test.describe('Checklist steps', () => {
 		await deleteBtn.click({ force: true })
 		await dispatchClick('.card-modal__checklist-item-delete')
 		await assertNoPlaceholderTraffic('delete')
-		await expect(item).toHaveCount(1, { timeout: 1500 })
+		await expect(item).toHaveCount(1)
 
 		// Forced past it, the inline title editor must not open — an editor here
 		// both PATCHes the placeholder id and loses the typed draft when the id
@@ -564,7 +564,7 @@ test.describe('Checklist steps', () => {
 		await expect(dragHandle).toHaveAttribute('draggable', 'true')
 		await expect(item).not.toHaveAttribute('aria-busy', 'true')
 		await assignBtn.click()
-		await expect(item.locator('.card-modal__step-popover')).toBeVisible({ timeout: 5000 })
+		await expect(item.locator('.card-modal__step-popover')).toBeVisible()
 
 		await expect(page.locator('.card-modal__save-error')).toHaveCount(0)
 		if (placeholderCalls.length > 0) {

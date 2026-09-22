@@ -14,7 +14,7 @@ test.describe('My Work hub', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/my-work`)
 
 		const hub = page.locator('.my-work-view')
-		await expect(hub).toBeVisible({ timeout: 10_000 })
+		await expect(hub).toBeVisible()
 
 		// Single hub title; the three tabs live in a tablist.
 		await expect(page.getByRole('heading', { name: 'My Work' })).toBeVisible()
@@ -23,17 +23,17 @@ test.describe('My Work hub', () => {
 
 		// Default tab = My tasks: the embedded MyCardsView renders WITHOUT its own
 		// header (the hub owns the title), proving embedded mode.
-		await expect(page.locator('.my-cards-view')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.my-cards-view')).toBeVisible()
 		await expect(page.locator('.my-cards-view__header')).toHaveCount(0)
 
 		// Switch to Reviews.
 		await page.getByRole('tab', { name: 'Reviews' }).click()
-		await expect(page.locator('.my-reviews-view')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.my-reviews-view')).toBeVisible()
 		await expect(page.locator('.my-cards-view')).toHaveCount(0)
 
 		// Switch to Inbox.
 		await page.getByRole('tab', { name: 'Inbox' }).click()
-		await expect(page.locator('.inbox-view')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.inbox-view')).toBeVisible()
 		await expect(page.locator('.my-reviews-view')).toHaveCount(0)
 
 		// The board filter control is present.
@@ -44,7 +44,7 @@ test.describe('My Work hub', () => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/my-tasks`)
 		// Not embedded → its own header is shown (backward compatible).
-		await expect(page.locator('.my-cards-view__header')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.my-cards-view__header')).toBeVisible()
 	})
 })
 

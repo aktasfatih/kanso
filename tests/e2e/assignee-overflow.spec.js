@@ -190,7 +190,7 @@ test.describe('Assignee overflow badge on every board surface (#10655)', () => {
 
 	test('list view shows 3 avatars + "+1", and no badge under the cap', async ({ page }) => {
 		await openBoard(page, 'List')
-		await page.waitForSelector('.board-list-row', { timeout: 10_000 })
+		await page.waitForSelector('.board-list-row', { timeout: 15_000 })
 
 		const crowded = page.locator('.board-list-row', { hasText: 'Crowded task' })
 		await expect(crowded).toBeVisible()
@@ -203,7 +203,7 @@ test.describe('Assignee overflow badge on every board surface (#10655)', () => {
 
 	test('timeline view shows 3 avatars + "+1", and no badge under the cap', async ({ page }) => {
 		await openBoard(page, 'Timeline')
-		await page.waitForSelector('.timeline__pane-row', { timeout: 10_000 })
+		await page.waitForSelector('.timeline__pane-row', { timeout: 15_000 })
 
 		const crowded = page.locator('.timeline__pane-row', { hasText: 'Crowded task' })
 		await expect(crowded).toBeVisible()
@@ -283,11 +283,11 @@ test.describe('Assignee overflow badge on every board surface (#10655)', () => {
 		await sweep({ name: 'compact kanban tile', size: 20, selector: '.card-tile .assignee-stack__overflow' })
 
 		await openBoard(page, 'Timeline')
-		await page.waitForSelector('.timeline__pane-row', { timeout: 10_000 })
+		await page.waitForSelector('.timeline__pane-row', { timeout: 15_000 })
 		await sweep({ name: 'timeline pane', size: 22, selector: '.timeline__pane-row .assignee-stack__overflow' })
 
 		await openBoard(page, 'List')
-		await page.waitForSelector('.board-list-row', { timeout: 10_000 })
+		await page.waitForSelector('.board-list-row', { timeout: 15_000 })
 		await sweep({ name: 'list row', size: 24, selector: '.board-list-row .assignee-stack__overflow' })
 
 		// Printed so a regression report carries the numbers, not just a verdict.

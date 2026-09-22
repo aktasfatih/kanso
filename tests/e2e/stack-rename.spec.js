@@ -22,35 +22,35 @@ test.describe('Column rename', () => {
 	test('clicking a column title renames it inline', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column__header', { timeout: 12_000 })
+		await page.waitForSelector('.stack-column__header', { timeout: 15_000 })
 
 		await page.locator('.stack-column__title', { hasText: 'Original Column' }).click()
 
 		const input = page.locator('.stack-column__title-input')
-		await expect(input).toBeVisible({ timeout: 4_000 })
+		await expect(input).toBeVisible()
 		await input.fill('Renamed Column')
 		await input.press('Enter')
 
-		await expect(page.locator('.stack-column__title', { hasText: 'Renamed Column' })).toBeVisible({ timeout: 6_000 })
+		await expect(page.locator('.stack-column__title', { hasText: 'Renamed Column' })).toBeVisible()
 
 		// Persisted: a reload still shows the new name.
 		await page.reload()
-		await page.waitForSelector('.stack-column__header', { timeout: 12_000 })
-		await expect(page.locator('.stack-column__title', { hasText: 'Renamed Column' })).toBeVisible({ timeout: 8_000 })
+		await page.waitForSelector('.stack-column__header', { timeout: 15_000 })
+		await expect(page.locator('.stack-column__title', { hasText: 'Renamed Column' })).toBeVisible()
 	})
 
 	test('Escape cancels the rename', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column__header', { timeout: 12_000 })
+		await page.waitForSelector('.stack-column__header', { timeout: 15_000 })
 
 		await page.locator('.stack-column__title', { hasText: 'Renamed Column' }).click()
 		const input = page.locator('.stack-column__title-input')
-		await expect(input).toBeVisible({ timeout: 4_000 })
+		await expect(input).toBeVisible()
 		await input.fill('Should Not Stick')
 		await input.press('Escape')
 
-		await expect(page.locator('.stack-column__title', { hasText: 'Renamed Column' })).toBeVisible({ timeout: 6_000 })
+		await expect(page.locator('.stack-column__title', { hasText: 'Renamed Column' })).toBeVisible()
 		await expect(page.locator('.stack-column__title', { hasText: 'Should Not Stick' })).toHaveCount(0)
 	})
 })

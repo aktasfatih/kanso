@@ -34,7 +34,7 @@ test.describe('Repeat from the card due-date menu (#55)', () => {
 		// Open the due-date popover, where the Repeat control lives.
 		await page.locator('[data-pill="due"]').click()
 		const freq = page.locator('select[data-recur="freq"]')
-		await expect(freq).toBeVisible({ timeout: 6_000 })
+		await expect(freq).toBeVisible()
 
 		// Choose "Weekly" → a rule is created with this card as its source and its
 		// own column as the target, on a FREQ=WEEKLY schedule. The quick Repeat
@@ -104,12 +104,12 @@ test.describe('Recurring indicator on the board tile (#61)', () => {
 	test('repeat icon shows on the recurring tile and is absent on a normal tile', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const recurTile = page.locator('.card-tile').filter({ hasText: 'Recurring chore' })
 		const plainTile = page.locator('.card-tile').filter({ hasText: 'One-off chore' })
 
-		await expect(recurTile.locator('.card-tile__recurring')).toBeVisible({ timeout: 10_000 })
+		await expect(recurTile.locator('.card-tile__recurring')).toBeVisible()
 		await expect(plainTile.locator('.card-tile__recurring')).toHaveCount(0)
 	})
 })
@@ -152,14 +152,14 @@ test.describe('Recurring indicator on the open card Due Date pill (#61 follow-up
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.recurCardId}`)
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 15_000 })
 		const recurPill = page.locator('[data-pill="due"]')
-		await expect(recurPill.locator('.repeat-icon')).toBeVisible({ timeout: 10_000 })
+		await expect(recurPill.locator('.repeat-icon')).toBeVisible()
 		await expect(recurPill.locator('.calendar-icon')).toHaveCount(0)
 
 		// Non-recurring card → the calendar glyph stays, no repeat icon.
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.plainCardId}`)
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 15_000 })
 		const plainPill = page.locator('[data-pill="due"]')
-		await expect(plainPill.locator('.calendar-icon')).toBeVisible({ timeout: 10_000 })
+		await expect(plainPill.locator('.calendar-icon')).toBeVisible()
 		await expect(plainPill.locator('.repeat-icon')).toHaveCount(0)
 	})
 })

@@ -60,7 +60,7 @@ test.describe('Sharing a board updates the assignee picker without a reload (#10
 	 */
 	async function openAssignPicker(page) {
 		await page.locator('.card-tile').filter({ hasText: CARD }).click()
-		await page.waitForSelector('.card-modal__attrbar', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 		await page.locator('.card-modal__attrbar button[data-pill="assign"]').click()
 		const popover = page.locator('.card-modal__attrbar .card-modal__popover')
 		await expect(popover).toBeVisible()
@@ -97,11 +97,11 @@ test.describe('Sharing a board updates the assignee picker without a reload (#10
 		// The sharee search needs >= 2 characters and debounces 250 ms.
 		await page.locator('.sharing__search-input').fill(peer.user)
 		const result = page.locator('.sharing__dropdown-item', { hasText: peer.user }).first()
-		await expect(result).toBeVisible({ timeout: 10_000 })
+		await expect(result).toBeVisible()
 		await result.click()
 		await shared
 
-		await expect(page.locator('.sharing__entry', { hasText: peer.user })).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.sharing__entry', { hasText: peer.user })).toBeVisible()
 		await page.keyboard.press('Escape') // close board settings
 		await expect(page.locator('#bs-pane-sharing')).toHaveCount(0)
 
@@ -111,13 +111,13 @@ test.describe('Sharing a board updates the assignee picker without a reload (#10
 		// reporter had to press F5.
 		popover = await openAssignPicker(page)
 		const peerOption = popover.locator('.card-modal__assign-option', { hasText: peer.user })
-		await expect(peerOption).toHaveCount(1, { timeout: 10_000 })
+		await expect(peerOption).toHaveCount(1)
 
 		// And it is a working option, not just a rendered row — the point of the
 		// picker is assigning, and the server refuses a non-reader.
 		await peerOption.click()
 		await expect(
 			page.locator('.card-modal__attrbar .card-modal__assignee-pill').filter({ hasText: peer.user }),
-		).toHaveCount(1, { timeout: 10_000 })
+		).toHaveCount(1)
 	})
 })

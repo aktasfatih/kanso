@@ -73,7 +73,7 @@ async function pickListView(page) {
 	await page.waitForTimeout(150)
 	await page.keyboard.press('Escape')
 	await page.waitForTimeout(200)
-	await expect(page.locator('.board-list-row').first()).toBeVisible({ timeout: 8_000 })
+	await expect(page.locator('.board-list-row').first()).toBeVisible()
 	// The virtualizer positions rows absolutely and re-lays them out once the
 	// group heights settle; grab bounding boxes only after that, or a drag can
 	// start on whatever row has since slid under the pointer.
@@ -123,7 +123,7 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
-		await expect(tile(page, 'NP')).toBeVisible({ timeout: 8_000 })
+		await expect(tile(page, 'NP')).toBeVisible()
 		expect(await parentOf('NC')).toBeNull()
 
 		await dragWithMouse(page, tile(page, 'NC'), tile(page, 'NP'), {
@@ -140,12 +140,12 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 			.toBe(state.ids.NP)
 
 		// The parent tile grows its sub-card progress badge.
-		await expect(tile(page, 'NP').locator('.card-tile__children')).toHaveText('0/1', { timeout: 8_000 })
+		await expect(tile(page, 'NP').locator('.card-tile__children')).toHaveText('0/1')
 
 		// Server is the source of truth — the relation survives a reload.
 		await page.reload()
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
-		await expect(tile(page, 'NP').locator('.card-tile__children')).toHaveText('0/1', { timeout: 10_000 })
+		await expect(tile(page, 'NP').locator('.card-tile__children')).toHaveText('0/1')
 	})
 
 	test('a sub-card renders indented under its parent in list view', async ({ page }) => {
@@ -155,7 +155,7 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 		await pickListView(page)
 
 		const child = page.locator('.board-list-row--child').filter({ hasText: 'NC' })
-		await expect(child).toBeVisible({ timeout: 8_000 })
+		await expect(child).toBeVisible()
 	})
 
 	test('dropping on a tile edge still reorders and leaves the parent untouched', async ({ page }) => {
@@ -232,7 +232,7 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 		}, { timeout: 10_000 }).toBe(state.n2Id)
 		expect(await parentOf('NC')).toBe(state.ids.NP)
 		// The parent keeps its sub-card badge across the column move.
-		await expect(tile(page, 'NP').locator('.card-tile__children')).toHaveText('0/1', { timeout: 8_000 })
+		await expect(tile(page, 'NP').locator('.card-tile__children')).toHaveText('0/1')
 	})
 
 	test('list view nests on a centre drop and pulls the card into the parent column', async ({ page }) => {
@@ -248,7 +248,7 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 		// NC sits in N2 while its parent NP is in N1 (previous test), so the list
 		// renders it top-level. Re-nesting has to move it into its parent's column,
 		// or the list could never indent it.
-		await expect(row(page, 'NC')).toBeVisible({ timeout: 8_000 })
+		await expect(row(page, 'NC')).toBeVisible()
 
 		await dragWithMouse(page, row(page, 'NC'), row(page, 'NP'), {
 			position: 'middle',
@@ -263,7 +263,7 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 
 		// Indented under NP, in NP's group.
 		const child = page.locator('.board-list-row--child').filter({ hasText: 'NC' })
-		await expect(child).toBeVisible({ timeout: 10_000 })
+		await expect(child).toBeVisible()
 		await expect.poll(async () => {
 			const card = await api.get(`/cards/${state.ids.NC}`)
 			return card.stackId

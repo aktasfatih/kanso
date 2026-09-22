@@ -43,24 +43,24 @@ test.describe('Undo toasts', () => {
 	test('deleting a card shows an Undo toast; clicking Undo restores the card', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// Open the card modal by clicking the card tile.
 		const cardTile = page.locator('.card-tile').filter({ hasText: 'Undo Test Card' })
-		await expect(cardTile).toBeVisible({ timeout: 10_000 })
+		await expect(cardTile).toBeVisible()
 		await cardTile.click()
 
 		// Wait for the modal to appear.
-		await page.waitForSelector('.card-modal', { timeout: 8_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open the actions (⋯) menu inside the modal.
 		const actionsMenu = page.locator('.card-modal__actions-menu')
-		await expect(actionsMenu).toBeVisible({ timeout: 5_000 })
+		await expect(actionsMenu).toBeVisible()
 		await actionsMenu.click()
 
 		// Click Delete in the actions dropdown - no confirm banner, just immediate delete.
 		const deleteBtn = page.locator('[role="menuitem"]').filter({ hasText: 'Delete' })
-		await expect(deleteBtn).toBeVisible({ timeout: 5_000 })
+		await expect(deleteBtn).toBeVisible()
 		await deleteBtn.click()
 
 		// Modal should have closed.
@@ -70,11 +70,11 @@ test.describe('Undo toasts', () => {
 		// role + message (see toast() in helpers.js) — never by @nextcloud/dialogs'
 		// own class names, which change from release to release.
 		const undoToast = toast(page, 'Card deleted')
-		await expect(undoToast).toBeVisible({ timeout: 8_000 })
+		await expect(undoToast).toBeVisible()
 
 		// Click the Undo button inside the toast.
 		const undoBtn = undoToast.getByRole('button', { name: 'Undo' })
-		await expect(undoBtn).toBeVisible({ timeout: 5_000 })
+		await expect(undoBtn).toBeVisible()
 		await undoBtn.click()
 
 		// The toast should dismiss.

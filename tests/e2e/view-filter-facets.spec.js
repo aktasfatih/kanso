@@ -113,7 +113,7 @@ test.describe('View filter facets survive a narrow server-side filter (#9862)', 
 		// Baseline: the facet offers both identities.
 		await trigger.click()
 		await assigneesDim.click()
-		await expect(optFor(me)).toBeVisible({ timeout: 10_000 })
+		await expect(optFor(me)).toBeVisible()
 		await expect(optFor(peer.user)).toBeVisible()
 
 		// ── The filter really does travel to the server ─────────────────────────

@@ -24,10 +24,10 @@ test.describe('Boards in the left navigation', () => {
 
 		// The board appears as a nav entry under Boards.
 		const item = page.locator('.app-navigation .app-navigation-entry-link', { hasText: state.title })
-		await expect(item.first()).toBeVisible({ timeout: 10_000 })
+		await expect(item.first()).toBeVisible()
 
 		await item.first().click()
 		await expect(page).toHaveURL(new RegExp(`#/board/${state.boardId}`), { timeout: 10_000 })
-		await page.waitForSelector('.board-view__header', { timeout: 10_000 })
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 	})
 })

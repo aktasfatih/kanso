@@ -43,12 +43,12 @@ test.describe('Move card… picker (keyboard / SR DnD alternative)', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open ⋯ → "Move card…" picker.
 		await page.locator('.card-modal__actions-menu button').first().click()
 		await page.getByRole('menuitem', { name: 'Move card…' }).click()
-		await page.waitForSelector('.card-modal__move-position', { timeout: 5_000 })
+		await page.waitForSelector('.card-modal__move-position', { timeout: 15_000 })
 
 		// Pick target column "Doing" and "After a specific card" is disabled there
 		// (empty stack) — the picker must degrade to top, never an invalid move.
@@ -69,11 +69,11 @@ test.describe('Move card… picker (keyboard / SR DnD alternative)', () => {
 		// Fresh state: Card C in To Do; move it to Doing AFTER Card B.
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.cId}`)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		await page.locator('.card-modal__actions-menu button').first().click()
 		await page.getByRole('menuitem', { name: 'Move card…' }).click()
-		await page.waitForSelector('.card-modal__move-position', { timeout: 5_000 })
+		await page.waitForSelector('.card-modal__move-position', { timeout: 15_000 })
 
 		await page.locator('.card-modal__copy-dialog select').first().selectOption({ label: 'Doing' })
 		await page.getByText('After a specific card').click()

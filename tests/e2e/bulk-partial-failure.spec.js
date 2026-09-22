@@ -75,7 +75,7 @@ async function failNthBulkChunk(page, n) {
 async function openColumnMenu(page) {
 	await page.locator('.stack-column__actions button').first().click()
 	const dialog = page.locator('[role="dialog"]').first()
-	await expect(dialog).toBeVisible({ timeout: 6_000 })
+	await expect(dialog).toBeVisible()
 	return dialog
 }
 
@@ -172,13 +172,13 @@ test.describe('A bulk action that fails mid-sequence keeps what already landed (
 		// @nextcloud/dialogs gives an undo toast a 10s life, so keep the budget
 		// under that (see column-archive-all.spec.js).
 		const undoToast = toast(page, `${FIRST_CHUNK} cards archived`)
-		await expect(undoToast).toBeVisible({ timeout: 8_000 })
+		await expect(undoToast).toBeVisible()
 
 		// Sanity on the fault itself: 100 really are archived server-side, 1 is not.
 		await expect.poll(() => archivedCount(state.boardId), { timeout: 30_000 }).toBe(FIRST_CHUNK)
 
 		const undoBtn = undoToast.getByRole('button', { name: 'Undo' })
-		await expect(undoBtn).toBeVisible({ timeout: 5_000 })
+		await expect(undoBtn).toBeVisible()
 		await undoBtn.click()
 
 		// THE assertion: the undo restores every card that landed. It can only get

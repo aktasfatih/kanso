@@ -32,27 +32,27 @@ test.describe('Comment reactions (#3550)', () => {
 	test('react to a comment → chip shows count 1 + highlighted; toggle off → chip gone', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// The seeded comment should be present.
 		const topComment = page.locator('.card-modal__comment-group > .card-modal__comment').first()
-		await expect(topComment).toBeVisible({ timeout: 8000 })
+		await expect(topComment).toBeVisible()
 
 		// Open the add-reaction picker on the top-level comment and pick 👍.
 		const addBtn = topComment.locator('.card-modal__reaction-add')
-		await expect(addBtn).toBeVisible({ timeout: 5000 })
+		await expect(addBtn).toBeVisible()
 		await addBtn.click()
 
 		const picker = topComment.locator('.card-modal__reaction-picker')
-		await expect(picker).toBeVisible({ timeout: 4000 })
+		await expect(picker).toBeVisible()
 		// First emoji in the fixed set is 👍.
 		await picker.locator('.card-modal__reaction-picker-btn').first().click()
 
 		// A chip appears with count 1 and is highlighted as "mine".
 		const chip = topComment.locator('.card-modal__reaction-chip').first()
-		await expect(chip).toBeVisible({ timeout: 6000 })
+		await expect(chip).toBeVisible()
 		await expect(chip).toHaveClass(/card-modal__reaction-chip--mine/, { timeout: 4000 })
-		await expect(chip.locator('.card-modal__reaction-count')).toHaveText('1', { timeout: 4000 })
+		await expect(chip.locator('.card-modal__reaction-count')).toHaveText('1')
 
 		// Clicking the highlighted chip toggles the reaction off → chip disappears.
 		await chip.click()
@@ -62,25 +62,25 @@ test.describe('Comment reactions (#3550)', () => {
 	test('reaction persists across reload', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const topComment = page.locator('.card-modal__comment-group > .card-modal__comment').first()
-		await expect(topComment).toBeVisible({ timeout: 8000 })
+		await expect(topComment).toBeVisible()
 
 		// React with 🎉 (a later emoji in the fixed set).
 		await topComment.locator('.card-modal__reaction-add').click()
 		const picker = topComment.locator('.card-modal__reaction-picker')
-		await expect(picker).toBeVisible({ timeout: 4000 })
+		await expect(picker).toBeVisible()
 		await picker.getByTitle('🎉').click()
 
-		await expect(topComment.locator('.card-modal__reaction-chip')).toHaveCount(1, { timeout: 6000 })
+		await expect(topComment.locator('.card-modal__reaction-chip')).toHaveCount(1)
 
 		// Reload: the chip should still be there (server truth), highlighted for me.
 		await page.reload()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 		const reloadedChip = page.locator('.card-modal__comment-group > .card-modal__comment')
 			.first().locator('.card-modal__reaction-chip').first()
-		await expect(reloadedChip).toBeVisible({ timeout: 8000 })
+		await expect(reloadedChip).toBeVisible()
 		await expect(reloadedChip).toHaveClass(/card-modal__reaction-chip--mine/, { timeout: 4000 })
 	})
 })

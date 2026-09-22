@@ -37,7 +37,7 @@ test.describe('Move card to top / bottom (card ⋯ menu)', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open the ⋯ menu and click "Move to top".
 		await page.locator('.card-modal__actions-menu button').first().click()

@@ -396,6 +396,29 @@ jobs:
         run: npm run test:l10n
       - name: Lint translation catalogues (syntax + placeholders)
         run: npm run l10n:lint
+      # Guard: no e2e wait may give itself LESS time than the suite-wide budget.
+      # playwright.config.js sets `expect: { timeout: 15_000 }` because this
+      # runner pool is shared and round-trips degrade 1.8-3x when it is
+      # saturated; an explicit `{ timeout: 5000 }` on a positive wait silently
+      # opts back out of that headroom. That is what made the suite
+      # load-sensitive — three runs of the same commit tripped seven different
+      # specs, none of them twice. Negative waits and `waitForTimeout` are left
+      # alone (a short budget there is load-bearing), and a deliberately short
+      # positive wait can be annotated `// short-budget-ok: <reason>`.
+      #
+      # It lives here rather than in `e2e` on purpose: this job takes ~2min and
+      # the browser suite takes ~1.7h, so a re-tightened timeout is caught in
+      # minutes instead of costing a full e2e cycle.
+      #
+      # Self-tests first, same reason as the l10n pair above: a guard that has
+      # quietly stopped catching anything is worse than no guard, because the
+      # green run then reads as proof. The fixtures assert both directions — a
+      # reintroduced `{ timeout: 5000 }` is caught, and the exempt shapes
+      # (negative assertions, `state: 'hidden'`, `short-budget-ok`) are not.
+      - name: e2e timeout guard self-tests
+        run: npm run test:e2e-timeouts
+      - name: Guard e2e wait budgets
+        run: npm run lint:e2e-timeouts
 
   # Cross-version × cross-DB install/migration matrix. This is what actually
   # VALIDATES the info.xml claim of NC 32–34: for each (version, db) combo it

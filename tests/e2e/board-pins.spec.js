@@ -28,12 +28,12 @@ test.describe('Board pinning (#3632)', () => {
 		await page.waitForSelector('.board-list-view', { timeout: 15_000 })
 
 		const tile = page.locator('.board-tile', { hasText: state.title }).first()
-		await expect(tile).toBeVisible({ timeout: 10_000 })
+		await expect(tile).toBeVisible()
 
 		// Zero-pins fallback: with no pins, the board is listed in the nav (all
 		// boards show).
 		const navLink = page.locator('.app-navigation .app-navigation-entry-link', { hasText: state.title })
-		await expect(navLink.first()).toBeVisible({ timeout: 10_000 })
+		await expect(navLink.first()).toBeVisible()
 
 		// No Pinned section yet for this board.
 		const pinnedSection = page.locator('.board-section', { hasText: 'Pinned' })
@@ -47,16 +47,16 @@ test.describe('Board pinning (#3632)', () => {
 		// The board now appears in the Pinned section.
 		await expect(page.locator('.board-section', { hasText: 'Pinned' })
 			.locator('.board-tile', { hasText: state.title }).first())
-			.toBeVisible({ timeout: 10_000 })
+			.toBeVisible()
 
 		// Reload — the pin persists (server truth) and the board is still pinned.
 		await page.reload()
 		await page.waitForSelector('.board-list-view', { timeout: 15_000 })
 		await expect(page.locator('.board-section', { hasText: 'Pinned' })
 			.locator('.board-tile', { hasText: state.title }).first())
-			.toBeVisible({ timeout: 10_000 })
+			.toBeVisible()
 		// Still listed in the nav.
-		await expect(navLink.first()).toBeVisible({ timeout: 10_000 })
+		await expect(navLink.first()).toBeVisible()
 
 		// Unpin from the Pinned section tile's options menu.
 		const pinnedTile = page.locator('.board-section', { hasText: 'Pinned' })
@@ -84,7 +84,7 @@ test.describe('Board pinning (#3632)', () => {
 			const folderSection = page.locator(`[data-test="folder-section-${folder.id}"]`)
 			// The board sits in its folder and is not pinned yet.
 			await expect(folderSection.locator('.board-tile', { hasText: board.title }).first())
-				.toBeVisible({ timeout: 10_000 })
+				.toBeVisible()
 			await expect(page.locator('.board-section', { hasText: 'Pinned' })
 				.locator('.board-tile', { hasText: board.title })).toHaveCount(0)
 
@@ -95,7 +95,7 @@ test.describe('Board pinning (#3632)', () => {
 			// It now appears under Pinned AND remains in its folder — folder not emptied.
 			await expect(page.locator('.board-section', { hasText: 'Pinned' })
 				.locator('.board-tile', { hasText: board.title }).first())
-				.toBeVisible({ timeout: 10_000 })
+				.toBeVisible()
 			await expect(folderSection.locator('.board-tile', { hasText: board.title }).first())
 				.toBeVisible()
 			await expect(folderSection.locator('.board-section__empty')).toHaveCount(0)

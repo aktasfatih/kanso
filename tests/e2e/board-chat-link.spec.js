@@ -8,7 +8,7 @@ async function openGeneralSettings(page) {
 	await page.getByRole('button', { name: 'More' }).click()
 	await page.getByRole('menuitem', { name: /board settings/i }).click()
 	await page.getByRole('tab', { name: /general/i }).click()
-	await expect(page.locator('#bs-pane-general')).toBeVisible({ timeout: 8_000 })
+	await expect(page.locator('#bs-pane-general')).toBeVisible()
 }
 
 // Project chat link (#3748): a per-board plain URL (typically a Talk room)
@@ -44,7 +44,7 @@ test.describe('Project chat link (#3748)', () => {
 		// The toolbar button appears, points at the URL, and opens a new tab
 		// (NcButton adds rel="nofollow noreferrer noopener" for href buttons).
 		const chatBtn = page.locator('[data-test="board-chat-btn"]')
-		await expect(chatBtn).toBeVisible({ timeout: 8_000 })
+		await expect(chatBtn).toBeVisible()
 		await expect(chatBtn).toHaveAttribute('href', CHAT_URL)
 		await expect(chatBtn).toHaveAttribute('target', '_blank')
 		await expect(chatBtn).toHaveAttribute('rel', /noopener/)

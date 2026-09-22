@@ -59,7 +59,7 @@ async function pickListView(page) {
 	await page.waitForTimeout(150)
 	await page.keyboard.press('Escape')
 	await page.waitForTimeout(200)
-	await expect(page.locator('.board-list-row').first()).toBeVisible({ timeout: 8_000 })
+	await expect(page.locator('.board-list-row').first()).toBeVisible()
 }
 
 test.describe('List view drag and drop', () => {
@@ -100,12 +100,12 @@ test.describe('List view drag and drop', () => {
 		await pickListView(page)
 
 		expect(await rowTitles(page)).toEqual(['C1', 'C2', 'C3'])
-		await expect(groupCount(page, 'L1')).toHaveText('3', { timeout: 8_000 })
+		await expect(groupCount(page, 'L1')).toHaveText('3')
 		await expect(groupCount(page, 'L2')).toHaveText('0')
 
 		const c1 = page.locator('.board-list-row-wrap').filter({ hasText: 'C1' })
 		const l2Drop = page.locator(`.board-list-group-drop[data-stack-id="${state.l2Id}"]`)
-		await expect(c1).toBeVisible({ timeout: 5_000 })
+		await expect(c1).toBeVisible()
 
 		await dragWithMouse(page, c1, l2Drop, {
 			// The empty group must show a drop highlight while it is hovered.
@@ -115,14 +115,14 @@ test.describe('List view drag and drop', () => {
 		})
 
 		// C1 moved into the empty group; the flat row order follows the groups.
-		await expect(groupCount(page, 'L2')).toHaveText('1', { timeout: 8_000 })
+		await expect(groupCount(page, 'L2')).toHaveText('1')
 		await expect(groupCount(page, 'L1')).toHaveText('2')
 		await expect.poll(async () => await rowTitles(page)).toEqual(['C2', 'C3', 'C1'])
 
 		// Server is the source of truth — the move survives a reload.
 		await page.reload()
 		await expect(page.locator('.board-list-row').first()).toBeVisible({ timeout: 15_000 })
-		await expect(groupCount(page, 'L2')).toHaveText('1', { timeout: 8_000 })
+		await expect(groupCount(page, 'L2')).toHaveText('1')
 		await expect(groupCount(page, 'L1')).toHaveText('2')
 		await expect.poll(async () => await rowTitles(page)).toEqual(['C2', 'C3', 'C1'])
 	})
