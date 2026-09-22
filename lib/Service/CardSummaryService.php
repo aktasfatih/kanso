@@ -69,6 +69,10 @@ class CardSummaryService {
 			'assignees' => $this->cardAssigneeMapper->findUserIdsByBoard($boardId),
 			'contacts' => $this->cardContactMapper->findContactsByBoard($boardId),
 			'checklist' => $this->checklistItemMapper->progressByBoard($boardId, $viewer),
+			// Derived overdue-step count (#10696): cardId => open past-due steps.
+			// Folded into the emitted `checklist` shape below, so the tile tints
+			// its existing badge instead of growing a second one.
+			'checklistOverdue' => $this->checklistItemMapper->overdueByBoard($boardId, new \DateTime('@' . time()), $viewer),
 			// Derived "waiting on client" (#3746): cardId => oldest open external
 			// step's assigned_at. Presence = waiting; never stored, always computed.
 			'waiting' => $this->checklistItemMapper->waitingByBoard($boardId, $viewer),
@@ -112,6 +116,7 @@ class CardSummaryService {
 			'assignees' => $this->cardAssigneeMapper->findUserIdsByBoards($boardIds),
 			'contacts' => $this->cardContactMapper->findContactsByBoards($boardIds),
 			'checklist' => $this->checklistItemMapper->progressByBoards($boardIds, $uid, $rolesByBoard),
+			'checklistOverdue' => $this->checklistItemMapper->overdueByBoards($boardIds, new \DateTime('@' . time()), $uid, $rolesByBoard),
 			'waiting' => $this->checklistItemMapper->waitingByBoards($boardIds, $uid, $rolesByBoard),
 			'childProgress' => $this->cardMapper->childProgressByBoards($boardIds, $uid, $rolesByBoard),
 			'commentCount' => $this->commentMapper->countsByBoards($boardIds),
@@ -134,6 +139,7 @@ class CardSummaryService {
 	 *     assignees: array<int, string[]>,
 	 *     contacts: array<int, list<array{contactUri: string, displayName: string}>>,
 	 *     checklist: array<int, array{total: int, done: int}>,
+	 *     checklistOverdue: array<int, int>,
 	 *     waiting: array<int, ?int>,
 	 *     childProgress: array<int, array{total: int, done: int}>,
 	 *     commentCount: array<int, int>,
@@ -152,7 +158,11 @@ class CardSummaryService {
 				+ ['labelIds' => $maps['labelIds'][$card->getId()] ?? []]
 				+ ['assigneeIds' => $maps['assignees'][$card->getId()] ?? []]
 				+ ['contacts' => $maps['contacts'][$card->getId()] ?? []]
-				+ ['checklist' => $maps['checklist'][$card->getId()] ?? ['total' => 0, 'done' => 0]]
+				// `overdue` rides INSIDE the checklist shape (#10696) rather than as
+				// a sibling field: the tile tints the one checklist badge off it, and
+				// a nested count can not be mistaken for a card-level due signal.
+				+ ['checklist' => ($maps['checklist'][$card->getId()] ?? ['total' => 0, 'done' => 0])
+					+ ['overdue' => $maps['checklistOverdue'][$card->getId()] ?? 0]]
 				+ ['waitingOnExternal' => \array_key_exists($card->getId(), $maps['waiting'])]
 				+ ['waitingSince' => $maps['waiting'][$card->getId()] ?? null]
 				+ ['childProgress' => $maps['childProgress'][$card->getId()] ?? ['total' => 0, 'done' => 0]]

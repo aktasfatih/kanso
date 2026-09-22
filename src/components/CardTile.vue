@@ -161,12 +161,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<TimerOutlineIcon :size="14" />
 				</span>
 				<!-- Checklist progress badge - only when the card has checklist items
-				     and the board still shows checklists (#5894). -->
+				     and the board still shows checklists (#5894). Tinted red when a
+				     step is open and past due (#10696): the same badge carries the
+				     signal, so the tile grows nothing. The label says "overdue" too -
+				     the tint alone would be a colour-only cue. -->
 				<span
 					v-if="cardFeatures.checklist && card.checklist && card.checklist.total > 0"
 					class="card-tile__checklist"
-					:class="{ 'card-tile__checklist--complete': card.checklist.done === card.checklist.total }"
-					:aria-label="t('kanso', 'Checklist progress')">
+					:class="{
+						'card-tile__checklist--complete': card.checklist.done === card.checklist.total,
+						'card-tile__checklist--overdue': hasOverdueSteps,
+					}"
+					:aria-label="checklistLabel"
+					:title="checklistLabel">
 					<CheckboxMarkedOutlineIcon :size="12" />
 					{{ card.checklist.done }}/{{ card.checklist.total }}
 				</span>
@@ -243,7 +250,7 @@ import StarIcon from 'vue-material-design-icons/Star.vue'
 import CheckboxMarkedCircleOutlineIcon from 'vue-material-design-icons/CheckboxMarkedCircleOutline.vue'
 import BroomIcon from 'vue-material-design-icons/Broom.vue'
 import AssigneeAvatars from './AssigneeAvatars.vue'
-import { translate as t } from '@nextcloud/l10n'
+import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { CARD_TYPES } from '../composables/useCardType.js'
 
@@ -444,6 +451,18 @@ function formatDue(iso) {
 	// shows the picked calendar day even west of UTC (not the previous day).
 	return formatCardDate(iso, props.card.allDay === true, { month: 'short', day: 'numeric' })
 }
+
+// Overdue checklist steps (#10696): the board summary carries the count of the
+// card's OPEN past-due steps. Suppressed on a done card exactly like the card's
+// own due chip above and like the step chip inside the modal - finished work is
+// not late work.
+const hasOverdueSteps = computed(() => !isDone.value && Number(props.card.checklist?.overdue ?? 0) > 0)
+
+// n(), not t() with a placeholder: pl/ru and friends need the plural forms, and
+// this mirrors the board tile's own `%n overdue` chip.
+const checklistLabel = computed(() => (hasOverdueSteps.value
+	? n('kanso', 'Checklist progress - %n overdue step', 'Checklist progress - %n overdue steps', Number(props.card.checklist.overdue))
+	: t('kanso', 'Checklist progress')))
 
 // Priority label for the indicator badge
 const priorityLabel = computed(() => {
@@ -779,6 +798,16 @@ const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.
 	color: var(--kanso-success-legible);
 	border-color: var(--kanso-success-legible);
 	background: var(--kanso-success-tint);
+}
+
+/* At least one step is open and past due (#10696) - the error twin of the
+ * --complete rule above, same tint strength on the same badge, so "late" and
+ * "finished" read as one pair. Mutually exclusive with --complete: a done step
+ * is never counted overdue. */
+.card-tile__checklist--overdue {
+	color: var(--kanso-error-legible);
+	border-color: var(--kanso-error-legible);
+	background: var(--kanso-error-tint);
 }
 
 /* Child-progress badge */

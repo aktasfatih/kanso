@@ -1251,6 +1251,11 @@ msgstr "清单未完成"
 msgid "Checklist progress"
 msgstr "清单进度"
 
+#: src/components/CardTile.vue:464
+msgid "Checklist progress - %n overdue step"
+msgid_plural "Checklist progress - %n overdue steps"
+msgstr[0] ""
+
 #: src/components/CsvImportModal.vue
 msgid "Choose a board…"
 msgstr "选择看板…"

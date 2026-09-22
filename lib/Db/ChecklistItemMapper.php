@@ -452,6 +452,97 @@ class ChecklistItemMapper extends QBMapper {
 	}
 
 	/**
+	 * The derived OVERDUE-STEP aggregate (#10696): for every non-deleted card
+	 * on the board, how many of its steps are still OPEN and already past their
+	 * due date - cardId => count. The board tile tints its existing checklist
+	 * badge off this, so a card carrying a late step stops looking identical to
+	 * one that is on track.
+	 *
+	 * Modelled on {@see self::waitingByBoard()}: ONE fixed grouped query folded
+	 * into the board summary as another enrichment map, never a per-card lookup,
+	 * so the constant-query-count property documented at {@see self::progressByBoard()}
+	 * holds however many steps exist. The open filter binds a dialect-safe
+	 * PARAM_BOOL (Postgres native boolean vs MySQL/SQLite 0/1) and the due
+	 * comparison binds PARAM_DATETIME_MUTABLE, the same idiom as
+	 * {@see CardMapper::overdueCount()}; `due_date` is nullable, and NULL < :now
+	 * is never true, so an undated step is never overdue without a further guard.
+	 *
+	 * "Done" is the STEP's own done flag, not the card's - a done card's tint is
+	 * suppressed on the tile, which keeps the derived count honest here.
+	 *
+	 * Viewer-scoped like every other summary map (#3743): a card hidden from this
+	 * viewer never enters the map, so its late steps can not leak through the
+	 * count even if a caller were to emit it wholesale.
+	 *
+	 * @return array<int, int> map of cardId => open past-due step count
+	 * @throws Exception
+	 */
+	public function overdueByBoard(int $boardId, \DateTime $now, ViewerContext $viewer): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ci.card_id')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName(), 'ci')
+			->innerJoin('ci', 'kanso_cards', 'c', $qb->expr()->eq('ci.card_id', 'c.id'))
+			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('ci.done', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->lt('ci.due_date', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
+			->groupBy('ci.card_id');
+		$this->visibilityScope->applyForViewer($qb, 'c', $viewer);
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['card_id']] = (int)$row['cnt'];
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
+	/**
+	 * The BOARD-SET twin of {@see self::overdueByBoard()}: the same derived
+	 * overdue-step map over MANY boards in ONE query, for the cross-board Views
+	 * feed - which renders the identical tile and must not pay a query per
+	 * readable board. Card ids are globally unique, so the union needs no
+	 * per-board nesting.
+	 *
+	 * Visibility is the cross-board mode of the scope (per-board role from the
+	 * map), so a card hidden on ITS board never appears - including for a viewer
+	 * who is internal on one board and external on another.
+	 *
+	 * @param int[] $boardIds
+	 * @param array<int, string> $rolesByBoard {@see \OCA\Kanso\Access\BoardAccess::rolesFor()}
+	 * @return array<int, int> map of cardId => open past-due step count
+	 * @throws Exception
+	 */
+	public function overdueByBoards(array $boardIds, \DateTime $now, string $uid, array $rolesByBoard): array {
+		if ($boardIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ci.card_id')
+			->selectAlias($qb->func()->count('*'), 'cnt')
+			->from($this->getTableName(), 'ci')
+			->innerJoin('ci', 'kanso_cards', 'c', $qb->expr()->eq('ci.card_id', 'c.id'))
+			->where($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('ci.done', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->lt('ci.due_date', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
+			->groupBy('ci.card_id');
+		$this->visibilityScope->apply($qb, 'c', $uid, null, $rolesByBoard);
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['card_id']] = (int)$row['cnt'];
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
+	/**
 	 * The cross-board "my steps" feed (#3745): every OPEN checklist step
 	 * assigned to $uid on the given boards, joined up with its card / board /
 	 * stack titles for display. ONE query, driven by the (assigned_user, done)

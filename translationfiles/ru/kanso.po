@@ -1301,6 +1301,13 @@ msgstr "Чек-лист не выполнен"
 msgid "Checklist progress"
 msgstr "Прогресс чек-листа"
 
+#: src/components/CardTile.vue:464
+msgid "Checklist progress - %n overdue step"
+msgid_plural "Checklist progress - %n overdue steps"
+msgstr[0] ""
+msgstr[1] ""
+msgstr[2] ""
+
 #: src/components/CsvImportModal.vue
 msgid "Choose a board…"
 msgstr "Выберите доску…"

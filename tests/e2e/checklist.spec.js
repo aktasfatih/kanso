@@ -295,10 +295,44 @@ test.describe('Checklist steps', () => {
 		await expect(item.locator('.card-modal__step-due')).toBeVisible({ timeout: 10_000 })
 		await expect(item.locator('.card-modal__step-due--overdue')).toBeVisible({ timeout: 10_000 })
 
+		// …and the signal reaches the BOARD (#10696): the tile's existing checklist
+		// badge tints, so a card carrying a late step stops looking identical to one
+		// that is on track. The board is loaded FRESH first, so every optimistic cache
+		// patch is gone and the tint can only come from the server's own board
+		// summary — which is what makes this a test of the overdue aggregate and
+		// not of the client-side guess.
+		const stepsTile = page.locator('.card-tile').filter({ hasText: 'Card With Steps' })
+		// Route back to the BOARD url first (the open card owns the route, so a bare
+		// reload would reopen the modal over the board), THEN reload: a goto that
+		// only changes the fragment is a same-document navigation and would leave
+		// the query cache — and with it the optimistic patch — fully intact.
+		await page.goto(state.boardUrl)
+		await page.reload()
+		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await expect(stepsTile.locator('.card-tile__checklist--overdue')).toBeVisible({ timeout: 15_000 })
+
+		// Reopen the card for the rest of the flow.
+		await stepsTile.click()
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await expect(item).toBeVisible({ timeout: 10_000 })
+
 		// Complete the step → done_at stamps server-side and the overdue accent
 		// is suppressed on the done row.
 		await toggleChecklistItem(page, 'Send contract')
 		await expect(item.locator('.card-modal__step-due--overdue')).toHaveCount(0, { timeout: 10_000 })
+
+		// The tile drops the tint with it - a DONE step is never late work, and the
+		// count it is derived from only ever sees open steps. Loaded fresh again, so
+		// this too is the server's answer.
+		await page.goto(state.boardUrl)
+		await page.reload()
+		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await expect(stepsTile.locator('.card-tile__checklist')).toBeVisible({ timeout: 15_000 })
+		await expect(stepsTile.locator('.card-tile__checklist--overdue')).toHaveCount(0, { timeout: 15_000 })
+
+		await stepsTile.click()
+		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await expect(item).toBeVisible({ timeout: 10_000 })
 
 		const items = await api.get(`/cards/${state.cardId}/checklist`)
 		const step = items.find((i) => i.title === 'Send contract')

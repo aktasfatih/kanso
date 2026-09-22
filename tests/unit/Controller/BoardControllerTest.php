@@ -345,8 +345,8 @@ class BoardControllerTest extends TestCase {
 		self::assertSame(['bob'], $data['cards'][0]['assigneeIds']);
 		self::assertSame([], $data['cards'][1]['labelIds']);
 		self::assertSame([], $data['cards'][1]['assigneeIds']);
-		self::assertSame(['total' => 4, 'done' => 1], $data['cards'][0]['checklist']);
-		self::assertSame(['total' => 0, 'done' => 0], $data['cards'][1]['checklist']);
+		self::assertSame(['total' => 4, 'done' => 1, 'overdue' => 0], $data['cards'][0]['checklist']);
+		self::assertSame(['total' => 0, 'done' => 0, 'overdue' => 0], $data['cards'][1]['checklist']);
 		// Derived waiting-on-client fields (#3746): from the waitingByBoard map,
 		// never stored on the card.
 		self::assertTrue($data['cards'][0]['waitingOnExternal']);
@@ -566,7 +566,7 @@ class BoardControllerTest extends TestCase {
 		self::assertSame(42, $data['cards']['upsert'][0]['id']);
 		// Full board-card shape (enrichment keys present, description absent).
 		self::assertSame([], $data['cards']['upsert'][0]['labelIds']);
-		self::assertSame(['total' => 0, 'done' => 0], $data['cards']['upsert'][0]['checklist']);
+		self::assertSame(['total' => 0, 'done' => 0, 'overdue' => 0], $data['cards']['upsert'][0]['checklist']);
 		self::assertFalse($data['cards']['upsert'][0]['blocked']);
 		self::assertArrayNotHasKey('description', $data['cards']['upsert'][0]);
 		self::assertSame([], $data['cards']['remove']);
