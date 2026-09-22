@@ -11,10 +11,16 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Service\BackupService;
 use OCA\Kanso\Service\BoardArchiveService;
+use OCA\Kanso\Service\NotificationService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\File;
 use OCP\Files\Folder;
+use OCP\Files\IAppData;
 use OCP\Files\IRootFolder;
+use OCP\Files\NotFoundException;
+use OCP\Files\NotPermittedException;
+use OCP\Files\SimpleFS\ISimpleFile;
+use OCP\Files\SimpleFS\ISimpleFolder;
 use OCP\IConfig;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -27,8 +33,11 @@ class BackupServiceTest extends TestCase {
 	private BoardMapper&MockObject $boardMapper;
 	private BoardArchiveService&MockObject $archiveService;
 	private IRootFolder&MockObject $rootFolder;
+	private IAppData&MockObject $appData;
+	private ISimpleFolder&MockObject $appDataFolder;
 	private ITimeFactory&MockObject $time;
 	private LoggerInterface&MockObject $logger;
+	private NotificationService&MockObject $notificationService;
 	private FakeConfig $config;
 	private BackupService $service;
 	/** Temp archives handed to the service, cleaned up after each test. */
@@ -41,17 +50,24 @@ class BackupServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->archiveService = $this->createMock(BoardArchiveService::class);
 		$this->rootFolder = $this->createMock(IRootFolder::class);
+		$this->appDataFolder = $this->createMock(ISimpleFolder::class);
+		$this->appData = $this->createMock(IAppData::class);
+		$this->appData->method('getFolder')->willReturn($this->appDataFolder);
+		$this->appData->method('newFolder')->willReturn($this->appDataFolder);
 		$this->time = $this->createMock(ITimeFactory::class);
 		$this->time->method('getTime')->willReturn(self::NOW);
 		$this->logger = $this->createMock(LoggerInterface::class);
+		$this->notificationService = $this->createMock(NotificationService::class);
 		$this->config = new FakeConfig();
 		$this->service = new BackupService(
 			$this->boardMapper,
 			$this->archiveService,
 			$this->rootFolder,
+			$this->appData,
 			$this->config,
 			$this->time,
 			$this->logger,
+			$this->notificationService,
 		);
 	}
 
@@ -113,10 +129,99 @@ class BackupServiceTest extends TestCase {
 		return $board;
 	}
 
+	/**
+	 * Enables backups into a FILES FOLDER - the destination these fixtures were
+	 * written for. Pinned explicitly rather than inferred, so the app-data
+	 * default cannot quietly turn these into app-data tests.
+	 */
 	private function enable(string $path = '/kanso-backups', int $retention = 3): void {
 		$this->config->setAppValue('kanso', BackupService::KEY_ENABLED, 'yes');
+		$this->config->setAppValue('kanso', BackupService::KEY_DESTINATION, BackupService::DEST_FILES);
 		$this->config->setAppValue('kanso', BackupService::KEY_PATH, $path);
 		$this->config->setAppValue('kanso', BackupService::KEY_RETENTION, (string)$retention);
+	}
+
+	/** Enables backups into Kanso's app data. No path, no account - by design. */
+	private function enableAppData(int $retention = 3): void {
+		$this->config->setAppValue('kanso', BackupService::KEY_ENABLED, 'yes');
+		$this->config->setAppValue('kanso', BackupService::KEY_DESTINATION, BackupService::DEST_APPDATA);
+		$this->config->setAppValue('kanso', BackupService::KEY_RETENTION, (string)$retention);
+	}
+
+	/**
+	 * An in-memory app-data folder: name-keyed {@see ISimpleFile} mocks, with
+	 * getFile() throwing NotFoundException for an absent name exactly as the real
+	 * ISimpleFolder does.
+	 *
+	 * @param array<string, string> $existing name => content
+	 * @param array<string, string> $written filled with what the run wrote
+	 * @param list<string> $deleted filled with what the run pruned
+	 */
+	private function stubAppDataFolder(array $existing, array &$written, array &$deleted): void {
+		/** @var array<string, ISimpleFile> $files */
+		$files = [];
+		$make = function (string $name, string $content) use (&$deleted, &$written): ISimpleFile {
+			$file = $this->createMock(ISimpleFile::class);
+			$file->method('getName')->willReturn($name);
+			$file->method('getSize')->willReturn(strlen($content));
+			$file->method('getMTime')->willReturn(self::NOW);
+			$file->method('read')->willReturnCallback(static function () use ($content) {
+				$handle = fopen('php://memory', 'r+b');
+				fwrite($handle, $content);
+				rewind($handle);
+				return $handle;
+			});
+			$file->method('putContent')->willReturnCallback(static function ($data) use ($name, &$written): void {
+				$written[$name] = is_resource($data) ? (string)stream_get_contents($data) : (string)$data;
+			});
+			$file->method('delete')->willReturnCallback(static function () use ($name, &$deleted): void {
+				$deleted[] = $name;
+			});
+			return $file;
+		};
+		foreach ($existing as $name => $content) {
+			$files[$name] = $make($name, $content);
+		}
+
+		$this->appDataFolder->method('getFile')->willReturnCallback(
+			static function (string $name) use (&$files): ISimpleFile {
+				if (!isset($files[$name])) {
+					throw new NotFoundException('no such file: ' . $name);
+				}
+				return $files[$name];
+			},
+		);
+		$this->appDataFolder->method('newFile')->willReturnCallback(
+			function (string $name, $content = null) use (&$files, &$written, $make): ISimpleFile {
+				$bytes = is_resource($content) ? (string)stream_get_contents($content) : (string)$content;
+				$written[$name] = $bytes;
+				$files[$name] = $make($name, $bytes);
+				return $files[$name];
+			},
+		);
+		$this->appDataFolder->method('getDirectoryListing')->willReturnCallback(
+			static function () use (&$files): array {
+				return array_values($files);
+			},
+		);
+	}
+
+	/**
+	 * The service under test with a DIFFERENT app data store than the one wired
+	 * in setUp() - which always resolves. Used by the tests that need app data to
+	 * be absent or unusable.
+	 */
+	private function serviceWith(IAppData $appData): BackupService {
+		return new BackupService(
+			$this->boardMapper,
+			$this->archiveService,
+			$this->rootFolder,
+			$appData,
+			$this->config,
+			$this->time,
+			$this->logger,
+			$this->notificationService,
+		);
 	}
 
 	// ---- disabled / unconfigured no-ops -----------------------------------
@@ -134,6 +239,7 @@ class BackupServiceTest extends TestCase {
 
 	public function testEnabledButPathUnsetRecordsError(): void {
 		$this->config->setAppValue('kanso', BackupService::KEY_ENABLED, 'yes');
+		$this->config->setAppValue('kanso', BackupService::KEY_DESTINATION, BackupService::DEST_FILES);
 		$this->config->setAppValue('kanso', BackupService::KEY_PATH, '');
 		$this->boardMapper->expects(self::never())->method('findAll');
 
@@ -333,7 +439,7 @@ class BackupServiceTest extends TestCase {
 
 	public function testConfiguredAccountIsUsedForTheFilesFolder(): void {
 		$this->enable();
-		$this->service->saveConfig(true, '/kanso-backups', 3, 'backupsvc');
+		$this->service->saveConfig(true, '/kanso-backups', 3, 'backupsvc', BackupService::DEFAULT_NOTIFY, BackupService::DEST_FILES);
 
 		$target = $this->createMock(Folder::class);
 		$target->method('isCreatable')->willReturn(true);
@@ -389,6 +495,605 @@ class BackupServiceTest extends TestCase {
 		self::assertSame(1700000000, $cfg['lastRunAt']);
 		self::assertSame(BackupService::STATUS_OK, $cfg['lastRunStatus']);
 		self::assertSame('Backed up 4 board(s)', $cfg['lastRunMessage']);
+	}
+
+	// ---- run notifications (#161) -----------------------------------------
+
+	/**
+	 * Wires a folder that accepts writes, so run() reaches STATUS_OK. Kept
+	 * separate from the happy-path test's fixture because these cases care only
+	 * about what gets announced, not about the bytes.
+	 */
+	private function stubWritableTarget(): void {
+		$target = $this->createMock(Folder::class);
+		$target->method('isCreatable')->willReturn(true);
+		$target->method('nodeExists')->willReturn(false);
+		$target->method('getDirectoryListing')->willReturn([]);
+		$target->method('newFile')->willReturn($this->createMock(File::class));
+
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('nodeExists')->willReturn(true);
+		$userFolder->method('get')->willReturn($target);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+
+		$this->boardMapper->method('findAll')->willReturn([$this->board(7)]);
+		$this->stubArchive();
+	}
+
+	/** A run that cannot start at all: enabled, Files destination, no path. */
+	private function stubFailingRun(): void {
+		$this->config->setAppValue('kanso', BackupService::KEY_ENABLED, 'yes');
+		$this->config->setAppValue('kanso', BackupService::KEY_DESTINATION, BackupService::DEST_FILES);
+		$this->config->setAppValue('kanso', BackupService::KEY_PATH, '');
+	}
+
+	public function testDefaultPolicyIsOnlyOnFailure(): void {
+		// Nothing is emitted today, so there is no prior behaviour to preserve -
+		// the default is the one the issue asked for.
+		self::assertSame(BackupService::NOTIFY_FAILURE, $this->service->getNotifyPolicy());
+		self::assertSame(BackupService::NOTIFY_FAILURE, $this->service->getConfig()['notify']);
+	}
+
+	public function testFailedRunNotifies(): void {
+		$this->stubFailingRun();
+		$this->notificationService->expects(self::once())
+			->method('notifyBackupResult')
+			->with(false, self::stringContains('path'));
+
+		$result = $this->service->run();
+
+		self::assertSame(BackupService::STATUS_ERROR, $result['status']);
+	}
+
+	public function testSuccessfulRunNotifiesWhenPolicyIsAlways(): void {
+		$this->enable();
+		$this->config->setAppValue('kanso', BackupService::KEY_NOTIFY, BackupService::NOTIFY_ALWAYS);
+		$this->stubWritableTarget();
+		$this->notificationService->expects(self::once())
+			->method('notifyBackupResult')
+			->with(true, 'Backed up 1 board(s)');
+
+		self::assertSame(BackupService::STATUS_OK, $this->service->run()['status']);
+	}
+
+	public function testSuccessfulRunIsSilentOnTheDefaultFailureOnlyPolicy(): void {
+		$this->enable();
+		$this->stubWritableTarget();
+		$this->notificationService->expects(self::never())->method('notifyBackupResult');
+
+		self::assertSame(BackupService::STATUS_OK, $this->service->run()['status']);
+	}
+
+	public function testNeverPolicyIsSilentOnSuccess(): void {
+		$this->enable();
+		$this->config->setAppValue('kanso', BackupService::KEY_NOTIFY, BackupService::NOTIFY_NEVER);
+		$this->stubWritableTarget();
+		$this->notificationService->expects(self::never())->method('notifyBackupResult');
+
+		self::assertSame(BackupService::STATUS_OK, $this->service->run()['status']);
+	}
+
+	public function testNeverPolicyIsSilentOnFailureToo(): void {
+		$this->stubFailingRun();
+		$this->config->setAppValue('kanso', BackupService::KEY_NOTIFY, BackupService::NOTIFY_NEVER);
+		$this->notificationService->expects(self::never())->method('notifyBackupResult');
+
+		self::assertSame(BackupService::STATUS_ERROR, $this->service->run()['status']);
+	}
+
+	public function testDisabledRunNotifiesNothingEvenOnAlways(): void {
+		// Disabled is not a failure, and it returns before the last-run record
+		// is touched - so it must stay silent whatever the policy says.
+		$this->config->setAppValue('kanso', BackupService::KEY_NOTIFY, BackupService::NOTIFY_ALWAYS);
+		$this->notificationService->expects(self::never())->method('notifyBackupResult');
+
+		self::assertSame('disabled', $this->service->run()['status']);
+	}
+
+	public function testNotificationFailureCannotFailTheBackup(): void {
+		$this->enable();
+		$this->config->setAppValue('kanso', BackupService::KEY_NOTIFY, BackupService::NOTIFY_ALWAYS);
+		$this->stubWritableTarget();
+		$this->notificationService->method('notifyBackupResult')
+			->willThrowException(new \RuntimeException('notification backend down'));
+		$this->logger->expects(self::once())->method('warning');
+
+		// The files are already written; a broken bell must not rewrite history.
+		$result = $this->service->run();
+
+		self::assertSame(BackupService::STATUS_OK, $result['status']);
+		self::assertSame(BackupService::STATUS_OK, $this->config->getAppValue('kanso', BackupService::KEY_LAST_RUN_STATUS, ''));
+	}
+
+	public function testSaveConfigRejectsAnUnknownPolicy(): void {
+		$this->service->saveConfig(true, '/foo', 3, 'admin', 'whenever-i-feel-like-it');
+
+		self::assertSame(BackupService::NOTIFY_FAILURE, $this->service->getNotifyPolicy());
+	}
+
+	public function testSaveConfigPersistsEachValidPolicy(): void {
+		foreach (BackupService::NOTIFY_CHOICES as $choice) {
+			$this->service->saveConfig(true, '/foo', 3, 'admin', $choice);
+			self::assertSame($choice, $this->service->getNotifyPolicy());
+		}
+	}
+
+	// ---- destination: default, migration rule, persistence (#161) ---------
+
+	public function testFreshInstallDefaultsToAppData(): void {
+		// Nothing configured at all - the state of an install that just enabled
+		// the app. The quiet destination is the one it gets.
+		self::assertSame(BackupService::DEST_APPDATA, $this->service->getDestination());
+		self::assertSame(BackupService::DEST_APPDATA, $this->service->getConfig()['destination']);
+		self::assertTrue($this->service->usesAppData());
+	}
+
+	public function testExistingInstallWithAConfiguredPathKeepsTheFilesFolder(): void {
+		// THE migration rule: no destination was ever chosen, but a target path
+		// is configured - only a release older than the setting leaves that
+		// behind, and its backups are in that folder. It must not be moved.
+		$this->config->setAppValue('kanso', BackupService::KEY_PATH, '/kanso-backups');
+
+		self::assertSame(BackupService::DEST_FILES, $this->service->getDestination());
+		self::assertFalse($this->service->usesAppData());
+	}
+
+	public function testExistingInstallThatNeverConfiguredAPathGetsTheNewDefault(): void {
+		// Enabled, no path: this instance was never writing backups anywhere, so
+		// there is nothing to preserve.
+		$this->config->setAppValue('kanso', BackupService::KEY_ENABLED, 'yes');
+
+		self::assertSame(BackupService::DEST_APPDATA, $this->service->getDestination());
+	}
+
+	public function testAnExplicitAppDataChoiceSurvivesAConfiguredPath(): void {
+		// An admin who picked app data while a path is still stored keeps app
+		// data - the path inference is a fallback, never an override.
+		$this->service->saveConfig(true, '/kanso-backups', 3, 'admin', BackupService::DEFAULT_NOTIFY, BackupService::DEST_APPDATA);
+
+		self::assertSame(BackupService::DEST_APPDATA, $this->service->getDestination());
+		// ...and the path is kept, so switching back does not make them retype it.
+		self::assertSame('/kanso-backups', $this->service->getTargetPath());
+	}
+
+	public function testSaveConfigRejectsAnUnknownDestination(): void {
+		$this->service->saveConfig(true, '', 3, 'admin', BackupService::DEFAULT_NOTIFY, 'dropbox');
+
+		self::assertSame(BackupService::DEFAULT_DESTINATION, $this->service->getDestination());
+	}
+
+	public function testSaveConfigPersistsEachValidDestination(): void {
+		foreach (BackupService::DESTINATION_CHOICES as $choice) {
+			$this->service->saveConfig(true, '/foo', 3, 'admin', BackupService::DEFAULT_NOTIFY, $choice);
+			self::assertSame($choice, $this->service->getDestination());
+		}
+	}
+
+	// ---- the app-data backend ---------------------------------------------
+
+	public function testAppDataRunWritesArchivesAndNeverTouchesAUserFolder(): void {
+		$this->enableAppData();
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder([], $written, $deleted);
+		// The whole point: no user folder is resolved, so no Files write happens
+		// and Nextcloud has nothing to write an activity row about.
+		$this->rootFolder->expects(self::never())->method('getUserFolder');
+		$this->boardMapper->method('findAll')->willReturn([$this->board(7), $this->board(14)]);
+		$this->stubArchive();
+
+		$result = $this->service->run();
+
+		self::assertSame(BackupService::STATUS_OK, $result['status']);
+		self::assertSame(2, $result['boards']);
+		self::assertSame(
+			['kanso-board-7-20260804-153000.zip', 'kanso-board-14-20260804-153000.zip'],
+			array_keys($written),
+		);
+		// And what landed is the real archive, attachments included - the same
+		// bytes the Files destination writes, because it is the same zip.
+		$entries = $this->readArchiveBytes($written['kanso-board-7-20260804-153000.zip']);
+		self::assertArrayHasKey('board.json', $entries);
+		self::assertSame('BYTES-Board 7', $entries['attachments/9/spec.pdf'] ?? null);
+		self::assertNull($this->scopes[7]);
+	}
+
+	public function testAppDataRunIgnoresAnEmptyPath(): void {
+		// A path is meaningless for app data; an empty one must not fail the run
+		// the way it does for the Files destination.
+		$this->enableAppData();
+		$this->config->setAppValue('kanso', BackupService::KEY_PATH, '');
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder([], $written, $deleted);
+		$this->boardMapper->method('findAll')->willReturn([$this->board(1)]);
+		$this->stubArchive();
+
+		self::assertSame(BackupService::STATUS_OK, $this->service->run()['status']);
+	}
+
+	public function testAppDataRetentionPrunesTheSameWayTheFilesFolderDoes(): void {
+		$this->enableAppData(2);
+		$existing = [
+			'kanso-board-7-20260101-000000.zip' => 'old',
+			'kanso-board-7-20260102-000000.zip' => 'newer',
+			// Another board's backup is never touched by board 7's sweep.
+			'kanso-board-99-20200101-000000.zip' => 'other',
+		];
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder($existing, $written, $deleted);
+		$this->boardMapper->method('findAll')->willReturn([$this->board(7)]);
+		$this->stubArchive();
+
+		self::assertSame(BackupService::STATUS_OK, $this->service->run()['status']);
+		self::assertSame(['kanso-board-7-20260101-000000.zip'], $deleted);
+	}
+
+	public function testAppDataSameSecondRerunOverwritesInPlace(): void {
+		// The filename is unique per second, so a collision means the same backup
+		// is being taken again: overwrite, never duplicate.
+		$this->enableAppData();
+		$existing = ['kanso-board-7-20260804-153000.zip' => 'stale'];
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder($existing, $written, $deleted);
+		$this->appDataFolder->expects(self::never())->method('newFile');
+		$this->boardMapper->method('findAll')->willReturn([$this->board(7)]);
+		$this->stubArchive();
+
+		self::assertSame(BackupService::STATUS_OK, $this->service->run()['status']);
+		$entries = $this->readArchiveBytes($written['kanso-board-7-20260804-153000.zip']);
+		self::assertArrayHasKey('board.json', $entries);
+	}
+
+	// ---- listing + retrieval ----------------------------------------------
+
+	public function testListBackupsIsNewestFirstAndOnlyKansoFiles(): void {
+		$this->enableAppData();
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder([
+			'kanso-board-7-20260101-000000.zip' => 'a',
+			'kanso-board-7-20260804-153000.zip' => 'bb',
+			// Not ours: a Files folder is a real folder an admin may have put
+			// anything in, and this listing is not a file browser.
+			'notes.txt' => 'nope',
+			'kanso-board-7-whatever.zip' => 'nope',
+		], $written, $deleted);
+
+		$list = $this->service->listBackups();
+
+		self::assertSame(
+			['kanso-board-7-20260804-153000.zip', 'kanso-board-7-20260101-000000.zip'],
+			array_column($list, 'name'),
+		);
+		self::assertSame(7, $list[0]['boardId']);
+		self::assertSame(2, $list[0]['size']);
+	}
+
+	public function testListBackupsAlsoWorksForTheFilesDestination(): void {
+		$this->enable();
+		$node = $this->createMock(File::class);
+		$node->method('getName')->willReturn('kanso-board-3-20260804-153000.zip');
+		$node->method('getSize')->willReturn(11);
+		$node->method('getMTime')->willReturn(self::NOW);
+
+		$target = $this->createMock(Folder::class);
+		$target->method('isCreatable')->willReturn(true);
+		$target->method('getDirectoryListing')->willReturn([$node]);
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('nodeExists')->willReturn(true);
+		$userFolder->method('get')->willReturn($target);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+
+		$list = $this->service->listBackups();
+
+		self::assertSame(['kanso-board-3-20260804-153000.zip'], array_column($list, 'name'));
+		self::assertSame(3, $list[0]['boardId']);
+	}
+
+	public function testOpenBackupStreamsTheStoredBytes(): void {
+		$this->enableAppData();
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder(['kanso-board-7-20260804-153000.zip' => 'ZIPBYTES'], $written, $deleted);
+
+		$backup = $this->service->openBackup('kanso-board-7-20260804-153000.zip');
+
+		self::assertSame(8, $backup['size']);
+		self::assertSame('ZIPBYTES', stream_get_contents($backup['stream']));
+		fclose($backup['stream']);
+	}
+
+	/**
+	 * The download endpoint's entire input validation. Every one of these must
+	 * be refused BEFORE storage is touched - the guard is an allow-list on the
+	 * exact filename shape Kanso writes, not an attempt to sanitize a path. It
+	 * also covers what would have to be true for the name to be safe in a
+	 * Content-Disposition header: no quote, no CR/LF, no NUL.
+	 */
+	public function testOpenBackupRefusesAnythingButAKansoBackupName(): void {
+		$this->enableAppData();
+		// Not even a lookup: a rejected name never reaches the storage layer.
+		$this->appData->expects(self::never())->method('getFolder');
+		$this->appDataFolder->expects(self::never())->method('getFile');
+
+		$hostile = [
+			'',
+			'../../../../etc/passwd',
+			'kanso-board-7-20260804-153000.zip/../../secret.zip',
+			'../kanso-board-7-20260804-153000.zip',
+			'kanso-board-7-20260804-153000.zip.php',
+			'card-12/9f3a',
+			'kanso-board-7-20260804-153000.txt',
+			'KANSO-BOARD-7-20260804-153000.zip',
+			"kanso-board-7-20260804-153000.zip\r\nX-Evil: 1",
+			"kanso-board-7-20260804-153000.zip\0.png",
+			'kanso-board-7-20260804-153000".zip',
+		];
+		foreach ($hostile as $name) {
+			self::assertFalse(BackupService::isBackupName($name), 'must not be accepted: ' . $name);
+			try {
+				$this->service->openBackup($name);
+				self::fail('openBackup accepted a hostile name: ' . $name);
+			} catch (NotFoundException) {
+				// Expected - and indistinguishable from "no such backup".
+			}
+		}
+	}
+
+	public function testOpenBackupOfAValidNameWithNoFileIsTheSameNotFound(): void {
+		// The no-oracle property, from the other side: a well-formed name with
+		// nothing behind it must fail EXACTLY as a malformed one does, or the 404
+		// the endpoint returns would start telling callers which names are even
+		// valid. Same exception type, same handling, same answer.
+		$this->enableAppData();
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder(['kanso-board-7-20260804-153000.zip' => 'ZIPBYTES'], $written, $deleted);
+
+		$this->expectException(NotFoundException::class);
+		$this->service->openBackup('kanso-board-99-20200101-000000.zip');
+	}
+
+	public function testOpenBackupSurfacesAStorageFailureAsSomethingOtherThanNotFound(): void {
+		// A destination that cannot be reached is NOT a missing backup: the
+		// download endpoint answers 404 for NotFoundException and lets anything
+		// else surface as a server error, so this type is what keeps a dead mount
+		// from being reported as a deleted archive.
+		$this->enable('/kanso-backups');
+		$this->rootFolder->method('getUserFolder')
+			->willThrowException(new \RuntimeException('storage backend unavailable'));
+
+		try {
+			$this->service->openBackup('kanso-board-7-20260804-153000.zip');
+			self::fail('a broken destination must not open a backup');
+		} catch (NotFoundException) {
+			self::fail('a storage failure must not masquerade as a missing backup');
+		} catch (\RuntimeException $e) {
+			self::assertStringContainsString('Backup account', $e->getMessage());
+		}
+	}
+
+	public function testOpenBackupSurfacesABrokenAppDataFolderAsSomethingOtherThanNotFound(): void {
+		// App data raises Files-layer exceptions for a store it cannot open, so
+		// without the wrapping in the target resolution an unusable app data store
+		// would reach the download endpoint as "no such backup". (A store that is
+		// merely EMPTY is a different case - see the absent-folder tests below -
+		// and this one is deliberately unusable rather than absent.)
+		$this->enableAppData();
+		$appData = $this->createMock(IAppData::class);
+		$appData->method('getFolder')->willThrowException(new NotPermittedException('read-only app data'));
+		$appData->method('newFolder')->willThrowException(new NotPermittedException('read-only app data'));
+		$service = $this->serviceWith($appData);
+
+		try {
+			$service->openBackup('kanso-board-7-20260804-153000.zip');
+			self::fail('an unusable app data store must not open a backup');
+		} catch (NotFoundException) {
+			self::fail('a storage failure must not masquerade as a missing backup');
+		} catch (\RuntimeException $e) {
+			self::assertStringContainsString('app data', $e->getMessage());
+		}
+	}
+
+	public function testListBackupsFailsLoudlyWhenTheDestinationCannotBeRead(): void {
+		// The listing used to swallow this and answer [], which the admin panel
+		// renders as "No backups stored yet." - a failure wearing the costume of
+		// an empty folder, on the one screen that is the only view of an app-data
+		// archive. It must throw so the endpoint can answer non-2xx.
+		$this->enable('/kanso-backups');
+		$this->rootFolder->method('getUserFolder')
+			->willThrowException(new \RuntimeException('no such account'));
+
+		$this->expectException(\RuntimeException::class);
+		$this->service->listBackups();
+	}
+
+	public function testListBackupsReturnsAnEmptyListForAHealthyEmptyDestination(): void {
+		// ...and the other half: a destination that resolved fine and simply holds
+		// nothing is still an empty list, not an error. "No backups yet" is a real
+		// state and the only one allowed to produce the empty hint.
+		$this->enableAppData();
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder([], $written, $deleted);
+
+		self::assertSame([], $this->service->listBackups());
+	}
+
+	// ---- reading never creates the destination ----------------------------
+	//
+	// Listing and downloading are READS. They used to resolve the destination
+	// through the same creating path a run does, so merely opening the admin
+	// panel with a typo'd folder created that folder in the backup account's
+	// Files - and then reported the empty folder it had just made as "No backups
+	// stored yet.", which is exactly the failure the listing error state exists
+	// to prevent. A missing folder is the likeliest misconfiguration there is.
+
+	public function testListingNeverCreatesAMissingFilesFolder(): void {
+		// The typo case, end to end: a path that is not there must come back as a
+		// listing failure, and must leave the account's Files untouched.
+		$this->enable('/kanso-bakcups');
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('nodeExists')->willReturn(false);
+		$userFolder->method('isCreatable')->willReturn(true);
+		// The account root DOES hold a Kanso backup. A read that quietly fell back
+		// to it would answer with a plausible listing for a folder the admin never
+		// named, so this has to fail rather than list anything at all.
+		$stray = $this->createMock(File::class);
+		$stray->method('getName')->willReturn('kanso-board-3-20260804-153000.zip');
+		$stray->method('getSize')->willReturn(11);
+		$stray->method('getMTime')->willReturn(self::NOW);
+		$userFolder->method('getDirectoryListing')->willReturn([$stray]);
+		// The guard: a read may not build what it was looking for.
+		$userFolder->expects(self::never())->method('newFolder');
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+
+		try {
+			$list = $this->service->listBackups();
+			self::fail('a destination that is not there must not list as empty, got ' . count($list) . ' entries');
+		} catch (\RuntimeException $e) {
+			self::assertStringContainsString('/kanso-bakcups', $e->getMessage());
+		}
+	}
+
+	public function testDownloadingNeverCreatesAMissingFilesFolder(): void {
+		// Same for the download: a wrong path is a broken destination, NOT a
+		// missing archive - reporting 404 here would send the admin looking for a
+		// backup that is sitting safely in the folder they meant to type.
+		$this->enable('/kanso-bakcups');
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('nodeExists')->willReturn(false);
+		$userFolder->method('isCreatable')->willReturn(true);
+		$userFolder->method('getDirectoryListing')->willReturn([]);
+		$userFolder->expects(self::never())->method('newFolder');
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+
+		try {
+			$this->service->openBackup('kanso-board-7-20260804-153000.zip');
+			self::fail('a destination that is not there must not open a backup');
+		} catch (NotFoundException) {
+			self::fail('a missing destination must not masquerade as a missing backup');
+		} catch (\RuntimeException $e) {
+			self::assertStringContainsString('/kanso-bakcups', $e->getMessage());
+		}
+	}
+
+	public function testARunStillCreatesAMissingFilesFolder(): void {
+		// The other half, and the thing that must not regress: the FIRST run into
+		// a freshly configured folder is expected to create it. Only reads were
+		// made non-creating.
+		$this->enable();
+
+		$target = $this->createMock(Folder::class);
+		$target->method('isCreatable')->willReturn(true);
+		$target->method('nodeExists')->willReturn(false);
+		$target->method('getDirectoryListing')->willReturn([]);
+		$written = [];
+		$target->method('newFile')->willReturnCallback(
+			function (string $name, $content) use (&$written): File {
+				$written[$name] = (string)stream_get_contents($content);
+				return $this->createMock(File::class);
+			},
+		);
+
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('nodeExists')->with('kanso-backups')->willReturn(false);
+		$userFolder->expects(self::once())
+			->method('newFolder')
+			->with('kanso-backups')
+			->willReturn($target);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+
+		$this->boardMapper->method('findAll')->willReturn([$this->board(7)]);
+		$this->stubArchive();
+
+		$result = $this->service->run();
+
+		self::assertSame(BackupService::STATUS_OK, $result['status']);
+		self::assertSame(['kanso-board-7-20260804-153000.zip'], array_keys($written));
+	}
+
+	public function testListingDoesNotCreateTheAppDataFolderAndReportsNoBackups(): void {
+		// App data is Kanso's own store: no admin configures, spells or mistypes
+		// it, and the `backups` subfolder is created by the first RUN and nothing
+		// else. So its absence is not a misconfiguration to report - it is the
+		// empty destination every install has until a backup runs, and calling
+		// that "your backups could not be read" would be false on every fresh
+		// install. What it must not do either way is create the folder.
+		$this->enableAppData();
+		$appData = $this->createMock(IAppData::class);
+		$appData->method('getFolder')->willThrowException(new NotFoundException('no folder'));
+		$appData->expects(self::never())->method('newFolder');
+
+		self::assertSame([], $this->serviceWith($appData)->listBackups());
+	}
+
+	public function testDownloadingFromAnUnwrittenAppDataStoreIsAMissingBackup(): void {
+		// ...and there, a 404 is the honest answer: nothing failed, the store
+		// simply holds no file of any name. (Contrast the unusable-app-data test
+		// above, which must stay a server error.)
+		$this->enableAppData();
+		$appData = $this->createMock(IAppData::class);
+		$appData->method('getFolder')->willThrowException(new NotFoundException('no folder'));
+		$appData->expects(self::never())->method('newFolder');
+
+		$this->expectException(NotFoundException::class);
+		$this->serviceWith($appData)->openBackup('kanso-board-7-20260804-153000.zip');
+	}
+
+	public function testListingStillFailsLoudlyWhenAppDataIsUnusable(): void {
+		// The distinction the test above depends on: an app data store that is
+		// PRESENT but cannot be opened is a real failure and still reaches the
+		// panel as one. Only an absent folder is an empty destination.
+		$this->enableAppData();
+		$appData = $this->createMock(IAppData::class);
+		$appData->method('getFolder')->willThrowException(new NotPermittedException('read-only app data'));
+
+		$this->expectException(\RuntimeException::class);
+		$this->serviceWith($appData)->listBackups();
+	}
+
+	public function testARunStillCreatesTheAppDataFolder(): void {
+		// The creating path for app data, preserved: the first run makes the
+		// `backups` subfolder that the reads above refuse to make.
+		$this->enableAppData();
+
+		$folder = $this->createMock(ISimpleFolder::class);
+		$folder->method('getDirectoryListing')->willReturn([]);
+		$folder->method('getFile')->willThrowException(new NotFoundException('no such file'));
+		$written = [];
+		$folder->method('newFile')->willReturnCallback(
+			function (string $name, $content = null) use (&$written): ISimpleFile {
+				$written[$name] = is_resource($content) ? (string)stream_get_contents($content) : (string)$content;
+				return $this->createMock(ISimpleFile::class);
+			},
+		);
+
+		$appData = $this->createMock(IAppData::class);
+		$appData->method('getFolder')->willThrowException(new NotFoundException('no folder'));
+		$appData->expects(self::once())
+			->method('newFolder')
+			->with(BackupService::APPDATA_FOLDER)
+			->willReturn($folder);
+
+		$this->boardMapper->method('findAll')->willReturn([$this->board(7)]);
+		$this->stubArchive();
+
+		$result = $this->serviceWith($appData)->run();
+
+		self::assertSame(BackupService::STATUS_OK, $result['status']);
+		self::assertSame(['kanso-board-7-20260804-153000.zip'], array_keys($written));
+	}
+
+	public function testIsBackupNameAcceptsWhatTheRunWrites(): void {
+		// The other half of the guard: it must not refuse Kanso's own filenames,
+		// or the download button would be dead for every backup.
+		self::assertTrue(BackupService::isBackupName('kanso-board-7-20260804-153000.zip'));
+		self::assertTrue(BackupService::isBackupName('kanso-board-123-20200101-000000.json'));
+		self::assertFalse(BackupService::isBackupName('kanso-board--20260804-153000.zip'));
 	}
 }
 

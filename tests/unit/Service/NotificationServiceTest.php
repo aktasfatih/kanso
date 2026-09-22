@@ -8,6 +8,9 @@ declare(strict_types=1);
 namespace OCA\Kanso\Tests\Unit\Service;
 
 use OCA\Kanso\Service\NotificationService;
+use OCP\IGroup;
+use OCP\IGroupManager;
+use OCP\IUser;
 use OCP\Notification\IManager;
 use OCP\Notification\INotification;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -15,12 +18,27 @@ use PHPUnit\Framework\TestCase;
 
 class NotificationServiceTest extends TestCase {
 	private IManager&MockObject $manager;
+	private IGroupManager&MockObject $groupManager;
 	private NotificationService $service;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->manager = $this->createMock(IManager::class);
-		$this->service = new NotificationService($this->manager);
+		$this->groupManager = $this->createMock(IGroupManager::class);
+		$this->service = new NotificationService($this->manager, $this->groupManager);
+	}
+
+	/** Wires the `admin` group to contain exactly these uids. */
+	private function stubAdmins(string ...$uids): void {
+		$users = [];
+		foreach ($uids as $uid) {
+			$user = $this->createMock(IUser::class);
+			$user->method('getUID')->willReturn($uid);
+			$users[] = $user;
+		}
+		$group = $this->createMock(IGroup::class);
+		$group->method('getUsers')->willReturn($users);
+		$this->groupManager->method('get')->with('admin')->willReturn($group);
 	}
 
 	public function testNotifyCardAssignedBuildsAndSends(): void {
@@ -136,5 +154,116 @@ class NotificationServiceTest extends TestCase {
 		$this->manager->expects(self::never())->method('markProcessed');
 
 		$this->service->dismissAllForObjects(NotificationService::OBJECT_CARD, []);
+	}
+
+	// ---- backup run notifications (#161) ----------------------------------
+
+	public function testNotifyBackupResultFansOutToEveryAdmin(): void {
+		$this->stubAdmins('root', 'ops');
+
+		$users = [];
+		$subjects = [];
+		$this->manager->method('createNotification')->willReturnCallback(
+			function () use (&$users, &$subjects): INotification {
+				$n = $this->createMock(INotification::class);
+				$n->method('setApp')->willReturnSelf();
+				$n->method('setUser')->willReturnCallback(function (string $uid) use ($n, &$users): INotification {
+					$users[] = $uid;
+					return $n;
+				});
+				$n->method('setDateTime')->willReturnSelf();
+				$n->method('setObject')->with('backup', 'run')->willReturnSelf();
+				$n->method('setSubject')->willReturnCallback(
+					function (string $subject, array $params) use ($n, &$subjects): INotification {
+						$subjects[] = [$subject, $params];
+						return $n;
+					}
+				);
+				return $n;
+			}
+		);
+		// One supersede + one post per admin.
+		$this->manager->expects(self::exactly(2))->method('markProcessed');
+		$this->manager->expects(self::exactly(2))->method('notify');
+
+		$this->service->notifyBackupResult(false, 'Backup target path is unset or unwritable');
+
+		// Two notifications built per admin (the supersede probe + the real one).
+		self::assertSame(['root', 'root', 'ops', 'ops'], $users);
+		self::assertSame([
+			['backup_failed', ['message' => 'Backup target path is unset or unwritable']],
+			['backup_failed', ['message' => 'Backup target path is unset or unwritable']],
+		], $subjects);
+	}
+
+	public function testNotifyBackupResultUsesTheSuccessSubjectWhenTheRunWorked(): void {
+		$this->stubAdmins('root');
+
+		$subjects = [];
+		$this->manager->method('createNotification')->willReturnCallback(
+			function () use (&$subjects): INotification {
+				$n = $this->createMock(INotification::class);
+				$n->method('setApp')->willReturnSelf();
+				$n->method('setUser')->willReturnSelf();
+				$n->method('setDateTime')->willReturnSelf();
+				$n->method('setObject')->willReturnSelf();
+				$n->method('setSubject')->willReturnCallback(
+					function (string $subject) use ($n, &$subjects): INotification {
+						$subjects[] = $subject;
+						return $n;
+					}
+				);
+				return $n;
+			}
+		);
+
+		$this->service->notifyBackupResult(true, 'Backed up 4 board(s)');
+
+		self::assertSame([NotificationService::SUBJECT_BACKUP_OK], $subjects);
+	}
+
+	public function testNotifyBackupResultSupersedesTheAdminsPreviousEntry(): void {
+		// The supersede probe must be keyed on app + user + the backup object and
+		// carry NO subject, so it clears a previous `backup_ok` as readily as a
+		// previous `backup_failed`. Without that, a nightly failure would stack
+		// one unread entry per night.
+		$this->stubAdmins('root');
+
+		$probe = $this->createMock(INotification::class);
+		$probe->method('setApp')->with('kanso')->willReturnSelf();
+		$probe->method('setUser')->with('root')->willReturnSelf();
+		$probe->expects(self::once())->method('setObject')->with('backup', 'run')->willReturnSelf();
+		$probe->expects(self::never())->method('setSubject');
+
+		$posted = $this->createMock(INotification::class);
+		$posted->method('setApp')->willReturnSelf();
+		$posted->method('setUser')->willReturnSelf();
+		$posted->method('setDateTime')->willReturnSelf();
+		$posted->method('setObject')->willReturnSelf();
+		$posted->method('setSubject')->willReturnSelf();
+
+		$this->manager->method('createNotification')->willReturnOnConsecutiveCalls($probe, $posted);
+		$this->manager->expects(self::once())->method('markProcessed')->with($probe);
+		$this->manager->expects(self::once())->method('notify')->with($posted);
+
+		$this->service->notifyBackupResult(false, 'boom');
+	}
+
+	public function testNotifyBackupResultIsANoOpWithoutAnAdminGroup(): void {
+		// No recipient may be guessed for an instance-wide event.
+		$this->groupManager->method('get')->with('admin')->willReturn(null);
+		$this->manager->expects(self::never())->method('createNotification');
+		$this->manager->expects(self::never())->method('notify');
+		$this->manager->expects(self::never())->method('markProcessed');
+
+		$this->service->notifyBackupResult(false, 'boom');
+	}
+
+	public function testNotifyBackupResultIsANoOpWhenTheAdminGroupIsEmpty(): void {
+		$this->stubAdmins();
+		$this->manager->expects(self::never())->method('createNotification');
+		$this->manager->expects(self::never())->method('notify');
+
+		$this->service->notifyBackupResult(true, 'Backed up 0 board(s)');
 	}
 }

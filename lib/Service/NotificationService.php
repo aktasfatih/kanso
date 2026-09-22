@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCP\IGroupManager;
 use OCP\Notification\IManager;
 
 /**
@@ -30,11 +31,24 @@ class NotificationService {
 	public const SUBJECT_CARD_DUE_SOON = 'card_due_soon';
 	public const SUBJECT_STEP_ASSIGNED = 'step_assigned';
 	public const SUBJECT_CARD_REMINDER = 'card_reminder';
+	public const SUBJECT_BACKUP_OK = 'backup_ok';
+	public const SUBJECT_BACKUP_FAILED = 'backup_failed';
 	public const OBJECT_CARD = 'card';
 	public const OBJECT_CHECKLIST_ITEM = 'checklist_item';
+	public const OBJECT_BACKUP = 'backup';
+
+	/**
+	 * The single object id every backup-run notification is filed under. It is a
+	 * constant, not a per-run id, and that is the whole superseding mechanism:
+	 * app + user + this object identifies "the backup notification", so the next
+	 * run can mark the previous one processed before posting its own. A nightly
+	 * failing backup therefore leaves ONE unread bell entry, not 365.
+	 */
+	public const OBJECT_BACKUP_RUN = 'run';
 
 	public function __construct(
 		private IManager $manager,
+		private IGroupManager $groupManager,
 	) {
 	}
 
@@ -204,6 +218,60 @@ class NotificationService {
 			->setSubject(self::SUBJECT_STEP_ASSIGNED, ['actor' => $actorUid, 'cardId' => $cardId]);
 
 		$this->manager->notify($notification);
+	}
+
+	/**
+	 * Tells the instance's admins how a scheduled backup run went (#161).
+	 *
+	 * RECIPIENTS are resolved here, deliberately, rather than taken from an
+	 * ambient current user: a backup runs on cron, where there IS no logged-in
+	 * user (the same empty-actor condition that makes its file-activity rows
+	 * render as a deleted account). So the audience is stated explicitly - every
+	 * member of the `admin` group, i.e. exactly the people who can open the
+	 * backup settings and fix a broken target path. An instance whose admin
+	 * group is somehow empty simply gets no notification; there is no fallback
+	 * to "some user", because guessing a recipient for an instance-wide event is
+	 * how a private failure message ends up in a stranger's bell.
+	 *
+	 * The event is ACTOR-LESS for the same reason. {@see \OCA\Kanso\Notification\Notifier}
+	 * renders these two subjects without an {actor} placeholder and without
+	 * touching a card, which is why it must branch on them before its card
+	 * lookup.
+	 *
+	 * Each recipient's previous backup notification is marked processed first,
+	 * so a backup that fails every night supersedes itself instead of stacking
+	 * unbounded unread entries. {@see OBJECT_BACKUP_RUN} explains the keying.
+	 *
+	 * @param bool $ok whether the run succeeded
+	 * @param string $message the run's own summary line, as shown in the panel
+	 */
+	public function notifyBackupResult(bool $ok, string $message): void {
+		$admins = $this->groupManager->get('admin')?->getUsers() ?? [];
+		if ($admins === []) {
+			return;
+		}
+
+		$subject = $ok ? self::SUBJECT_BACKUP_OK : self::SUBJECT_BACKUP_FAILED;
+		foreach ($admins as $admin) {
+			$uid = $admin->getUID();
+
+			// Supersede: drop this recipient's previous backup notification
+			// (either subject) before posting the new one.
+			$previous = $this->manager->createNotification();
+			$previous->setApp('kanso')
+				->setUser($uid)
+				->setObject(self::OBJECT_BACKUP, self::OBJECT_BACKUP_RUN);
+			$this->manager->markProcessed($previous);
+
+			$notification = $this->manager->createNotification();
+			$notification->setApp('kanso')
+				->setUser($uid)
+				->setDateTime((new \DateTime())->setTimestamp(time()))
+				->setObject(self::OBJECT_BACKUP, self::OBJECT_BACKUP_RUN)
+				->setSubject($subject, ['message' => $message]);
+
+			$this->manager->notify($notification);
+		}
 	}
 
 	/**

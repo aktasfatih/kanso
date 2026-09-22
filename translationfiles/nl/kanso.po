@@ -403,8 +403,16 @@ msgstr "Er is een kaart aangemaakt, verplaatst of afgerond, of er is een bord me
 msgid "A fresh copy is created each time; this card stays as the source"
 msgstr "Er wordt elke keer een verse kopie gemaakt; deze kaart blijft de bron"
 
+#: templates/admin-backup.php
+msgid "A new one replaces the last, so a backup that keeps failing does not pile up."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Accept mail from (one address or @domain per line — leave empty to accept anyone)"
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Account that owns the folder"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -556,6 +564,10 @@ msgstr "Toevoegen…"
 #: src/components/CardDetail.vue
 msgid "After a specific card"
 msgstr "Na een specifieke kaart"
+
+#: templates/admin-backup.php
+msgid "After every backup"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "After N occurrences"
@@ -761,10 +773,6 @@ msgstr "Bijlagen"
 msgid "Auto-archive"
 msgstr "Automatisch archiveren"
 
-#: templates/admin-backup.php
-msgid "Automatically export every Kanso board to a versioned JSON file on a daily schedule, keeping the last few backups per board. Point this at a Nextcloud folder; mount that folder as an S3 External Storage to keep off-site copies. Kanso writes the files via Nextcloud and never holds S3 credentials."
-msgstr "Exporteer elk Kanso-bord dagelijks automatisch naar een JSON-bestand met versienummer en bewaar de laatste paar back-ups per bord. Wijs hiervoor een Nextcloud-map aan; koppel die map als S3-externe opslag om kopieën buiten de deur te bewaren. Kanso schrijft de bestanden via Nextcloud en heeft nooit S3-inloggegevens in handen."
-
 #: src/components/BoardSettingsModal.vue
 msgid "Automation"
 msgstr "Automatisering"
@@ -791,6 +799,10 @@ msgstr "Terug naar filters"
 msgid "Back to projects"
 msgstr "Terug naar projecten"
 
+#: templates/admin-backup.php
+msgid "Back up boards automatically"
+msgstr ""
+
 #: lib/SetupCheck/InstanceConfigCheck.php
 msgid "Background jobs use a server-side mode and \"overwrite.cli.url\" is set."
 msgstr "Achtergrondtaken draaien in een servermodus en \"overwrite.cli.url\" is ingesteld."
@@ -804,6 +816,10 @@ msgstr "Achtergrondtaken draaien in AJAX-modus, die alleen werkt zolang er een p
 #: src/components/StackColumn.vue
 msgid "Backlog"
 msgstr "Backlog"
+
+#: templates/admin-backup.php
+msgid "Backup"
+msgstr ""
 
 #: src/admin-backup.js
 msgid "Backup completed"
@@ -861,6 +877,7 @@ msgstr "Blauw"
 #: src/views/PublicBoard.vue
 #: src/views/TrashView.vue
 #: src/views/ViewPage.vue
+#: templates/admin-backup.php
 msgid "Board"
 msgstr "Bord"
 
@@ -1568,6 +1585,10 @@ msgstr "Kan dat Trello-bestand niet importeren."
 msgid "Could not load that board’s columns."
 msgstr "Kan de kolommen van dat bord niet laden."
 
+#: src/admin-backup.js
+msgid "Could not load the stored backups."
+msgstr ""
+
 #: src/components/CsvImportModal.vue
 msgid "Could not load your boards."
 msgstr "Kan je borden niet laden."
@@ -2012,6 +2033,10 @@ msgstr "In kolommen met een reviewvergrendeling kan een kaart pas naar Klaar als
 msgid "Down vs previous period"
 msgstr "Omlaag t.o.v. de vorige periode"
 
+#: src/admin-backup.js
+msgid "Download"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Download a backup of this board, attachments included."
 msgstr "Download een back-up van dit bord, inclusief bijlagen."
@@ -2103,6 +2128,14 @@ msgstr "bijv. KAN"
 msgid "Each Deck board is copied into a new Kanso board you own: stacks, cards, labels and assignees. Your Deck boards are left untouched."
 msgstr "Elk Deck-bord wordt gekopieerd naar een nieuw Kanso-bord dat van jou is: kolommen, kaarten, labels en toegewezen personen. Je Deck-borden blijven ongewijzigd."
 
+#: templates/admin-backup.php
+msgid "Each file holds one whole board, with every card and attachment on it, even private ones."
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Each run adds up to two entries per board to this account's activity."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 msgid "Edit"
@@ -2169,10 +2202,6 @@ msgstr "Openbare link inschakelen"
 #: src/components/BoardSettingsModal.vue
 msgid "Enable rule"
 msgstr "Regel inschakelen"
-
-#: templates/admin-backup.php
-msgid "Enable scheduled backups"
-msgstr "Geplande back-ups inschakelen"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Enabled"
@@ -2266,6 +2295,10 @@ msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Elk jaar"
 msgstr[1] "Elke %n jaar"
+
+#: templates/admin-backup.php
+msgid "Everyone in the administrators group gets the message."
+msgstr ""
 
 #: src/views/BoardView.vue
 msgid "Exit multi-select"
@@ -2922,6 +2955,10 @@ msgstr "Mapacties"
 msgid "Folder and target column"
 msgstr ""
 
+#: templates/admin-backup.php
+msgid "Folder in that account"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Forever"
 msgstr "Voor altijd"
@@ -3087,6 +3124,10 @@ msgstr ""
 msgid "Importing…"
 msgstr "Importeren…"
 
+#: templates/admin-backup.php
+msgid "In a Files folder"
+msgstr ""
+
 #: src/components/BoardListView.vue
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTimelineView.vue
@@ -3111,6 +3152,10 @@ msgstr "Gearchiveerde meenemen"
 #: src/views/ProjectView.vue
 msgid "Inline code"
 msgstr "Code in de tekst"
+
+#: templates/admin-backup.php
+msgid "Inside Kanso (recommended)"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardTile.vue
@@ -3180,9 +3225,21 @@ msgstr "Kanso en de Guests-app"
 msgid "Kanso background jobs & email links"
 msgstr "Achtergrondtaken en e-maillinks van Kanso"
 
+#: lib/Notification/Notifier.php
+msgid "Kanso board backup completed"
+msgstr ""
+
+#: lib/Notification/Notifier.php
+msgid "Kanso board backup failed"
+msgstr ""
+
 #: templates/admin-backup.php
 msgid "Kanso board backups"
 msgstr "Back-ups van Kanso-borden"
+
+#: templates/admin-backup.php
+msgid "Kanso cannot switch them off, and the notification setting below does not remove them."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Kanso checks a dedicated mailbox every five minutes and turns each new message into a card — the subject becomes the title and the body becomes the description. Use a mailbox that exists only for this board."
@@ -3191,6 +3248,10 @@ msgstr ""
 #: src/views/BoardList.vue
 msgid "Kanso export (.zip)"
 msgstr "Kanso-export (.zip)"
+
+#: templates/admin-backup.php
+msgid "Kanso keeps the files itself. Nothing goes into anyone's Files folder."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Kanso never contacts your instance — it only receives what the webhook sends. A link you paste stays without a status until a delivery mentions it."
@@ -3203,6 +3264,10 @@ msgstr "Kanso opent standaard de lijst met borden. Zet dit aan om in plaats daar
 #: src/App.vue
 msgid "Kanso settings"
 msgstr "Kanso-instellingen"
+
+#: templates/admin-backup.php
+msgid "Kanso writes the files into a Files folder you can open and sync."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Keep my version"
@@ -3577,6 +3642,10 @@ msgstr "Wacht op jouw review"
 msgid "never"
 msgstr "nooit"
 
+#: templates/admin-backup.php
+msgid "Never"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "New board name…"
 msgstr "Naam van het nieuwe bord…"
@@ -3627,6 +3696,10 @@ msgstr "Nieuw sjabloon"
 msgid "New view"
 msgstr "Nieuwe weergave"
 
+#: templates/admin-backup.php
+msgid "Newest first."
+msgstr ""
+
 #: src/components/CsvImportModal.vue
 msgid "Next"
 msgstr "Volgende"
@@ -3635,10 +3708,6 @@ msgstr "Volgende"
 msgid "next {date}"
 msgstr "volgende {date}"
 
-#: templates/admin-backup.php
-msgid "Nextcloud account that owns the target folder"
-msgstr "Nextcloud-account dat eigenaar is van de doelmap"
-
 #: src/views/BoardList.vue
 msgid "Nextcloud Deck"
 msgstr "Nextcloud Deck"
@@ -3646,6 +3715,10 @@ msgstr "Nextcloud Deck"
 #: src/components/BoardSettingsModal.vue
 msgid "No"
 msgstr "Nee"
+
+#: templates/admin-backup.php
+msgid "No activity entries and no quota use, but you cannot sync the files or store them elsewhere."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "No activity yet."
@@ -3670,6 +3743,10 @@ msgstr "Nog geen regels voor automatisch archiveren."
 #: src/components/BoardSettingsModal.vue
 msgid "No background"
 msgstr "Geen achtergrond"
+
+#: templates/admin-backup.php
+msgid "No backups stored yet."
+msgstr ""
 
 #: src/App.vue
 msgid "No boards in this folder"
@@ -3928,6 +4005,10 @@ msgstr "Hier is nog niets — taken die je afrondt verschijnen in dit gedeelte."
 msgid "Nothing on the selected board is assigned to you. Choose “All boards” to see everything assigned to you."
 msgstr "Op het geselecteerde bord is niets aan je toegewezen. Kies “Alle borden” om alles te zien wat aan je is toegewezen."
 
+#: templates/admin-backup.php
+msgid "Notify administrators"
+msgstr ""
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "now"
@@ -3957,6 +4038,14 @@ msgstr "Verschuiving erna (dagen)"
 msgid "On days"
 msgstr "Op dagen"
 
+#: templates/admin-backup.php
+msgid "Once a day, Kanso saves a copy of every board as a zip file."
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Only administrators can download them, and they can never be shared by a link."
+msgstr ""
+
 #: src/composables/useBoardFilters.js
 msgid "Only archived"
 msgstr "Alleen gearchiveerde"
@@ -3972,6 +4061,10 @@ msgstr "Alleen issues met een label"
 #: src/views/MyCardsView.vue
 msgid "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list."
 msgstr "Alleen de eerste {count} toegewezen kaarten worden geladen, dus sommige van je taken ontbreken in deze lijst."
+
+#: templates/admin-backup.php
+msgid "Only when a backup fails"
+msgstr ""
 
 #: src/components/CommandPalette.vue
 msgid "open"
@@ -4162,6 +4255,10 @@ msgstr "Bord vastzetten"
 #: src/views/BoardList.vue
 msgid "Pinned"
 msgstr "Vastgezet"
+
+#: templates/admin-backup.php
+msgid "Point this at a separate account nobody signs in to, and they land in its feed instead of yours."
+msgstr ""
 
 #: src/views/BoardStats.vue
 msgid "Points / week (avg)"
@@ -4886,6 +4983,10 @@ msgstr "Zijbalk"
 msgid "Single date"
 msgstr "Eén datum"
 
+#: templates/admin-backup.php
+msgid "Size"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Skip while open"
 msgstr "Overslaan zolang de kaart open is"
@@ -5011,6 +5112,10 @@ msgstr "De timer stoppen"
 msgid "Stop watching this card"
 msgstr "Deze kaart niet meer volgen"
 
+#: templates/admin-backup.php
+msgid "Stored backups"
+msgstr ""
+
 #: src/components/MarkdownEditor.vue
 msgid "Strikethrough"
 msgstr "Doorhalen"
@@ -5049,10 +5154,6 @@ msgstr "Systeem"
 #: src/services/estimateScales.js
 msgid "T-shirt (XS–XL)"
 msgstr "T-shirtmaten (XS–XL)"
-
-#: templates/admin-backup.php
-msgid "Target folder (Nextcloud path under that account)"
-msgstr "Doelmap (Nextcloud-pad onder dat account)"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Target stack"
@@ -5099,6 +5200,10 @@ msgstr "Die kaart staat niet meer op dit bord."
 msgid "That is not a date we can use. Pick a day, or clear the field for no expiry."
 msgstr ""
 
+#: templates/admin-backup.php
+msgid "The backups then live in that account's Files."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "The chat link must be a http:// or https:// URL."
 msgstr "De chatlink moet een http:// of https:// URL zijn."
@@ -5110,6 +5215,10 @@ msgstr "De CSV heeft een koprij en minstens één gegevensrij nodig."
 #: src/views/BoardList.vue
 msgid "The Deck app is not installed on this server, so there is nothing to import."
 msgstr "De Deck-app is niet geïnstalleerd op deze server, dus er valt niets te importeren."
+
+#: templates/admin-backup.php
+msgid "The files use that account's quota, and each write shows up in its activity."
+msgstr ""
 
 #: lib/SetupCheck/GuestsWhitelistCheck.php
 msgid "The Guests app is enabled but its app whitelist is missing: %1$s. Guest accounts shared onto a Kanso board cannot open it (card deep links from emails fail with a generic denial). Add the missing app(s) in Administration settings > Guests."
@@ -5133,6 +5242,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "The link stops working at the end of the selected day, in the time zone it was set from. Exactly: {when}. Leave empty for no expiry."
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "The only way to get one back is the list at the bottom of this page."
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -5561,6 +5674,10 @@ msgstr "Zodra een kaart in een rol komt"
 msgid "When someone requests your review on a card it will appear here."
 msgstr "Zodra iemand jouw review op een kaart vraagt, verschijnt die hier."
 
+#: templates/admin-backup.php
+msgid "Where to keep the backups"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Which Forgejo issues to take in"
 msgstr ""
@@ -5607,6 +5724,10 @@ msgstr "Workflow"
 msgid "Write a reply…"
 msgstr "Schrijf een antwoord…"
 
+#: templates/admin-backup.php
+msgid "Written"
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "wrote"
 msgstr "schreef"
@@ -5634,6 +5755,10 @@ msgstr "Ja"
 #: src/views/TrashView.vue
 msgid "Yes, delete"
 msgstr "Ja, verwijderen"
+
+#: templates/admin-backup.php
+msgid "You can also point that folder at another server with external storage."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "you can edit"

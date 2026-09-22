@@ -66,6 +66,12 @@ return [
 		['name' => 'backupAdmin#index', 'url' => '/api/admin/backup', 'verb' => 'GET'],
 		['name' => 'backupAdmin#update', 'url' => '/api/admin/backup', 'verb' => 'PUT'],
 		['name' => 'backupAdmin#run', 'url' => '/api/admin/backup/run', 'verb' => 'POST'],
+		// Listing + retrieval of the stored backups. Required by the app-data
+		// destination, where the archives are not in anyone's Files and this is
+		// the only way to reach them. Admin-gated exactly like the rest of the
+		// controller - see its docblock.
+		['name' => 'backupAdmin#files', 'url' => '/api/admin/backup/files', 'verb' => 'GET'],
+		['name' => 'backupAdmin#download', 'url' => '/api/admin/backup/download', 'verb' => 'GET'],
 
 		['name' => 'board#index', 'url' => '/api/boards', 'verb' => 'GET'],
 		['name' => 'board#create', 'url' => '/api/boards', 'verb' => 'POST'],
