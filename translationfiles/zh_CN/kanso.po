@@ -1261,10 +1261,12 @@ msgstr "清单完成度"
 msgid "Checklist incomplete"
 msgstr "清单未完成"
 
+#: src/components/CardPreview.vue
 #: src/components/CardTile.vue
 msgid "Checklist progress"
 msgstr "清单进度"
 
+#: src/components/CardPreview.vue:227
 #: src/components/CardTile.vue:464
 msgid "Checklist progress - %n overdue step"
 msgid_plural "Checklist progress - %n overdue steps"

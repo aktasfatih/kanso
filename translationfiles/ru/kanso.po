@@ -1313,10 +1313,12 @@ msgstr "Выполнено пунктов чек-листа"
 msgid "Checklist incomplete"
 msgstr "Чек-лист не выполнен"
 
+#: src/components/CardPreview.vue
 #: src/components/CardTile.vue
 msgid "Checklist progress"
 msgstr "Прогресс чек-листа"
 
+#: src/components/CardPreview.vue:227
 #: src/components/CardTile.vue:464
 msgid "Checklist progress - %n overdue step"
 msgid_plural "Checklist progress - %n overdue steps"

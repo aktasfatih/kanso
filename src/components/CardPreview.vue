@@ -60,11 +60,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				{{ dueLabel }}
 			</span>
 
-			<!-- Checklist progress - hidden when the board switched checklists off (#5894) -->
+			<!-- Checklist progress - hidden when the board switched checklists off
+			     (#5894). Tinted red when a step is open and past due (#10708), from
+			     the same summary field and under the same conditions as the tile
+			     underneath, so the peek can never contradict what it is peeking at.
+			     The label carries "overdue" too - the tint alone would be a
+			     colour-only cue. -->
 			<span
 				v-if="cardFeatures.checklist && card.checklist && card.checklist.total > 0"
 				class="card-preview__checklist"
-				:class="{ 'card-preview__checklist--complete': card.checklist.done === card.checklist.total }">
+				:class="{
+					'card-preview__checklist--complete': card.checklist.done === card.checklist.total,
+					'card-preview__checklist--overdue': hasOverdueSteps,
+				}"
+				:aria-label="checklistLabel"
+				:title="checklistLabel">
 				<CheckboxMarkedOutlineIcon :size="12" />
 				{{ card.checklist.done }}/{{ card.checklist.total }}
 			</span>
@@ -110,7 +120,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
-import { translate as t } from '@nextcloud/l10n'
+import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import CalendarIcon from 'vue-material-design-icons/Calendar.vue'
 import FlagIcon from 'vue-material-design-icons/Flag.vue'
@@ -203,9 +213,23 @@ const dueLabel = computed(() => {
 	return formatCardDate(props.card.duedate, props.card.allDay === true, { month: 'short', day: 'numeric' })
 })
 
+const isDone = computed(() => Number(props.card.doneAt) > 0)
+
+// Overdue checklist steps (#10708): the board summary carries the count of the
+// card's OPEN past-due steps, and this reads it exactly as the tile does
+// (CardTile.hasOverdueSteps) - same field, same done-card suppression - so the
+// preview and the tile it floats over can never disagree about one card.
+const hasOverdueSteps = computed(() => !isDone.value && Number(props.card.checklist?.overdue ?? 0) > 0)
+
+// n(), not t() with a placeholder: pl/ru and friends need the plural forms, and
+// this is the same string the tile's badge announces.
+const checklistLabel = computed(() => (hasOverdueSteps.value
+	? n('kanso', 'Checklist progress - %n overdue step', 'Checklist progress - %n overdue steps', Number(props.card.checklist.overdue))
+	: t('kanso', 'Checklist progress')))
+
 const dueDateClass = computed(() => {
 	if (!props.card.duedate) return ''
-	if (Number(props.card.doneAt) > 0) return ''
+	if (isDone.value) return ''
 	const due = new Date(props.card.duedate)
 	const now = new Date()
 	if (due < now) return 'card-preview__due--overdue'
@@ -401,6 +425,16 @@ onBeforeUnmount(() => {
 	color: var(--kanso-success-legible);
 	border-color: var(--kanso-success-legible);
 	background: var(--kanso-success-tint);
+}
+
+/* At least one step is open and past due (#10708) - the error twin of the
+ * --complete rule above, and the same tokens the tile's badge uses, so the peek
+ * and the tile under it render one state, not two. Mutually exclusive with
+ * --complete: a done step is never counted overdue. */
+.card-preview__checklist--overdue {
+	color: var(--kanso-error-legible);
+	border-color: var(--kanso-error-legible);
+	background: var(--kanso-error-tint);
 }
 
 .card-preview__assignees {

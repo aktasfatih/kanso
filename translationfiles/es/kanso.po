@@ -1287,10 +1287,12 @@ msgstr "Listas de tareas terminadas"
 msgid "Checklist incomplete"
 msgstr "Lista de tareas incompleta"
 
+#: src/components/CardPreview.vue
 #: src/components/CardTile.vue
 msgid "Checklist progress"
 msgstr "Progreso de la lista de tareas"
 
+#: src/components/CardPreview.vue:227
 #: src/components/CardTile.vue:464
 msgid "Checklist progress - %n overdue step"
 msgid_plural "Checklist progress - %n overdue steps"

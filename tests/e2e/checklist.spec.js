@@ -311,6 +311,19 @@ test.describe('Checklist steps', () => {
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 		await expect(stepsTile.locator('.card-tile__checklist--overdue')).toBeVisible({ timeout: 15_000 })
 
+		// …and the hover preview agrees with the tile it floats over (#10708). It is
+		// a SECOND consumer of the same summary field and used to draw a neutral,
+		// on-track badge over a red one. Asserted on the preview component itself -
+		// the tile assertion above cannot see it.
+		await stepsTile.hover()
+		await expect(page.locator('.card-tile:hover')).toHaveCount(1)
+		await page.keyboard.press('Space')
+		const preview = page.locator('.card-preview')
+		await expect(preview).toBeVisible({ timeout: 15_000 })
+		await expect(preview.locator('.card-preview__checklist--overdue')).toBeVisible({ timeout: 15_000 })
+		await page.keyboard.press('Escape')
+		await expect(preview).not.toBeVisible({ timeout: 15_000 })
+
 		// Reopen the card for the rest of the flow.
 		await stepsTile.click()
 		await page.waitForSelector('.card-modal', { timeout: 15_000 })
@@ -329,6 +342,16 @@ test.describe('Checklist steps', () => {
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 		await expect(stepsTile.locator('.card-tile__checklist')).toBeVisible({ timeout: 15_000 })
 		await expect(stepsTile.locator('.card-tile__checklist--overdue')).toHaveCount(0, { timeout: 15_000 })
+
+		// The preview drops it with the tile - still the same one state, not two.
+		await stepsTile.hover()
+		await expect(page.locator('.card-tile:hover')).toHaveCount(1)
+		await page.keyboard.press('Space')
+		await expect(preview).toBeVisible({ timeout: 15_000 })
+		await expect(preview.locator('.card-preview__checklist')).toBeVisible({ timeout: 15_000 })
+		await expect(preview.locator('.card-preview__checklist--overdue')).toHaveCount(0, { timeout: 15_000 })
+		await page.keyboard.press('Escape')
+		await expect(preview).not.toBeVisible({ timeout: 15_000 })
 
 		await stepsTile.click()
 		await page.waitForSelector('.card-modal', { timeout: 15_000 })

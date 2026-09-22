@@ -1287,10 +1287,12 @@ msgstr "Kontrol listesi tamam"
 msgid "Checklist incomplete"
 msgstr "Kontrol listesi tamamlanmadı"
 
+#: src/components/CardPreview.vue
 #: src/components/CardTile.vue
 msgid "Checklist progress"
 msgstr "Kontrol listesi ilerlemesi"
 
+#: src/components/CardPreview.vue:227
 #: src/components/CardTile.vue:464
 msgid "Checklist progress - %n overdue step"
 msgid_plural "Checklist progress - %n overdue steps"
