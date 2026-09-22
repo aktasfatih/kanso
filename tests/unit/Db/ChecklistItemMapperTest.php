@@ -347,6 +347,242 @@ class ChecklistItemMapperTest extends TestCase {
 		self::assertSame([], $mapper->overdueByBoards([], new \DateTime('@1700000000'), 'alice', []));
 	}
 
+	// ---- the checklist PROGRESS aggregate (#10709) --------------------------
+
+	/**
+	 * Happy path: the two grouped passes are paired into a per-card
+	 * total/done shape, and a card the done pass never returned falls back to
+	 * 0 done rather than dropping out of the map.
+	 */
+	public function testProgressByBoardPairsEachCardsTotalWithItsDoneCount(): void {
+		$map = null;
+		// The recorded result drains once, so the first pass (totals) consumes
+		// the fed rows and the done pass legitimately comes back empty.
+		$this->recordQuery(
+			[['card_id' => 3, 'cnt' => 4], ['card_id' => 9, 'cnt' => 1]],
+			fn (ChecklistItemMapper $m) => $m->progressByBoard(7, self::viewer()),
+			$map
+		);
+
+		self::assertSame(
+			[3 => ['total' => 4, 'done' => 0], 9 => ['total' => 1, 'done' => 0]],
+			$map
+		);
+	}
+
+	/**
+	 * DENIAL (#3743, pinned by #10709): progressByBoard is viewer-scoped, so a
+	 * card this viewer cannot see contributes NO checklist progress - neither to
+	 * the board tile nor to the board-wide checklist total StatsService sums
+	 * straight off this map (which has no visible-card list to gate it).
+	 *
+	 * The three visibility branches must be bound with the viewer's OWN role and
+	 * uid, on BOTH passes: an internal card of the opposite side, or someone
+	 * else's private card, can then never match. This is the assertion the card
+	 * says was missing - deleting `applyForViewer()` from countByBoard() empties
+	 * all four expectations below.
+	 */
+	public function testProgressByBoardNeverCountsAStepOfACardHiddenFromTheViewer(): void {
+		$predicates = $this->recordQuery(
+			[],
+			fn (ChecklistItemMapper $m) => $m->progressByBoard(7, self::viewer(7, ViewerContext::ROLE_EXTERNAL))
+		);
+
+		// progressByBoard runs countByBoard TWICE (totals, then done-only), so
+		// every scope binding is expected once per pass - both must carry it.
+		self::assertSame(
+			[
+				CardVisibilityScope::VISIBILITY_PUBLIC,
+				CardVisibilityScope::VISIBILITY_INTERNAL,
+				CardVisibilityScope::VISIBILITY_PRIVATE,
+				CardVisibilityScope::VISIBILITY_PUBLIC,
+				CardVisibilityScope::VISIBILITY_INTERNAL,
+				CardVisibilityScope::VISIBILITY_PRIVATE,
+			],
+			self::boundValues($predicates, 'eq', 'c.visibility'),
+			'the visibility rule must be applied to the joined cards table, on BOTH counting passes'
+		);
+		self::assertSame(
+			[ViewerContext::ROLE_EXTERNAL, ViewerContext::ROLE_EXTERNAL],
+			self::boundValues($predicates, 'eq', 'c.creator_role'),
+			'the internal branch must bind the VIEWER\'s side, not a wildcard'
+		);
+		self::assertSame(
+			['alice', 'alice'],
+			self::boundValues($predicates, 'eq', 'c.owner'),
+			'the private branch must bind the viewer as owner'
+		);
+		// Two board bindings per pass: the aggregate's own filter and the scope's.
+		self::assertSame([7, 7, 7, 7], self::boundValues($predicates, 'eq', 'c.board_id'), 'must stay board-scoped');
+		self::assertSame([0, 0], self::boundValues($predicates, 'eq', 'c.deleted_at'), 'trashed cards carry no progress');
+		// Only the SECOND pass narrows to done steps - a dialect-safe PARAM_BOOL,
+		// never SUM(done), so Postgres booleans and MySQL/SQLite 0/1 agree.
+		self::assertSame([true], self::boundValues($predicates, 'eq', 'ci.done'), 'exactly one pass counts done steps');
+	}
+
+	/**
+	 * The board-SET twin keeps the same scoping in cross-board mode: the role
+	 * that holds on EACH board is bound per side, so a viewer who is internal on
+	 * one board and external on another never picks up the other side's progress.
+	 */
+	public function testProgressByBoardsScopesPerBoardRoleAndShortCircuitsOnAnEmptySet(): void {
+		$predicates = $this->recordQuery(
+			[],
+			fn (ChecklistItemMapper $m) => $m->progressByBoards(
+				[7, 9],
+				'alice',
+				[7 => ViewerContext::ROLE_INTERNAL, 9 => ViewerContext::ROLE_EXTERNAL],
+			)
+		);
+
+		$boardFilters = self::boundValues($predicates, 'in', 'c.board_id');
+		self::assertSame([7, 9], $boardFilters[0] ?? null, 'the readable set is the outer filter');
+		foreach ($boardFilters as $bound) {
+			self::assertEmpty(array_diff((array)$bound, [7, 9]), 'no board outside the readable set may be queried');
+		}
+		self::assertSame(
+			[
+				ViewerContext::ROLE_INTERNAL, ViewerContext::ROLE_EXTERNAL,
+				ViewerContext::ROLE_INTERNAL, ViewerContext::ROLE_EXTERNAL,
+			],
+			self::boundValues($predicates, 'eq', 'c.creator_role'),
+			'each board\'s own side must be bound, on both counting passes'
+		);
+		self::assertSame(['alice', 'alice'], self::boundValues($predicates, 'eq', 'c.owner'));
+
+		// Denial: no readable boards means no query at all - never `IN ()`.
+		$db = $this->createMock(IDBConnection::class);
+		$db->expects(self::never())->method('getQueryBuilder');
+		$mapper = new ChecklistItemMapper($db, new CardVisibilityScope());
+		self::assertSame([], $mapper->progressByBoards([], 'alice', []));
+	}
+
+	/**
+	 * The anonymous twin binds the PUBLIC-ONLY scope and, crucially, grows NO
+	 * role or owner branch: a share link has no session, so an internal or
+	 * private card's progress must be unreachable rather than merely unmatched.
+	 */
+	public function testProgressByBoardPublicOnlyRestrictsToPublicCardsWithNoRoleBranch(): void {
+		$predicates = $this->recordQuery(
+			[],
+			fn (ChecklistItemMapper $m) => $m->progressByBoardPublicOnly(7)
+		);
+
+		self::assertSame(
+			[CardVisibilityScope::VISIBILITY_PUBLIC, CardVisibilityScope::VISIBILITY_PUBLIC],
+			self::boundValues($predicates, 'eq', 'c.visibility'),
+			'both counting passes must be restricted to public cards'
+		);
+		self::assertSame([], self::boundValues($predicates, 'eq', 'c.creator_role'), 'an anonymous read has no role to match');
+		self::assertSame([], self::boundValues($predicates, 'eq', 'c.owner'), 'and no owner to match either');
+		self::assertSame([7, 7], self::boundValues($predicates, 'eq', 'c.board_id'));
+	}
+
+	// ---- the derived "waiting on client" aggregate (#3746) ------------------
+
+	/**
+	 * DENIAL: the wait map is viewer-scoped too, so a hidden card's parked step
+	 * can not surface its existence through the tile's waiting chip.
+	 */
+	public function testWaitingByBoardNeverSurfacesACardHiddenFromTheViewer(): void {
+		$predicates = $this->recordQuery(
+			[],
+			fn (ChecklistItemMapper $m) => $m->waitingByBoard(7, self::viewer(7, ViewerContext::ROLE_EXTERNAL))
+		);
+
+		self::assertSame(
+			[
+				CardVisibilityScope::VISIBILITY_PUBLIC,
+				CardVisibilityScope::VISIBILITY_INTERNAL,
+				CardVisibilityScope::VISIBILITY_PRIVATE,
+			],
+			self::boundValues($predicates, 'eq', 'c.visibility'),
+			'the visibility rule must be applied to the joined cards table'
+		);
+		self::assertSame([ViewerContext::ROLE_EXTERNAL], self::boundValues($predicates, 'eq', 'c.creator_role'));
+		self::assertSame(['alice'], self::boundValues($predicates, 'eq', 'c.owner'));
+		// The filters that make presence in the map MEAN "waiting": the step is
+		// still open and frozen on the queried side.
+		self::assertSame([false], self::boundValues($predicates, 'eq', 'ci.done'), 'a done step is nobody\'s wait');
+		self::assertSame(
+			[ViewerContext::ROLE_EXTERNAL],
+			self::boundValues($predicates, 'eq', 'ci.assigned_role'),
+			'the wait is derived from the STEP\'s frozen side'
+		);
+	}
+
+	/**
+	 * The board-SET twin of the wait map keeps per-board roles in cross-board
+	 * mode, and never queries with an empty readable set.
+	 */
+	public function testWaitingByBoardsScopesPerBoardRoleAndShortCircuitsOnAnEmptySet(): void {
+		$predicates = $this->recordQuery(
+			[],
+			fn (ChecklistItemMapper $m) => $m->waitingByBoards(
+				[7, 9],
+				'alice',
+				[7 => ViewerContext::ROLE_INTERNAL, 9 => ViewerContext::ROLE_EXTERNAL],
+			)
+		);
+
+		$boardFilters = self::boundValues($predicates, 'in', 'c.board_id');
+		self::assertSame([7, 9], $boardFilters[0] ?? null, 'the readable set is the outer filter');
+		foreach ($boardFilters as $bound) {
+			self::assertEmpty(array_diff((array)$bound, [7, 9]), 'no board outside the readable set may be queried');
+		}
+		self::assertSame(
+			[ViewerContext::ROLE_INTERNAL, ViewerContext::ROLE_EXTERNAL],
+			self::boundValues($predicates, 'eq', 'c.creator_role'),
+			'each board\'s own side must be bound'
+		);
+		self::assertSame(['alice'], self::boundValues($predicates, 'eq', 'c.owner'));
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->expects(self::never())->method('getQueryBuilder');
+		$mapper = new ChecklistItemMapper($db, new CardVisibilityScope());
+		self::assertSame([], $mapper->waitingByBoards([], 'alice', []));
+	}
+
+	// ---- the cross-board "my steps" feed (#3745) ----------------------------
+
+	/**
+	 * DENIAL: being ASSIGNED a step grants no visibility over its card, so the
+	 * my-steps feed applies the same cross-board scope as my-cards. Drop it and
+	 * a step assigned on a card the viewer may not see would be listed - with
+	 * the card, board and stack titles the feed joins in.
+	 */
+	public function testFindOpenAssignedInBoardsNeverReturnsAStepOfACardHiddenFromTheViewer(): void {
+		$predicates = $this->recordQuery(
+			[],
+			fn (ChecklistItemMapper $m) => $m->findOpenAssignedInBoards(
+				'alice',
+				[7, 9],
+				[7 => ViewerContext::ROLE_INTERNAL, 9 => ViewerContext::ROLE_EXTERNAL],
+			)
+		);
+
+		self::assertSame(
+			[
+				CardVisibilityScope::VISIBILITY_PUBLIC,
+				CardVisibilityScope::VISIBILITY_INTERNAL,
+				CardVisibilityScope::VISIBILITY_PRIVATE,
+			],
+			self::boundValues($predicates, 'eq', 'c.visibility'),
+			'assignment is not visibility - the scope must still be applied'
+		);
+		self::assertSame(
+			[ViewerContext::ROLE_INTERNAL, ViewerContext::ROLE_EXTERNAL],
+			self::boundValues($predicates, 'eq', 'c.creator_role'),
+			'each board\'s own side must be bound'
+		);
+		self::assertSame(['alice'], self::boundValues($predicates, 'eq', 'c.owner'));
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->expects(self::never())->method('getQueryBuilder');
+		$mapper = new ChecklistItemMapper($db, new CardVisibilityScope());
+		self::assertSame([], $mapper->findOpenAssignedInBoards('alice', [], []));
+	}
+
 	public function testFindByCardBreaksSortKeyTiesByIdAscending(): void {
 		// Two items tied on sort_key, fed in an order that is neither id order
 		// nor the expected order, so only a real id tiebreaker in the query can
