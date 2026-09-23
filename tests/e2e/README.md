@@ -125,19 +125,76 @@ await page.waitForSelector('.card-modal', { timeout: 15_000 })  // ✅ see below
 unset it would fall through to the 240s test cap — so those keep an explicit
 `{ timeout: 15_000 }` rather than dropping the option.
 
+`expect.poll(fn, { timeout })` and `toPass({ timeout })` follow the same rule,
+and they have **no exception for `.not`**. Unlike a matcher, a poll returns the
+instant its assertion passes — `expect.poll(...).not.toBe(x)` returns as soon as
+the value stops being `x`, it does not spend the budget proving a negative. So
+every poll budget is a positive one. (`playwright.config.js` states
+`expect.toPass.timeout` alongside `expect.timeout`, because Playwright otherwise
+falls back to 0 for `toPass` — "no budget but the 240s test cap" — rather than to
+the 15s global.)
+
 None of this applies to a **negative** wait (`not.toBeVisible`,
 `toHaveCount(0)`, `state: 'hidden'`) or to `waitForTimeout`: there a short
 budget is load-bearing, because the assertion only passes by spending it.
 Lengthening those just makes the suite slower.
 
-`npm run lint:e2e-timeouts` enforces this (it runs in CI's `build-frontend`
-job, so it fails in minutes rather than costing a ~1.7h e2e cycle). A
-deliberately short positive budget is fine if you say why:
+### …and don't hand-roll one that outlives what it waits on
+
+The mirror-image mistake, and the one the first sweep of this rule made: some
+things on screen **dismiss themselves**, so the 15s global is not a safe default
+for a wait on one. It is a wait nothing can satisfy once the thing is gone, and
+the failure it prints ("not visible") describes something that really did
+appear.
+
+Known lifetimes, all of them from the source rather than from memory:
+
+| Thing | Life | Defined in |
+| --- | --- | --- |
+| Undo toast (`showUndo`) | **10s** | `TOAST_UNDO_TIMEOUT`, `@nextcloud/dialogs/dist/toast.d.ts` |
+| Any other toast | **7s** | `TOAST_DEFAULT_TIMEOUT`, same file |
+| "Find on board" ring | **2.4s** | `revealTimer`, `src/views/BoardView.vue` |
+| Comment deep-link highlight | **4s** | `highlightTimer`, `src/components/CardDetail.vue` |
+| "Created" flash on a recurrence rule | **3s** | `src/components/BoardSettingsModal.vue` |
+| "Copied!" on the branch-name button | **1.5s** | `branchCopied`, `src/components/CardDetail.vue` |
+
+So a wait on one of those states a budget **under** its life, and says so:
+
+```js
+const undoToast = toast(page, 'Card deleted')
+// short-budget-ok: the undo toast is gone at 10s (TOAST_UNDO_TIMEOUT)
+await expect(undoToast).toBeVisible({ timeout: 8_000 })
+```
+
+Two things follow from the same fact and are easy to miss:
+
+- **Order matters.** Anything perishable is asserted *first*. A 10s wait sitting
+  in front of a 2.4s ring can consume the ring's whole life and then look for a
+  class that was correctly removed.
+- **What the budget really has to cover is the action, not the toast.** If the
+  action the toast reports is itself slow (a 101-card bulk write runs to ~30s),
+  the wait has to outlive the toast — there is no budget that covers a 30s write
+  and stays under a 10s toast. Those are annotated `// long-budget-ok: <reason>`
+  and are expected to be rare; three exist today, all over 100-card bulk writes.
+
+`npm run lint:e2e-timeouts` enforces all of it (it runs in CI's `build-frontend`
+job, so it fails in minutes rather than costing a ~1.7h e2e cycle). It knows a
+toast wait by the suite's own `toast()` helper — including through a variable
+bound to one — and requires either a budget under 10s or the long-budget escape.
+It does **not** know about the other ephemera in the table above; those are on
+you, and `// short-budget-ok: <reason>` is how you record the reason:
 
 ```js
 // short-budget-ok: the banner auto-dismisses at 3s, so a longer wait can't pass
 await expect(banner).toBeVisible({ timeout: 2000 })
 ```
+
+One gap worth knowing about: the guard only inspects the matchers in
+`POSITIVE_WAITS` (`toBeVisible`, `toHaveText`, `toHaveValue`, `toHaveCount`,
+`waitForSelector`, `waitForResponse`, `waitForFunction`) plus `expect.poll` /
+`toPass`. Around 130 hand-rolled sub-15s budgets still sit on `toHaveClass`,
+`toContainText`, `toHaveURL`, `toBeInViewport` and friends. Sweeping those is its
+own change; until then, apply the rule by hand when you touch one.
 
 ## Isolation & parallelism
 

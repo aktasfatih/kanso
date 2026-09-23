@@ -105,6 +105,132 @@ test('an unrelated comment above does NOT suppress the finding', () => {
 	assert.equal(scan(src).length, 1)
 })
 
+// ── expect.poll / toPass ──────────────────────────────────────────────────────
+// Both retry until the assertion passes, so neither has the negative form whose
+// short budget is load-bearing — every budget on them is a positive one.
+
+test('flags an expect.poll that budgets under 15s', () => {
+	const found = scan('await expect.poll(() => count(), { timeout: 8_000 }).toBe(3)\n')
+	assert.equal(found.length, 1)
+	assert.equal(found[0].matcher, 'expect.poll')
+	assert.equal(found[0].value, 8000)
+	assert.equal(found[0].kind, 'poll')
+})
+
+test('flags a toPass that budgets under 15s', () => {
+	const found = scan('await expect(async () => { await check() }).toPass({ timeout: 10_000 })\n')
+	assert.equal(found.length, 1)
+	assert.equal(found[0].matcher, 'toPass')
+	assert.equal(found[0].value, 10000)
+})
+
+test('flags an expect.poll whose option sits on its own line', () => {
+	const src = [
+		'await expect.poll(',
+		'\tasync () => (await api.get(`/cards/${id}`)).stackId,',
+		'\t{ timeout: 8_000 },',
+		').toBe(target)',
+		'',
+	].join('\n')
+	const found = scan(src)
+	assert.equal(found.length, 1)
+	assert.equal(found[0].line, 3)
+})
+
+test('a NEGATED poll is still flagged — poll has no budget-spending negative', () => {
+	assert.equal(scan('await expect.poll(() => url(), { timeout: 8_000 }).not.toContain(\'x\')\n').length, 1)
+})
+
+test('accepts a poll at or above the 15s global, and one with no budget at all', () => {
+	assert.deepEqual(scan('await expect.poll(() => n(), { timeout: 15_000 }).toBe(1)\n'), [])
+	assert.deepEqual(scan('await expect.poll(() => n(), { timeout: 30_000 }).toBe(1)\n'), [])
+	assert.deepEqual(scan('await expect.poll(() => n()).toBe(1)\n'), [])
+})
+
+test('leaves a poll option that is not a numeric literal alone', () => {
+	assert.deepEqual(scan('await expect.poll(() => n(), { timeout: REFETCH + SLACK }).toBe(1)\n'), [])
+	assert.deepEqual(scan('await expect.poll(() => n(), { message: \'timeout: 500\' }).toBe(1)\n'), [])
+})
+
+test('honours short-budget-ok on a poll', () => {
+	assert.deepEqual(
+		scan('await expect.poll(() => n(), { timeout: 2_000 }).toBe(1) // short-budget-ok: fixture\n'),
+		[],
+	)
+})
+
+// ── Finite lifetime: a wait must not outlive what it waits on ─────────────────
+
+test('flags a toast wait with no budget — the 15s global outlives the toast', () => {
+	const found = scan('await expect(toast(page, \'Card deleted\')).toBeVisible()\n')
+	assert.equal(found.length, 1)
+	assert.equal(found[0].kind, 'toast')
+	assert.equal(found[0].value, null)
+})
+
+test('flags a toast wait budgeted at or above the 10s toast life', () => {
+	assert.deepEqual(
+		scan('await expect(toast(page, \'x\')).toBeVisible({ timeout: 30_000 })\n').map((v) => v.kind),
+		['toast'],
+	)
+	// 10s is both over the toast's life and under the 15s global, so it breaks
+	// both rules at once and is reported by each.
+	assert.deepEqual(
+		scan('await expect(toast(page, \'x\')).toBeVisible({ timeout: 10_000 })\n').map((v) => v.kind).sort(),
+		['short', 'toast'],
+	)
+})
+
+test('follows a toast through a variable, and through one derived from it', () => {
+	const src = [
+		'const undoToast = toast(page, \'Card deleted\')',
+		'await expect(undoToast).toBeVisible()',
+		'const undoBtn = undoToast.getByRole(\'button\', { name: \'Undo\' })',
+		'await expect(undoBtn).toBeVisible()',
+		'',
+	].join('\n')
+	assert.deepEqual(scan(src).map((v) => v.line), [2, 4])
+})
+
+test('accepts a toast wait budgeted under the toast life, once annotated', () => {
+	const src = [
+		'const undoToast = toast(page, \'Card deleted\')',
+		'// short-budget-ok: the undo toast is gone at 10s',
+		'await expect(undoToast).toBeVisible({ timeout: 8_000 })',
+		'',
+	].join('\n')
+	assert.deepEqual(scan(src), [])
+})
+
+test('honours long-budget-ok when the slow part precedes the toast', () => {
+	assert.deepEqual(
+		scan('await expect(toast(page, \'x\')).toBeVisible({ timeout: 60_000 }) // long-budget-ok: fixture\n'),
+		[],
+	)
+})
+
+test('short-budget-ok does NOT excuse a toast wait that outlives the toast', () => {
+	const found = scan('await expect(toast(page, \'x\')).toBeVisible({ timeout: 30_000 }) // short-budget-ok: fixture\n')
+	assert.equal(found.length, 1)
+	assert.equal(found[0].kind, 'toast')
+})
+
+test('a toast asserted ABSENT needs no lifetime budget', () => {
+	assert.deepEqual(scan('await expect(toast(page, \'x\')).toHaveCount(0)\n'), [])
+	assert.deepEqual(scan('await expect(toast(page, \'x\')).not.toBeVisible()\n'), [])
+})
+
+test('a non-toast wait on the line after a toast one is not dragged in', () => {
+	const src = [
+		'const undoToast = toast(page, \'x\')',
+		'// short-budget-ok: fixture',
+		'await expect(undoToast).toBeVisible({ timeout: 8_000 })',
+		'await expect(page.locator(\'.card-tile\')).toHaveCount(3)',
+		'',
+	].join('\n')
+	assert.deepEqual(scan(src), [])
+})
+
 test('reports each violation in a file separately', () => {
 	const src = [
 		'await expect(a).toBeVisible({ timeout: 5000 })',
