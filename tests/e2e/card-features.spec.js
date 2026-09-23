@@ -106,7 +106,11 @@ test.describe('Built-in card sections (#5894)', () => {
 		})
 		// Sanity: the fixture data really is there.
 		expect(board.cards.find((c) => c.id === state.cardId).timerRunning).toBe(true)
-		expect(board.cards.find((c) => c.id === state.cardId).checklist).toEqual({ done: 1, total: 2 })
+		// Whole-object on purpose: this is the payload-drift guard, so a new key in
+		// the checklist summary has to be acknowledged here. `overdue` (#10696)
+		// always rides the shape and is 0 when no open step is past due — this
+		// fixture's two steps carry no due date at all.
+		expect(board.cards.find((c) => c.id === state.cardId).checklist).toEqual({ done: 1, total: 2, overdue: 0 })
 		expect(await api.get(`/cards/${state.cardId}/attachments`)).toHaveLength(1)
 	})
 
