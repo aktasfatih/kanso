@@ -41,6 +41,18 @@ const BATCH = 6
 /**
  * Apply `fn` to every item, `size` of them in flight at a time.
  *
+ * `allSettled`, not `Promise.all`, and deliberately: `Promise.all` REJECTS on
+ * the first failure while the rest of the wave is still in flight. In this
+ * fixture that means `beforeAll` throws, `afterAll` starts deleting accounts
+ * and the board — and the five still-running provisioning calls land after it,
+ * leaving accounts nothing will ever clean up on a shared instance. Letting the
+ * whole wave settle first costs nothing (it is the same wall clock: `all`
+ * doesn't cancel anything either, it just stops waiting) and keeps teardown
+ * strictly after setup.
+ *
+ * The failure is still raised — with every reason in the wave, not just the
+ * first — so a broken fixture is loud rather than silently half-applied.
+ *
  * @param {Array<any>} items What to work through.
  * @param {number} size How many to run concurrently.
  * @param {(item: any) => Promise<any>} fn The work for one item.
@@ -48,7 +60,14 @@ const BATCH = 6
  */
 async function inWaves(items, size, fn) {
 	for (let i = 0; i < items.length; i += size) {
-		await Promise.all(items.slice(i, i + size).map((item) => fn(item)))
+		const results = await Promise.allSettled(items.slice(i, i + size).map((item) => fn(item)))
+		const failed = results.filter((r) => r.status === 'rejected')
+		if (failed.length > 0) {
+			throw new Error(
+				`inWaves: ${failed.length}/${results.length} failed in the wave starting at index ${i}:\n`
+				+ failed.map((f) => `  - ${f.reason?.message ?? f.reason}`).join('\n'),
+			)
+		}
 	}
 }
 
