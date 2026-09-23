@@ -160,9 +160,17 @@ $hideIf = static function (bool $hidden): void {
 			   reports, never on the unsaved dropdown, because the button acts on
 			   the saved one right now. Note what this does NOT claim: with
 			   retention above 1 a board has several archives, so "the only copy"
-			   is true of the FILE, not of the board. */ ?>
+			   is true of the FILE, not of the board.
+
+			   The FIRST sentence therefore says nothing about permanence: it is
+			   shown to every admin, and "for good" is false under the Files
+			   destination, where FilesBackupTarget::delete() parks the node in
+			   the backup account's trashbin. Claiming it here contradicted the
+			   files span two lines below on the same page. Whether the file can
+			   be got back is the spans' job; this line only promises that Kanso
+			   itself is not holding another copy, which is true either way. */ ?>
 		<p class="settings-hint" id="kanso-backup-delete-hint">
-			<?php p($l->t('Deleting a backup removes that file for good; Kanso keeps no second copy of it.')); ?>
+			<?php p($l->t('Deleting a backup removes that file from this list; Kanso keeps no second copy of it.')); ?>
 			<span id="kanso-backup-delete-hint-appdata"<?php $hideIf(!$usesAppData); ?>><?php p($l->t('It is not in anyone\'s Files, so there is nowhere to undo it from.')); ?></span>
 			<span id="kanso-backup-delete-hint-files"<?php $hideIf($usesAppData); ?>><?php p($l->t('The file goes to that account\'s trashbin and keeps using space until that is emptied.')); ?></span>
 		</p>

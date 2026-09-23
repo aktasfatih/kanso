@@ -1980,7 +1980,7 @@ msgid "deleted this card"
 msgstr "ha eliminado esta tarjeta"
 
 #: templates/admin-backup.php
-msgid "Deleting a backup removes that file for good; Kanso keeps no second copy of it."
+msgid "Deleting a backup removes that file from this list; Kanso keeps no second copy of it."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
