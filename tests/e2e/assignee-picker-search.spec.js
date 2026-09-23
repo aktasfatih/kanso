@@ -20,11 +20,45 @@ import { test, expect, api, ncLogin, BASE, provisionUser, deleteUser } from './h
 const CAP = 25
 const POOL = 30
 
+// How many of the fixture's round trips are in flight at once.
+//
+// Provisioning a Nextcloud user is not a cheap INSERT — it hashes a password
+// and copies the skeleton directory — and each account needs a second request
+// to put it on the board, so the pool costs 60 full requests. Issued strictly
+// one after another that measured ~51s on an idle local box with the backend
+// to itself, and on CI (a 4-CPU runner, two Playwright workers, one Nextcloud)
+// it ran past the 180s hook budget outright: the hook timed out, afterAll
+// deleted the board while the abandoned loop was still posting to it (the
+// `404: Not found` in the report is that collateral, not the cause), and both
+// sibling tests were reported as hook casualties.
+//
+// Six at a time turns 60 serial hops into ~10 waves. Deliberately not
+// `Promise.all` over the whole pool: sixty concurrent requests would queue
+// inside the one apache/php pool that every other spec in the run shares, so
+// the wall-clock win is small and the collateral is not.
+const BATCH = 6
+
+/**
+ * Apply `fn` to every item, `size` of them in flight at a time.
+ *
+ * @param {Array<any>} items What to work through.
+ * @param {number} size How many to run concurrently.
+ * @param {(item: any) => Promise<any>} fn The work for one item.
+ * @return {Promise<void>} once every item is done.
+ */
+async function inWaves(items, size, fn) {
+	for (let i = 0; i < items.length; i += size) {
+		await Promise.all(items.slice(i, i + size).map((item) => fn(item)))
+	}
+}
+
 test.describe('Assigning someone the participants cap leaves out (#10704)', () => {
 	const state = { boardId: 0, cardId: 0, smallBoardId: 0, smallCardId: 0, boardUrl: '', smallBoardUrl: '', uids: [] }
 
 	// Provisioning + sharing 30 accounts is ~60 round trips; the default test
-	// timeout is not the budget for a fixture this size.
+	// timeout is not the budget for a fixture this size. The waves (see BATCH)
+	// are what keeps it inside this one — a bigger number here would only have
+	// bought the serial version a slower way to be the slowest thing in the run.
 	test.beforeAll(async ({}, testInfo) => {
 		test.setTimeout(180_000)
 		const prefix = `e2epool${testInfo.workerIndex}_`
@@ -37,12 +71,21 @@ test.describe('Assigning someone the participants cap leaves out (#10704)', () =
 
 		// "Pool Person NN" sorts after the acting user's own display name, so the
 		// tail of this list is exactly what the cap sheds.
+		const pool = []
 		for (let i = 1; i <= POOL; i++) {
-			const uid = prefix + String(i).padStart(2, '0')
-			state.uids.push(uid)
-			await provisionUser(uid, 'Kanso-e2e-pool!1', { displayName: `Pool Person ${String(i).padStart(2, '0')}` })
-			await api.post(`/boards/${board.id}/acl`, { participant: uid, participantType: 'user', permission: 1 })
+			const n = String(i).padStart(2, '0')
+			pool.push({ uid: prefix + n, displayName: `Pool Person ${n}` })
 		}
+		state.uids = pool.map((p) => p.uid)
+
+		// An account has to EXIST before it can be given access, so each person's
+		// two calls stay ordered — the concurrency is strictly across different
+		// people. Firing all 60 at once would race the ACL post against its own
+		// user creation.
+		await inWaves(pool, BATCH, async ({ uid, displayName }) => {
+			await provisionUser(uid, 'Kanso-e2e-pool!1', { displayName })
+			await api.post(`/boards/${board.id}/acl`, { participant: uid, participantType: 'user', permission: 1 })
+		})
 
 		// A second board nobody else is on: the control for the note, which must
 		// not nag on a board whose list really is everyone.
@@ -58,8 +101,10 @@ test.describe('Assigning someone the participants cap leaves out (#10704)', () =
 		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 		if (state.smallBoardId) await api.delete(`/boards/${state.smallBoardId}`).catch(() => {})
 		// Leave the instance as we found it — 30 stray accounts would otherwise
-		// turn up in every other spec's share and mention pickers.
-		for (const uid of state.uids) await deleteUser(uid)
+		// turn up in every other spec's share and mention pickers. Same waves as
+		// the setup: a teardown that overruns its own budget leaves exactly the
+		// mess it exists to clear up.
+		await inWaves(state.uids, BATCH, (uid) => deleteUser(uid))
 	})
 
 	/**
