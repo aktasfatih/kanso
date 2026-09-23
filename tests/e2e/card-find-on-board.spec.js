@@ -123,6 +123,15 @@ test.describe('Find the card on board (#10062)', () => {
 		// fp=4 → only Urgent cards. The target has no priority, so it is filtered
 		// out: there is no tile to scroll to and the user has to be told why.
 		await openCardMenu(page, cardUrl(state.targetId, '?fp=4'))
+
+		// Unlike every other test here, this one jumps straight to the card URL
+		// without loading the board first — and the toast below cannot be raised
+		// until the board has loaded: the reveal watcher returns early while
+		// `boardData` is null (src/views/BoardView.vue). A visible column proves
+		// that 61-card GET landed, so the toast's 6s budget is spent on the toast
+		// rather than on the board behind it. `.card-modal` alone would not: the
+		// modal renders its skeleton before either request answers.
+		await expect(page.locator('.stack-column').first()).toBeVisible()
 		await findAction(page).click()
 
 		// A plain toast dismisses itself at TOAST_DEFAULT_TIMEOUT = 7s, and the

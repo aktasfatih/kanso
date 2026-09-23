@@ -774,7 +774,22 @@ test.describe('Kanso admin backup settings', () => {
 		expect(await storedNames(), 'a dismissed confirm must not delete anything').toContain(name)
 
 		// 2. Saying yes removes it, and says so.
+		//
+		// The delete's own round-trip is awaited first, at the 15s global, because
+		// the toast is raised only once it resolves: in src/admin-backup.js the
+		// `showSuccess` sits behind `await axios.delete(...)` and the listing
+		// reload after it. Starting the toast's short budget at the CLICK would
+		// hand a slow storage delete most of those 6s and fail a delete that in
+		// fact succeeded — the toast's budget has to measure the toast, not the
+		// storage. Awaiting the DELETE leaves only the listing read inside it,
+		// which is the same shape the recur-rule save uses. `page.waitFor*` is not
+		// covered by `expect.timeout`, hence the explicit 15s to match the global.
+		const deleted = page.waitForResponse(
+			(r) => r.url().includes('/api/admin/backup/files') && r.request().method() === 'DELETE',
+			{ timeout: 15_000 },
+		)
 		await clickDelete(page, row, 'accept')
+		expect((await deleted).ok(), 'the delete itself must succeed').toBe(true)
 
 		// A plain toast dismisses itself at TOAST_DEFAULT_TIMEOUT = 7s, so a 15s wait
 		// short-budget-ok: would outlive the toast and report the wrong failure

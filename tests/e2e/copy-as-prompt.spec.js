@@ -123,6 +123,13 @@ test.describe('Copy as prompt', () => {
 		await page.goto(state.cardUrl)
 		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
+		// The comment has to be on screen before the menu is opened. copyAsPrompt()
+		// falls back to `await commentsQuery.refetch()` whenever the comments have
+		// not landed yet (src/components/CardDetail.vue), and that round-trip would
+		// then be spent inside the toast's 6s budget below. Once the body is
+		// rendered the query holds data, so the fallback cannot fire.
+		await expect(page.getByText(COMMENT_BODY).first()).toBeVisible()
+
 		// Open the overflow (⋯) actions menu in the card modal header.
 		const menuTrigger = page.locator('.card-modal__actions-menu button').first()
 		await expect(menuTrigger).toBeVisible()
