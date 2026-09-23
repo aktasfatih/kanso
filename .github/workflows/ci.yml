@@ -260,22 +260,47 @@ jobs:
       # vacuous on exactly the newer legs it exists for - which is the whole
       # point of the step. Instead every line of output is inspected and
       # anything that is not "No syntax errors detected" fails the job.
+      #
+      # Which makes the RUNNER's own PHP part of the contract, and it is not
+      # always clean. setup-php installs the php8.x-* extension packages without
+      # necessarily installing the system libraries they link against, so every
+      # invocation can print, before it ever looks at the file:
+      #
+      #   PHP Warning:  PHP Startup: Unable to load dynamic library 'pdo_pgsql'
+      #   ... (libpq.so.5: cannot open shared object file ...) in Unknown on line 0
+      #
+      # and still report "No syntax errors detected" for all of them. That is
+      # how this step spent 2 minutes failing on PHP 8.5 with zero syntax errors
+      # (run 35825736166): a broken runner build wearing a syntax error's face.
+      #
+      # `-n` is the fix rather than another grep exclusion: with no php.ini read,
+      # no extension is loaded, so a startup warning cannot be emitted at all.
+      # A filter would have to grow an entry per broken extension, and each
+      # entry is a hole a real diagnostic could hide in. Parsing needs no
+      # extension - implicit-nullable and its kin are raised by the compiler.
+      #
+      # `-n` also discards the ini's error_reporting/display_errors, so both are
+      # re-asserted explicitly: printing deprecations is the ENTIRE reason this
+      # step reads output instead of the exit code, and fixing the false red must
+      # not quietly trade that away. log_errors=0 keeps each diagnostic to one
+      # line instead of a stdout/stderr pair.
       - name: Parse-check the shipped tree
         run: |
           set -uo pipefail
           out="$(mktemp)"
           rc=0
           find lib appinfo templates -name '*.php' -print0 \
-            | xargs -0 -r -n1 php -l > "$out" 2>&1 || rc=$?
+            | xargs -0 -r -n1 php -n -d error_reporting=E_ALL -d display_errors=1 -d log_errors=0 -l \
+              > "$out" 2>&1 || rc=$?
           # Drop the per-file success lines and the blank lines PHP prints
           # before a diagnostic; whatever survives is a real complaint.
           noise="$(grep -vE '^(No syntax errors detected in |$)' "$out" || true)"
           if [ "$rc" -ne 0 ] || [ -n "$noise" ]; then
-            echo "::error::php -l reported problems in the shipped tree on PHP $(php -r 'echo PHP_VERSION;')"
+            echo "::error::php -l reported problems in the shipped tree on PHP $(php -n -r 'echo PHP_VERSION;')"
             printf '%s\n' "$noise"
             exit 1
           fi
-          echo "Shipped tree parses cleanly and silently on PHP $(php -r 'echo PHP_VERSION;')"
+          echo "Shipped tree parses cleanly and silently on PHP $(php -n -r 'echo PHP_VERSION;')"
       - name: Install dependencies
         run: composer install --no-interaction --no-progress
       - name: Run unit tests
