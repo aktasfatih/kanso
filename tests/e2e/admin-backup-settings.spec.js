@@ -599,6 +599,17 @@ test.describe('Kanso admin backup settings', () => {
 	})
 
 	test('a run into app data lists its backups and the download returns a real zip', async ({ page, request }) => {
+		// A board of this spec's own, BEFORE the run. A run archives every live
+		// board on the instance (BackupService::run over BoardMapper::findAll),
+		// so on an instance that happens to hold none it succeeds having written
+		// nothing: the listing is then legitimately empty and no wait can make a
+		// row appear. That is reachable on CI — a fresh stack holds no boards and
+		// the parallel worker's specs delete and recreate theirs — and it is what
+		// made this the one flaky test in the file. Every other test here already
+		// seeds through seedArchive() for exactly this reason.
+		const board = await admin.post('/boards', { title: `Backup e2e run ${Date.now()}` })
+		seededBoards.push(board.id)
+
 		await gotoPanel(page)
 
 		// Switch to app data and take a backup from the panel itself — the whole
@@ -611,22 +622,38 @@ test.describe('Kanso admin backup settings', () => {
 			await page.click('label[for="kanso-backup-enabled"]')
 		}
 		await expect(enabledBox).toBeChecked()
-		await page.fill('#kanso-backup-retention', '2')
-		await page.click('#kanso-backup-run')
+		// 30, not 2: a run prunes EVERY board down to this many archives, so a
+		// small number deletes copies another session left behind — the isolation
+		// note at the top of this file, which seedArchive() already honours.
+		await page.fill('#kanso-backup-retention', '30')
 
-		// The listing is the ONLY view of an app-data backup; a row must appear.
-		const rows = page.locator('#kanso-backup-file-rows tr')
-		await expect(rows.first()).toBeVisible({ timeout: 30_000 })
-		const firstName = await rows.first().locator('td').first().innerText()
+		// Wait for the run itself, not just for the DOM to catch up. The click
+		// handler only re-reads the listing when the POST resolves ok; on the
+		// error path it raises a toast and leaves the table exactly as it was, so
+		// polling the table alone turns a failed run into a timeout that says
+		// nothing about why.
+		await Promise.all([
+			page.waitForResponse((r) => r.url().includes('/api/admin/backup/run') && r.ok()),
+			page.click('#kanso-backup-run'),
+		])
+
+		// The listing is the ONLY view of an app-data backup; THIS spec's row must
+		// appear. Named rather than `first()`: the listing is instance-wide and
+		// sorted by name, so the top row can belong to another worker's board —
+		// and every assertion below (the download, the traversal refusals) would
+		// then be made about somebody else's archive.
+		const row = page.locator(`#kanso-backup-file-rows tr[data-name^="kanso-board-${board.id}-"]`)
+		await expect(row).toHaveCount(1)
+		const firstName = await row.getAttribute('data-name')
 		expect(firstName).toMatch(/^kanso-board-\d+-\d{8}-\d{6}\.zip$/)
 
 		// The setting round-tripped: a reload still shows app data, from the
 		// server-rendered template rather than from the form state.
 		await page.reload()
 		await expect(page.locator('#kanso-backup-destination')).toHaveValue('appdata')
-		await expect(page.locator('#kanso-backup-file-rows tr').first()).toBeVisible({ timeout: 30_000 })
+		await expect(row).toHaveCount(1)
 
-		const href = await page.locator('#kanso-backup-file-rows tr').first().locator('a.kanso-backup-download').getAttribute('href')
+		const href = await row.locator('a.kanso-backup-download').getAttribute('href')
 		expect(href).toContain('/api/admin/backup/download')
 
 		// The bytes: a zip an admin can actually open.
