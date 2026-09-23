@@ -10,12 +10,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<div class="board-attachments">
 			<header class="board-attachments__header">
 				<h2 class="board-attachments__title">{{ t('kanso', 'Attachments on this board') }}</h2>
-				<span v-if="!isPending && !error" class="board-attachments__count">
+				<span v-if="!isPending && !loadError" class="board-attachments__count">
 					{{ n('kanso', '%n file', '%n files', total) }}
 				</span>
 			</header>
 
-			<p v-if="error" class="board-attachments__error">
+			<!-- The whole-list error state is for having NOTHING to show. A failed
+				"Load more" sets `error` too, and gating the list on that took
+				every row the reader already had off the screen — so this one
+				follows `loadError` (see below) and the next-page failure is
+				reported inline beside the button that caused it. -->
+			<p v-if="loadError" class="board-attachments__error">
 				{{ t('kanso', 'Failed to load the board\'s attachments.') }}
 			</p>
 
@@ -25,7 +30,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</div>
 
 			<!-- Empty state -->
-			<div v-else-if="!error && items.length === 0" class="board-attachments__empty">
+			<div v-else-if="!loadError && items.length === 0" class="board-attachments__empty">
 				<PaperclipIcon :size="40" class="board-attachments__empty-icon" />
 				<p class="board-attachments__empty-title">{{ t('kanso', 'No attachments yet') }}</p>
 				<p class="board-attachments__empty-hint">
@@ -34,7 +39,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</div>
 
 			<!-- Attachment list -->
-			<ul v-else-if="!error" class="board-attachments__list">
+			<ul v-else-if="!loadError" class="board-attachments__list">
 				<li v-for="item in items" :key="item.id" class="board-attachments__row">
 					<button
 						type="button"
@@ -90,7 +95,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<!-- Paging (#10738). The server answers one page and says whether more
 				exist for THIS viewer, so "Load more" is the client walking offsets -
 				not a raised cap. Every file on the board is reachable this way. -->
-			<div v-if="!error && items.length < total" class="board-attachments__footer">
+			<div v-if="!loadError && items.length < total" class="board-attachments__footer">
 				<span class="board-attachments__shown">
 					{{ t('kanso', 'Showing the {shown} most recent of {total} files.', { shown: items.length, total }) }}
 				</span>
@@ -101,6 +106,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					@click="fetchNextPage()">
 					{{ isFetchingNextPage ? t('kanso', 'Loading more files…') : t('kanso', 'Load more files') }}
 				</NcButton>
+				<!-- A next page that failed says so HERE, next to the button that
+					asked for it. The rows already loaded stay exactly where they
+					were, and the button is still there to try again. -->
+				<span v-if="isFetchNextPageError" class="board-attachments__more-error" role="alert">
+					{{ t('kanso', 'Could not load more files. Try again.') }}
+				</span>
 			</div>
 		</div>
 	</NcModal>
@@ -131,25 +142,22 @@ defineEmits(['close', 'open-card'])
 
 // The modal is only mounted while it is open, so the query fires on open - ONE
 // page of it, and one request regardless of how many files the board holds.
+//
+// `items`, `total` and `loadError` come from the composable rather than being
+// re-derived here: `items` is deduped by attachment id (offset paging can hand
+// the same row to two pages, and a duplicate `:key` renders it twice), and
+// `loadError` is the narrow "nothing loaded at all" case - a failed NEXT page
+// keeps every row on screen and reports itself beside the button instead.
 const {
-	data,
 	isPending,
-	error,
+	items,
+	total,
+	loadError,
 	hasNextPage,
 	isFetchingNextPage,
+	isFetchNextPageError,
 	fetchNextPage,
 } = useBoardAttachments(computed(() => Number(props.boardId)))
-
-// Every page loaded so far, in order. Row keys are attachment ids, so a row
-// that a concurrent upload pushed across the page boundary renders once.
-const items = computed(() => (data.value?.pages ?? []).flatMap((page) => page.items ?? []))
-
-// The freshest total is the last page's - each page carries the viewer-scoped
-// count as of its own query.
-const total = computed(() => {
-	const pages = data.value?.pages
-	return pages?.length ? (pages[pages.length - 1].total ?? 0) : 0
-})
 
 /** Credit a person rather than a raw uid when the server resolved a name. */
 function uploader(item) {
@@ -352,5 +360,10 @@ function formatBytes(bytes) {
 .board-attachments__shown {
 	font-size: 0.8rem;
 	color: var(--color-text-maxcontrast);
+}
+
+.board-attachments__more-error {
+	font-size: 0.8rem;
+	color: var(--color-error-text);
 }
 </style>

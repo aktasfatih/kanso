@@ -1627,6 +1627,10 @@ msgstr ""
 msgid "Could not import that Trello file."
 msgstr ""
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Could not load more files. Try again."
+msgstr ""
+
 #: src/components/CsvImportModal.vue
 msgid "Could not load that board’s columns."
 msgstr ""
@@ -1861,6 +1865,14 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Delete \"{title}\"?"
+msgstr ""
+
+#: src/admin-backup.js
+msgid "Delete {name}? Kanso keeps no second copy of it."
+msgstr ""
+
+#: src/admin-backup.js
+msgid "Delete {name}? The file goes to the backup account's trashbin — Kanso keeps no second copy of it."
 msgstr ""
 
 #: src/admin-backup.js

@@ -38,8 +38,9 @@ export const BOARD_ATTACHMENTS_PAGE_SIZE = 25
  * over a set that only grows at the FRONT, so a file uploaded while the modal
  * is open shifts later pages by one - it can repeat a row across pages, never
  * skip one silently. Anything stronger would mean a keyset cursor through the
- * visibility-scoped query for a modal that is open for seconds; the page ids
- * are the list's `:key`, so a repeat renders once.
+ * visibility-scoped query for a modal that is open for seconds; the repeat is
+ * deduped by attachment id in `items` below, because Vue does NOT dedupe by
+ * `:key` - a duplicate key renders the row twice and warns.
  *
  * `staleTime` stays at 30s ON PURPOSE. The stale window was never the bug -
  * nothing invalidated this key at all, so the card mutations that add and
@@ -48,13 +49,15 @@ export const BOARD_ATTACHMENTS_PAGE_SIZE = 25
  * invalidation refetches the loaded pages regardless of staleness.
  *
  * @param {number|string|import('vue').Ref} boardId board id (may be a ref)
- * @return {object} the TanStack infinite query
+ * @return {object} the TanStack infinite query, plus `items` (the deduped rows
+ *   to render), `total` and `loadError` - see below for why the last two are
+ *   derived HERE rather than in the modal
  */
 export function useBoardAttachments(boardId) {
 	const resolvedId = computed(() =>
 		typeof boardId === 'object' && boardId !== null ? boardId.value : boardId)
 
-	return useInfiniteQuery({
+	const query = useInfiniteQuery({
 		queryKey: computed(() => boardAttachmentsQueryKey(resolvedId.value)),
 		queryFn: ({ pageParam }) => fetchBoardAttachments(resolvedId.value, {
 			limit: BOARD_ATTACHMENTS_PAGE_SIZE,
@@ -75,4 +78,44 @@ export function useBoardAttachments(boardId) {
 		enabled: computed(() => !!resolvedId.value),
 		staleTime: 30 * 1000,
 	})
+
+	const pages = computed(() => query.data.value?.pages ?? [])
+
+	// The rows to render: every page so far, in order, with repeats dropped.
+	//
+	// Paging by offset over a list that grows at the FRONT means a file uploaded
+	// between two page fetches comes back as both the last row of page N and the
+	// first of page N+1 (see the offsets note above). Vue does NOT dedupe by
+	// `:key` - a duplicate key logs a warning, renders the row TWICE and can
+	// patch the wrong one - so the id is deduped here, first occurrence winning,
+	// which leaves the pages in the order the server sent them.
+	const items = computed(() => {
+		const seen = new Set()
+		const rows = []
+		for (const page of pages.value) {
+			for (const item of page.items ?? []) {
+				if (seen.has(item.id)) {
+					continue
+				}
+				seen.add(item.id)
+				rows.push(item)
+			}
+		}
+		return rows
+	})
+
+	// The freshest total is the last page's - each page carries the
+	// viewer-scoped count as of its own query.
+	const total = computed(() =>
+		pages.value.length ? (pages.value[pages.value.length - 1].total ?? 0) : 0)
+
+	// `error` is set by ANY failed fetch, a second page included, while the pages
+	// already fetched stay in `data`. A view that renders its error state off
+	// `error` therefore throws away a screenful of rows the reader was using the
+	// moment one "Load more" fails. This is the narrower question the whole-list
+	// error state should ask: is there nothing to show? A failed next page is
+	// `isFetchNextPageError` instead, reported next to the button that caused it.
+	const loadError = computed(() => !!query.error.value && pages.value.length === 0)
+
+	return { ...query, pages, items, total, loadError }
 }

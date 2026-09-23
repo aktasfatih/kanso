@@ -93,7 +93,10 @@ function harness(t, boardId, files = [{ id: 1, filename: 'spec.pdf', cardId: 7 }
 	app.use(VueQueryPlugin, { queryClient })
 	clients.push(queryClient)
 
-	const state = { files: [...files] }
+	// `failAtOffset` makes the LISTING fail from that offset on, which is how the
+	// next-page-failure tests below get a real rejected fetch rather than a hand-
+	// seeded error flag.
+	const state = { files: [...files], failAtOffset: null }
 	let boardReads = 0
 	let cardWrites = 0
 	const offsets = []
@@ -105,6 +108,9 @@ function harness(t, boardId, files = [{ id: 1, filename: 'spec.pdf', cardId: 7 }
 			const limit = Number(config.params?.limit ?? state.files.length)
 			const offset = Number(config.params?.offset ?? 0)
 			offsets.push(offset)
+			if (state.failAtOffset !== null && offset >= state.failAtOffset) {
+				throw new Error('listing unavailable')
+			}
 			const items = state.files.slice(offset, offset + limit)
 			return {
 				status: 200,
@@ -236,4 +242,95 @@ test('the board-attachments key is spelled the same whichever end produces it', 
 	assert.deepEqual(boardAttachmentsQueryKey('14'), ['board-attachments', '14'])
 	assert.deepEqual(boardAttachmentsQueryKey(() => 14), ['board-attachments', '14'])
 	assert.deepEqual(boardAttachmentsQueryKey({ value: '14' }), ['board-attachments', '14'])
+})
+
+// ── What the modal actually renders, once the pages are in hand ──────────────
+//
+// `listed()` above is the RAW flatten the modal used to do inline. These two
+// properties are why it no longer does, and they live on the composable so they
+// can be asserted without mounting an SFC (this repo has no SFC test rig).
+
+/** The rows BoardAttachmentsModal would render, in order. */
+const rendered = (h) => h.board.items.value.map((a) => a.filename)
+
+test('a row that a concurrent upload pushed across the page boundary is listed once', async (t) => {
+	// Offset paging over a list that grows at the FRONT. Page 1 is rows 0-24 of
+	// the list as it stood; an upload lands while the modal is open; page 2 is
+	// asked for by OFFSET 25, which in the NEW list is the row that was already
+	// the last of page 1. The server is not wrong - this is what offset paging
+	// over a growing list means - so the client has to cope.
+	//
+	// It used to "cope" by doing nothing, on the claim that ids are the `:key` so
+	// a repeat renders once. Vue does not dedupe by key: it warns about the
+	// duplicate, renders BOTH rows and can patch the wrong one.
+	const many = Array.from({ length: BOARD_ATTACHMENTS_PAGE_SIZE + 3 }, (_, i) => ({
+		id: 1000 - i, filename: `file-${i}.txt`, cardId: 7,
+	}))
+	const h = harness(t, 10742, many)
+	await flush()
+	assert.equal(rendered(h).length, BOARD_ATTACHMENTS_PAGE_SIZE)
+
+	// The upload, mid-modal: one more row at the front.
+	h.state.files = [{ id: 2000, filename: 'just-uploaded.png', cardId: 7 }, ...many]
+
+	await h.board.fetchNextPage()
+	await flush()
+
+	const rows = rendered(h)
+	const boundary = `file-${BOARD_ATTACHMENTS_PAGE_SIZE - 1}.txt`
+	assert.equal(rows.filter((f) => f === boundary).length, 1,
+		`${boundary} came back in BOTH pages and must still be rendered once - `
+		+ 'a duplicate :key renders twice and warns, it does not dedupe')
+	assert.equal(new Set(h.board.items.value.map((a) => a.id)).size, rows.length,
+		'no attachment id may appear twice in the rendered list')
+
+	// Deduping must not lose rows or reorder them: every distinct file fetched is
+	// still there, newest-first, so this cannot pass by dropping the page.
+	assert.deepEqual(rows, [
+		...many.slice(0, BOARD_ATTACHMENTS_PAGE_SIZE).map((a) => a.filename),
+		...many.slice(BOARD_ATTACHMENTS_PAGE_SIZE).map((a) => a.filename),
+	], 'the pages stay in server order with the repeat dropped')
+})
+
+test('a failed "Load more" keeps the rows already loaded on screen', async (t) => {
+	// TanStack sets `error` for ANY failed fetch - the second page included -
+	// while `data.pages` keeps the pages that did load. The modal gated its whole
+	// list on `!error`, so one failed next-page request replaced every row the
+	// reader was looking at with "Failed to load the board's attachments."
+	const many = Array.from({ length: BOARD_ATTACHMENTS_PAGE_SIZE + 3 }, (_, i) => ({
+		id: 2000 - i, filename: `file-${i}.txt`, cardId: 7,
+	}))
+	const h = harness(t, 10743, many)
+	await flush()
+	assert.equal(rendered(h).length, BOARD_ATTACHMENTS_PAGE_SIZE, 'page one loaded')
+
+	// Now the next page fails - a timeout, a 500, a dropped connection.
+	h.state.failAtOffset = BOARD_ATTACHMENTS_PAGE_SIZE
+	await h.board.fetchNextPage().catch(() => {})
+	await flush()
+
+	assert.ok(h.board.error.value, 'the failed page must surface as an error')
+	assert.equal(h.board.isFetchNextPageError.value, true,
+		'and it must be identifiable as a NEXT-PAGE failure, so the modal can '
+		+ 'report it beside the button instead of over the list')
+	assert.equal(h.board.loadError.value, false,
+		'the whole-list error state is for having NOTHING to show - 25 rows are '
+		+ 'still in hand and the reader must keep them')
+	assert.equal(rendered(h).length, BOARD_ATTACHMENTS_PAGE_SIZE,
+		'every row that had loaded is still listed after the failed next page')
+	assert.equal(h.board.hasNextPage.value, true, 'and "Load more" is still there to retry')
+})
+
+test('a failed FIRST page is still the whole-list error state', async (t) => {
+	// The control for the test above: with no page loaded there is nothing to
+	// preserve, so the error state is exactly right and must not be softened.
+	const h = harness(t, 10744, [{ id: 1, filename: 'spec.pdf', cardId: 7 }])
+	h.state.failAtOffset = 0
+	await h.queryClient.resetQueries()
+	await flush()
+
+	assert.ok(h.board.error.value, 'the first page failed')
+	assert.equal(h.board.loadError.value, true,
+		'nothing loaded, so the modal must say so rather than show an empty list')
+	assert.deepEqual(rendered(h), [])
 })
