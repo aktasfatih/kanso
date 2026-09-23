@@ -298,7 +298,7 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:4653
+#: src/components/CardDetail.vue:4715
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
@@ -308,7 +308,7 @@ msgid "%n file"
 msgid_plural "%n files"
 msgstr[0] ""
 
-#: src/components/CardDetail.vue:4651
+#: src/components/CardDetail.vue:4713
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
@@ -328,7 +328,7 @@ msgid "%n label was not created and is missing from the imported cards: only boa
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
 msgstr[0] ""
 
-#: src/components/CardDetail.vue:4649
+#: src/components/CardDetail.vue:4711
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -348,12 +348,12 @@ msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n 点"
 
-#: src/components/CardDetail.vue:1115
+#: src/components/CardDetail.vue:1177
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
 
-#: src/components/CardDetail.vue:2129
+#: src/components/CardDetail.vue:2191
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -368,7 +368,7 @@ msgid "%n unscheduled card"
 msgid_plural "%n unscheduled cards"
 msgstr[0] "%n 张未排期的卡片"
 
-#: src/components/CardDetail.vue:293
+#: src/components/CardDetail.vue:312
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n 位关注者"
@@ -1791,7 +1791,7 @@ msgid "Date"
 msgstr "日期"
 
 #: src/components/BoardSettingsModal.vue:2162
-#: src/components/CardDetail.vue:4842
+#: src/components/CardDetail.vue:4904
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -3245,7 +3245,7 @@ msgstr "斜体"
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6612
+#: src/components/CardDetail.vue:6674
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3564,7 +3564,7 @@ msgid "Mon"
 msgstr "周一"
 
 #: src/components/BoardSettingsModal.vue:2164
-#: src/components/CardDetail.vue:4844
+#: src/components/CardDetail.vue:4906
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -5022,7 +5022,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:6618
+#: src/components/CardDetail.vue:6680
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -5745,7 +5745,7 @@ msgid "Wed"
 msgstr "周三"
 
 #: src/components/BoardSettingsModal.vue:2163
-#: src/components/CardDetail.vue:4843
+#: src/components/CardDetail.vue:4905
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -5837,7 +5837,7 @@ msgid "wrote"
 msgstr "写道"
 
 #: src/components/BoardSettingsModal.vue:2165
-#: src/components/CardDetail.vue:4845
+#: src/components/CardDetail.vue:4907
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"

@@ -307,7 +307,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n ligne de données détectée"
 msgstr[1] "%n lignes de données détectées"
 
-#: src/components/CardDetail.vue:4653
+#: src/components/CardDetail.vue:4715
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "il y a %n jour"
@@ -319,7 +319,7 @@ msgid_plural "%n files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4651
+#: src/components/CardDetail.vue:4713
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "il y a %n heure"
@@ -343,7 +343,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4649
+#: src/components/CardDetail.vue:4711
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "il y a %n minute"
@@ -367,13 +367,13 @@ msgid_plural "%n points"
 msgstr[0] "%n point"
 msgstr[1] "%n points"
 
-#: src/components/CardDetail.vue:1115
+#: src/components/CardDetail.vue:1177
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n projet"
 msgstr[1] "%n projets"
 
-#: src/components/CardDetail.vue:2129
+#: src/components/CardDetail.vue:2191
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -391,7 +391,7 @@ msgid_plural "%n unscheduled cards"
 msgstr[0] "%n carte non planifiée"
 msgstr[1] "%n cartes non planifiées"
 
-#: src/components/CardDetail.vue:293
+#: src/components/CardDetail.vue:312
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n observateur"
@@ -1818,7 +1818,7 @@ msgid "Date"
 msgstr "Date"
 
 #: src/components/BoardSettingsModal.vue:2162
-#: src/components/CardDetail.vue:4842
+#: src/components/CardDetail.vue:4904
 msgid "day"
 msgid_plural "days"
 msgstr[0] "jour"
@@ -3277,7 +3277,7 @@ msgstr "Italique"
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6612
+#: src/components/CardDetail.vue:6674
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3597,7 +3597,7 @@ msgid "Mon"
 msgstr "Lun"
 
 #: src/components/BoardSettingsModal.vue:2164
-#: src/components/CardDetail.vue:4844
+#: src/components/CardDetail.vue:4906
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mois"
@@ -5058,7 +5058,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr "Afficher le panneau de discussion"
 
-#: src/components/CardDetail.vue:6618
+#: src/components/CardDetail.vue:6680
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Afficher le panneau de discussion (%n commentaire)"
@@ -5782,7 +5782,7 @@ msgid "Wed"
 msgstr "Mer"
 
 #: src/components/BoardSettingsModal.vue:2163
-#: src/components/CardDetail.vue:4843
+#: src/components/CardDetail.vue:4905
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "semaine"
@@ -5875,7 +5875,7 @@ msgid "wrote"
 msgstr "a écrit"
 
 #: src/components/BoardSettingsModal.vue:2165
-#: src/components/CardDetail.vue:4845
+#: src/components/CardDetail.vue:4907
 msgid "year"
 msgid_plural "years"
 msgstr[0] "an"

@@ -135,7 +135,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</template>
 							<ChevronRightIcon :size="14" class="card-modal__crumb-chevron" />
 							<span class="card-modal__attr card-modal__status-wrap">
+								<!-- Both halves of this switcher are writes: the column list calls
+								     CardService::move() and the status list CardService::update(),
+								     and BOTH assert PERMISSION_EDIT. The role model has no "may
+								     move but not edit" seat - the bits are READ/EDIT/SHARE/MANAGE
+								     and nothing else - so a member with READ only gets the chip as
+								     a plain label (#10732): the status still reads, the switcher
+								     goes. -->
 								<button
+									v-if="canEdit"
 									class="card-modal__status-chip card-modal__status-chip--btn"
 									:class="`card-modal__status-chip--${currentStatus}`"
 									:disabled="updateCard.isPending.value || stageMoving"
@@ -145,6 +153,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									{{ statusChipLabel }}
 									<ChevronDownIcon :size="12" />
 								</button>
+								<span
+									v-else
+									class="card-modal__status-chip"
+									:class="`card-modal__status-chip--${currentStatus}`">
+									{{ statusChipLabel }}
+								</span>
 								<div v-if="openPicker === 'status'" class="card-modal__popover">
 									<!-- Every live column is an option (#54); pick the exact one. Offered
 									     on every board, so a card can change column without changing
@@ -253,7 +267,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							@click="expandToPage">
 							<OpenInNewIcon :size="18" />
 						</button>
+						<!-- Marking done is CardService::update() under the hood, so it needs
+						     EDIT like every other status change (#10732). A member with READ
+						     only loses the button, not the information: the breadcrumb chip
+						     above still reads "DONE". -->
 						<button
+							v-if="canEdit"
 							class="card-modal__done-btn"
 							:class="{ 'card-modal__done-btn--done': isDone }"
 							:disabled="updateCard.isPending.value"
@@ -564,18 +583,30 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 				<!-- Attribute bar: every card attribute on one scannable row -->
 				<div class="card-modal__attrbar">
-					<!-- Priority -->
-					<div class="card-modal__attr">
-						<button
+					<!-- Priority.
+					     Every pill in this bar is its own value AND its own editor, so
+					     #10703's rule ("keep the data, drop the write affordance") needs
+					     one extra step here (#10732): for a member with READ only the pill
+					     renders as a plain span - the priority still reads, nothing opens.
+					     An UNSET attribute has no data to keep, so its dashed placeholder
+					     is pure affordance and drops out of the bar entirely.
+					     Setting any of these is PATCH /cards/{id} -> CardService::update(),
+					     which asserts PERMISSION_EDIT; the server check is untouched. -->
+					<div v-if="canEdit || currentPriority > 0" class="card-modal__attr">
+						<component
+							:is="canEdit ? 'button' : 'span'"
 							class="card-modal__pill"
 							data-pill="priority"
-							:class="currentPriority > 0 ? `card-modal__pill--priority-${currentPriority}` : 'card-modal__pill--dashed'"
-							:aria-expanded="openPicker === 'priority'"
-							@click="togglePicker('priority')">
+							:class="[
+								currentPriority > 0 ? `card-modal__pill--priority-${currentPriority}` : 'card-modal__pill--dashed',
+								{ 'card-modal__pill--static': !canEdit },
+							]"
+							:aria-expanded="canEdit ? openPicker === 'priority' : undefined"
+							@click="canEdit && togglePicker('priority')">
 							<FlagIcon v-if="currentPriority > 0" :size="14" />
 							<FlagOutlineIcon v-else :size="14" />
 							{{ currentPriority > 0 ? currentPriorityLevel.label : t('kanso', 'Priority') }}
-						</button>
+						</component>
 						<div v-if="openPicker === 'priority'" class="card-modal__popover">
 							<button
 								v-for="level in PRIORITY_LEVELS"
@@ -590,17 +621,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 					</div>
 
-					<!-- Type (#3402): exactly one built-in issue type, icon-first -->
-					<div class="card-modal__attr">
-						<button
+					<!-- Type (#3402): exactly one built-in issue type, icon-first.
+					     Same read-only treatment as Priority above (#10732). -->
+					<div v-if="canEdit || currentType" class="card-modal__attr">
+						<component
+							:is="canEdit ? 'button' : 'span'"
 							class="card-modal__pill"
 							data-pill="type"
-							:class="currentType ? `card-modal__pill--type-${currentType.value}` : 'card-modal__pill--dashed'"
-							:aria-expanded="openPicker === 'type'"
-							@click="togglePicker('type')">
+							:class="[
+								currentType ? `card-modal__pill--type-${currentType.value}` : 'card-modal__pill--dashed',
+								{ 'card-modal__pill--static': !canEdit },
+							]"
+							:aria-expanded="canEdit ? openPicker === 'type' : undefined"
+							@click="canEdit && togglePicker('type')">
 							<component :is="typeIcon(currentType?.value)" :size="14" />
 							{{ currentType ? currentType.label : t('kanso', 'Type') }}
-						</button>
+						</component>
 						<div v-if="openPicker === 'type'" class="card-modal__popover">
 							<button
 								class="card-modal__popover-opt"
@@ -623,21 +659,28 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 					</div>
 
-					<!-- Dates (due + start) -->
-					<div class="card-modal__attr">
-						<button
+					<!-- Dates (due + start).
+					     Same read-only treatment as Priority above (#10732) - the popover
+					     behind this pill edits both dates, the all-day flag and (for a
+					     manager) the repeat rule, all of them writes. -->
+					<div v-if="canEdit || cardData.duedate" class="card-modal__attr">
+						<component
+							:is="canEdit ? 'button' : 'span'"
 							class="card-modal__pill"
 							data-pill="due"
-							:class="cardData.duedate ? dueDateClass : 'card-modal__pill--dashed'"
-							:aria-expanded="openPicker === 'due'"
-							@click="togglePicker('due')">
+							:class="[
+								cardData.duedate ? dueDateClass : 'card-modal__pill--dashed',
+								{ 'card-modal__pill--static': !canEdit },
+							]"
+							:aria-expanded="canEdit ? openPicker === 'due' : undefined"
+							@click="canEdit && togglePicker('due')">
 							<!-- A recurring card swaps the calendar glyph for a repeat
 							     icon (#61 follow-up), matching the board tile cue for
 							     all viewers. Same footprint, so no layout shift. -->
 							<RepeatIcon v-if="cardIsRecurring" :size="14" :title="t('kanso', 'Repeats')" />
 							<CalendarIcon v-else :size="14" />
 							{{ cardData.duedate ? dueDateLabel : t('kanso', 'Due date') }}
-						</button>
+						</component>
 						<div v-if="openPicker === 'due'" class="card-modal__popover card-modal__popover--pad card-modal__popover--date">
 							<!-- A timed card is a Start → End window; an all-day card is a
 							     single day, so it collapses to one date field (no time). -->
@@ -744,16 +787,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 					</div>
 
-					<!-- Estimate -->
-					<div v-if="boardEstimateScale !== 'none'" class="card-modal__attr">
-						<button
+					<!-- Estimate. Same read-only treatment as Priority above (#10732). -->
+					<div v-if="boardEstimateScale !== 'none' && (canEdit || currentEstimate)" class="card-modal__attr">
+						<component
+							:is="canEdit ? 'button' : 'span'"
 							class="card-modal__pill"
-							:class="currentEstimate ? '' : 'card-modal__pill--dashed'"
-							:aria-expanded="openPicker === 'estimate'"
-							@click="togglePicker('estimate')">
+							data-pill="estimate"
+							:class="[
+								currentEstimate ? '' : 'card-modal__pill--dashed',
+								{ 'card-modal__pill--static': !canEdit },
+							]"
+							:aria-expanded="canEdit ? openPicker === 'estimate' : undefined"
+							@click="canEdit && togglePicker('estimate')">
 							<TimerSandIcon :size="14" />
 							{{ currentEstimate ? t('kanso', 'Estimate: {value}', { value: currentEstimate }) : t('kanso', 'Estimate') }}
-						</button>
+						</component>
 						<div v-if="openPicker === 'estimate'" class="card-modal__popover">
 							<div class="card-modal__popover-tokens">
 								<button
@@ -952,17 +1000,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:hide-status="true"
 									:disable-tooltip="true" />
 								<span class="card-modal__assignee-name" :title="c.displayName">{{ c.displayName }}</span>
+								<!-- Unlinking is ContactService::unlink() -> PERMISSION_EDIT, so
+								     it follows the per-assignee "×" (#10703, #10732). The avatar
+								     and the name - the whole point of the chip - stay. -->
 								<button
+									v-if="canEdit"
 									class="card-modal__pill-x"
+									data-contact-x
 									:title="t('kanso', 'Unlink contact')"
 									:disabled="toggleContact.isPending.value"
 									@click="handleToggleContact(c, false)">
 									<CloseIcon :size="12" />
 								</button>
 							</span>
-							<div class="card-modal__attr">
+							<!-- Linking is ContactService::link() -> PERMISSION_EDIT (#10732). -->
+							<div v-if="canEdit" class="card-modal__attr">
 								<button
 									class="card-modal__pill card-modal__pill--dashed"
+									data-pill="contact"
 									:aria-expanded="openPicker === 'contact'"
 									@click="toggleContactPicker()">
 									<AccountBoxIcon :size="14" />
@@ -1102,12 +1157,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 					</div>
 
-					<!-- Projects membership -->
+					<!-- Projects membership.
+					     Deliberately NOT gated on canEdit (#10732). A project is the
+					     viewer's OWN collection: ProjectService::addCard() loads the
+					     project as its owner and then asks only for PERMISSION_READ on the
+					     card's board, so collecting a card you can merely read is
+					     explicitly allowed. Hiding this pill would remove a working
+					     feature from read-only members, not a dead affordance. -->
 					<span class="card-modal__attr-divider" />
 
 					<div class="card-modal__attr">
 						<button
 							class="card-modal__pill card-modal__pill--dashed card-modal__pill--sm"
+							data-pill="project"
 							:aria-expanded="openPicker === 'project'"
 							@click="togglePicker('project')">
 							<FolderMultipleOutlineIcon :size="12" />
@@ -7371,8 +7433,14 @@ async function handleToggleProject(projectId) {
 	cursor: pointer;
 	white-space: nowrap;
 }
-.card-modal__pill:hover {
+/* A pill rendered as a plain span for a member who cannot edit (#10732) still
+   carries the value, so it keeps the shape - but nothing about it may read as
+   clickable. */
+.card-modal__pill:not(.card-modal__pill--static):hover {
 	border-color: var(--color-primary-element);
+}
+.card-modal__pill--static {
+	cursor: default;
 }
 .card-modal__pill--sm {
 	height: 24px;
