@@ -231,6 +231,57 @@ test('a non-toast wait on the line after a toast one is not dragged in', () => {
 	assert.deepEqual(scan(src), [])
 })
 
+// A wait with no `expect()` of its own — `page.waitForSelector`,
+// `waitForResponse`, `waitForFunction` — must not inherit the subject of an
+// earlier assertion. These two tests pin BOTH directions of that: the innocent
+// line stays quiet, and the violation the lifetime rule exists for still fires.
+
+test('a bare page.wait* after a toast assertion is not given the toast as its subject', () => {
+	for (const tail of [
+		'await page.waitForSelector(\'.card-modal\', { timeout: 15_000 })',
+		'await page.waitForResponse((r) => r.ok(), { timeout: 15_000 })',
+		'await page.waitForFunction(() => window.ready, null, { timeout: 30_000 })',
+	]) {
+		const src = [
+			'const undoToast = toast(page, \'Card deleted\')',
+			'// short-budget-ok: fixture',
+			'await expect(undoToast).toBeVisible({ timeout: 8_000 })',
+			tail,
+			'',
+		].join('\n')
+		assert.deepEqual(scan(src), [], tail)
+	}
+})
+
+test('...and the same holds for an inline toast() assertion right above', () => {
+	const src = [
+		'await expect(toast(page, \'Backup deleted\')).toBeVisible({ timeout: 6_000 }) // short-budget-ok: f',
+		'await page.waitForSelector(\'#kanso-backup-file-rows\', { timeout: 15_000 })',
+		'',
+	].join('\n')
+	assert.deepEqual(scan(src), [])
+})
+
+test('the genuine toast-outlives-its-life case is STILL reported', () => {
+	// Same two lines as above, but the toast wait itself now outlives the toast.
+	const src = [
+		'const undoToast = toast(page, \'Card deleted\')',
+		'await expect(undoToast).toBeVisible({ timeout: 30_000 })',
+		'await page.waitForSelector(\'.card-modal\', { timeout: 15_000 })',
+		'',
+	].join('\n')
+	const found = scan(src)
+	assert.deepEqual(found.map((v) => [v.line, v.kind, v.matcher]), [[2, 'toast', 'toBeVisible']])
+})
+
+test('a multi-line expect still reaches its subject, and a negated one still does not', () => {
+	assert.deepEqual(
+		scan('await expect(toast(page, \'x\'))\n\t.toBeVisible({ timeout: 30_000 })\n').map((v) => v.kind),
+		['toast'],
+	)
+	assert.deepEqual(scan('await expect(toast(page, \'x\'))\n\t.not.toBeVisible()\n'), [])
+})
+
 test('reports each violation in a file separately', () => {
 	const src = [
 		'await expect(a).toBeVisible({ timeout: 5000 })',

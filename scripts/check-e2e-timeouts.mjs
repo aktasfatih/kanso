@@ -204,19 +204,30 @@ function toastIdentifiers(masked) {
 
 /**
  * The expression a matcher is asserted against, when it is spelled
- * `expect(<subject>)` — the shape the lifetime rule keys on. Anchoring on the
- * nearest preceding `expect(` is what keeps it from picking up an unrelated
- * locator mentioned a line or two earlier.
+ * `expect(<subject>)` — the shape the lifetime rule keys on.
+ *
+ * The matcher must actually hang off that `expect()`: its paren has to close
+ * BEFORE the matcher's dot, with nothing but an optional `.not` chain in
+ * between. Merely being the nearest `expect(` behind the cursor is not enough —
+ * `page.waitForSelector` / `waitForResponse` / `waitForFunction` carry no
+ * `expect()` of their own, so any one of them written after a toast assertion
+ * would otherwise inherit that assertion's subject and be failed by the
+ * toast-lifetime rule. A guard that reddens CI on an innocent line is worse
+ * than the documented rule it enforces, so an unanchored wait gets no subject.
  *
  * @param {string} masked masked source
  * @param {number} dotAt index of the '.' introducing the matcher
  * @return {string|null} the subject text, or null when there is no expect() anchor
  */
 function expectSubject(masked, dotAt) {
-	const window = masked.slice(Math.max(0, dotAt - 400), dotAt)
-	const at = window.lastIndexOf('expect(')
+	const from = Math.max(0, dotAt - 400)
+	const at = masked.slice(from, dotAt).lastIndexOf('expect(')
 	if (at === -1) { return null }
-	return window.slice(at + 'expect('.length)
+	const openAt = from + at + 'expect('.length - 1
+	const closeAt = matchParen(masked, openAt)
+	if (closeAt === -1 || closeAt >= dotAt) { return null }
+	if (!/^\s*(?:\.not\s*)?$/.test(masked.slice(closeAt + 1, dotAt))) { return null }
+	return masked.slice(openAt + 1, closeAt)
 }
 
 /** @param {string} dir @return {string[]} every .js file under dir, recursively */
