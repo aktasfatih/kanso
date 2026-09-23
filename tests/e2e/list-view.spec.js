@@ -522,7 +522,7 @@ test.describe('List view — column composer (#9853)', () => {
 			const { stacks } = await api.get(`/boards/${state.boardId}`)
 			newStackId = (stacks ?? []).find((s) => s.title === 'In review')?.id ?? 0
 			return newStackId
-		}, { timeout: 8_000 }).toBeGreaterThan(0)
+		}).toBeGreaterThan(0)
 
 		// A brand-new (empty) column must be a live drop target immediately — its
 		// only drop target is the group-header overlay (there is no card row to
@@ -564,7 +564,7 @@ test.describe('List view — column composer (#9853)', () => {
 		await expect.poll(async () => {
 			const { stacks } = await api.get(`/boards/${state.boardId}`)
 			return (stacks ?? []).some((s) => s.title === 'From the menu')
-		}, { timeout: 8_000 }).toBe(true)
+		}).toBe(true)
 	})
 
 	test('the composer keeps its focus and half-typed draft while the list recycles rows', async ({ page }) => {

@@ -100,7 +100,7 @@ test.describe('Typing a date by keyboard', () => {
 		// Leaving the field commits exactly once, with the fully-typed date.
 		await blur(page)
 		await expect
-			.poll(() => cardDates(state.boardId, state.cardId).then((d) => localYmd(d.duedate)), { timeout: 8_000 })
+			.poll(() => cardDates(state.boardId, state.cardId).then((d) => localYmd(d.duedate)))
 			.toBe('2027-03-14')
 		expect(patches, 'exactly one PATCH on blur').toHaveLength(1)
 		expect(patches[0]).toHaveProperty('duedate')
@@ -125,7 +125,7 @@ test.describe('Typing a date by keyboard', () => {
 
 		await dueInput.press('Enter')
 		await expect
-			.poll(() => cardDates(state.boardId, state.cardId).then((d) => localYmd(d.duedate)), { timeout: 8_000 })
+			.poll(() => cardDates(state.boardId, state.cardId).then((d) => localYmd(d.duedate)))
 			.toBe('2027-09-10')
 		expect(patches.length, 'Enter commits at least once').toBeGreaterThanOrEqual(1)
 	})
@@ -159,7 +159,7 @@ test.describe('Typing a date by keyboard', () => {
 
 		await blur(page)
 		await expect
-			.poll(() => cardDates(state.boardId, state.cardId).then((d) => localYmd(d.startDate)), { timeout: 8_000 })
+			.poll(() => cardDates(state.boardId, state.cardId).then((d) => localYmd(d.startDate)))
 			.toBe('2027-05-09')
 		expect(patches, 'exactly one PATCH on blur').toHaveLength(1)
 		expect(patches[0]).toHaveProperty('startDate')

@@ -776,7 +776,9 @@ test.describe('Kanso admin backup settings', () => {
 		// 2. Saying yes removes it, and says so.
 		await clickDelete(page, row, 'accept')
 
-		await expect(toast(page, 'Backup deleted')).toBeVisible()
+		// A plain toast dismisses itself at TOAST_DEFAULT_TIMEOUT = 7s, so a 15s wait
+		// short-budget-ok: would outlive the toast and report the wrong failure
+		await expect(toast(page, 'Backup deleted')).toBeVisible({ timeout: 6_000 })
 		await expect(row).toHaveCount(0)
 
 		// ...and ONLY it. A neighbouring archive is still listed and exactly one
@@ -819,7 +821,9 @@ test.describe('Kanso admin backup settings', () => {
 
 		await clickDelete(page, row, 'accept')
 
-		await expect(toast(page, /could not delete the backup/i)).toBeVisible()
+		// A plain toast dismisses itself at TOAST_DEFAULT_TIMEOUT = 7s, so a 15s wait
+		// short-budget-ok: would outlive the toast and report the wrong failure
+		await expect(toast(page, /could not delete the backup/i)).toBeVisible({ timeout: 6_000 })
 		// And never the other message. Asserted only once the error is on screen,
 		// so it cannot pass by being checked before either toast had rendered.
 		await expect(toast(page, 'Backup deleted')).toHaveCount(0)

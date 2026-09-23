@@ -41,10 +41,7 @@ test.describe('Repeat from the card due-date menu (#55)', () => {
 		// control defaults to RESET mode (the card comes back each week rather than
 		// spawning a duplicate) — see the recurring-UX overhaul.
 		await freq.selectOption('WEEKLY')
-		await expect.poll(
-			async () => (await cardRule(state.boardId, state.cardId))?.rrule ?? null,
-			{ timeout: 8_000 },
-		).toContain('FREQ=WEEKLY')
+		await expect.poll(async () => (await cardRule(state.boardId, state.cardId))?.rrule ?? null).toContain('FREQ=WEEKLY')
 		let rule = await cardRule(state.boardId, state.cardId)
 		expect(Number(rule.templateCardId)).toBe(Number(state.cardId))
 		expect(Number(rule.targetStackId)).toBe(Number(state.stackId))
@@ -54,17 +51,11 @@ test.describe('Repeat from the card due-date menu (#55)', () => {
 		const interval = page.locator('input[data-recur="interval"]')
 		await interval.fill('2')
 		await interval.blur()
-		await expect.poll(
-			async () => (await cardRule(state.boardId, state.cardId))?.rrule ?? '',
-			{ timeout: 8_000 },
-		).toContain('INTERVAL=2')
+		await expect.poll(async () => (await cardRule(state.boardId, state.cardId))?.rrule ?? '').toContain('INTERVAL=2')
 
 		// Turn Repeat off → the rule is deleted.
 		await freq.selectOption('OFF')
-		await expect.poll(
-			async () => await cardRule(state.boardId, state.cardId),
-			{ timeout: 8_000 },
-		).toBeNull()
+		await expect.poll(async () => await cardRule(state.boardId, state.cardId)).toBeNull()
 	})
 })
 

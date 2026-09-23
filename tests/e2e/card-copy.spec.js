@@ -59,7 +59,7 @@ test.describe('Copy card to another stack (card ⋯ menu)', () => {
 
 		// The duplicate appears in the target column titled "… (copy)".
 		await expect
-			.poll(() => stackTitles(state.boardId, state.doneId), { timeout: 8_000 })
+			.poll(() => stackTitles(state.boardId, state.doneId))
 			.toEqual(['Original card (copy)'])
 
 		// Fetch the duplicate and assert content was cloned, but NOT assignees.

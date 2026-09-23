@@ -66,7 +66,7 @@ test.describe('Default board on start', () => {
 		await expect(startHere).toBeVisible()
 		await startHere.click()
 		await expect
-			.poll(async () => (await api.get('/settings')).defaultBoardId, { timeout: 10_000 })
+			.poll(async () => (await api.get('/settings')).defaultBoardId)
 			.toBe(state.boardId)
 		await page.locator('.bs-modal__close').click()
 		await expect(page.locator('.bs-modal')).toBeHidden({ timeout: 10_000 })
@@ -82,13 +82,13 @@ test.describe('Default board on start', () => {
 		await dialog.getByText('Show formatting toolbar', { exact: true }).click()
 		await dialog.getByText('Inbox', { exact: true }).click()
 		await expect
-			.poll(async () => (await api.get('/settings')).cardDiscussionPosition, { timeout: 10_000 })
+			.poll(async () => (await api.get('/settings')).cardDiscussionPosition)
 			.toBe('bottom')
 		await expect
-			.poll(async () => (await api.get('/settings')).editorToolbarHidden, { timeout: 10_000 })
+			.poll(async () => (await api.get('/settings')).editorToolbarHidden)
 			.toBe(true)
 		await expect
-			.poll(async () => (await api.get('/settings')).hiddenNavSections, { timeout: 10_000 })
+			.poll(async () => (await api.get('/settings')).hiddenNavSections)
 			.toEqual(['inbox'])
 		await page.keyboard.press('Escape')
 

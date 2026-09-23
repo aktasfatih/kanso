@@ -53,10 +53,10 @@ test.describe('CalDAV per-board calendar toggle (UI)', () => {
 
 		// Turn it OFF → the board must drop out of the calendar-home.
 		await toggle.click()
-		await expect.poll(() => calendarPresent(state.boardId), { timeout: 8_000 }).toBe(false)
+		await expect.poll(() => calendarPresent(state.boardId)).toBe(false)
 
 		// Turn it back ON → it returns.
 		await toggle.click()
-		await expect.poll(() => calendarPresent(state.boardId), { timeout: 8_000 }).toBe(true)
+		await expect.poll(() => calendarPresent(state.boardId)).toBe(true)
 	})
 })

@@ -88,14 +88,17 @@ test.describe('Archive every card in a column (#10430)', () => {
 		// radius of a single archive is exactly why this action needs a real undo
 		// rather than a confirm dialog. It is located by role + that label (see
 		// toast() in helpers.js), not by @nextcloud/dialogs' own class names.
-		// @nextcloud/dialogs gives an undo toast a 10s life, so assert on it with a
-		// budget UNDER that — a longer one would report "not visible" for a toast
-		// that appeared and simply expired, which reads as the wrong failure.
+		// @nextcloud/dialogs gives an undo toast a 10s life (TOAST_UNDO_TIMEOUT), so
+		// assert on it with a budget UNDER that — a longer one would report "not
+		// visible" for a toast that appeared and simply expired, which reads as the
+		// wrong failure and is a wait nothing could ever satisfy.
 		const undoToast = toast(page, '3 cards archived')
-		await expect(undoToast).toBeVisible()
+		// short-budget-ok: the undo toast is gone at 10s (TOAST_UNDO_TIMEOUT)
+		await expect(undoToast).toBeVisible({ timeout: 8_000 })
 
 		const undoBtn = undoToast.getByRole('button', { name: 'Undo' })
-		await expect(undoBtn).toBeVisible()
+		// short-budget-ok: lives inside the 10s toast asserted above
+		await expect(undoBtn).toBeVisible({ timeout: 3_000 })
 		await undoBtn.click()
 
 		// All three come back to the column …

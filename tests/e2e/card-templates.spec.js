@@ -90,7 +90,7 @@ test.describe('Card templates (per-board)', () => {
 		// A new live card is created from the template (one more than before),
 		// while the template itself stays out of the live list.
 		await expect
-			.poll(() => stackTitles(state.boardId, state.todoId).then((t) => t.length), { timeout: 8_000 })
+			.poll(() => stackTitles(state.boardId, state.todoId).then((t) => t.length))
 			.toBe(liveBefore + 1)
 		const titles = await stackTitles(state.boardId, state.todoId)
 		expect(titles.every((t) => t === 'Bug report')).toBe(true)
@@ -126,7 +126,7 @@ test.describe('Card templates (per-board)', () => {
 		await page.getByRole('menuitem', { name: 'Bug report' }).click()
 
 		await expect
-			.poll(() => stackTitles(state.boardId, state.todoId).then((t) => t.length), { timeout: 8_000 })
+			.poll(() => stackTitles(state.boardId, state.todoId).then((t) => t.length))
 			.toBe(liveBefore + 1)
 	})
 })

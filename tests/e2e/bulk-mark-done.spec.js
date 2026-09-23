@@ -59,7 +59,7 @@ test.describe('Bulk mark done (multi-select)', () => {
 
 		// Both selected cards are stamped done server-side; Charlie is not.
 		await expect
-			.poll(() => doneByTitle(state.boardId, state.todoId), { timeout: 10_000 })
+			.poll(() => doneByTitle(state.boardId, state.todoId))
 			.toEqual({ Alpha: true, Bravo: true, Charlie: false })
 
 		// The board reflects the done state on the two tiles.

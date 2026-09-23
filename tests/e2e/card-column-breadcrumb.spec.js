@@ -93,10 +93,7 @@ test.describe('Card column in the breadcrumb (#10064)', () => {
 		await page.locator('.card-modal__status-chip--btn').click()
 		await page.locator('.card-modal__status-wrap .card-modal__popover-opt--column', { hasText: 'Working column' }).click()
 
-		await expect.poll(
-			async () => (await api.get(`/cards/${state.statusCardId}`)).stackId,
-			{ timeout: 8_000 },
-		).toBe(state.workingId)
+		await expect.poll(async () => (await api.get(`/cards/${state.statusCardId}`)).stackId).toBe(state.workingId)
 
 		// …and the status is untouched: same started_at, still not done.
 		card = await api.get(`/cards/${state.statusCardId}`)

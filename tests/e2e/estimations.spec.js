@@ -96,10 +96,10 @@ test.describe('Card estimations (#3443)', () => {
 			.toBeVisible()
 		await page.getByRole('button', { name: 'Change and clear' }).click()
 
-		await expect.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.estimateScale, { timeout: 8_000 })
+		await expect.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.estimateScale)
 			.toBe('tshirt')
 		// The off-scale '8' was cleared server-side by the scale change.
-		await expect.poll(async () => (await api.get(`/cards/${state.cardId}`)).estimate, { timeout: 8_000 })
+		await expect.poll(async () => (await api.get(`/cards/${state.cardId}`)).estimate)
 			.toBeNull()
 	})
 
@@ -183,7 +183,7 @@ test.describe('Estimate sorting & filtering', () => {
 		await expect.poll(async () => {
 			const t = (await page.locator('.card-tile__title').allTextContents()).map((s) => s.trim())
 			return t.indexOf('EstBig') < t.indexOf('EstSmall') && t.indexOf('EstSmall') < t.indexOf('EstNone')
-		}, { timeout: 8_000 }).toBe(true)
+		}).toBe(true)
 
 		// Reopening the menu shows the active mode as selected (not blank).
 		await page.locator('.board-view__display-menu button').first().click()
@@ -197,7 +197,7 @@ test.describe('Estimate sorting & filtering', () => {
 		await expect.poll(async () => {
 			const t = (await page.locator('.card-tile__title').allTextContents()).map((s) => s.trim())
 			return t.indexOf('EstSmall') < t.indexOf('EstBig') && t.indexOf('EstBig') < t.indexOf('EstNone')
-		}, { timeout: 8_000 }).toBe(true)
+		}).toBe(true)
 	})
 
 	test('filter by estimate token, and by "Unestimated"', async ({ page }) => {

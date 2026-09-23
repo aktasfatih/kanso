@@ -52,7 +52,7 @@ test.describe('Name length caps differ per entity', () => {
 			const match = projects.find((p) => p.title === 'p'.repeat(PROJECT_CAP))
 			if (match) created.projectIds.push(match.id)
 			return match?.title?.length ?? 0
-		}, { timeout: 10_000 }).toBe(PROJECT_CAP)
+		}).toBe(PROJECT_CAP)
 	})
 
 	test('the board title input caps at 100 — a different cap on the same sweep', async ({ page }) => {
@@ -76,7 +76,7 @@ test.describe('Name length caps differ per entity', () => {
 			const match = boards.find((b) => b.title === 'b'.repeat(BOARD_CAP))
 			if (match) created.boardIds.push(match.id)
 			return match?.title?.length ?? 0
-		}, { timeout: 10_000 }).toBe(BOARD_CAP)
+		}).toBe(BOARD_CAP)
 
 		// The contrast itself, asserted rather than implied: had the sweep used a
 		// single shared number, these two would be equal.

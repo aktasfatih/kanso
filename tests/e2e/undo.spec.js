@@ -69,12 +69,20 @@ test.describe('Undo toasts', () => {
 		// The undo toast should appear, saying the card was deleted. Located by
 		// role + message (see toast() in helpers.js) — never by @nextcloud/dialogs'
 		// own class names, which change from release to release.
+		// The budget is deliberately UNDER the toast's own life: showUndo dismisses
+		// itself after TOAST_UNDO_TIMEOUT = 10s, so a 15s wait can outlive the thing
+		// it waits on and report "not visible" for a toast that appeared and simply
+		// expired — the wrong failure, and one no budget could ever satisfy.
 		const undoToast = toast(page, 'Card deleted')
-		await expect(undoToast).toBeVisible()
+		// short-budget-ok: the undo toast is gone at 10s (TOAST_UNDO_TIMEOUT)
+		await expect(undoToast).toBeVisible({ timeout: 8_000 })
 
-		// Click the Undo button inside the toast.
+		// Click the Undo button inside the toast. Tighter again: the toast is
+		// already on screen and its button renders in the same frame, so this only
+		// has whatever is left of those 10 seconds to spend.
 		const undoBtn = undoToast.getByRole('button', { name: 'Undo' })
-		await expect(undoBtn).toBeVisible()
+		// short-budget-ok: lives inside the 10s toast asserted above
+		await expect(undoBtn).toBeVisible({ timeout: 3_000 })
 		await undoBtn.click()
 
 		// The toast should dismiss.

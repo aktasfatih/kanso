@@ -39,7 +39,7 @@ test.describe('Board rename + Add column', () => {
 		await nameInput.press('Enter')
 
 		// Server reflects the rename…
-		await expect.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.title, { timeout: 8_000 })
+		await expect.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.title)
 			.toBe(newTitle)
 		// …and so does the header once the modal is dismissed.
 		await page.keyboard.press('Escape')
@@ -70,7 +70,7 @@ test.describe('Board rename + Add column', () => {
 		await expect.poll(async () => {
 			const { stacks } = await api.get(`/boards/${state.boardId}`)
 			return (stacks ?? []).some((s) => s.title === 'In review')
-		}, { timeout: 8_000 }).toBe(true)
+		}).toBe(true)
 	})
 
 	test('renaming a board updates the app-navigation sidebar live', async ({ page }) => {
@@ -95,7 +95,7 @@ test.describe('Board rename + Add column', () => {
 		await expect(nameInput).toBeVisible()
 		await nameInput.fill(after)
 		await nameInput.press('Enter')
-		await expect.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.title, { timeout: 8_000 })
+		await expect.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.title)
 			.toBe(after)
 
 		// The sidebar reflects the new name and drops the old one — no manual reload.

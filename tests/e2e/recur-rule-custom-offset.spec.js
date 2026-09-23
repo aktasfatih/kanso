@@ -79,10 +79,7 @@ test.describe('Editing a rule with a sub-day due-date offset (#10130)', () => {
 		await page.getByRole('button', { name: /^Save rule$/ }).click()
 
 		// Read the rule back: the column moved, the offset survived byte for byte.
-		await expect.poll(
-			async () => Number((await storedRule())?.targetStackId),
-			{ timeout: 8_000 },
-		).toBe(Number(state.otherStackId))
+		await expect.poll(async () => Number((await storedRule())?.targetStackId)).toBe(Number(state.otherStackId))
 
 		const after = await storedRule()
 		expect(Number(after.duedateOffsetSeconds)).toBe(SUB_DAY_OFFSET)
@@ -131,6 +128,6 @@ test.describe('Editing a rule with a whole-day due-date offset (#10130)', () => 
 		await expect.poll(async () => {
 			const rules = await api.get(`/boards/${state.boardId}/recur-rules`)
 			return Number(rules.find((r) => Number(r.id) === Number(state.ruleId))?.duedateOffsetSeconds ?? 0)
-		}, { timeout: 8_000 }).toBe(3 * 86400)
+		}).toBe(3 * 86400)
 	})
 })

@@ -62,7 +62,7 @@ test.describe('Column description', () => {
 		// Persisted server-side — this is the same payload kanso_get_board returns,
 		// so the MCP sees it too …
 		await expect
-			.poll(() => stackDescription(state.boardId, state.stackId), { timeout: 10_000 })
+			.poll(() => stackDescription(state.boardId, state.stackId))
 			.toBe(DESCRIPTION)
 
 		// … and a human reads it straight off the column header.

@@ -199,7 +199,7 @@ test.describe('Timeline (Gantt) view (#3471)', () => {
 		// Persistence: after a reload the card still carries a due date (it stays
 		// scheduled and does not fall back into the unscheduled footer).
 		await expect
-			.poll(async () => (await api.get(`/cards/${card.id}`)).duedate, { timeout: 10_000 })
+			.poll(async () => (await api.get(`/cards/${card.id}`)).duedate)
 			.not.toBeNull()
 
 		await page.reload()

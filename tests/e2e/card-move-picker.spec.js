@@ -59,7 +59,7 @@ test.describe('Move card… picker (keyboard / SR DnD alternative)', () => {
 
 		// Card B landed in Doing (moved via the shared queue → server reflects it).
 		await expect
-			.poll(() => cardStackId(state.boardId, state.bId), { timeout: 8_000 })
+			.poll(() => cardStackId(state.boardId, state.bId))
 			.toBe(state.doingId)
 		expect(await stackOrder(state.boardId, state.todoId)).toEqual(['Card A', 'Card C'])
 		expect(await stackOrder(state.boardId, state.doingId)).toEqual(['Card B'])
@@ -82,7 +82,7 @@ test.describe('Move card… picker (keyboard / SR DnD alternative)', () => {
 		await page.getByRole('button', { name: 'Move', exact: true }).click()
 
 		await expect
-			.poll(() => stackOrder(state.boardId, state.doingId), { timeout: 8_000 })
+			.poll(() => stackOrder(state.boardId, state.doingId))
 			.toEqual(['Card B', 'Card C'])
 	})
 })

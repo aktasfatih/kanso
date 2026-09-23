@@ -57,7 +57,7 @@ test.describe('New cards on top', () => {
 
 		// Flag persisted (board fields are nested under `.board`).
 		await expect
-			.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.newCardsOnTop, { timeout: 10_000 })
+			.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.newCardsOnTop)
 			.toBe(true)
 
 		// New cards (via the real create path) now land at the top: B above A.
@@ -68,6 +68,6 @@ test.describe('New cards on top', () => {
 
 		// Assert the persisted server-side order (source of truth), polling so the
 		// second create's row is visible before we compare on slow infra.
-		await expect.poll(() => stackOrder(), { timeout: 10_000 }).toEqual(['Card B', 'Card A'])
+		await expect.poll(() => stackOrder()).toEqual(['Card B', 'Card A'])
 	})
 })

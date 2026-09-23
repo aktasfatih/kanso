@@ -137,6 +137,7 @@ test.describe('A bulk action that fails mid-sequence keeps what already landed (
 		// 1 committed; a handler that dropped `err.partial` would show no toast at
 		// all, and one that reported the whole selection would say 101.
 		await expect(toast(page, `${FIRST_CHUNK} cards updated before the action failed`))
+			// long-budget-ok: the 101-card bulk write (~30s) precedes the toast, not the toast
 			.toBeVisible({ timeout: 30_000 })
 		await expect(toast(page, `${CARD_COUNT} cards updated before the action failed`))
 			.toHaveCount(0)
@@ -169,16 +170,25 @@ test.describe('A bulk action that fails mid-sequence keeps what already landed (
 		// failure, StackColumn would bail at `archivedIds.length === 0` and there
 		// would be no undo at all — the 100 archived cards would then only be
 		// recoverable one at a time from the Archived page.
-		// @nextcloud/dialogs gives an undo toast a 10s life, so keep the budget
-		// under that (see column-archive-all.spec.js).
+		// This is the one toast wait in the suite that CANNOT sit under the toast's
+		// own 10s life: the 101-card archive is what is being waited on, and that
+		// write runs to ~30s on a saturated runner. The toast only appears once it
+		// resolves, and then stays for 10s — so the budget has to cover the write.
 		const undoToast = toast(page, `${FIRST_CHUNK} cards archived`)
-		await expect(undoToast).toBeVisible()
+		// long-budget-ok: the 101-card archive (~30s) precedes the toast, not the toast
+		await expect(undoToast).toBeVisible({ timeout: 30_000 })
 
 		// Sanity on the fault itself: 100 really are archived server-side, 1 is not.
-		await expect.poll(() => archivedCount(state.boardId), { timeout: 30_000 }).toBe(FIRST_CHUNK)
+		// Deliberately tight: the toast above already proves the archive RESOLVED,
+		// so this is one API read, not a wait on the write. A 30s budget here would
+		// happily eat the undo toast's whole 10s life and leave the click below with
+		// nothing to press.
+		// short-budget-ok: the write has already landed; a longer wait outlives the toast
+		await expect.poll(() => archivedCount(state.boardId), { timeout: 2_000 }).toBe(FIRST_CHUNK)
 
 		const undoBtn = undoToast.getByRole('button', { name: 'Undo' })
-		await expect(undoBtn).toBeVisible()
+		// short-budget-ok: lives inside the 10s toast asserted above
+		await expect(undoBtn).toBeVisible({ timeout: 3_000 })
 		await undoBtn.click()
 
 		// THE assertion: the undo restores every card that landed. It can only get

@@ -132,10 +132,7 @@ test.describe('Adding a second assignee from the card modal (#10603)', () => {
 		await expect(popover.locator('.card-modal__assign-option[aria-pressed="true"]')).toHaveCount(3)
 
 		// The server agrees — not just the optimistic cache.
-		await expect.poll(
-			async () => (await api.get(`/cards/${state.cardId}`)).assigneeIds.length,
-			{ timeout: 10_000 },
-		).toBe(3)
+		await expect.poll(async () => (await api.get(`/cards/${state.cardId}`)).assigneeIds.length).toBe(3)
 
 		// And the board tile shows them: 3 avatars, no overflow badge at the cap.
 		await page.keyboard.press('Escape') // close picker

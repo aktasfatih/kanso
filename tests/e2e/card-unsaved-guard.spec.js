@@ -107,7 +107,7 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 		let pt = await backdropPoint(page)
 		await page.mouse.click(pt.x, pt.y)
 
-		await expect.poll(() => dialogs.messages.length, { timeout: 8_000 }).toBe(1)
+		await expect.poll(() => dialogs.messages.length).toBe(1)
 		expect(dialogs.messages[0]).toContain('unsaved changes')
 
 		// Cancelled → still on the card, editor still open, draft untouched.
@@ -168,7 +168,7 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 		dialogs.accept = false
 		await page.locator('.card-modal-modal .modal-container__close').click()
 
-		await expect.poll(() => dialogs.messages.length, { timeout: 8_000 }).toBe(1)
+		await expect.poll(() => dialogs.messages.length).toBe(1)
 		expect(dialogs.messages[0]).toContain('unsaved changes')
 
 		// Cancelled → the card is still up, never flashed away, draft intact.
@@ -254,7 +254,7 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 		let pt = await backdropPoint(page)
 		await page.mouse.click(pt.x, pt.y)
 
-		await expect.poll(() => dialogs.messages.length, { timeout: 8_000 }).toBe(1)
+		await expect.poll(() => dialogs.messages.length).toBe(1)
 		expect(dialogs.messages[0]).toContain('unsaved changes')
 		await expect(page).toHaveURL(new RegExp(`/card/${card.id}`))
 		await expect(replyProse(page)).toContainText('half-written reply')

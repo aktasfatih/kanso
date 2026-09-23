@@ -44,7 +44,7 @@ test.describe('All-day due dates', () => {
 		await page.locator('.card-modal__allday input[type=checkbox]').check()
 
 		// Server persists the flag …
-		await expect.poll(() => cardAllDay(state.boardId, state.cardId), { timeout: 8_000 }).toBe(true)
+		await expect.poll(() => cardAllDay(state.boardId, state.cardId)).toBe(true)
 		// … and the input becomes a plain date (no time-of-day).
 		await expect(dateInput).toHaveAttribute('type', 'date')
 	})

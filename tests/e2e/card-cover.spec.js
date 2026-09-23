@@ -59,7 +59,7 @@ test.describe('Card cover colour', () => {
 		expect(patchSet.ok()).toBeTruthy()
 
 		// Persisted as the bare-hex preset.
-		await expect.poll(() => cardCoverColor(state.cardId), { timeout: 10_000 }).toBe('e74c3c')
+		await expect.poll(() => cardCoverColor(state.cardId)).toBe('e74c3c')
 
 		// Close the modal and assert the tile now shows the cover band.
 		await page.keyboard.press('Escape')
@@ -84,7 +84,7 @@ test.describe('Card cover colour', () => {
 		expect(patchClear.ok()).toBeTruthy()
 
 		// Cover cleared server-side …
-		await expect.poll(() => cardCoverColor(state.cardId), { timeout: 10_000 }).toBeFalsy()
+		await expect.poll(() => cardCoverColor(state.cardId)).toBeFalsy()
 
 		// … and the band is gone from the tile.
 		await page.keyboard.press('Escape')

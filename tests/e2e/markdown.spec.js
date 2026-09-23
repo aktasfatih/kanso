@@ -340,10 +340,7 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 
 		// The sanitiser sets loading="lazy", so wait for the bytes to actually
 		// arrive — an undecoded img has naturalWidth 0 and would fake a pass.
-		const decoded = (loc) => expect.poll(
-			async () => loc.evaluate((el) => el.complete && el.naturalWidth),
-			{ timeout: 10_000 },
-		)
+		const decoded = (loc) => expect.poll(async () => loc.evaluate((el) => el.complete && el.naturalWidth))
 		await decoded(wide).toBe(WIDE_PX)
 		await decoded(small).toBe(SMALL_PX)
 

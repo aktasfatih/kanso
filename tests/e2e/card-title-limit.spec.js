@@ -54,7 +54,7 @@ test.describe('Card title length cap', () => {
 		await composer.press('Enter')
 
 		// Created with exactly the 100-character prefix — no 400, no truncation surprise.
-		await expect.poll(() => titles(), { timeout: 10_000 }).toContain(capped('a'))
+		await expect.poll(() => titles()).toContain(capped('a'))
 	})
 
 	test('list-view composer truncates at 100', async ({ page }) => {
@@ -100,6 +100,6 @@ test.describe('Card title length cap', () => {
 		await expect(titleInput).toHaveValue(capped('d'))
 
 		await titleInput.press('Enter')
-		await expect.poll(() => titles(), { timeout: 10_000 }).toContain(capped('d'))
+		await expect.poll(() => titles()).toContain(capped('d'))
 	})
 })

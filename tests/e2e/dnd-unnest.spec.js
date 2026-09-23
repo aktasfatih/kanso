@@ -167,7 +167,7 @@ test.describe('Drag a sub-card out of its parent (list view)', () => {
 			},
 		})
 
-		await expect.poll(async () => (await rowTitles(page)).slice(0, 4), { timeout: 10_000 })
+		await expect.poll(async () => (await rowTitles(page)).slice(0, 4))
 			.toEqual(['UP', 'UB', 'UA', 'UT'])
 		// The whole point: the relation survived the reorder.
 		expect(await parentOf('UB')).toBe(state.ids.UP)
@@ -199,12 +199,12 @@ test.describe('Drag a sub-card out of its parent (list view)', () => {
 			},
 		})
 
-		await expect.poll(async () => await parentOf('UA'), { timeout: 10_000 }).toBeNull()
+		await expect.poll(async () => await parentOf('UA')).toBeNull()
 
 		// The row un-indents and lands where it was dropped.
 		await expect(page.locator('.board-list-row--child').filter({ hasText: 'UA' }))
 			.toHaveCount(0, { timeout: 10_000 })
-		await expect.poll(async () => (await rowTitles(page)).slice(0, 4), { timeout: 10_000 })
+		await expect.poll(async () => (await rowTitles(page)).slice(0, 4))
 			.toEqual(['UP', 'UB', 'UT', 'UA'])
 
 		// Server is the source of truth — it survives a reload.
@@ -242,7 +242,7 @@ test.describe('Drag a sub-card out of its parent (list view)', () => {
 		})
 
 		// Reordered inside U2, and still a sub-card of UP over in U1.
-		await expect.poll(async () => (await rowTitles(page)).slice(-2), { timeout: 10_000 })
+		await expect.poll(async () => (await rowTitles(page)).slice(-2))
 			.toEqual(['UZ', 'UX'])
 		expect(await parentOf('UX')).toBe(state.ids.UP)
 	})
@@ -286,7 +286,7 @@ test.describe('Drag a sub-card out of its parent (list view)', () => {
 
 		await page.getByTitle('Detach from parent').click()
 
-		await expect.poll(async () => await parentOf('UB'), { timeout: 10_000 }).toBeNull()
+		await expect.poll(async () => await parentOf('UB')).toBeNull()
 		await expect(parentLink).toHaveCount(0, { timeout: 8_000 })
 	})
 })

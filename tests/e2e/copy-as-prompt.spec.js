@@ -136,7 +136,9 @@ test.describe('Copy as prompt', () => {
 		// A success toast should confirm the copy. Its MESSAGE is the assertion —
 		// "a toast appeared" would also be satisfied by the error toast this very
 		// action raises when the clipboard is unavailable.
-		await expect(toast(page, 'Card copied as prompt.')).toBeVisible()
+		// A plain toast dismisses itself at TOAST_DEFAULT_TIMEOUT = 7s, so a 15s wait
+		// short-budget-ok: would outlive the toast and report the wrong failure
+		await expect(toast(page, 'Card copied as prompt.')).toBeVisible({ timeout: 6_000 })
 
 		// Read the clipboard back and assert it contains the title + comment body.
 		const clip = await page.evaluate(() => navigator.clipboard.readText())

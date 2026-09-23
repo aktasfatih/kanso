@@ -59,7 +59,7 @@ test.describe('Manage card templates (#3634)', () => {
 
 		// The rename persisted server-side (database-first).
 		await expect
-			.poll(() => templateTitles(state.boardId), { timeout: 8_000 })
+			.poll(() => templateTitles(state.boardId))
 			.toEqual(['Renamed template'])
 
 		// Close the card modal (Escape) and reopen the manager — the new title shows.
@@ -74,7 +74,7 @@ test.describe('Manage card templates (#3634)', () => {
 		await page.waitForSelector('.card-modal__title', { timeout: 15_000 })
 		// …and the board now has two templates, both hidden from the live board.
 		await expect
-			.poll(() => templateTitles(state.boardId).then((t) => t.length), { timeout: 8_000 })
+			.poll(() => templateTitles(state.boardId).then((t) => t.length))
 			.toBe(2)
 		const board = await api.get(`/boards/${state.boardId}`)
 		expect(board.cards.some((c) => c.isTemplate === false)).toBe(false)
@@ -93,7 +93,7 @@ test.describe('Manage card templates (#3634)', () => {
 
 		// It's gone from the list and from the board's templates.
 		await expect
-			.poll(() => templateTitles(state.boardId), { timeout: 8_000 })
+			.poll(() => templateTitles(state.boardId))
 			.not.toContain('Renamed template')
 		await expect(page.locator('.manage-templates__row')).toHaveCount(1)
 	})

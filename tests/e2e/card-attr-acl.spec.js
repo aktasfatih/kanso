@@ -118,10 +118,7 @@ test.describe('Assign and label controls stay available to editors (#10703)', ()
 		// And they still work — the gate is presentation, not a new restriction.
 		await attrbar.locator('.card-modal__assignee-pill .card-modal__pill-x').click()
 		await expect(attrbar.locator('.card-modal__assignee-pill')).toHaveCount(0)
-		await expect.poll(
-			async () => (await api.get(`/cards/${state.cardId}`)).assigneeIds.length,
-			{ timeout: 10_000 },
-		).toBe(0)
+		await expect.poll(async () => (await api.get(`/cards/${state.cardId}`)).assigneeIds.length).toBe(0)
 	})
 })
 
@@ -382,9 +379,6 @@ test.describe('The rest of the attribute bar stays available to editors (#10732)
 
 		// The gate is presentation, not a new restriction: an editor's write lands.
 		await header.locator('.card-modal__done-btn').click()
-		await expect.poll(
-			async () => (await api.get(`/cards/${state.cardId}`)).doneAt,
-			{ timeout: 10_000 },
-		).toBeGreaterThan(0)
+		await expect.poll(async () => (await api.get(`/cards/${state.cardId}`)).doneAt).toBeGreaterThan(0)
 	})
 })

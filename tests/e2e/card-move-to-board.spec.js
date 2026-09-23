@@ -69,11 +69,11 @@ test.describe('Move card to another board (card ⋯ menu)', () => {
 
 		// The card LEFT the source board...
 		await expect
-			.poll(() => stackTitles(state.srcBoardId, state.srcStackId), { timeout: 8_000 })
+			.poll(() => stackTitles(state.srcBoardId, state.srcStackId))
 			.toEqual([])
 		// ...and APPEARS on the target board.
 		await expect
-			.poll(() => stackTitles(state.dstBoardId, state.dstStackId), { timeout: 8_000 })
+			.poll(() => stackTitles(state.dstBoardId, state.dstStackId))
 			.toEqual(['Relocatable card'])
 
 		// The relocated card is a NEW card (fresh id) carrying the content + mapped label.

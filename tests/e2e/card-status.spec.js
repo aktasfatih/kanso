@@ -72,10 +72,7 @@ test.describe('Card status (#3481)', () => {
 
 		// The status change carries the card into the Done-role column (#54), and it
 		// is stamped done - status and board position stay in sync.
-		await expect.poll(
-			async () => (await api.get(`/cards/${state.syncCardId}`)).stackId,
-			{ timeout: 8_000 },
-		).toBe(state.doneStackId)
+		await expect.poll(async () => (await api.get(`/cards/${state.syncCardId}`)).stackId).toBe(state.doneStackId)
 		card = await api.get(`/cards/${state.syncCardId}`)
 		expect(Number(card.doneAt)).toBeGreaterThan(0)
 	})

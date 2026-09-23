@@ -142,14 +142,14 @@ test.describe('JS scrolls honour prefers-reduced-motion (#10475)', () => {
 
 			await page.locator('.card-modal__discussion-toggle').click()
 
-			await expect.poll(() => requestedBehaviors(page), { timeout: 10_000 }).toEqual(['auto'])
+			await expect.poll(() => requestedBehaviors(page)).toEqual(['auto'])
 			await expect(page.locator('.card-modal__discussion')).toBeFocused()
 		})
 
 		test('the comment deep link scrolls instantly', async ({ page }) => {
 			await openCommentDeepLink(page)
 
-			await expect.poll(() => requestedBehaviors(page), { timeout: 10_000 }).toContain('auto')
+			await expect.poll(() => requestedBehaviors(page)).toContain('auto')
 			expect(await requestedBehaviors(page)).not.toContain('smooth')
 		})
 
@@ -159,7 +159,7 @@ test.describe('JS scrolls honour prefers-reduced-motion (#10475)', () => {
 
 			await page.getByRole('button', { name: 'Jump to today' }).click()
 
-			await expect.poll(() => requestedBehaviors(page), { timeout: 10_000 }).toContain('auto')
+			await expect.poll(() => requestedBehaviors(page)).toContain('auto')
 			expect(await requestedBehaviors(page)).not.toContain('smooth')
 		})
 	})
@@ -178,13 +178,13 @@ test.describe('JS scrolls honour prefers-reduced-motion (#10475)', () => {
 
 			await page.locator('.card-modal__discussion-toggle').click()
 
-			await expect.poll(() => requestedBehaviors(page), { timeout: 10_000 }).toEqual(['smooth'])
+			await expect.poll(() => requestedBehaviors(page)).toEqual(['smooth'])
 		})
 
 		test('the comment deep link still scrolls smoothly', async ({ page }) => {
 			await openCommentDeepLink(page)
 
-			await expect.poll(() => requestedBehaviors(page), { timeout: 10_000 }).toContain('smooth')
+			await expect.poll(() => requestedBehaviors(page)).toContain('smooth')
 		})
 
 		test('the timeline jump-to-today still scrolls smoothly', async ({ page }) => {
@@ -193,7 +193,7 @@ test.describe('JS scrolls honour prefers-reduced-motion (#10475)', () => {
 
 			await page.getByRole('button', { name: 'Jump to today' }).click()
 
-			await expect.poll(() => requestedBehaviors(page), { timeout: 10_000 }).toContain('smooth')
+			await expect.poll(() => requestedBehaviors(page)).toContain('smooth')
 		})
 	})
 })

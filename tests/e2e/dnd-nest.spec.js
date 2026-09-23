@@ -136,7 +136,7 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 			},
 		})
 
-		await expect.poll(async () => await parentOf('NC'), { timeout: 10_000 })
+		await expect.poll(async () => await parentOf('NC'))
 			.toBe(state.ids.NP)
 
 		// The parent tile grows its sub-card progress badge.
@@ -229,7 +229,7 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 		await expect.poll(async () => {
 			const card = await api.get(`/cards/${state.ids.NC}`)
 			return card.stackId
-		}, { timeout: 10_000 }).toBe(state.n2Id)
+		}).toBe(state.n2Id)
 		expect(await parentOf('NC')).toBe(state.ids.NP)
 		// The parent keeps its sub-card badge across the column move.
 		await expect(tile(page, 'NP').locator('.card-tile__children')).toHaveText('0/1')
@@ -258,7 +258,7 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 			},
 		})
 
-		await expect.poll(async () => await parentOf('NC'), { timeout: 10_000 })
+		await expect.poll(async () => await parentOf('NC'))
 			.toBe(state.ids.NP)
 
 		// Indented under NP, in NP's group.
@@ -267,6 +267,6 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 		await expect.poll(async () => {
 			const card = await api.get(`/cards/${state.ids.NC}`)
 			return card.stackId
-		}, { timeout: 10_000 }).toBe(state.n1Id)
+		}).toBe(state.n1Id)
 	})
 })

@@ -62,7 +62,7 @@ test.describe('Stack colour', () => {
 		expect(patchResponse.ok()).toBeTruthy()
 
 		// Persisted as the bare-hex preset …
-		await expect.poll(() => stackColor(state.boardId, state.stackId), { timeout: 10_000 }).toBe('e74c3c')
+		await expect.poll(() => stackColor(state.boardId, state.stackId)).toBe('e74c3c')
 		// … and the header shows the coloured accent.
 		await expect(page.locator('.stack-column__header--colored').first()).toBeVisible()
 	})

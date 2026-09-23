@@ -55,7 +55,7 @@ test.describe('Quick multi-add', () => {
 		// trim/skip-blank behaviour) → exactly 3 cards, in submitted order.
 		await pasteIntoComposer(composer, 'Alpha\n  Bravo  \n\nCharlie\n')
 
-		await expect.poll(() => stackOrder(), { timeout: 10_000 }).toEqual([
+		await expect.poll(() => stackOrder()).toEqual([
 			'Alpha', 'Bravo', 'Charlie',
 		])
 
@@ -63,7 +63,7 @@ test.describe('Quick multi-add', () => {
 		await composer.fill('Delta')
 		await composer.press('Enter')
 
-		await expect.poll(() => stackOrder(), { timeout: 10_000 }).toEqual([
+		await expect.poll(() => stackOrder()).toEqual([
 			'Alpha', 'Bravo', 'Charlie', 'Delta',
 		])
 	})

@@ -73,12 +73,9 @@ test.describe('Bulk edit cards (multi-select)', () => {
 		// #10287 — the bar is now three inline actions plus one "More" overflow, so
 		// this is the whole inline row: the remaining actions are entries INSIDE
 		// More and are asserted below.
-		await expect.poll(
-			() => page.locator('.bulk-action-bar button').evaluateAll(
+		await expect.poll(() => page.locator('.bulk-action-bar button').evaluateAll(
 				(els) => els.map((el) => el.closest('[title]')?.getAttribute('title') ?? null),
-			),
-			{ timeout: 10_000 },
-		).toEqual([
+			)).toEqual([
 			'Move to…',
 			'Add label…',
 			'Mark done',
@@ -109,10 +106,10 @@ test.describe('Bulk edit cards (multi-select)', () => {
 
 		// Both selected cards land in Done; Charlie stays in To Do.
 		await expect
-			.poll(() => stackTitles(state.boardId, state.doneId), { timeout: 10_000 })
+			.poll(() => stackTitles(state.boardId, state.doneId))
 			.toEqual(['Alpha', 'Bravo'])
 		await expect
-			.poll(() => stackTitles(state.boardId, state.todoId), { timeout: 10_000 })
+			.poll(() => stackTitles(state.boardId, state.todoId))
 			.toEqual(['Charlie'])
 	})
 
