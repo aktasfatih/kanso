@@ -47,10 +47,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ item.filename }}
 							</span>
 							<span class="board-attachments__meta">
+								<!-- hide-status is NOT cosmetic: NcAvatar otherwise GETs
+									the user-status API once PER INSTANCE, and this list
+									mounts one avatar per row - 40 files from one person
+									were 40 requests for that one person (#10738). Same
+									flag every other avatar in the app already sets. -->
 								<NcAvatar
 									:user="item.uploadedBy || ''"
 									:display-name="uploader(item)"
 									:size="16"
+									:hide-status="true"
 									:disable-menu="true" />
 								<span class="board-attachments__uploader">{{ uploader(item) }}</span>
 								<span class="board-attachments__sep">·</span>
@@ -81,9 +87,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</li>
 			</ul>
 
-			<p v-if="capped" class="board-attachments__capped">
-				{{ t('kanso', 'Showing the {shown} most recent of {total} files.', { shown: items.length, total }) }}
-			</p>
+			<!-- Paging (#10738). The server answers one page and says whether more
+				exist for THIS viewer, so "Load more" is the client walking offsets -
+				not a raised cap. Every file on the board is reachable this way. -->
+			<div v-if="!error && items.length < total" class="board-attachments__footer">
+				<span class="board-attachments__shown">
+					{{ t('kanso', 'Showing the {shown} most recent of {total} files.', { shown: items.length, total }) }}
+				</span>
+				<NcButton
+					v-if="hasNextPage"
+					class="board-attachments__more"
+					:disabled="isFetchingNextPage"
+					@click="fetchNextPage()">
+					{{ isFetchingNextPage ? t('kanso', 'Loading more files…') : t('kanso', 'Load more files') }}
+				</NcButton>
+			</div>
 		</div>
 	</NcModal>
 </template>
@@ -93,6 +111,7 @@ import { computed } from 'vue'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import DownloadIcon from 'vue-material-design-icons/Download.vue'
@@ -110,12 +129,27 @@ const props = defineProps({
 
 defineEmits(['close', 'open-card'])
 
-// The modal is only mounted while it is open, so the query fires on open.
-const { data, isPending, error } = useBoardAttachments(computed(() => Number(props.boardId)))
+// The modal is only mounted while it is open, so the query fires on open - ONE
+// page of it, and one request regardless of how many files the board holds.
+const {
+	data,
+	isPending,
+	error,
+	hasNextPage,
+	isFetchingNextPage,
+	fetchNextPage,
+} = useBoardAttachments(computed(() => Number(props.boardId)))
 
-const items = computed(() => data.value?.items ?? [])
-const total = computed(() => data.value?.total ?? 0)
-const capped = computed(() => !!data.value?.capped)
+// Every page loaded so far, in order. Row keys are attachment ids, so a row
+// that a concurrent upload pushed across the page boundary renders once.
+const items = computed(() => (data.value?.pages ?? []).flatMap((page) => page.items ?? []))
+
+// The freshest total is the last page's - each page carries the viewer-scoped
+// count as of its own query.
+const total = computed(() => {
+	const pages = data.value?.pages
+	return pages?.length ? (pages[pages.length - 1].total ?? 0) : 0
+})
 
 /** Credit a person rather than a raw uid when the server resolved a name. */
 function uploader(item) {
@@ -307,9 +341,16 @@ function formatBytes(bytes) {
 	background: var(--color-background-hover);
 }
 
-.board-attachments__capped {
+.board-attachments__footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.board-attachments__shown {
 	font-size: 0.8rem;
 	color: var(--color-text-maxcontrast);
-	margin: 0;
 }
 </style>

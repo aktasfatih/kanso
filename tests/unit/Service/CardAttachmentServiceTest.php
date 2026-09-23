@@ -317,6 +317,37 @@ class CardAttachmentServiceTest extends TestCase {
 	}
 
 	/**
+	 * PAGING IS NOT A WAY AROUND THE SCOPE (#10738). Now that the client walks
+	 * offsets rather than reading one page and stopping, EVERY page - not just
+	 * the first - has to be answered with the caller's own viewer context, and
+	 * the offset has to reach the query unchanged. A service that resolved the
+	 * viewer only for the first page, or dropped it on a paged call, would hand
+	 * a caller exactly the rows page one hid from them.
+	 */
+	public function testListForBoardScopesASecondPageToTheSameViewer(): void {
+		$this->expectBoardLoaded('exty', ViewerContext::ROLE_EXTERNAL);
+		$seen = [];
+		$this->attachmentMapper->expects(self::once())
+			->method('findByBoard')
+			->willReturnCallback(function (int $boardId, ViewerContext $viewer, int $limit, int $offset) use (&$seen): array {
+				$seen = ['viewer' => $viewer, 'limit' => $limit, 'offset' => $offset];
+				return [];
+			});
+		$this->attachmentMapper->expects(self::once())
+			->method('countByBoard')
+			->with(4, self::callback(static fn (ViewerContext $v): bool => $v->userId === 'exty' && $v->role === ViewerContext::ROLE_EXTERNAL))
+			->willReturn(60);
+
+		$this->service->listForBoard(4, 'exty', 25, 25);
+
+		self::assertSame('exty', $seen['viewer']->userId);
+		self::assertSame(4, $seen['viewer']->boardId);
+		self::assertSame(ViewerContext::ROLE_EXTERNAL, $seen['viewer']->role);
+		self::assertSame(25, $seen['limit']);
+		self::assertSame(25, $seen['offset'], 'the requested offset must reach the query');
+	}
+
+	/**
 	 * The page is HARD-capped server-side: a caller asking for the whole board in
 	 * one response gets the cap instead, and a negative offset reads as the
 	 * first page rather than a negative OFFSET the DB would reject.

@@ -3245,7 +3245,7 @@ msgstr "斜体"
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6674
+#: src/components/CardDetail.vue:6677
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3449,9 +3449,17 @@ msgstr "关联了一位联系人"
 msgid "List"
 msgstr "列表"
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Load more files"
+msgstr ""
+
 #: src/views/InboxView.vue
 msgid "Loading inbox…"
 msgstr "正在加载收件箱…"
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "Loading more files…"
+msgstr ""
 
 #: src/views/ProjectView.vue
 msgid "Loading project…"
@@ -5022,7 +5030,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:6680
+#: src/components/CardDetail.vue:6683
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"

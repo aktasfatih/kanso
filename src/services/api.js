@@ -455,8 +455,13 @@ export const cardAttachmentUrl = (cardId, attachmentId) =>
 // {items, total, capped}, each item carrying the owning card's id and title.
 // Downloads still go through cardAttachmentUrl() above - there is no separate
 // board-scoped byte path.
-export const fetchBoardAttachments = (boardId) =>
-	axios.get(url(`/api/boards/${boardId}/attachments`)).then((r) => r.data)
+// ONE page of it: the server takes limit/offset and clamps limit to its own
+// BOARD_PAGE_LIMIT, so a board with more files than one page holds is reached
+// by asking for the next offset - not by raising the cap (#10738).
+export const fetchBoardAttachments = (boardId, { limit, offset } = {}) =>
+	axios.get(url(`/api/boards/${boardId}/attachments`), {
+		params: { limit, offset },
+	}).then((r) => r.data)
 
 // INLINE image URL (#3525). Server serves Content-Disposition: inline ONLY for
 // the raster-image allow-list (png/jpeg/gif/webp), everything else 404s. Used

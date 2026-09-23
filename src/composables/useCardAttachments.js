@@ -9,7 +9,8 @@
  * that invalidate the list; delete is optimistic with rollback (mirrors
  * useCardLinks' remove).
  *
- * `cardId` may be a plain value, a Vue ref, or a getter function.
+ * `cardId` may be a plain value, a Vue ref, or a getter function; `boardId` the
+ * same, and it is what lets these mutations reach the BOARD-wide listing too.
  */
 
 import { computed, unref } from 'vue'
@@ -20,11 +21,15 @@ import {
 	attachCardFileFromFiles as apiAttachFromFiles,
 	deleteCardAttachment as apiDelete,
 } from '../services/api.js'
+import { boardAttachmentsQueryKey } from './queryKeys.js'
 
 /**
  * @param {import('vue').Ref<string|number>|string|number|Function} cardId
+ * @param {import('vue').Ref<string|number>|string|number|Function} [boardId] the
+ *   card's board - omit only where it genuinely is not known; without it the
+ *   board-wide attachments modal cannot be told its list changed.
  */
-export function useCardAttachments(cardId) {
+export function useCardAttachments(cardId, boardId) {
 	const queryClient = useQueryClient()
 
 	const resolvedId = computed(() => {
@@ -34,6 +39,26 @@ export function useCardAttachments(cardId) {
 
 	const key = computed(() => ['card-attachments', resolvedId.value])
 
+	// The board-wide listing (#10670) shows exactly the rows these mutations
+	// add and remove, from a DIFFERENT cache key - so every settle has to
+	// invalidate both or the modal serves a stale list until a reload (#10738).
+	// Through the shared String-coercing helper, never a hand-spelled key.
+	const boardKey = computed(() => {
+		const v = typeof boardId === 'function' ? boardId() : unref(boardId)
+		return (v === undefined || v === null || v === '') ? null : boardAttachmentsQueryKey(v)
+	})
+
+	/**
+	 * Settle-phase invalidation for all three mutations: the card's own list
+	 * plus the board-wide one.
+	 */
+	function invalidateLists() {
+		queryClient.invalidateQueries({ queryKey: key.value })
+		if (boardKey.value !== null) {
+			queryClient.invalidateQueries({ queryKey: boardKey.value })
+		}
+	}
+
 	const query = useQuery({
 		queryKey: key,
 		queryFn: () => fetchCardAttachments(resolvedId.value),
@@ -41,7 +66,7 @@ export function useCardAttachments(cardId) {
 
 	const uploadAttachment = useMutation({
 		mutationFn: (file) => apiUpload(resolvedId.value, file),
-		onSettled: () => queryClient.invalidateQueries({ queryKey: key.value }),
+		onSettled: () => invalidateLists(),
 	})
 
 	// "Choose from Files": the server COPIES the picked Files node's bytes into
@@ -50,7 +75,7 @@ export function useCardAttachments(cardId) {
 	// the server's, not the picker's).
 	const attachFromFiles = useMutation({
 		mutationFn: (fileId) => apiAttachFromFiles(resolvedId.value, fileId),
-		onSettled: () => queryClient.invalidateQueries({ queryKey: key.value }),
+		onSettled: () => invalidateLists(),
 	})
 
 	const removeAttachment = useMutation({
@@ -68,7 +93,7 @@ export function useCardAttachments(cardId) {
 				queryClient.setQueryData(key.value, context.previous)
 			}
 		},
-		onSettled: () => queryClient.invalidateQueries({ queryKey: key.value }),
+		onSettled: () => invalidateLists(),
 	})
 
 	return { ...query, attachments: query.data, uploadAttachment, attachFromFiles, removeAttachment }

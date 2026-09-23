@@ -6116,7 +6116,10 @@ async function copyBranchName() {
 }
 
 // ── File attachments (#3526) ─────────────────────────────────────────────────
-const { attachments: cardAttachmentsData, uploadAttachment, attachFromFiles, removeAttachment } = useCardAttachments(computed(() => props.cardId))
+// `boardId` too: attaching or removing a file changes the BOARD-wide
+// attachments listing as much as the card's own, and that lives under its own
+// cache key (#10738).
+const { attachments: cardAttachmentsData, uploadAttachment, attachFromFiles, removeAttachment } = useCardAttachments(computed(() => props.cardId), boardId)
 const cardAttachments = computed(() => cardAttachmentsData.value ?? [])
 const attachmentInput = ref(null)
 const attachmentError = ref('')

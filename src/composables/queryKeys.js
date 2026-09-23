@@ -64,6 +64,38 @@ export function participantsQueryKey(id) {
 }
 
 /**
+ * Returns the TanStack Query key for a board's ATTACHMENT listing - the
+ * board-wide "All attachments" modal (#10670).
+ *
+ * Here for the same reason as the two keys above: the listing has one
+ * producer (useBoardAttachments, mounted only while the modal is open) and its
+ * invalidators live somewhere else entirely - the per-CARD attachment mutations
+ * in useCardAttachments, which is what actually adds and removes the rows this
+ * listing shows. Spelled out by hand at both ends, the modal kept serving the
+ * pre-upload list until a reload (#10738).
+ *
+ * String-coerced like the two above, and for the identical trap: the modal
+ * resolves the board id off a component prop that may be a Number, while the
+ * mutation side derives it from the route param (a string). `['board-attachments', 14]`
+ * and `['board-attachments', '14']` are different cache entries - an
+ * invalidation that silently matches nothing.
+ *
+ * Accepts a ref, a getter function, or a plain primitive.
+ *
+ * @param {number|string|import('vue').Ref|Function} id
+ * @returns {[string, string]}
+ */
+export function boardAttachmentsQueryKey(id) {
+	let value = id
+	if (typeof value === 'function') {
+		value = value()
+	} else if (value !== null && typeof value === 'object' && value.value !== undefined) {
+		value = value.value
+	}
+	return ['board-attachments', String(value)]
+}
+
+/**
  * Key family for the cross-board "My Work" feeds (My Tasks / My Reviews /
  * Inbox). These queries live outside the per-board cache, so board-scoped
  * invalidation and delta sync never touch them (#3766).

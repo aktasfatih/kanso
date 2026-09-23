@@ -34,6 +34,19 @@ async function uploadFile(cardId, filename, content) {
 	return r.json()
 }
 
+/** Open the board-wide attachment modal from the ⋯ More menu. */
+async function openBoardAttachments(page) {
+	await page.getByRole('button', { name: 'More' }).click()
+	await page.getByRole('menuitem', { name: 'Board attachments' }).click()
+	await page.waitForSelector('.board-attachments', { timeout: 15_000 })
+}
+
+/** Close whichever modal is on top and wait for it to actually go. */
+async function closeCardModal(page) {
+	await page.locator('.card-modal-modal .modal-container__close').click()
+	await expect(page.locator('.card-modal')).toHaveCount(0)
+}
+
 // Board-wide attachment view (#10670): every file on the board in one modal,
 // reachable from the ⋯ More menu, each row naming its owning card and opening it.
 test.describe('Board attachments view', () => {
@@ -83,6 +96,127 @@ test.describe('Board attachments view', () => {
 		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 		await expect(page).toHaveURL(new RegExp(`/board/${boardId}/card/${firstCardId}$`))
 	})
+
+	// #10738 — the listing is cached under its OWN query key, and the per-card
+	// attachment mutations used to invalidate only the card's list. So attaching
+	// a file and looking at the board listing showed the list from BEFORE the
+	// upload until the page was reloaded. Both halves are pinned here: the row
+	// must appear on an upload and disappear on a removal, in one tab, with no
+	// reload anywhere.
+	test('an upload and a removal reach the board listing with no reload', async ({ page }) => {
+		const LIVE = 'live-refresh.txt'
+
+		await ncLogin(page)
+		await page.goto(boardUrl(boardId))
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+
+		// Any full page load past this point would be the very thing the card is
+		// about, so count them and assert zero at the end.
+		let reloads = 0
+		page.on('load', () => { reloads++ })
+
+		const liveRow = page.locator('.board-attachments__row', { hasText: LIVE })
+
+		// ── add ────────────────────────────────────────────────────────────────
+		// Open the listing once so the client HAS it cached (staleTime 30s) - a
+		// cold cache would refetch on its own and prove nothing.
+		let cachedAt = Date.now()
+		await openBoardAttachments(page)
+		await expect(liveRow).toHaveCount(0)
+
+		// Open the owning card straight from the listing and upload there, so the
+		// upload goes through the app's own mutation rather than a bare fetch.
+		await page.locator('.board-attachments__row', { hasText: 'board-listing-spec.txt' })
+			.locator('.board-attachments__open').click()
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+		await page.setInputFiles('.card-modal__file-input', {
+			name: LIVE,
+			mimeType: 'text/plain',
+			buffer: Buffer.from('shows up without a reload'),
+		})
+		await expect(page.locator('.card-modal__link-row', { hasText: LIVE })).toHaveCount(1)
+
+		await closeCardModal(page)
+		await openBoardAttachments(page)
+		await expect(liveRow).toHaveCount(1)
+		// Guard against a VACUOUS pass: past the 30s stale window the listing
+		// would refetch on its own and this would hold with no invalidation at
+		// all. Loud failure beats a green that proves nothing.
+		expect(Date.now() - cachedAt,
+			'this half outran the 30s cache window - the assertion above proves nothing')
+			.toBeLessThan(28_000)
+
+		// ── remove ─────────────────────────────────────────────────────────────
+		// The reopen above refetched, so the stale window restarts here.
+		cachedAt = Date.now()
+		await liveRow.locator('.board-attachments__open').click()
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+		await page.locator('.card-modal__link-row', { hasText: LIVE })
+			.locator('.card-modal__child-remove').click()
+		await expect(page.locator('.card-modal__link-row', { hasText: LIVE }))
+			.toHaveCount(0)
+
+		await closeCardModal(page)
+		await openBoardAttachments(page)
+		await expect(liveRow).toHaveCount(0)
+		expect(Date.now() - cachedAt,
+			'this half outran the 30s cache window - the assertion above proves nothing')
+			.toBeLessThan(28_000)
+
+		expect(reloads, 'the listing refreshed itself, so nothing should have reloaded').toBe(0)
+	})
+})
+
+// #10738 — the server always took limit/offset and the modal never used them,
+// so a board with more files than one page holds had rows with NO route in the
+// UI at all. One page is BOARD_ATTACHMENTS_PAGE_SIZE rows; "Load more" walks
+// the offsets.
+test.describe('Board attachments - paging', () => {
+	// Keep in step with BOARD_ATTACHMENTS_PAGE_SIZE (useBoardAttachments.js).
+	const PAGE_SIZE = 25
+	const TOTAL = PAGE_SIZE + 1
+	const state = { boardId: 0 }
+
+	test.beforeAll(async () => {
+		state.boardId = (await api('POST', '/boards', { title: 'Board attachments paging E2E' })).body.id
+		const stack = (await api('POST', '/stacks', { boardId: state.boardId, title: 'Tasks' })).body
+		const card = (await api('POST', '/cards', { stackId: stack.id, title: 'Paged card' })).body
+		// Uploaded oldest-first, and the listing is newest-first, so file 00 is
+		// the one that lands past the first page.
+		for (let i = 0; i < TOTAL; i++) {
+			await uploadFile(card.id, `paging-file-${String(i).padStart(2, '0')}.txt`, `bytes ${i}`)
+		}
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api('DELETE', `/boards/${state.boardId}`)
+	})
+
+	test('every file past the first page is reachable through Load more', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(boardUrl(state.boardId))
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await openBoardAttachments(page)
+
+		const rows = page.locator('.board-attachments__row')
+		const oldest = page.locator('.board-attachments__row', { hasText: 'paging-file-00.txt' })
+		const loadMore = page.getByRole('button', { name: 'Load more files' })
+
+		// One page on open - the request count does not grow with the board.
+		await expect(rows).toHaveCount(PAGE_SIZE)
+		await expect(oldest).toHaveCount(0)
+		// …and the modal says how much of the board it is showing.
+		await expect(page.locator('.board-attachments__count')).toContainText(String(TOTAL))
+		await expect(page.locator('.board-attachments__shown')).toContainText(String(TOTAL))
+
+		// The next page reaches the row the first page could not.
+		await loadMore.click()
+		await expect(rows).toHaveCount(TOTAL)
+		await expect(oldest).toHaveCount(1)
+
+		// Nothing left to ask for: the offer to load more goes away.
+		await expect(loadMore).toHaveCount(0)
+	})
 })
 
 // The denial half, over real HTTP with a real second user: board membership is
@@ -116,6 +250,12 @@ test.describe.serial('Board attachments - who may see what', () => {
 		await api('PATCH', `/cards/${priv.id}`, { visibility: 'private' })
 		await uploadFile(priv.id, `owner-only-${token}.txt`, 'must never be listed')
 
+		// Two MORE public files, uploaded last. The listing is newest-first, so
+		// this ordering puts the owner-only file exactly where a paging bug would
+		// surface it: off the peer's first page and onto their second (#10738).
+		await uploadFile(pub.id, `shared-b-${token}.txt`, 'also visible')
+		await uploadFile(pub.id, `shared-c-${token}.txt`, 'also visible')
+
 		// A second board the peer is NO member of at all.
 		const other = (await api('POST', '/boards', { title: 'Board attachments unshared ' + token })).body
 		state.unsharedBoardId = other.id
@@ -139,12 +279,60 @@ test.describe.serial('Board attachments - who may see what', () => {
 		expect(names).not.toContain(`owner-only-${token}.txt`)
 		// The total is the viewer's total too - a count that saw more would leak
 		// the existence of the hidden card's file.
-		expect(res.body.total).toBe(1)
+		expect(res.body.total).toBe(3)
 
-		// The owner, by contrast, sees both.
+		// The owner, by contrast, sees all four.
 		const asOwner = await api('GET', `/boards/${state.sharedBoardId}/attachments`)
-		expect(asOwner.body.items.map((i) => i.filename).sort())
-			.toEqual([`owner-only-${token}.txt`, `shared-${token}.txt`])
+		expect(asOwner.body.items.map((i) => i.filename).sort()).toEqual([
+			`owner-only-${token}.txt`,
+			`shared-${token}.txt`,
+			`shared-b-${token}.txt`,
+			`shared-c-${token}.txt`,
+		].sort())
+	})
+
+	// #10738 — paging must not become the way around the scope. Page 1 of the
+	// peer's listing is clean either way; the file they may not see sits at the
+	// offset their SECOND page reads, which is exactly where an unscoped page
+	// query would hand it over. Walked one page at a time, as the modal does.
+	test('paging past the first page never reaches a hidden card\'s file', async ({ peer }) => {
+		const seen = []
+		let offset = 0
+		let pages = 0
+
+		for (;;) {
+			const res = await call(peer.auth, 'GET',
+				`/boards/${state.sharedBoardId}/attachments?limit=2&offset=${offset}`)
+			expect(res.status).toBe(200)
+			pages++
+
+			// Every page is counted against the VIEWER's total, on every page.
+			expect(res.body.total).toBe(3)
+			for (const item of res.body.items) {
+				expect(item.filename, 'a hidden card\'s file surfaced through paging')
+					.not.toBe(`owner-only-${token}.txt`)
+				seen.push(item.filename)
+			}
+
+			if (!res.body.capped || res.body.items.length === 0) break
+			offset += res.body.items.length
+			expect(pages, 'paging did not terminate').toBeLessThan(10)
+		}
+
+		// The walk really did reach a second page - otherwise this proves nothing.
+		expect(pages).toBeGreaterThan(1)
+		expect(seen.sort()).toEqual([
+			`shared-${token}.txt`,
+			`shared-b-${token}.txt`,
+			`shared-c-${token}.txt`,
+		].sort())
+
+		// The owner pages over their own, larger, scope - four files, same walk.
+		const ownerFirst = await api('GET', `/boards/${state.sharedBoardId}/attachments?limit=2&offset=0`)
+		const ownerSecond = await api('GET', `/boards/${state.sharedBoardId}/attachments?limit=2&offset=2`)
+		expect(ownerFirst.body.total).toBe(4)
+		expect([...ownerFirst.body.items, ...ownerSecond.body.items].map((i) => i.filename))
+			.toContain(`owner-only-${token}.txt`)
 	})
 
 	test('a non-member gets 403, not a listing', async ({ peer }) => {
