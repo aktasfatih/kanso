@@ -3,6 +3,29 @@
 
 import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
+/**
+ * Put MY review of `cardId` into the approved state over the API.
+ *
+ * A test that needs an approved review must create that state itself, not lean
+ * on a sibling test having clicked Approve. Playwright's retry re-runs ONLY the
+ * failing test in a fresh worker: `beforeAll` runs again and hands it a freshly
+ * created *pending* review, while the sibling that approved it does not run at
+ * all. So a sibling dependency cannot be satisfied on retry — it turns one slow
+ * runner into three identical failures.
+ *
+ * Idempotent: ReviewService::setState is a no-op when the state already matches
+ * (lib/Service/ReviewService.php), so this is safe whether or not the Approve
+ * test ran first.
+ */
+async function approveMyReviewOf(cardId) {
+	const mine = await api.get('/reviews/mine')
+	const review = Array.isArray(mine) ? mine.find((r) => r.cardId === cardId) : null
+	if (!review) {
+		throw new Error(`no review of card ${cardId} in /reviews/mine`)
+	}
+	await api.patch(`/cards/${cardId}/reviews/${review.id}`, { state: 'approved' })
+}
+
 test.describe('My Reviews page', () => {
 	const state = { boardId: 0, stackId: 0, cardId: 0, reviewsUrl: '' }
 
@@ -88,11 +111,14 @@ test.describe('My Reviews page', () => {
 	})
 
 	test('clicking "Open card" affordance navigates to the card modal', async ({ page }) => {
+		// This test needs an APPROVED review, so it makes one itself rather than
+		// inheriting the click from the test above (see approveMyReviewOf).
+		await approveMyReviewOf(state.cardId)
+
 		await ncLogin(page)
 		await page.goto(state.reviewsUrl)
 		await page.waitForSelector('.my-reviews-view', { timeout: 15_000 })
 
-		// After previous test the card is approved - click the approved row
 		const approvedSection = page.locator('.my-reviews-view__section').filter({
 			has: page.locator('.my-reviews-view__section-title', { hasText: 'Approved' }),
 		})

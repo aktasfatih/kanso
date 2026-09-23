@@ -18,6 +18,27 @@ async function openTrashPage(page) {
 	await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
 }
 
+/**
+ * Make sure `cardId` is sitting in `boardId`'s trash, soft-deleting it if it is
+ * not.
+ *
+ * Every test here that reads or acts on the trash calls this, instead of
+ * inheriting the soft-delete performed by the first test. Playwright's retry
+ * re-runs ONLY the failing test in a fresh worker: `beforeAll` runs again and
+ * recreates a *live* card, while the sibling test that trashed it does not run
+ * at all. A sibling dependency therefore cannot be satisfied on retry — which
+ * is how one slow-runner miss became three identical failures.
+ *
+ * Reads the trash first rather than DELETEing blind: CardService::delete()
+ * loads the card through the non-deleted lookup, so re-deleting an already
+ * trashed card is a 404, not a no-op.
+ */
+async function ensureTrashed(boardId, cardId) {
+	const trash = await api.get(`/boards/${boardId}/trash`)
+	if (Array.isArray(trash) && trash.some((c) => c.id === cardId)) return
+	await api.delete(`/cards/${cardId}`)
+}
+
 async function backToBoard(page) {
 	await page.locator('.trash-view__back').click()
 	await page.waitForSelector('.board-view__header', { timeout: 15_000 })
@@ -68,7 +89,7 @@ test.describe('Trash', () => {
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// Soft-delete the card via the API (existing DELETE endpoint).
-		await api.delete(`/cards/${state.cardId}`)
+		await ensureTrashed(state.boardId, state.cardId)
 
 		// Reload so the board query reflects the deletion.
 		await page.reload()
@@ -87,6 +108,9 @@ test.describe('Trash', () => {
 	})
 
 	test('the Trash page is deep-linkable via its route', async ({ page }) => {
+		// Self-sufficient: this test needs a trashed card, so it makes one.
+		await ensureTrashed(state.boardId, state.cardId)
+
 		await ncLogin(page)
 		// Navigate straight to the trash URL (deep link, no board visit first).
 		await page.goto(`${state.boardUrl}/trash`)
@@ -98,6 +122,9 @@ test.describe('Trash', () => {
 	})
 
 	test('restoring a card removes it from Trash and returns it to the board', async ({ page }) => {
+		// Self-sufficient: restoring needs something in the trash to restore.
+		await ensureTrashed(state.boardId, state.cardId)
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
@@ -127,8 +154,10 @@ test.describe('Trash', () => {
 	})
 
 	test('permanently deleting a card removes it from Trash and it is not recoverable via API', async ({ page }) => {
-		// Re-soft-delete the card so it is in the trash again.
-		await api.delete(`/cards/${state.cardId}`)
+		// Re-soft-delete the card so it is in the trash again — unless the restore
+		// test did not run (a retry runs this test alone), in which case it is
+		// already there and a second DELETE would 404.
+		await ensureTrashed(state.boardId, state.cardId)
 
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
