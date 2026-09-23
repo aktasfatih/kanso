@@ -34,12 +34,12 @@ async function submitWipField(page, dialog) {
 }
 
 test.describe('Column controls (role + WIP limit)', () => {
-	const state = { boardId: 0, boardUrl: '' }
+	const state = { boardId: 0, stackId: 0, boardUrl: '' }
 
 	test.beforeAll(async () => {
 		const board = await api.send('POST', '/boards', { title: 'Column Controls E2E' })
 		state.boardId = board.id
-		await api.send('POST', '/stacks', { boardId: board.id, title: 'Control Column' })
+		state.stackId = (await api.send('POST', '/stacks', { boardId: board.id, title: 'Control Column' })).id
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 	})
 
@@ -105,9 +105,15 @@ test.describe('Column controls (role + WIP limit)', () => {
 
 	// ── Test: Clear WIP limit (set to 0) removes the "/ N" from badge ───────────
 	test('Clear WIP limit (set to 0) removes the "/ N" from badge', async ({ page }) => {
+		// Clearing proves nothing unless a limit is actually there to clear, and a
+		// retry re-runs only this test — so set it over the API and assert it first.
+		await api.send('PATCH', `/stacks/${state.stackId}`, { wipLimit: 3 })
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.stack-column__header', { timeout: 15_000 })
+
+		await expect(page.locator('.stack-column__badge', { hasText: '/ 3' })).toBeVisible()
 
 		const dialog = await openColumnMenu(page)
 

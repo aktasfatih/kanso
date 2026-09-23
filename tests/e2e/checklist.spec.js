@@ -175,7 +175,25 @@ test.describe('Checklist', () => {
 		await expect(doneItem.locator('.card-modal__checklist-checkbox')).toBeChecked()
 	})
 
+	// The two items, and the first one's done flag, are created through the UI by
+	// the test above — which is what THAT test proves, so seeding them in
+	// beforeAll would make it vacuous. A retry re-runs only the failing test on a
+	// fresh worker, so this one would meet an empty checklist and fail on every
+	// attempt. Ensure, don't add: only the missing item is created, so a normal
+	// full run still has exactly two and the 2/2 assertion stays meaningful.
+	async function ensureTwoItemsOneDone() {
+		const items = await api.get(`/cards/${state.cardId}/checklist`)
+		for (const title of ['Buy groceries', 'Write tests']) {
+			if (items.some((i) => i.title === title)) continue
+			items.push(await api.post(`/cards/${state.cardId}/checklist`, { title }))
+		}
+		const first = items.find((i) => i.title === 'Buy groceries')
+		if (!first.done) await api.patch(`/checklist/${first.id}`, { done: true })
+	}
+
 	test('complete all items - badge turns success color, progress bar turns green', async ({ page }) => {
+		await ensureTwoItemsOneDone()
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })

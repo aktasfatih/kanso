@@ -130,6 +130,21 @@ test.describe('Board filter bar + saved filters (#3407)', () => {
 	})
 
 	test('the "Default (no filter)" view exits a saved view back to unfiltered', async ({ page }) => {
+		// The whole Views section — the "Default (no filter)" row included — only
+		// renders when the board has at least one saved view (BoardFilterBar.vue:81),
+		// and that view is saved through the UI by the test above. A retry re-runs
+		// only the failing test, so without this the row simply is not there. Seeded
+		// here rather than in beforeAll, where it would make the save test vacuous;
+		// and only when the board has none, so the save test's own view is never
+		// overwritten on a full run.
+		const { filters } = await api.send('GET', `/boards/${state.boardId}/saved-filters`)
+		if (!filters.length) {
+			await api.send('PUT', `/boards/${state.boardId}/saved-filters`, {
+				name: 'Backend overdue',
+				filter: { labels: [state.labelId], due: 'overdue' },
+			})
+		}
+
 		await ncLogin(page)
 		// Land on the board with the saved view active straight from the URL.
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}?fl=${state.labelId}&fd=overdue`)

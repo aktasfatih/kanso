@@ -113,6 +113,11 @@ test.describe('Card priorities', () => {
 	})
 
 	test('filter to Urgent only - High card is hidden; clear filter restores it', async ({ page }) => {
+		// Own the priorities this filters on: a retry re-runs only this test, so the
+		// two modal tests that set them never ran. Re-setting the same level is a no-op.
+		await api.patch(`/cards/${state.highCardId}`, { priority: 3 })
+		await api.patch(`/cards/${state.urgentCardId}`, { priority: 4 })
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
@@ -161,8 +166,34 @@ test.describe('Card priorities', () => {
 	})
 
 	test('priority persists after page reload', async ({ page }) => {
+		// Own the whole round trip. A retry re-runs only this test, so the modal
+		// test that set the priority never ran — clear it over the API (0 is "no
+		// priority"), then set it through the UI below, so the reload proves a UI
+		// write really reached the server rather than that a seeded row renders.
+		await api.patch(`/cards/${state.highCardId}`, { priority: 0 })
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
+
+		// Set the priority to High through the modal, exactly as the first test does.
+		const cardTile = page.locator('.card-tile').filter({ hasText: 'High Priority Card' })
+		await expect(cardTile).toBeVisible()
+		await cardTile.click()
+
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+
+		const attrbar = page.locator('.card-modal__attrbar')
+		const priorityPill = attrbar.locator('button.card-modal__pill').first()
+		await expect(priorityPill).toBeVisible()
+		await priorityPill.click()
+		await page.locator('.card-modal__popover .card-modal__popover-opt', { hasText: /^High$/ }).click()
+		await expect(attrbar.locator('.card-modal__pill--priority-3')).toBeVisible()
+
+		await page.keyboard.press('Escape')
+		await page.waitForSelector('.card-modal', { state: 'hidden', timeout: 5000 }).catch(() => {})
+
+		await page.reload()
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// After reload the High Priority Card tile should still carry the badge

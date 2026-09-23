@@ -46,6 +46,13 @@ test.describe('Card relations (#3404)', () => {
 	})
 
 	test('a reverse blocks relation that would cycle is rejected', async () => {
+		// There is no cycle to reject without A→B, and a retry re-runs only this
+		// test — so ensure the relation here rather than inheriting it.
+		const a = await api.get(`/cards/${state.a}`)
+		if (!a.relations.blocks.map((r) => r.cardId).includes(state.b)) {
+			await api.post(`/cards/${state.a}/relations`, { otherCardId: state.b, kind: 'blocks' })
+		}
+
 		// A already blocks B, so "B blocks A" would close a cycle.
 		const r = await rawPost(`/cards/${state.b}/relations`, { otherCardId: state.a, kind: 'blocks' })
 		expect(r.ok).toBe(false)

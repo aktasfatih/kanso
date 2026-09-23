@@ -44,6 +44,39 @@ test.describe('Parent / Child cards', () => {
 		}
 	})
 
+	// The sub-cards below are created through the UI by the first test — which is
+	// exactly what that test exists to prove, so they cannot be seeded in
+	// beforeAll without making it vacuous. A retry, though, re-runs ONLY the
+	// failing test: beforeAll hands it a pristine, CHILDLESS parent and the test
+	// that populated it never runs, so every later test here fails deterministically
+	// on every attempt. Each of them therefore asserts its own precondition into
+	// place first, creating only what is MISSING — on a normal full run the
+	// children are already there and nothing is added, so the counts stay 2.
+	async function fetchChildren() {
+		return (await api.get(`/cards/${state.parentCardId}`)).children ?? []
+	}
+
+	async function ensureTwoChildren() {
+		const children = await fetchChildren()
+		let created = false
+		for (const title of ['Sub-task Alpha', 'Sub-task Beta']) {
+			if (children.some((c) => c.title === title)) continue
+			const child = await api.post('/cards', { stackId: state.stackId, title })
+			await api.put(`/cards/${child.id}/parent`, { parentCardId: state.parentCardId })
+			created = true
+		}
+		return created ? await fetchChildren() : children
+	}
+
+	// …and the 1/2 progress the tests below read comes from the toggle test, so
+	// the done flag has to be ensured the same way.
+	async function ensureOneChildDone() {
+		const children = await ensureTwoChildren()
+		if (children.some((c) => Number(c.doneAt) > 0)) return children
+		await api.patch(`/cards/${children[0].id}`, { done: true })
+		return await fetchChildren()
+	}
+
 	test('add two sub-cards via UI, assert Children section shows 2 items and progress 0/2', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
@@ -84,12 +117,11 @@ test.describe('Parent / Child cards', () => {
 	})
 
 	test('toggle one child done via API, reload parent modal, assert progress 1/2', async ({ page }) => {
-		await ncLogin(page)
-
-		// Fetch the parent card detail to find child ids
-		const parentDetail = await api.get(`/cards/${state.parentCardId}`)
-		const children = parentDetail.children ?? []
+		// Self-sufficient on a retry: the sub-cards come from the UI test above.
+		const children = await ensureTwoChildren()
 		expect(children.length).toBe(2)
+
+		await ncLogin(page)
 
 		// Mark the first child done via the API (set done: true)
 		const firstChild = children[0]
@@ -125,6 +157,10 @@ test.describe('Parent / Child cards', () => {
 	})
 
 	test('reload board and assert parent tile persists child badge 1/2', async ({ page }) => {
+		// Self-sufficient on a retry: both the sub-cards and the done flag that
+		// makes this 1/2 are set by the two tests above.
+		await ensureOneChildDone()
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
@@ -143,6 +179,9 @@ test.describe('Parent / Child cards', () => {
 	})
 
 	test('open a child card from parent modal - child shows its Parent row', async ({ page }) => {
+		// Self-sufficient on a retry: there is no child link to click otherwise.
+		await ensureTwoChildren()
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
@@ -176,14 +215,14 @@ test.describe('Parent / Child cards', () => {
 	})
 
 	test('detach a child - parent progress drops to 0/1', async ({ page }) => {
-		await ncLogin(page)
-
-		// Fetch fresh parent detail to find the undone child
-		const parentDetail = await api.get(`/cards/${state.parentCardId}`)
-		const children = parentDetail.children ?? []
+		// Self-sufficient on a retry: this needs both children AND the one done
+		// flag, so that removing the undone one leaves 1 / 1.
+		const children = await ensureOneChildDone()
 		// Find the child that is NOT done
 		const undoneChild = children.find((c) => Number(c.doneAt) === 0)
 		expect(undoneChild).toBeTruthy()
+
+		await ncLogin(page)
 
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })

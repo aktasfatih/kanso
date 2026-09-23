@@ -63,6 +63,15 @@ test.describe('Card review flow', () => {
 	})
 
 	test('board tile shows the review-state chip', async ({ page }) => {
+		// The approval comes from the test above, which a retry of this one never
+		// runs: beforeAll re-runs and hands it a freshly requested PENDING review
+		// instead. Approve it here over the API — idempotent, since
+		// ReviewService::setState no-ops when the state already matches.
+		const mine = await api.get('/reviews/mine')
+		const review = Array.isArray(mine) ? mine.find((r) => r.cardId === state.cardId) : null
+		if (!review) throw new Error(`no review of card ${state.cardId} in /reviews/mine`)
+		await api.patch(`/cards/${state.cardId}/reviews/${review.id}`, { state: 'approved' })
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })

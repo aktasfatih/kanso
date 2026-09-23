@@ -35,7 +35,11 @@ test.describe('Card estimations (#3443)', () => {
 	})
 
 	test('a card estimate must belong to the board scale', async () => {
-		// Board is fibonacci from the earlier test. A valid token sticks…
+		// Own the scale this validates against: a retry re-runs only this test, so
+		// the switch made by the earlier one never happened.
+		await api.patch(`/boards/${state.boardId}`, { estimateScale: 'fibonacci' })
+
+		// A valid token sticks…
 		await api.patch(`/cards/${state.cardId}`, { estimate: '8' })
 		expect((await api.get(`/cards/${state.cardId}`)).estimate).toBe('8')
 

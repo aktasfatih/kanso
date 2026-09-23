@@ -110,6 +110,11 @@ test.describe('Card types', () => {
 	})
 
 	test('filter to Bug only - Feature card is hidden; clear filter restores it', async ({ page }) => {
+		// Own the types this filters on: a retry re-runs only this test, so the two
+		// modal tests that set them never ran. Setting the same type again is a no-op.
+		await api.patch(`/cards/${state.bugCardId}`, { type: 'bug' })
+		await api.patch(`/cards/${state.featureCardId}`, { type: 'feature' })
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
@@ -157,8 +162,34 @@ test.describe('Card types', () => {
 	})
 
 	test('type persists after page reload', async ({ page }) => {
+		// Own the whole round trip. A retry re-runs only this test, so the modal
+		// test that set the type never ran — clear it over the API ('' is "no
+		// type"), then set it through the UI below, so the reload proves a UI write
+		// really reached the server rather than that a seeded row renders.
+		await api.patch(`/cards/${state.bugCardId}`, { type: '' })
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
+
+		// Set the type to Bug through the modal, exactly as the first test does.
+		const cardTile = page.locator('.card-tile').filter({ hasText: 'Bug Type Card' })
+		await expect(cardTile).toBeVisible()
+		await cardTile.click()
+
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+
+		const pill = typePill(page)
+		await expect(pill).toBeVisible()
+		await pill.click()
+		await page.locator('.card-modal__popover .card-modal__popover-opt', { hasText: 'Bug' }).click()
+		await expect(page.locator('.card-modal__attrbar .card-modal__pill--type-bug'))
+			.toBeVisible()
+
+		await page.keyboard.press('Escape')
+		await page.waitForSelector('.card-modal', { state: 'hidden', timeout: 5000 }).catch(() => {})
+
+		await page.reload()
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// The Bug Type Card tile should still carry the bug type icon

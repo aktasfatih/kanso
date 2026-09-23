@@ -8,13 +8,14 @@ import { test, expect, api, ncLogin, BASE } from './helpers.js'
 // (MarkdownEditor.vue). There is no separate "Preview" toggle anymore — markdown
 // renders live as you type. The formatting toolbar is .kanso-md-editor__toolbar.
 test.describe('Description formatting toolbar', () => {
-	const state = { boardId: 0, cardUrl: '' }
+	const state = { boardId: 0, cardId: 0, cardUrl: '' }
 
 	test.beforeAll(async () => {
 		const board = await api.post('/boards', { title: 'Desc-Editor E2E' })
 		state.boardId = board.id
 		const stack = await api.post('/stacks', { boardId: board.id, title: 'Do' })
 		const card = await api.post('/cards', { stackId: stack.id, title: 'Editable card' })
+		state.cardId = card.id
 		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
 	})
 
@@ -157,11 +158,16 @@ test.describe('Description formatting toolbar', () => {
 	})
 
 	test('Bulleted list button prefixes each selected paragraph with a bullet', async ({ page }) => {
+		// This test enters the editor through the desc view, which only renders on a
+		// card that already has a description. A retry re-runs only this test, so
+		// give the card one here instead of relying on the save above.
+		await api.patch(`/cards/${state.cardId}`, { description: '**hello world**' })
+
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
 		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
-		// Prior test saved a description → edit via the desc view area.
+		// A saved description → edit via the desc view area.
 		await page.locator('.card-modal__desc-view').click()
 		const editor = page.locator('.card-modal__section .kanso-md-editor')
 		await expect(editor).toBeVisible()

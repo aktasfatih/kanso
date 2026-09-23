@@ -66,7 +66,15 @@ test.describe('Move card… picker (keyboard / SR DnD alternative)', () => {
 	})
 
 	test('positions the card after a specific card in the same/other column', async ({ page }) => {
-		// Fresh state: Card C in To Do; move it to Doing AFTER Card B.
+		// Card B is the anchor this test picks in the "after" select, and it only
+		// reaches Doing via the test above — which a retry of this test alone never
+		// runs. Move it there ourselves when it is not already, so Doing holds
+		// exactly Card B whether or not that test ran.
+		if ((await cardStackId(state.boardId, state.bId)) !== state.doingId) {
+			await api.post(`/cards/${state.bId}/move`, { targetStackId: state.doingId, afterCardId: null })
+		}
+
+		// Card C is in To Do; move it to Doing AFTER Card B.
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.cId}`)
 		await page.waitForSelector('.card-modal', { timeout: 15_000 })

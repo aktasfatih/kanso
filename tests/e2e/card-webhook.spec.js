@@ -267,6 +267,10 @@ test.describe('GitHub webhook issue intake', () => {
 	})
 
 	test('an archived intake card still dedupes a redelivered opened event', async () => {
+		// Intake has to be on for a card to be created at all. A retry re-runs only
+		// this test, so configure it here instead of leaning on the test above.
+		await api('PUT', `/boards/${boardId}/webhook/intake`, { stackId: inboxStackId, label: '' })
+
 		const issueNumber = ++issueSeq
 		const raw = openedBody(issueNumber)
 		const res = await postWebhook(boardId, raw, sign(raw, secret))

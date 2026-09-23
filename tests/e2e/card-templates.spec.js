@@ -57,6 +57,10 @@ test.describe('Card templates (per-board)', () => {
 	})
 
 	test('create-from-template clones title/description/labels/checklist into a fresh live card', async () => {
+		// Own the precondition: a retry re-runs only this test, so the flag the
+		// first test sets is not there. Re-flagging an existing template is a no-op.
+		await api.put(`/cards/${state.tplId}/template`, { isTemplate: true })
+
 		const created = await api.post(`/cards/${state.tplId}/create-from-template`, { targetStackId: state.todoId })
 
 		// The new card is a distinct, live (non-template) card.
@@ -77,6 +81,10 @@ test.describe('Card templates (per-board)', () => {
 	})
 
 	test('the composer "from template" picker creates a card from the template in the UI', async ({ page }) => {
+		// Own the precondition: a retry re-runs only this test, so the flag the
+		// first test sets is not there and the picker would list nothing.
+		await api.put(`/cards/${state.tplId}/template`, { isTemplate: true })
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
@@ -102,6 +110,10 @@ test.describe('Card templates (per-board)', () => {
 	// #10476 — SwimlaneRow renders StackColumn too, but used to drop the template
 	// props on the floor, so grouping a board silently removed card templates.
 	test('the "from template" picker is reachable with swimlanes on', async ({ page }) => {
+		// Own the precondition: a retry re-runs only this test, so the flag the
+		// first test sets is not there and the picker would list nothing.
+		await api.put(`/cards/${state.tplId}/template`, { isTemplate: true })
+
 		// An unlabelled live card guarantees at least one lane exists whatever the
 		// earlier tests in this file left behind.
 		await api.post('/cards', { stackId: state.todoId, title: 'Lane anchor' })

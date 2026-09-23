@@ -60,9 +60,15 @@ test.describe('Project chat link (#3748)', () => {
 	})
 
 	test('an invalid scheme is rejected inline and clearing removes the button', async ({ page }) => {
+		// Clearing proves nothing unless a URL is actually set, and a retry re-runs
+		// only this test — so set it over the API and assert the button first.
+		await api.send('PATCH', `/boards/${state.boardId}`, { chatUrl: CHAT_URL })
+
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+
+		await expect(page.locator('[data-test="board-chat-btn"]')).toBeVisible()
 
 		await openGeneralSettings(page)
 

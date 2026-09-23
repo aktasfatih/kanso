@@ -21,6 +21,18 @@ test.describe('Automation rules (#3400)', () => {
 		await api.send('PATCH', `/stacks/${state.progStackId}`, { role: ROLE_IN_PROGRESS })
 		await api.send('PATCH', `/stacks/${state.doneStackId}`, { role: ROLE_DONE })
 		state.labelId = (await api.send('POST', '/labels', { boardId: board.id, title: 'Auto-tagged', color: 'e74c3c' })).id
+
+		// The timer rules live here, not in the body of the test that first used
+		// them: the idempotency test reuses them, and a retry re-runs only the
+		// failing test, so it would meet a board with no timer rules at all and
+		// fail on every attempt. Both timer tests still prove what they always
+		// did — that the moves start/stop the clock and write the entries.
+		await api.send('POST', `/boards/${board.id}/automation-rules`, {
+			trigger: 'card_entered_role', action: 'start_timer', params: { role: ROLE_IN_PROGRESS },
+		})
+		await api.send('POST', `/boards/${board.id}/automation-rules`, {
+			trigger: 'card_entered_role', action: 'stop_timer', params: { role: ROLE_DONE },
+		})
 	})
 
 	test.afterAll(async () => {
@@ -62,12 +74,7 @@ test.describe('Automation rules (#3400)', () => {
 	})
 
 	test('start_timer on entry, then stop_timer, writes an elapsed time entry (#73)', async () => {
-		await api.send('POST', `/boards/${state.boardId}/automation-rules`, {
-			trigger: 'card_entered_role', action: 'start_timer', params: { role: ROLE_IN_PROGRESS },
-		})
-		await api.send('POST', `/boards/${state.boardId}/automation-rules`, {
-			trigger: 'card_entered_role', action: 'stop_timer', params: { role: ROLE_DONE },
-		})
+		// The start/stop rules come from beforeAll — see the note there.
 		const cardId = (await api.send('POST', '/cards', { stackId: state.todoStackId, title: 'Timed work' })).id
 
 		// No time entries before any timer runs.
@@ -99,7 +106,7 @@ test.describe('Automation rules (#3400)', () => {
 	})
 
 	test('re-entering the start column does not start a second timer (idempotent) (#73)', async () => {
-		// Reuses the start/stop rules created by the previous test.
+		// Uses the start/stop rules created in beforeAll.
 		const cardId = (await api.send('POST', '/cards', { stackId: state.todoStackId, title: 'Idempotent timer' })).id
 
 		// Start, bounce out to a role-less column and back in — the second entry

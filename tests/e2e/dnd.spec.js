@@ -134,11 +134,20 @@ test.describe('Card drag and drop', () => {
 	})
 
 	test('rapid successive drags end in server-consistent order', async ({ page }) => {
+		// This test starts from "both cards in S2, S1 empty" — the state the test
+		// above drags into. A retry re-runs only the failing test, so put card A in
+		// S2 ourselves, and only when it is not already there, so the sort keys are
+		// untouched when that test did run.
+		const a = await api.get(`/cards/${state.cardAId}`)
+		if (a.stackId !== state.stackS2Id) {
+			await api.post(`/cards/${state.cardAId}/move`, { targetStackId: state.stackS2Id, afterCardId: null })
+		}
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
-		// After test 1: A and B are both in S2. S1 is empty.
+		// A and B are both in S2. S1 is empty.
 		const s1 = page.locator('.stack-column').nth(0)
 		const s2 = page.locator('.stack-column').nth(1)
 

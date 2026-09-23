@@ -80,6 +80,13 @@ test.describe('Realtime card modal freshness', () => {
 	})
 
 	test('a remote change never clobbers a dirty description draft', async ({ browser, peer }) => {
+		// The description this test starts from is written by the test above, which
+		// a retry never runs — beforeAll gives it a pristine card instead. Set it
+		// here rather than in beforeAll: seeding it there would hand the test above
+		// its own assertion for free and make it vacuous. Idempotent — the same
+		// value again when that test did run.
+		await api.patch(`/cards/${state.cardId}`, { description: 'remote description v1' })
+
 		const testerCtx = await browser.newContext()
 		try {
 			const page = await testerCtx.newPage()

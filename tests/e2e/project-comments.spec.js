@@ -11,6 +11,21 @@ import { test, expect, api, ncLogin, BASE } from './helpers.js'
 test.describe('Project discussion log (owner-only comments)', () => {
 	const state = { projectId: 0 }
 
+	/**
+	 * Ensure the log holds a top-level comment, and hand it back.
+	 *
+	 * A retry re-runs only the failing test, in a fresh worker: `beforeAll` makes a
+	 * brand-new (empty) project while the test that posted the comment never runs.
+	 * This looks before it posts, so the log holds exactly one top-level comment
+	 * either way — posting unconditionally would give the thread two on a clean run.
+	 */
+	async function ensureTopComment(body) {
+		const existing = await api.get(`/projects/${state.projectId}/comments`)
+		const top = existing.find((c) => c.parentCommentId == null)
+		if (top) return top
+		return api.post(`/projects/${state.projectId}/comments`, { body })
+	}
+
 	test.beforeAll(async () => {
 		const project = await api.post('/projects', { title: `Discussion Project ${Date.now()}` })
 		state.projectId = project.id
@@ -54,6 +69,10 @@ test.describe('Project discussion log (owner-only comments)', () => {
 	})
 
 	test('post a one-level reply under the top-level comment', async ({ page }) => {
+		// A reply needs something to reply TO; the first test's comment is absent on
+		// a retry (see ensureTopComment).
+		await ensureTopComment('First **note** in the log')
+
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
 		await expect(page.locator('.project-view__comment')).toBeVisible()
@@ -75,6 +94,10 @@ test.describe('Project discussion log (owner-only comments)', () => {
 	})
 
 	test('edit the top-level comment and assert the "edited" marker appears', async ({ page }) => {
+		// Something has to be there to edit — the first test's comment is gone on a
+		// retry. The edit itself is still driven through the UI, which is the point.
+		await ensureTopComment('First **note** in the log')
+
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
 		const topComment = page.locator('.project-view__comment-group > .project-view__comment').first()

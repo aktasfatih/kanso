@@ -118,6 +118,12 @@ test.describe('List view — quick-add composer', () => {
 		state.boardId = board.id
 		const stack = await api.post('/stacks', { boardId: board.id, title: 'Backlog' })
 		state.stackId = stack.id
+		// The "composer sits above the cards" test needs a card row to compare
+		// against, and used to borrow the one the composer test creates — which a
+		// retry never runs (it re-runs only the failing test on a fresh fixture).
+		// Seeding it here is safe: the composer test asserts on a row it types in
+		// itself, under its own unique title, so it stays just as falsifiable.
+		await api.post('/cards', { stackId: stack.id, title: 'Existing backlog card' })
 	})
 
 	test.afterAll(async () => {
@@ -160,7 +166,7 @@ test.describe('List view — quick-add composer', () => {
 	test('composer is at the top of the group, above existing cards', async ({ page }) => {
 		await openListView(page)
 
-		// There should be at least one card in the stack from the previous test.
+		// The stack always holds at least the card seeded in beforeAll.
 		// The composer row (add type) should appear before card rows in the DOM.
 		const composerWrap = page.locator('.board-list-table .card-composer-wrap').first()
 		const firstCardRow = page.locator('.board-list-row').first()

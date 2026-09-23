@@ -14,6 +14,34 @@ function replyProse(page) {
 	return page.locator('.card-modal__reply-compose .kanso-md-editor .ProseMirror').first()
 }
 
+/**
+ * Put the card's thread into a known shape over the API.
+ *
+ * Every test below has to stand on its own. Playwright's retry re-runs ONLY the
+ * failing test in a fresh worker: `beforeAll` runs again and builds a brand-new
+ * board and card, while the sibling that posted the comment does not run at
+ * all — so a precondition inherited from an earlier test is simply absent, and
+ * one slow-runner miss turns into three identical failures.
+ *
+ * These ENSURE rather than ADD: they look before they post, so the card ends up
+ * holding exactly one top-level comment and one reply whether the siblings ran
+ * or not. Blindly posting would double the thread up on a clean run and break
+ * the tests that count it.
+ */
+async function ensureTopComment(cardId, body) {
+	const existing = await api.get(`/cards/${cardId}/comments`)
+	const top = existing.find((c) => c.parentCommentId == null)
+	if (top) return top
+	return api.post(`/cards/${cardId}/comments`, { body })
+}
+
+async function ensureReply(cardId, parentCommentId, body) {
+	const existing = await api.get(`/cards/${cardId}/comments`)
+	const reply = existing.find((c) => c.parentCommentId === parentCommentId)
+	if (reply) return reply
+	return api.post(`/cards/${cardId}/comments`, { body, parentCommentId })
+}
+
 test.describe('Comments / Discussion', () => {
 	const state = { boardId: 0, cardId: 0, boardUrl: '', cardUrl: '' }
 
@@ -78,6 +106,10 @@ test.describe('Comments / Discussion', () => {
 	})
 
 	test('post a reply under the top-level comment, assert nested rendering', async ({ page }) => {
+		// A reply needs something to reply TO, and the comment the test above posts
+		// is gone on a retry (see ensureTopComment).
+		await ensureTopComment(state.cardId, 'Hello **world** from test')
+
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
 		await page.waitForSelector('.card-modal', { timeout: 15_000 })
@@ -115,6 +147,11 @@ test.describe('Comments / Discussion', () => {
 	})
 
 	test('card tile shows commentCount badge after closing modal', async ({ page }) => {
+		// The badge counts the thread the two tests above build; on a retry neither
+		// ran, so put the same comment + reply on the card first.
+		const top = await ensureTopComment(state.cardId, 'Hello **world** from test')
+		await ensureReply(state.cardId, top.id, 'This is a **reply**')
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
@@ -130,6 +167,10 @@ test.describe('Comments / Discussion', () => {
 	})
 
 	test('edit the top-level comment and assert "edited" marker appears', async ({ page }) => {
+		// Something has to be there to edit — the first test's comment is absent on
+		// a retry. The edit itself still happens through the UI, which is the point.
+		await ensureTopComment(state.cardId, 'Hello **world** from test')
+
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
 		await page.waitForSelector('.card-modal', { timeout: 15_000 })
@@ -157,6 +198,12 @@ test.describe('Comments / Discussion', () => {
 	})
 
 	test('delete top-level comment removes it and its reply from the UI', async ({ page }) => {
+		// This asserts on exactly one comment plus one reply, so it establishes that
+		// thread itself instead of inheriting it from the tests above (which a retry
+		// never runs). The delete under test is still the one done through the UI.
+		const top = await ensureTopComment(state.cardId, 'Hello **world** from test')
+		await ensureReply(state.cardId, top.id, 'This is a **reply**')
+
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
 		await page.waitForSelector('.card-modal', { timeout: 15_000 })
@@ -177,8 +224,24 @@ test.describe('Comments / Discussion', () => {
 	})
 
 	test('reload confirms deletion is persisted', async ({ page }) => {
+		// The subject is that a deletion made through the UI survives a fresh load,
+		// so this test does the deleting: on a retry the card beforeAll just made is
+		// empty anyway, and inheriting the delete above would leave "no comments"
+		// true for the wrong reason — a pass proving nothing. Ends at zero live
+		// comments either way, so the run order does not change the outcome.
+		const top = await ensureTopComment(state.cardId, 'Hello **world** from test')
+		await ensureReply(state.cardId, top.id, 'This is a **reply**')
+
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+
+		const topComment = page.locator('.card-modal__comment-group > .card-modal__comment').first()
+		await expect(topComment).toBeVisible()
+		await topComment.locator('.card-modal__comment-icon-btn--danger').click()
+		await expect(page.locator('.card-modal__comment')).toHaveCount(0, { timeout: 6000 })
+
+		await page.reload()
 		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// After reload there should be no comments

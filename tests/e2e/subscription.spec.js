@@ -120,6 +120,12 @@ test.describe('Card Subscriptions / Watchers', () => {
 	})
 
 	test('Watching state persists after page reload', async ({ page }) => {
+		// Own the whole round trip. A retry re-runs only this test, so the earlier
+		// Watch click never happened — clear the subscription over the API, then
+		// subscribe through the UI below, so the reload proves a UI write really
+		// reached the server rather than that a seeded row renders.
+		await api.delete(`/cards/${state.cardId}/subscription`)
+
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
 		await page.waitForSelector('.card-modal', { timeout: 15_000 })
@@ -127,7 +133,15 @@ test.describe('Card Subscriptions / Watchers', () => {
 		const watchBtn = page.locator('.card-modal__watch-btn')
 		await expect(watchBtn).toBeVisible()
 
-		// After prior test subscribed, this should still be active on fresh load,
+		// Subscribe through the UI, exactly as the Watch-click test does.
+		await watchBtn.click()
+		await expect(watchBtn).toHaveClass(/card-modal__watch-btn--active/, { timeout: 6000 })
+		await expect(watchBtn).toHaveAttribute('aria-pressed', 'true')
+
+		await page.reload()
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+
+		// After the reload this should still be active on the fresh load,
 		// with the count badge (not the "Watch" label) shown.
 		await expect(watchBtn).toHaveClass(/card-modal__watch-btn--active/, { timeout: 6000 })
 		await expect(watchBtn).toHaveAttribute('aria-pressed', 'true')
@@ -135,6 +149,11 @@ test.describe('Card Subscriptions / Watchers', () => {
 	})
 
 	test('clicking Watching again unsubscribes and shows count 0', async ({ page }) => {
+		// Own the precondition — there has to be a subscription to click away. A
+		// retry re-runs only this test, so the earlier Watch click never happened;
+		// re-subscribing when it did is a no-op.
+		await api.put(`/cards/${state.cardId}/subscription`)
+
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
 		await page.waitForSelector('.card-modal', { timeout: 15_000 })
