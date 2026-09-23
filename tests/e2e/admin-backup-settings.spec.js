@@ -748,13 +748,25 @@ test.describe('Kanso admin backup settings', () => {
 		await page.selectOption('#kanso-backup-destination', 'files')
 		await expect(appdataCost, 'the delete cost must not follow the unsaved dropdown').toBeVisible()
 		await expect(filesCost).toBeHidden()
+
+		// ...and neither does the QUESTION in front of the button. Asked while the
+		// dropdown says Files but app data is what is SAVED, the confirm must still
+		// promise a hard delete: an admin told the archive lands in a trashbin,
+		// moments before it is destroyed outright, has been told the one thing that
+		// makes this click unrecoverable.
+		const underUnsavedFiles = await clickDelete(page, row, 'dismiss')
+		expect(underUnsavedFiles, 'the confirm must follow the SAVED destination').toMatch(/for good/i)
+		expect(underUnsavedFiles, 'app data has no trashbin to offer').not.toMatch(/trashbin/i)
+		expect(await storedNames(), 'a dismissed confirm must not delete anything').toContain(name)
+
 		await page.selectOption('#kanso-backup-destination', 'appdata')
 
 		// 1. It asks — and the question names the file and says what it costs,
 		// because there is nowhere to undo this from.
 		const question = await clickDelete(page, row, 'dismiss')
 		expect(question).toContain(name)
-		expect(question).toMatch(/for good|no second copy/i)
+		expect(question).toMatch(/for good/i)
+		expect(question, 'app data is a hard delete, so nothing may hint otherwise').not.toMatch(/trashbin/i)
 
 		// Saying no leaves the archive exactly where it was — in the table and in
 		// storage both.

@@ -115,10 +115,16 @@ function boot() {
 	// file goes to a trashbin, while Delete hard-deletes from app data, is
 	// exactly the wrong way round. The listing endpoint returns the authoritative
 	// destination, so that is what drives it.
+	//
+	// The confirm dialog reads the same value (see deleteFile below), so the
+	// hint on the page and the question in front of the button can never say
+	// two different things about the same click.
+	let savedDestination = null
 	const applyDeleteHint = (destinationOfRecord) => {
 		if (!destinationOfRecord) {
 			return
 		}
+		savedDestination = destinationOfRecord
 		const appdata = destinationOfRecord === DEST_APPDATA
 		if (deleteHintAppData) {
 			deleteHintAppData.style.display = appdata ? '' : 'none'
@@ -249,12 +255,27 @@ function boot() {
 	// and an admin reading an overstatement next to six sibling rows stops
 	// believing the rest of the panel.
 	//
+	// And "for good" is said ONLY where it is true. Under a Files folder the
+	// node is deleted through the Files API, which parks it in the backup
+	// account's trashbin — recoverable by whoever owns that account — so telling
+	// an admin it is gone forever there is the same overstatement one step
+	// worse: it is wrong. Like the hint beside the button, the wording follows
+	// the SAVED destination the listing reported, never the dropdown's unsaved
+	// value; until a listing has answered, neither claim is made.
+	//
 	// The list is reloaded from the server either way rather than having the row
 	// spliced out (or left in place) locally: a failure raised after the file was
 	// already unlinked would otherwise leave a phantom row, and the server is the
 	// authority on what is stored.
 	const deleteFile = async (name, button) => {
-		const question = t('kanso', 'Delete {name}? This file is removed for good — Kanso keeps no second copy of it.', { name })
+		let question
+		if (savedDestination === DEST_APPDATA) {
+			question = t('kanso', 'Delete {name}? This file is removed for good — Kanso keeps no second copy of it.', { name })
+		} else if (savedDestination) {
+			question = t('kanso', 'Delete {name}? The file goes to the backup account\'s trashbin — Kanso keeps no second copy of it.', { name })
+		} else {
+			question = t('kanso', 'Delete {name}? Kanso keeps no second copy of it.', { name })
+		}
 		if (!window.confirm(question)) {
 			return
 		}
