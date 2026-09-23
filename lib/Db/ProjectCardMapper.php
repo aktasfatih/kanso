@@ -79,18 +79,28 @@ class ProjectCardMapper extends QBMapper {
 	}
 
 	/**
-	 * The ids of every project a card belongs to - powers the `projectIds` list
-	 * on card detail.
+	 * The ids of the VIEWER'S OWN projects a card belongs to - powers the
+	 * `projectIds` list on card detail.
+	 *
+	 * Scoped by owner (#10737): projects are private, owner-only collections
+	 * (there is no sharing/ACL table - see {@see \OCA\Kanso\Service\ProjectService}),
+	 * and collecting a card needs only READ on its board, so an unscoped list
+	 * told every reader of a shared card how many OTHER people had filed it into
+	 * their private collections. The join to `kanso_projects` keeps the query at
+	 * one round trip; "the projects the viewer may see" is exactly "the projects
+	 * the viewer owns".
 	 *
 	 * @return int[]
 	 * @throws Exception
 	 */
-	public function findProjectIdsByCard(int $cardId): array {
+	public function findProjectIdsByCard(int $cardId, string $uid): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('project_id')
-			->from($this->getTableName())
-			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
-			->orderBy('project_id', 'ASC');
+		$qb->select('pc.project_id')
+			->from($this->getTableName(), 'pc')
+			->innerJoin('pc', 'kanso_projects', 'p', $qb->expr()->eq('pc.project_id', 'p.id'))
+			->where($qb->expr()->eq('pc.card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('p.owner', $qb->createNamedParameter($uid)))
+			->orderBy('pc.project_id', 'ASC');
 
 		$result = $qb->executeQuery();
 		$ids = [];

@@ -178,7 +178,10 @@ class CardController extends Controller {
 			+ ['timeSpent' => $this->cardTimeEntryMapper->sumSecondsByCard($id)]
 			+ ['subscription' => $this->subscriptionService->buildCardSubscription($id, $uid)]
 			+ ['relations' => $this->relationService->groupedForCard($id, $board, $uid)]
-			+ ['projectIds' => $this->projectCardMapper->findProjectIdsByCard($id)]
+			// The viewer's OWN projects this card sits in (#10737) - projects are
+			// private collections, so another member's collection must not even
+			// be countable from here.
+			+ ['projectIds' => $this->projectCardMapper->findProjectIdsByCard($id, $uid)]
 			// Custom-field VALUES (#3537): [{fieldId, value}] - detail-only, never
 			// in the board summary (the definitions ride the board payload).
 			+ ['fieldValues' => array_map(

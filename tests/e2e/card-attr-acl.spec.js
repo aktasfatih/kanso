@@ -203,7 +203,7 @@ test.describe('The rest of the attribute bar is editors only (#10732)', () => {
 	test.describe.configure({ mode: 'serial' })
 	test.use({ storageState: { cookies: [], origins: [] }, viewport: { width: 1600, height: 900 } })
 
-	const state = { boardId: 0, cardId: 0, doingStackId: 0, projectId: 0 }
+	const state = { boardId: 0, cardId: 0, doingStackId: 0, projectId: 0, peerProjectId: 0 }
 	let ctx = null
 	let page = null
 	let attrbar = null
@@ -217,6 +217,13 @@ test.describe('The rest of the attribute bar is editors only (#10732)', () => {
 			permission: 1,
 		})
 
+		// The card owner files it into a project of their OWN (#10737). Projects
+		// are private, owner-only collections, so nothing about this one — not
+		// even its existence as a number — may reach the read-only peer below.
+		const project = await api.post('/projects', { title: 'Owner only ' + Math.floor(Date.now() / 1000) })
+		state.projectId = project.id
+		await api.put(`/projects/${project.id}/cards/${state.cardId}`)
+
 		ctx = await browser.newContext({ viewport: { width: 1600, height: 900 } })
 		page = await ctx.newPage()
 		await ncLogin(page, { user: peer.user, pass: peer.pass })
@@ -228,9 +235,11 @@ test.describe('The rest of the attribute bar is editors only (#10732)', () => {
 		header = page.locator('.card-modal__header')
 	})
 
-	test.afterAll(async () => {
+	test.afterAll(async ({ peer }) => {
 		if (ctx) await ctx.close()
 		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
+		if (state.projectId) await api.delete(`/projects/${state.projectId}`).catch(() => {})
+		if (state.peerProjectId) await peer.api.delete(`/projects/${state.peerProjectId}`).catch(() => {})
 		await deleteAclVCard()
 	})
 
@@ -300,6 +309,44 @@ test.describe('The rest of the attribute bar is editors only (#10732)', () => {
 		// ProjectService::addCard() asks for READ, not EDIT: this pill is a live
 		// control for a viewer, so it must survive the sweep.
 		await expect(attrbar.locator('button[data-pill="project"]')).toBeVisible()
+
+		// …but it counts the VIEWER'S projects only (#10737). The card owner has
+		// already filed it into a private project of theirs; that must not show
+		// up here even as a bare number, so the pill still reads its empty label.
+		await expect(attrbar.locator('button[data-pill="project"]')).toHaveText(/^\s*Project\s*$/)
+	})
+
+	test("a viewer's card payload never carries another member's project (#10737)", async ({ peer }) => {
+		// The server-side denial behind the pill above, asserted directly: the
+		// owner sees their own collection, the peer sees nothing at all.
+		const asOwner = await api.get(`/cards/${state.cardId}`)
+		expect(asOwner.projectIds).toContain(state.projectId)
+
+		const asPeer = await peer.api.get(`/cards/${state.cardId}`)
+		expect(asPeer.projectIds).not.toContain(state.projectId)
+		expect(asPeer.projectIds).toEqual([])
+	})
+
+	test('a viewer who files the card into their OWN project sees their own count', async ({ peer }) => {
+		// The other half: scoping the count must not have broken the feature the
+		// pill exists for. A read-only member may still collect a readable card,
+		// and then the count IS theirs to see — while the owner's stays theirs.
+		const project = await peer.api.post('/projects', { title: 'Peer only ' + Math.floor(Date.now() / 1000) })
+		state.peerProjectId = project.id
+		const filed = await peer.api.raw('PUT', `/projects/${project.id}/cards/${state.cardId}`)
+		expect(filed.status, 'a viewer may collect a card they can read').toBe(200)
+
+		const asPeer = await peer.api.get(`/cards/${state.cardId}`)
+		expect(asPeer.projectIds).toEqual([project.id])
+		const asOwner = await api.get(`/cards/${state.cardId}`)
+		expect(asOwner.projectIds).toEqual([state.projectId])
+
+		// …and the peer's own UI now shows the count the payload justifies. A
+		// full reload (the card deep link) re-fetches past the client cache.
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.cardId}`)
+		await page.reload()
+		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
+		await expect(page.locator('.card-modal__attrbar button[data-pill="project"]')).toHaveText(/1 project/)
 	})
 })
 
