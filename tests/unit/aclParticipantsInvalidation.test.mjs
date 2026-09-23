@@ -137,8 +137,13 @@ function harness(t, boardId) {
 	}
 }
 
-/** The uids the assignee picker would currently offer. */
-const offered = (h) => (h.assignees.participants.data.value ?? []).map((p) => p.uid)
+/**
+ * The uids the assignee picker would currently offer. Read through the
+ * composable's own `participantList`, not the raw query data: since #10704 the
+ * cached value is a {items, truncated, limit} page, and the list is the part of
+ * it the picker renders.
+ */
+const offered = (h) => h.assignees.participantList.value.map((p) => p.uid)
 
 test('sharing a board refreshes the assignee picker without a reload', async (t) => {
 	const h = harness(t, 10669)

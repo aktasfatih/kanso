@@ -858,18 +858,38 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							class="card-modal__pill card-modal__pill--dashed"
 							data-pill="assign"
 							:aria-expanded="openPicker === 'assign'"
-							@click="togglePicker('assign')">
+							@click="toggleAssignPicker()">
 							<AccountPlusIcon :size="14" />
 							{{ cardAssigneeIds.length > 0 ? t('kanso', 'Add assignee') : t('kanso', 'Assign') }}
 						</button>
 						<div v-if="openPicker === 'assign'" class="card-modal__popover">
+							<!-- The rows below are the FIRST PAGE of a payload the server caps, so on
+							     a board shared with more people than the cap they are not everyone.
+							     This box is how the rest are reached: it asks the server for the
+							     typed substring instead of filtering the page already in hand, and
+							     the note at the foot of the popover says which of the two lists is
+							     on screen whenever that list is partial (#10704). -->
+							<input
+								ref="assigneeSearchInput"
+								v-model="assigneeQuery"
+								type="text"
+								class="card-modal__assign-search"
+								data-assign-search
+								:placeholder="t('kanso', 'Search people…')"
+								:aria-label="t('kanso', 'Search the people with access to this board')"
+								@input="onAssigneeSearch">
 							<!-- Only once the participants query has actually answered - while
 							     it is still in flight an empty list is "not loaded yet", not
 							     "nobody has access". -->
 							<div
-								v-if="assignCandidates.length === 0 && !participants.isPending.value"
+								v-if="assignCandidates.length === 0 && !assigneeSearchActive && !participants.isPending.value"
 								class="card-modal__popover-empty">
 								{{ t('kanso', 'Nobody has access to this board yet.') }}
+							</div>
+							<div
+								v-if="assignCandidates.length === 0 && assigneeSearchActive && !assigneeSearching"
+								class="card-modal__popover-empty">
+								{{ t('kanso', 'Nobody with access to this board matches that.') }}
 							</div>
 							<!-- A row carries `aria-busy` for its in-flight window, never
 							     `disabled` (#10705). Disabling the element that currently HAS
@@ -907,6 +927,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								class="card-modal__popover-empty">
 								{{ t('kanso', 'Everyone shown here is already assigned to this card.') }}
 							</div>
+							<!-- …and the caveat the picker used to leave unsaid: what is listed is a
+							     page, not the board. Rendered only when the server actually held
+							     something back, so a board everyone fits on says nothing. -->
+							<div v-if="assigneeListNote" class="card-modal__assign-note" data-assign-note>
+								{{ assigneeListNote }}
+							</div>
+							<span v-if="assigneeSearchError" class="card-modal__save-error">{{ assigneeSearchError }}</span>
 						</div>
 					</div>
 					<span v-if="assigneeError" class="card-modal__save-error">{{ assigneeError }}</span>
@@ -1250,7 +1277,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:disabled="isSaving"
 										:autofocus="true"
 										min-height="160px"
-										:participants="participants.data.value ?? []"
+										:participants="participantList"
 										:upload-image="(file) => uploadAttachment.mutateAsync(file)"
 										:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
 										:show-toolbar="!editorToolbarHidden"
@@ -2338,7 +2365,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												:disabled="addComment.isPending.value"
 												:autofocus="true"
 												min-height="60px"
-												:participants="participants.data.value ?? []"
+												:participants="participantList"
 												:upload-image="(file) => uploadAttachment.mutateAsync(file)"
 												:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
 												:show-toolbar="!editorToolbarHidden"
@@ -2379,7 +2406,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:placeholder="t('kanso', 'Start a new thread…')"
 										:disabled="addComment.isPending.value"
 										min-height="60px"
-										:participants="participants.data.value ?? []"
+										:participants="participantList"
 										:upload-image="(file) => uploadAttachment.mutateAsync(file)"
 										:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
 										:show-toolbar="!editorToolbarHidden"
@@ -2595,7 +2622,7 @@ import { scaleTokens } from '../services/estimateScales.js'
 import { useLabels } from '../composables/useLabels.js'
 import { useAssignees } from '../composables/useAssignees.js'
 import { useContacts } from '../composables/useContacts.js'
-import { fetchCardContacts } from '../services/api.js'
+import { fetchCardContacts, fetchParticipants } from '../services/api.js'
 import { useReviews } from '../composables/useReviews.js'
 import { useRecurRules } from '../composables/useRecurRules.js'
 import { useReminders, reminderPresets } from '../composables/useReminders.js'
@@ -3021,30 +3048,69 @@ async function submitCreateLabel() {
 }
 
 // ── Assignees ────────────────────────────────────────────────────────────────
-const { participants, toggleAssignee } = useAssignees(boardId)
+const { participants, participantList, participantsTruncated, participantsLimit, toggleAssignee } = useAssignees(boardId)
 const assigneeError = ref('')
+
+// Picker search (#10704). The participants payload is capped server-side, so on
+// a board shared with more people than the cap the rest were simply unreachable
+// - the picker only ever rendered the cached first page. Typing here asks the
+// server for THAT substring instead, which is the only path to person N+1, and
+// the popover says which of the two lists it is showing.
+//
+// Deliberately NOT written into the participants query cache: that cache is also
+// the board-wide uid → display-name map (assignees, reviewers, swimlanes), and
+// replacing it with a search result would blank out names all over the board.
+const assigneeQuery = ref('')
+const assigneeSearchResults = ref([])
+const assigneeSearching = ref(false)
+const assigneeSearchTruncated = ref(false)
+const assigneeSearchLimit = ref(0)
+const assigneeSearchError = ref('')
+const assigneeSearchInput = ref(null)
+// Everyone a search has turned up in this modal, kept after the box is cleared.
+// The results list itself is transient, but a person the cached page cannot
+// resolve must keep their NAME on the pill once they are assigned - clearing
+// this with the query would put their bare uid back a keystroke later.
+const discoveredParticipants = ref(new Map())
+let assigneeSearchTimer = null
+let assigneeSearchSeq = 0
 
 const cardAssigneeIds = computed(() =>
 	Array.isArray(cardData.value?.assigneeIds) ? cardData.value.assigneeIds : [],
 )
 
+// uid → participant, for resolving display names. The cached page is the base;
+// anyone the picker's search turned up is folded in on top (#10704), so a person
+// the cap sheds still shows their NAME on the pill the moment you assign them,
+// instead of the bare uid the cached page alone can resolve them to.
 const participantMap = computed(() => {
-	const list = Array.isArray(participants.data.value) ? participants.data.value : []
-	return new Map(list.map((p) => [p.uid, p]))
+	const map = new Map(participantList.value.map((p) => [p.uid, p]))
+	for (const [uid, p] of discoveredParticipants.value) {
+		if (!map.has(uid)) map.set(uid, p)
+	}
+	return map
 })
 
 function participantName(uid) {
 	return participantMap.value.get(uid)?.displayName ?? uid
 }
 
+// True while the picker is showing search results rather than the cached page.
+const assigneeSearchActive = computed(() => assigneeQuery.value.trim() !== '')
+
+// The rows the picker is currently listing: the cached first page while idle,
+// the server's answer for the typed substring while searching.
+const assigneeSource = computed(() =>
+	assigneeSearchActive.value ? assigneeSearchResults.value : participantList.value,
+)
+
 const unassignedParticipants = computed(() => {
-	const list = Array.isArray(participants.data.value) ? participants.data.value : []
 	const assigned = new Set(cardAssigneeIds.value)
-	return list.filter((p) => !assigned.has(p.uid))
+	return assigneeSource.value.filter((p) => !assigned.has(p.uid))
 })
 
 /**
- * Every participant, tagged with whether this card already has them. The
+ * Every listed participant, tagged with whether this card already has them. The
  * picker renders ALL of them (assigned ones ticked and toggleable) rather
  * than only the unassigned remainder, so the list can never run dry and take
  * the control with it. The server's order (display name) is kept as-is on
@@ -3052,10 +3118,99 @@ const unassignedParticipants = computed(() => {
  * pointer between clicks, which is exactly when a second assignee is added.
  */
 const assignCandidates = computed(() => {
-	const list = Array.isArray(participants.data.value) ? participants.data.value : []
 	const assigned = new Set(cardAssigneeIds.value)
-	return list.map((p) => ({ ...p, assigned: assigned.has(p.uid) }))
+	return assigneeSource.value.map((p) => ({ ...p, assigned: assigned.has(p.uid) }))
 })
+
+/**
+ * What the popover says about the list it is showing, or '' when the list is
+ * everyone and needs no caveat. This is the part the bug was missing: the cap
+ * was applied silently, so a board with more members than the cap looked exactly
+ * like a board with fewer (#10704).
+ */
+const assigneeListNote = computed(() => {
+	if (assigneeSearchActive.value) {
+		if (!assigneeSearchTruncated.value) return ''
+		return t('kanso', 'Showing the first {count} matches. Keep typing to narrow them down.', {
+			count: assigneeSearchLimit.value,
+		})
+	}
+	if (!participantsTruncated.value) return ''
+	return t('kanso', 'Showing the first {count} people with access. Search to find anyone else.', {
+		count: participantsLimit.value,
+	})
+})
+
+/**
+ * Ask the server for the people matching `query`. `seq` discards an answer that
+ * a later keystroke has already superseded, so a slow response can never repaint
+ * the list with a stale substring's results.
+ *
+ * @param {string} query the typed substring; '' clears back to the cached page.
+ */
+async function runAssigneeSearch(query) {
+	const bId = resolvePickerBoardId()
+	if (bId === null || bId === undefined || bId === 'undefined') return
+	const seq = ++assigneeSearchSeq
+	if (query.trim() === '') {
+		assigneeSearching.value = false
+		assigneeSearchResults.value = []
+		assigneeSearchTruncated.value = false
+		assigneeSearchError.value = ''
+		return
+	}
+	assigneeSearching.value = true
+	assigneeSearchError.value = ''
+	try {
+		const page = await fetchParticipants(bId, query)
+		if (seq !== assigneeSearchSeq) return
+		assigneeSearchResults.value = page.items
+		const discovered = new Map(discoveredParticipants.value)
+		for (const p of page.items) discovered.set(p.uid, p)
+		discoveredParticipants.value = discovered
+		assigneeSearchTruncated.value = page.truncated
+		assigneeSearchLimit.value = page.limit
+	} catch (err) {
+		if (seq !== assigneeSearchSeq) return
+		assigneeSearchResults.value = []
+		assigneeSearchTruncated.value = false
+		assigneeSearchError.value = err?.response?.data?.error || t('kanso', 'Could not search the people on this board.')
+	} finally {
+		if (seq === assigneeSearchSeq) assigneeSearching.value = false
+	}
+}
+
+function onAssigneeSearch() {
+	if (assigneeSearchTimer) clearTimeout(assigneeSearchTimer)
+	assigneeSearchTimer = setTimeout(() => {
+		runAssigneeSearch(assigneeQuery.value)
+	}, 200)
+}
+
+/**
+ * Open (or close) the assignee picker, resetting its search each time so it
+ * always opens on the full first page rather than on the last thing typed.
+ *
+ * Focus goes to the search box on open. The rows themselves keep the focus
+ * behaviour #10705 fixed: nothing here runs on a toggle, so an in-flight pick
+ * still leaves focus exactly where the user put it.
+ */
+async function toggleAssignPicker() {
+	if (openPicker.value === 'assign') {
+		openPicker.value = null
+		return
+	}
+	openPicker.value = 'assign'
+	if (assigneeSearchTimer) clearTimeout(assigneeSearchTimer)
+	assigneeSearchSeq++
+	assigneeQuery.value = ''
+	assigneeSearchResults.value = []
+	assigneeSearchTruncated.value = false
+	assigneeSearching.value = false
+	assigneeSearchError.value = ''
+	await nextTick()
+	assigneeSearchInput.value?.focus?.()
+}
 
 // The uid whose toggle is in flight, or null when idle — the assignee twin of
 // labelTogglePending, and there for the same two reasons (#10705): it drives
@@ -3114,7 +3269,7 @@ const cardContactUris = computed(() => new Set(cardContacts.value.map((c) => c.c
 // successful call as "available" and only hide on a hard failure). We surface
 // the picker whenever the card already has contacts, or the probe succeeded.
 async function runContactSearch(query) {
-	const bId = resolveContactBoardId()
+	const bId = resolvePickerBoardId()
 	// Board id not known yet (full-page route, card still loading). Skip the probe;
 	// the boardId watch below re-runs it once the id resolves. Avoids a bogus
 	// GET /boards/undefined/contacts.
@@ -3140,7 +3295,8 @@ async function runContactSearch(query) {
 	}
 }
 
-function resolveContactBoardId() {
+// Shared by both live pickers in this modal (contacts and the assignee search).
+function resolvePickerBoardId() {
 	const b = boardId
 	if (typeof b === 'function') return b()
 	// Return `.value` even when it's undefined (ref not resolved yet) rather than
@@ -3309,7 +3465,7 @@ const reviewsCompact = computed(() => cardReviews.value.length >= 3)
 // who already holds a review of the selected type - switching the type re-opens
 // them, which is how you add multiple reviews to one card.
 const unrequestedParticipants = computed(() => {
-	const list = Array.isArray(participants.data.value) ? participants.data.value : []
+	const list = participantList.value
 	const type = selectedReviewTypeId.value ?? 0
 	const requested = new Set(
 		cardReviews.value.filter((r) => (r.reviewTypeId ?? 0) === type).map((r) => r.reviewer),
@@ -4096,7 +4252,7 @@ function toggleStepMenu(item, type) {
 // All board participants (external members included - assigning a step to the
 // client side is the point of #3745) minus the current assignee.
 function stepAssignCandidates(item) {
-	const list = Array.isArray(participants.data.value) ? participants.data.value : []
+	const list = participantList.value
 	return list.filter((p) => p.uid !== item.assignedUser)
 }
 
@@ -6132,7 +6288,7 @@ const watcherIds = computed(() =>
 // header/pill state desync).
 const displayedWatcherIds = computed(() => watcherIds.value.filter((uid) => uid !== currentUserId))
 const unwatchedParticipants = computed(() => {
-	const list = Array.isArray(participants.data.value) ? participants.data.value : []
+	const list = participantList.value
 	const watching = new Set(watcherIds.value)
 	// The actor manages themselves via the header Watch toggle.
 	return list.filter((p) => !watching.has(p.uid) && p.uid !== currentUserId)
@@ -7473,7 +7629,8 @@ async function handleToggleProject(projectId) {
 	color: var(--color-primary-element);
 }
 /* Contacts picker (#3530) */
-.card-modal__contact-search {
+.card-modal__contact-search,
+.card-modal__assign-search {
 	width: 100%;
 	margin-bottom: 4px;
 	padding: 4px 8px;
@@ -7482,6 +7639,14 @@ async function handleToggleProject(projectId) {
 	background: var(--color-main-background);
 	color: var(--color-main-text);
 	font-size: 0.8125rem;
+}
+/* The "this list is a page, not the board" caveat under the assignee rows. */
+.card-modal__assign-note {
+	padding: 6px 8px 2px;
+	border-top: 1px solid var(--color-border);
+	margin-top: 4px;
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
 }
 .card-modal__contact-option-text {
 	display: flex;

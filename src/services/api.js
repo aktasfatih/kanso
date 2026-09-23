@@ -5,6 +5,7 @@ import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { translate as t } from '@nextcloud/l10n'
 import { toMyCardsFeed, toRecentlyDoneFeed } from './myCardsFeed.js'
+import { toBoundedPage } from './boundedList.js'
 
 const url = (path) => generateUrl('/apps/kanso' + path)
 
@@ -218,12 +219,19 @@ export const unassignLabel = (cardId, labelId) =>
 
 // Assignees
 // The participants payload is capped server-side. `q` (optional) filters by
-// display name / uid server-side for boards shared with large groups; today's
-// callers pass no q and receive the capped full list unchanged.
+// display name / uid server-side, which is the only way to reach somebody the
+// cap sheds on a board shared with a large group.
+//
+// The body stays a plain array (every other API client parses it that way); the
+// two facts about the bound ride in headers. Resolving to {items, truncated,
+// limit} rather than the bare array is what lets the picker say "showing the
+// first N" instead of presenting a truncated list as if it were everyone
+// (#10704). `truncated` is false unless the server positively said otherwise,
+// so an older server (no headers) degrades to "no claim made", not a false one.
 export const fetchParticipants = (boardId, q) =>
 	axios
 		.get(url(`/api/boards/${boardId}/participants`), q ? { params: { q } } : undefined)
-		.then((r) => r.data)
+		.then((r) => toBoundedPage(r.data, r.headers))
 
 export const assignUser = (cardId, userId) =>
 	axios.put(url(`/api/cards/${cardId}/assignees/${userId}`)).then((r) => r.data)

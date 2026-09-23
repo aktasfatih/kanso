@@ -65,6 +65,18 @@ export function useAssignees(boardId) {
 		staleTime: 3 * 60 * 1000,
 	})
 
+	// The cached page is {items, truncated, limit} (#10704). `participantList` is the
+	// array every consumer wants; `participantsTruncated` says whether the server had
+	// MORE to give than this page - the one fact that separates "this is everyone
+	// on the board" from "these are the first `participantsLimit`", and so the one
+	// thing that decides whether the picker may present the list as complete.
+	const participantList = computed(() => {
+		const page = participants.data.value
+		return Array.isArray(page?.items) ? page.items : []
+	})
+	const participantsTruncated = computed(() => participants.data.value?.truncated === true)
+	const participantsLimit = computed(() => participants.data.value?.limit ?? 0)
+
 	// ── Toggle assignee on a card (assign / unassign) ───────────────────────────
 	// assign = true → assign, assign = false → unassign
 	const toggleAssignee = useMutation({
@@ -128,6 +140,9 @@ export function useAssignees(boardId) {
 
 	return {
 		participants,
+		participantList,
+		participantsTruncated,
+		participantsLimit,
 		toggleAssignee,
 	}
 }

@@ -43,6 +43,8 @@ use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\SubscriptionService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
+use OCP\AppFramework\Http\JSONResponse;
+use OCP\AppFramework\Http\Response;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
@@ -409,34 +411,81 @@ class BoardControllerTest extends TestCase {
 		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
 	}
 
+	/**
+	 * @param list<array{uid: string, displayName: string}> $participants
+	 * @return array{participants: list<array{uid: string, displayName: string}>, truncated: bool, limit: int}
+	 */
+	private function participantPage(array $participants, bool $truncated = false): array {
+		return ['participants' => $participants, 'truncated' => $truncated, 'limit' => 25];
+	}
+
 	public function testParticipantsReturnsList(): void {
 		$participants = [
 			['uid' => 'alice', 'displayName' => 'Alice Adams'],
 			['uid' => 'bob', 'displayName' => 'Bob Baker'],
 		];
-		$this->participantService->method('getParticipants')
+		$this->participantService->method('searchParticipants')
 			->with(1, 'alice', null)
-			->willReturn($participants);
+			->willReturn($this->participantPage($participants));
 
 		$response = $this->controller->participants(1);
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		// The body stays the bare list every existing API client parses.
 		self::assertSame($participants, $response->getData());
 	}
 
 	public function testParticipantsPassesQueryThrough(): void {
 		$participants = [['uid' => 'bob', 'displayName' => 'Bob Baker']];
 		$this->participantService->expects(self::once())
-			->method('getParticipants')
+			->method('searchParticipants')
 			->with(1, 'alice', 'bob')
-			->willReturn($participants);
+			->willReturn($this->participantPage($participants));
 
 		$response = $this->controller->participants(1, 'bob');
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertSame($participants, $response->getData());
 	}
 
+	/**
+	 * The headers the controller itself set. Response::getHeaders() merges in the
+	 * framework defaults through the server container, which unit tests have no
+	 * instance of, so read the response's own header map directly (same approach
+	 * as MyCardsControllerTest).
+	 *
+	 * @return array<string, string>
+	 */
+	private function headersOf(JSONResponse $response): array {
+		$headers = (new \ReflectionProperty(Response::class, 'headers'))->getValue($response);
+		return is_array($headers) ? $headers : [];
+	}
+
+	public function testParticipantsAnnouncesAnUncappedListAsComplete(): void {
+		$this->participantService->method('searchParticipants')
+			->willReturn($this->participantPage([['uid' => 'alice', 'displayName' => 'Alice Adams']]));
+
+		$headers = $this->headersOf($this->controller->participants(1));
+		// "0" - not merely absent: the picker may present this list as everyone.
+		self::assertSame('0', $headers[BoardController::HEADER_TRUNCATED]);
+		self::assertSame('25', $headers[BoardController::HEADER_LIMIT]);
+	}
+
+	public function testParticipantsAnnouncesACappedListAsPartial(): void {
+		$this->participantService->method('searchParticipants')
+			->willReturn($this->participantPage(
+				[['uid' => 'alice', 'displayName' => 'Alice Adams']],
+				true
+			));
+
+		// Without this the client cannot tell a complete board from the first
+		// page of a big one, which is exactly how everyone past the cap became
+		// unassignable with nothing saying so (#10704).
+		$headers = $this->headersOf($this->controller->participants(1));
+		self::assertSame('1', $headers[BoardController::HEADER_TRUNCATED]);
+		self::assertSame('25', $headers[BoardController::HEADER_LIMIT]);
+	}
+
 	public function testParticipantsMapsNotPermittedTo403(): void {
-		$this->participantService->method('getParticipants')
+		$this->participantService->method('searchParticipants')
 			->willThrowException(new NotPermittedException());
 
 		$response = $this->controller->participants(1);
@@ -445,7 +494,7 @@ class BoardControllerTest extends TestCase {
 	}
 
 	public function testParticipantsMapsDoesNotExistTo404(): void {
-		$this->participantService->method('getParticipants')
+		$this->participantService->method('searchParticipants')
 			->willThrowException(new DoesNotExistException('gone'));
 
 		$response = $this->controller->participants(1);

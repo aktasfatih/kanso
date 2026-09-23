@@ -141,7 +141,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				class="board-view__filter-menu"
 				:state="filterState"
 				:labels="boardLabels"
-				:participants="participants.data.value ?? []"
+				:participants="participantList"
 				:saved-filters="savedFilters"
 				:active-saved-name="activeSavedName"
 				:estimate-scale="boardData?.board?.estimateScale ?? 'none'"
@@ -302,7 +302,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:card-fields="boardData.cardFields ?? []"
 			:acl="boardData.acl ?? []"
 			:permissions="boardData.permissions ?? 0"
-			:participants="participants.data.value ?? []"
+			:participants="participantList"
 			:current-user-id="currentUserId"
 			:stacks="boardData.stacks ?? []"
 			:cards="boardData.cards ?? []"
@@ -579,7 +579,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:card="previewCard"
 				:labels-by-id="labelsById"
 				:board-prefix="boardData?.board?.prefix ?? ''"
-				:participants="participants.data.value ?? []"
+				:participants="participantList"
 				:anchor-rect="previewAnchorRect"
 				@close="closePreview"
 				@open="openPreviewCard" />
@@ -600,7 +600,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:count="bulk.selectedCount.value"
 			:stacks="sortedStacks"
 			:labels="boardLabels"
-			:participants="participants.data.value ?? []"
+			:participants="participantList"
 			:applying="bulk.applying.value"
 			@move="onBulkMove"
 			@add-label="onBulkAddLabel"
@@ -1155,7 +1155,7 @@ const isBoardSubscribed = computed(() => boardData.value?.subscription?.subscrib
 function toggleBoardWatch() {
 	boardWatchToggle.mutate({ subscribed: !isBoardSubscribed.value })
 }
-const { participants } = useAssignees(boardId)
+const { participantList } = useAssignees(boardId)
 
 // Resolve current Nextcloud user id - OC.getCurrentUser() is always available in NC apps
 const currentUserId = (() => {
@@ -1499,7 +1499,7 @@ const lanes = computed(() => {
 		swimlaneMode.value,
 		cardsByStack.value,
 		boardLabels.value,
-		participants.data.value ?? [],
+		participantList.value,
 	)
 })
 

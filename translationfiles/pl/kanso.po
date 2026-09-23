@@ -316,7 +316,7 @@ msgstr[0] "Wykryto %n wiersz danych"
 msgstr[1] "Wykryto %n wiersze danych"
 msgstr[2] "Wykryto %n wierszy danych"
 
-#: src/components/CardDetail.vue:4497
+#: src/components/CardDetail.vue:4653
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dzień temu"
@@ -330,7 +330,7 @@ msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: src/components/CardDetail.vue:4495
+#: src/components/CardDetail.vue:4651
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n godzinę temu"
@@ -358,7 +358,7 @@ msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: src/components/CardDetail.vue:4493
+#: src/components/CardDetail.vue:4649
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minutę temu"
@@ -386,14 +386,14 @@ msgstr[0] "%n punkt"
 msgstr[1] "%n punkty"
 msgstr[2] "%n punktów"
 
-#: src/components/CardDetail.vue:1088
+#: src/components/CardDetail.vue:1115
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n projekt"
 msgstr[1] "%n projekty"
 msgstr[2] "%n projektów"
 
-#: src/components/CardDetail.vue:2102
+#: src/components/CardDetail.vue:2129
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -1691,6 +1691,10 @@ msgstr "Nie udało się zapisać ustawień przyjmowania zgłoszeń."
 msgid "Could not save the title"
 msgstr "Nie udało się zapisać tytułu"
 
+#: src/components/CardDetail.vue
+msgid "Could not search the people on this board."
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "Could not set up the starter board."
 msgstr "Nie udało się przygotować tablicy startowej."
@@ -1841,7 +1845,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:2162
-#: src/components/CardDetail.vue:4686
+#: src/components/CardDetail.vue:4842
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dzień"
@@ -3305,7 +3309,7 @@ msgstr "Kursywa"
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6456
+#: src/components/CardDetail.vue:6612
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3626,7 +3630,7 @@ msgid "Mon"
 msgstr "Pn"
 
 #: src/components/BoardSettingsModal.vue:2164
-#: src/components/CardDetail.vue:4688
+#: src/components/CardDetail.vue:4844
 msgid "month"
 msgid_plural "months"
 msgstr[0] "miesiąc"
@@ -4088,6 +4092,10 @@ msgstr "Brak typu"
 
 #: src/components/CardDetail.vue
 msgid "Nobody has access to this board yet."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Nobody with access to this board matches that."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -4938,9 +4946,17 @@ msgstr "Szukaj kart…"
 msgid "Search contacts…"
 msgstr "Szukaj kontaktów…"
 
+#: src/components/CardDetail.vue
+msgid "Search people…"
+msgstr ""
+
 #: src/components/SearchBox.vue
 msgid "Search results"
 msgstr "Wyniki wyszukiwania"
+
+#: src/components/CardDetail.vue
+msgid "Search the people with access to this board"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Search users or groups"
@@ -5078,7 +5094,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr "Pokaż panel dyskusji"
 
-#: src/components/CardDetail.vue:6462
+#: src/components/CardDetail.vue:6618
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Pokaż panel dyskusji (%n komentarz)"
@@ -5107,6 +5123,14 @@ msgstr "Wyświetlanych jest {count} najnowszych zadań ukończonych w ciągu ost
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Showing the {shown} most recent of {total} files."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Showing the first {count} matches. Keep typing to narrow them down."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Showing the first {count} people with access. Search to find anyone else."
 msgstr ""
 
 #: src/views/ViewPage.vue
@@ -5795,7 +5819,7 @@ msgid "Wed"
 msgstr "Śr"
 
 #: src/components/BoardSettingsModal.vue:2163
-#: src/components/CardDetail.vue:4687
+#: src/components/CardDetail.vue:4843
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "tydzień"
@@ -5889,7 +5913,7 @@ msgid "wrote"
 msgstr "napisał"
 
 #: src/components/BoardSettingsModal.vue:2165
-#: src/components/CardDetail.vue:4689
+#: src/components/CardDetail.vue:4845
 msgid "year"
 msgid_plural "years"
 msgstr[0] "rok"

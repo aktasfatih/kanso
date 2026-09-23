@@ -5,35 +5,23 @@
  * The "My tasks" feed is capped server-side (OCA\Kanso\Service\MyCardsService::LIMIT).
  * The cap is reported in response HEADERS rather than in the body, so
  * `GET /api/my-cards` keeps returning the plain card list every API client
- * (including the MCP server) already consumes.
+ * (including the MCP server) already consumes - the shared convention, and the
+ * header reader, live in services/boundedList.js.
  *
- * This module is the one place that knows about that wire detail. It is
- * deliberately free of Vue / Nextcloud imports so it can be unit-tested under
- * plain `node --test` (tests/unit/myCardsFeed.test.mjs).
+ * This module is deliberately free of Vue / Nextcloud imports so it can be
+ * unit-tested under plain `node --test` (tests/unit/myCardsFeed.test.mjs).
  */
 
+import { LIMIT_HEADER, TRUNCATED_HEADER, headerValue } from './boundedList.js'
+
 /** '1' when more assigned cards exist beyond the cap, '0' when the feed is complete. */
-export const MY_CARDS_TRUNCATED_HEADER = 'x-kanso-truncated'
+export const MY_CARDS_TRUNCATED_HEADER = TRUNCATED_HEADER
 
 /** The row cap the server built the feed with. */
-export const MY_CARDS_LIMIT_HEADER = 'x-kanso-limit'
+export const MY_CARDS_LIMIT_HEADER = LIMIT_HEADER
 
 /** What the feed looks like before the first response lands. */
 const EMPTY_FEED = { cards: [], truncated: false, limit: 0 }
-
-/**
- * Read one header out of whatever shape the caller has: an AxiosHeaders / fetch
- * Headers instance (`.get()`) or a plain lower-cased object.
- *
- * @param {object|undefined} headers - response headers
- * @param {string} name - lower-cased header name
- * @return {string|undefined} the raw header value
- */
-function headerValue(headers, name) {
-	if (!headers) return undefined
-	if (typeof headers.get === 'function') return headers.get(name) ?? undefined
-	return headers[name]
-}
 
 /**
  * Build the feed object the query cache stores from a raw API response.

@@ -35,6 +35,16 @@ class BoardController extends Controller {
 	use ApiErrorTrait;
 	use ConditionalReadTrait;
 
+	/**
+	 * Signals that a bounded list response left something out ('1') or is
+	 * complete ('0'). Same names and same meaning as MyCardsController's pair -
+	 * one convention for "this body is a page, not the whole set".
+	 */
+	public const HEADER_TRUNCATED = 'X-Kanso-Truncated';
+
+	/** The cap the response was built with. */
+	public const HEADER_LIMIT = 'X-Kanso-Limit';
+
 	public function __construct(
 		string $appName,
 		IRequest $request,
@@ -322,13 +332,21 @@ class BoardController extends Controller {
 	 * Bounded server-side: an optional `?q` filters by display name / uid and
 	 * the result is always capped, so a board shared with a very large group
 	 * cannot balloon the picker payload.
+	 *
+	 * The bound is described in two response headers rather than wrapped around
+	 * the body, so the payload stays the plain JSON array every existing client
+	 * already parses (mcp/kanso_mcp/client.py among them) while the picker can
+	 * still tell "this is everyone" from "this is the first N of more" and say
+	 * so instead of silently truncating.
 	 */
 	#[NoAdminRequired]
 	public function participants(int $id, ?string $q = null): JSONResponse {
 		return $this->respond(function () use ($id, $q): JSONResponse {
-			return new JSONResponse(
-				$this->participantService->getParticipants($id, $this->currentUserId(), $q)
-			);
+			$page = $this->participantService->searchParticipants($id, $this->currentUserId(), $q);
+			$response = new JSONResponse($page['participants']);
+			$response->addHeader(self::HEADER_TRUNCATED, $page['truncated'] ? '1' : '0');
+			$response->addHeader(self::HEADER_LIMIT, (string)$page['limit']);
+			return $response;
 		});
 	}
 

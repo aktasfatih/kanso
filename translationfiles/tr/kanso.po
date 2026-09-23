@@ -307,7 +307,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n veri satırı bulundu"
 msgstr[1] "%n veri satırı bulundu"
 
-#: src/components/CardDetail.vue:4497
+#: src/components/CardDetail.vue:4653
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n gün önce"
@@ -319,7 +319,7 @@ msgid_plural "%n files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4495
+#: src/components/CardDetail.vue:4651
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
@@ -343,7 +343,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4493
+#: src/components/CardDetail.vue:4649
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n dakika önce"
@@ -367,13 +367,13 @@ msgid_plural "%n points"
 msgstr[0] "%n puan"
 msgstr[1] "%n puan"
 
-#: src/components/CardDetail.vue:1088
+#: src/components/CardDetail.vue:1115
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n proje"
 msgstr[1] "%n proje"
 
-#: src/components/CardDetail.vue:2102
+#: src/components/CardDetail.vue:2129
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -1664,6 +1664,10 @@ msgstr "Sorun alma ayarları kaydedilemedi."
 msgid "Could not save the title"
 msgstr "Başlık kaydedilemedi"
 
+#: src/components/CardDetail.vue
+msgid "Could not search the people on this board."
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "Could not set up the starter board."
 msgstr "Başlangıç panosu kurulamadı."
@@ -1814,7 +1818,7 @@ msgid "Date"
 msgstr "Tarih"
 
 #: src/components/BoardSettingsModal.vue:2162
-#: src/components/CardDetail.vue:4686
+#: src/components/CardDetail.vue:4842
 msgid "day"
 msgid_plural "days"
 msgstr[0] "gün"
@@ -3273,7 +3277,7 @@ msgstr "İtalik"
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6456
+#: src/components/CardDetail.vue:6612
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3593,7 +3597,7 @@ msgid "Mon"
 msgstr "Pzt"
 
 #: src/components/BoardSettingsModal.vue:2164
-#: src/components/CardDetail.vue:4688
+#: src/components/CardDetail.vue:4844
 msgid "month"
 msgid_plural "months"
 msgstr[0] "ay"
@@ -4054,6 +4058,10 @@ msgstr "Tür yok"
 
 #: src/components/CardDetail.vue
 msgid "Nobody has access to this board yet."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Nobody with access to this board matches that."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -4904,9 +4912,17 @@ msgstr "Kartlarda ara…"
 msgid "Search contacts…"
 msgstr "Kişilerde ara…"
 
+#: src/components/CardDetail.vue
+msgid "Search people…"
+msgstr ""
+
 #: src/components/SearchBox.vue
 msgid "Search results"
 msgstr "Arama sonuçları"
+
+#: src/components/CardDetail.vue
+msgid "Search the people with access to this board"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Search users or groups"
@@ -5042,7 +5058,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr "Tartışma panelini göster"
 
-#: src/components/CardDetail.vue:6462
+#: src/components/CardDetail.vue:6618
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Tartışma panelini göster (%n yorum)"
@@ -5070,6 +5086,14 @@ msgstr "Son {days} günde tamamlanan en son {count} görev gösteriliyor."
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Showing the {shown} most recent of {total} files."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Showing the first {count} matches. Keep typing to narrow them down."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Showing the first {count} people with access. Search to find anyone else."
 msgstr ""
 
 #: src/views/ViewPage.vue
@@ -5758,7 +5782,7 @@ msgid "Wed"
 msgstr "Çar"
 
 #: src/components/BoardSettingsModal.vue:2163
-#: src/components/CardDetail.vue:4687
+#: src/components/CardDetail.vue:4843
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "hafta"
@@ -5851,7 +5875,7 @@ msgid "wrote"
 msgstr "yazdı"
 
 #: src/components/BoardSettingsModal.vue:2165
-#: src/components/CardDetail.vue:4689
+#: src/components/CardDetail.vue:4845
 msgid "year"
 msgid_plural "years"
 msgstr[0] "yıl"
