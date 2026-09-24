@@ -11,6 +11,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.36.0](https://github.com/aktasfatih/kanso/compare/v0.35.0...v0.36.0) (2026-09-24)
+
+
+### Bug Fixes
+
+* add a second and third assignee to a card without the Assign button vanishing ([c31560b](https://github.com/aktasfatih/kanso/commit/c31560b904f93fdfe789d68498eb897dbab74bd2)), closes [#10603](https://github.com/aktasfatih/kanso/issues/10603)
+* announce the assignee avatar stack and keep "+N" inside its badge at bigger font sizes ([8e05bba](https://github.com/aktasfatih/kanso/commit/8e05bba53214dcc44d2adeda392082988db51a52)), closes [#10659](https://github.com/aktasfatih/kanso/issues/10659)
+* **attachments:** keep the board's files on screen when "Load more" fails ([e2747e9](https://github.com/aktasfatih/kanso/commit/e2747e928278a94fec14c6455fa9919431f52232))
+* **backup:** stop promising a deleted backup is gone for good when it is not ([cbc7145](https://github.com/aktasfatih/kanso/commit/cbc71454fdeddb0636196a65ccfd6fb38991e5f1))
+* **backup:** stop the static delete hint promising permanence to Files admins ([bc55a72](https://github.com/aktasfatih/kanso/commit/bc55a72397c9a05244d76a5a2212e3df1cdedaac))
+* count only your own projects on a card, not everyone else's ([3256415](https://github.com/aktasfatih/kanso/commit/325641569435a782c2c44f6e9a361e981eb6e6e4))
+* **deps:** bump the npm-production group across 1 directory with 19 updates ([4b7b4dc](https://github.com/aktasfatih/kanso/commit/4b7b4dc2045634a00d4fba3b55c59c58b9741a4f))
+* find and assign anyone on a board shared with a large group, not just the first 25 ([028a26e](https://github.com/aktasfatih/kanso/commit/028a26eb5f52b2f5c1f1752e19a452a2783aa747))
+* give the comments section the card window's full height on tall screens ([539facd](https://github.com/aktasfatih/kanso/commit/539facd82fd9fd17182d7a1103aaef43efe13bc9))
+* keep keyboard focus on a picker row while its toggle is saving ([b9666dc](https://github.com/aktasfatih/kanso/commit/b9666dcd0c10db9ce43d434bfb996e7841eb4721))
+* refresh the board attachments list as files change, and page through every file ([8ab5d65](https://github.com/aktasfatih/kanso/commit/8ab5d65149ec27e7b8be8468ce953cd026a2d1cf)), closes [#10670](https://github.com/aktasfatih/kanso/issues/10670) [#10738](https://github.com/aktasfatih/kanso/issues/10738)
+* show a newly shared-with member in the assignee picker right away ([3b74731](https://github.com/aktasfatih/kanso/commit/3b74731f21561dde68f1080c6cf8a7c1d84f830d))
+* stop offering assign and label controls to members who can only read a board ([99280df](https://github.com/aktasfatih/kanso/commit/99280dfa575d8dff0416487af3f760af30763bd3))
+* stop PHP 8.5 logging a deprecation every time a review is requested ([1d1bf81](https://github.com/aktasfatih/kanso/commit/1d1bf81d34a7d62c495ac51e5e15c736bb50b94c))
+* stop showing the whole editing toolbar to members who can only read a card ([de0121a](https://github.com/aktasfatih/kanso/commit/de0121ab16ee68ecbc76fac767690eaeb4401b6b))
+* stop the hover preview from showing an overdue checklist as on track ([07bb8f5](https://github.com/aktasfatih/kanso/commit/07bb8f51713a0290294789b64b860807818d271f))
+
+
+### Features
+
+* find every file attached to a board without opening each card ([ff22823](https://github.com/aktasfatih/kanso/commit/ff22823a97f1bf35db9051a8445956645b54636b))
+* remove a stored board backup from the admin settings panel ([8a8e8c2](https://github.com/aktasfatih/kanso/commit/8a8e8c2355cb4eedc96b07f8938a220e0f27dbfc))
+* say what a column is for with a description under its name ([1cd33ba](https://github.com/aktasfatih/kanso/commit/1cd33ba051dc9affd0403cd7e09417496cd583ab))
+* spot a card with an overdue checklist step straight from the board ([1260705](https://github.com/aktasfatih/kanso/commit/12607054ae4a04b93357b5e9a3f7cbbef7d3a412))
+
 # [0.35.0](https://github.com/aktasfatih/kanso/compare/v0.34.1...v0.35.0) (2026-09-22)
 
 
