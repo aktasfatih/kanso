@@ -35,18 +35,18 @@ test.describe('Card cover colour', () => {
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const tile = page.locator('.card-tile').filter({ hasText: 'Cover Card' })
-		await expect(tile).toBeVisible({ timeout: 5000 })
+		await expect(tile).toBeVisible()
 		// No cover band before a colour is set.
 		await expect(tile.locator('.card-tile__cover')).toHaveCount(0)
 
 		// Open the card modal.
 		await tile.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open the Cover picker in the attribute bar.
 		await page.getByRole('button', { name: /^Cover$/ }).click()
 		const swatches = page.locator('.card-modal__cover-swatch')
-		await expect(swatches.first()).toBeVisible({ timeout: 5000 })
+		await expect(swatches.first()).toBeVisible()
 
 		// Pick the first swatch (Red, e74c3c) and wait for the persisting PATCH.
 		const [patchSet] = await Promise.all([
@@ -59,21 +59,21 @@ test.describe('Card cover colour', () => {
 		expect(patchSet.ok()).toBeTruthy()
 
 		// Persisted as the bare-hex preset.
-		await expect.poll(() => cardCoverColor(state.cardId), { timeout: 10_000 }).toBe('e74c3c')
+		await expect.poll(() => cardCoverColor(state.cardId)).toBe('e74c3c')
 
 		// Close the modal and assert the tile now shows the cover band.
 		await page.keyboard.press('Escape')
 		await page.waitForSelector('.card-modal', { state: 'hidden', timeout: 5000 }).catch(() => {})
 
 		const coverBand = tile.locator('.card-tile__cover')
-		await expect(coverBand).toBeVisible({ timeout: 6_000 })
+		await expect(coverBand).toBeVisible()
 
 		// Reopen the modal and clear the cover.
 		await tile.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 		await page.getByRole('button', { name: /^Cover$/ }).click()
 		const clearBtn = page.getByRole('button', { name: /^No cover$/ })
-		await expect(clearBtn).toBeVisible({ timeout: 5000 })
+		await expect(clearBtn).toBeVisible()
 		const [patchClear] = await Promise.all([
 			page.waitForResponse(
 				(r) => /\/api\/cards\/\d+/.test(r.url()) && r.request().method() === 'PATCH',
@@ -84,7 +84,7 @@ test.describe('Card cover colour', () => {
 		expect(patchClear.ok()).toBeTruthy()
 
 		// Cover cleared server-side …
-		await expect.poll(() => cardCoverColor(state.cardId), { timeout: 10_000 }).toBeFalsy()
+		await expect.poll(() => cardCoverColor(state.cardId)).toBeFalsy()
 
 		// … and the band is gone from the tile.
 		await page.keyboard.press('Escape')

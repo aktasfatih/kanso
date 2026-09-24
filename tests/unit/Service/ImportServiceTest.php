@@ -38,6 +38,7 @@ use OCA\Kanso\Service\ImportArchiveReader;
 use OCA\Kanso\Service\ImportService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\RecurrenceService;
+use OCA\Kanso\Service\StackService;
 use OCP\Files\IAppData;
 use OCP\Files\IMimeTypeDetector;
 use OCP\Files\NotFoundException;
@@ -341,6 +342,55 @@ class ImportServiceTest extends TestCase {
 		self::assertSame('Legacy board', $result['title']);
 		self::assertSame(1, $result['stacks']);
 		self::assertSame(0, $result['cards']);
+	}
+
+	/**
+	 * A column description (#10474) rides the document, so export → import and
+	 * board duplicate both carry it. An over-long one is truncated to the same
+	 * cap a write enforces - the field is returned on every board payload, so an
+	 * untrusted document does not get to make that payload arbitrarily large.
+	 */
+	public function testImportCarriesStackDescriptionAndTruncatesAnOverLongOne(): void {
+		$this->primeDb();
+		$this->boardService->method('create')->willReturn($this->newBoard('Roadmap'));
+		$captured = [];
+		$this->stackMapper->method('insert')->willReturnCallback(
+			function (Stack $s) use (&$captured): Stack {
+				$captured[] = $s;
+				$s->setId(30 + count($captured));
+				return $s;
+			}
+		);
+
+		$doc = [
+			'kanso' => ExportService::FORMAT_VERSION,
+			'exportedAt' => 1234,
+			'board' => [
+				'title' => 'Roadmap',
+				'stacks' => [
+					['id' => 1, 'title' => 'Todo', 'sortKey' => 'a', 'role' => 0, 'description' => 'Only cards with a reproducer.'],
+					['id' => 2, 'title' => 'Done', 'sortKey' => 'b', 'role' => 5],
+					['id' => 3, 'title' => 'Huge', 'sortKey' => 'c', 'role' => 0, 'description' => str_repeat('x', StackService::MAX_DESCRIPTION_LENGTH + 500)],
+					['id' => 4, 'title' => 'Blank', 'sortKey' => 'd', 'role' => 0, 'description' => "  \n "],
+				],
+				'cards' => [],
+			],
+		];
+
+		$this->service->import((string)json_encode($doc), 'importer');
+
+		self::assertCount(4, $captured);
+		self::assertSame('Only cards with a reproducer.', $captured[0]->getDescription());
+		self::assertNull($captured[1]->getDescription(), 'a stack without a description stays null');
+		self::assertSame(
+			StackService::MAX_DESCRIPTION_LENGTH,
+			mb_strlen((string)$captured[2]->getDescription()),
+			'an over-long description is truncated to the cap'
+		);
+		self::assertNull(
+			$captured[3]->getDescription(),
+			'a whitespace-only description normalises to null, exactly as a write does'
+		);
 	}
 
 	// ── happy path + remapping ─────────────────────────────────────────────────

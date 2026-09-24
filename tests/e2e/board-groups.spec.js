@@ -33,18 +33,18 @@ test.describe('Board grouping / folders (#3529)', () => {
 		// Create a folder via the inline form.
 		await page.getByRole('button', { name: 'New folder' }).click()
 		const folderInput = page.locator('[data-test="new-folder-input"]')
-		await expect(folderInput).toBeVisible({ timeout: 10_000 })
+		await expect(folderInput).toBeVisible()
 		await folderInput.fill(state.folderName)
 		await page.getByRole('button', { name: 'Create folder' }).click()
 
 		// The folder section appears.
 		const folderSection = page.locator('.board-section', { hasText: state.folderName })
-		await expect(folderSection.first()).toBeVisible({ timeout: 10_000 })
+		await expect(folderSection.first()).toBeVisible()
 
 		// The new board starts Ungrouped: open its folder menu and move it in.
 		const ungrouped = page.locator('[data-test="folder-section-ungrouped"]')
 		const tile = ungrouped.locator('.board-list__tile-wrap', { hasText: state.title })
-		await expect(tile.first()).toBeVisible({ timeout: 10_000 })
+		await expect(tile.first()).toBeVisible()
 		await tile.first().locator('[data-test^="board-options-menu-"] button').first().click()
 
 		// Pick the folder from the move menu.
@@ -55,7 +55,7 @@ test.describe('Board grouping / folders (#3529)', () => {
 		// The board now sits inside the folder section.
 		await expect(
 			folderSection.first().locator('.board-list__tile-wrap', { hasText: state.title }).first(),
-		).toBeVisible({ timeout: 10_000 })
+		).toBeVisible()
 
 		// Capture the created folder id for cleanup, then reload and re-assert.
 		const groups = await api.get('/board-groups')
@@ -69,6 +69,6 @@ test.describe('Board grouping / folders (#3529)', () => {
 		const folderAfter = page.locator('.board-section', { hasText: state.folderName })
 		await expect(
 			folderAfter.first().locator('.board-list__tile-wrap', { hasText: state.title }).first(),
-		).toBeVisible({ timeout: 10_000 })
+		).toBeVisible()
 	})
 })

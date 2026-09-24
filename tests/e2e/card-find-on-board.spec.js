@@ -55,19 +55,26 @@ test.describe('Find the card on board (#10062)', () => {
 		await expect(targetTile(page)).toHaveCount(0)
 
 		await openCardMenu(page, cardUrl(state.targetId))
-		await expect(findAction(page)).toBeVisible({ timeout: 8000 })
+		await expect(findAction(page)).toBeVisible()
 		await findAction(page).click()
 
 		// The modal closed and we are back on the board.
 		await expect(page.locator('.card-modal')).toHaveCount(0, { timeout: 10_000 })
 
 		// The tile is now mounted, on screen, and wearing the "here it is" ring.
-		await expect(targetTile(page)).toBeVisible({ timeout: 10_000 })
+		// The RING is asserted first and on a tight budget, because it is the
+		// perishable half: BoardView clears `revealedCardId` 2.4s after the jump
+		// (the setTimeout next to `revealTimer`). Asserting it after a 10s viewport
+		// wait could look for a class that had already been removed, and a 15s
+		// budget for it would be a wait nothing could ever satisfy. Being in the
+		// viewport, by contrast, is permanent.
+		await expect(targetTile(page)).toBeVisible()
+		// short-budget-ok: the reveal ring is cleared 2.4s after the tile mounts
+		await expect(targetTile(page)).toHaveClass(/card-tile--revealed/, { timeout: 2_000 })
 		await expect(targetTile(page)).toBeInViewport({ timeout: 10_000 })
-		await expect(targetTile(page)).toHaveClass(/card-tile--revealed/)
 
 		// `reveal` is consumed, so a reload does not re-fire the jump.
-		await expect.poll(() => page.url(), { timeout: 10_000 }).not.toContain('reveal=')
+		await expect.poll(() => page.url()).not.toContain('reveal=')
 	})
 
 	test('expands a collapsed column first', async ({ page }) => {
@@ -116,9 +123,21 @@ test.describe('Find the card on board (#10062)', () => {
 		// fp=4 → only Urgent cards. The target has no priority, so it is filtered
 		// out: there is no tile to scroll to and the user has to be told why.
 		await openCardMenu(page, cardUrl(state.targetId, '?fp=4'))
+
+		// Unlike every other test here, this one jumps straight to the card URL
+		// without loading the board first — and the toast below cannot be raised
+		// until the board has loaded: the reveal watcher returns early while
+		// `boardData` is null (src/views/BoardView.vue). A visible column proves
+		// that 61-card GET landed, so the toast's 6s budget is spent on the toast
+		// rather than on the board behind it. `.card-modal` alone would not: the
+		// modal renders its skeleton before either request answers.
+		await expect(page.locator('.stack-column').first()).toBeVisible()
 		await findAction(page).click()
 
-		await expect(toast(page, /hidden by the current filter/i)).toBeVisible({ timeout: 10_000 })
+		// A plain toast dismisses itself at TOAST_DEFAULT_TIMEOUT = 7s, and the
+		// action that raises it is client-side, so the budget stays under that life.
+		// short-budget-ok: the toast is gone at 7s (TOAST_DEFAULT_TIMEOUT)
+		await expect(toast(page, /hidden by the current filter/i)).toBeVisible({ timeout: 6_000 })
 		await expect(targetTile(page)).toHaveCount(0)
 	})
 

@@ -64,10 +64,10 @@ test.describe('Scroll-to-comment deep links (#3870)', () => {
 		const errors = collectConsoleErrors(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/card/${state.cardId}?comment=${targetId}`)
 
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const target = page.locator(`#comment-${targetId}`)
-		await expect(target).toBeVisible({ timeout: 10_000 })
+		await expect(target).toBeVisible()
 
 		// The transient highlight class lands on the target while it fades.
 		await expect(target).toHaveClass(/card-modal__comment-group--highlight/, { timeout: 5000 })
@@ -89,10 +89,10 @@ test.describe('Scroll-to-comment deep links (#3870)', () => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/card/${state.cardId}#comment-${targetId}`)
 
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const target = page.locator(`#comment-${targetId}`)
-		await expect(target).toBeVisible({ timeout: 10_000 })
+		await expect(target).toBeVisible()
 		await expect(target).toHaveClass(/card-modal__comment-group--highlight/, { timeout: 5000 })
 		await expect(target).toBeInViewport({ timeout: 5000 })
 	})
@@ -121,10 +121,10 @@ test.describe('Scroll-to-comment deep links (#3870)', () => {
 		const targetId = state.comments[6]
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/card/${state.cardId}?comment=${targetId}`)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const target = page.locator(`#comment-${targetId}`)
-		await expect(target).toBeVisible({ timeout: 10_000 })
+		await expect(target).toBeVisible()
 		// The scroll has run by the time the highlight is on, and the composer is
 		// provably not on screen yet - so the reflow below really is after it.
 		await expect(target).toHaveClass(/card-modal__comment-group--highlight/, { timeout: 5000 })
@@ -133,7 +133,7 @@ test.describe('Scroll-to-comment deep links (#3870)', () => {
 
 		// Now let the composer in and shrink the thread pane under the target.
 		releaseBoardRead()
-		await expect(page.locator('.card-modal__composer .kanso-md-editor')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.card-modal__composer .kanso-md-editor')).toBeVisible()
 
 		// The deep link's target must survive that reflow, not be left below it.
 		await expect(target).toBeInViewport({ timeout: 5000 })
@@ -143,10 +143,10 @@ test.describe('Scroll-to-comment deep links (#3870)', () => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/card/${state.cardId}?comment=${state.replyId}`)
 
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const reply = page.locator(`#comment-${state.replyId}`)
-		await expect(reply).toBeVisible({ timeout: 10_000 })
+		await expect(reply).toBeVisible()
 		await expect(reply).toHaveClass(/card-modal__comment--highlight/, { timeout: 5000 })
 	})
 
@@ -163,9 +163,9 @@ test.describe('Scroll-to-comment deep links (#3870)', () => {
 		// A comment id that does not exist in this thread.
 		await page.goto(`${BASE}/index.php/apps/kanso#/card/${state.cardId}?comment=99999999`)
 
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 		// Card opens fine and the thread renders.
-		await expect(page.locator('.card-modal__comment-group').first()).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.card-modal__comment-group').first()).toBeVisible()
 		// Nothing got the highlight class.
 		await expect(page.locator('.card-modal__comment-group--highlight')).toHaveCount(0)
 

@@ -267,6 +267,10 @@ test.describe('GitHub webhook issue intake', () => {
 	})
 
 	test('an archived intake card still dedupes a redelivered opened event', async () => {
+		// Intake has to be on for a card to be created at all. A retry re-runs only
+		// this test, so configure it here instead of leaning on the test above.
+		await api('PUT', `/boards/${boardId}/webhook/intake`, { stackId: inboxStackId, label: '' })
+
 		const issueNumber = ++issueSeq
 		const raw = openedBody(issueNumber)
 		const res = await postWebhook(boardId, raw, sign(raw, secret))
@@ -333,7 +337,7 @@ test.describe('Issue intake settings UI', () => {
 		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		await page.getByRole('tab', { name: /automation/i }).click()
 		// The GitHub group auto-expands while the webhook is active.
-		await expect(page.locator('#bs-webhook-intake-stack')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('#bs-webhook-intake-stack')).toBeVisible()
 	}
 
 	test('picking a stack and a label filter persists', async ({ page }) => {

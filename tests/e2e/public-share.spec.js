@@ -1464,7 +1464,7 @@ test.describe('Public board serves the images embedded in a shared card', () => 
 			// DECODED intrinsic size separates a rendered picture from the bug.
 			await expect.poll(
 				async () => img.evaluate((el) => el.naturalWidth),
-				{ timeout: 10_000, message: `${selector} never decoded — the bytes did not arrive` },
+				{ message: `${selector} never decoded — the bytes did not arrive` },
 			).toBe(PNG_W)
 			expect(await img.evaluate((el) => el.naturalHeight)).toBe(PNG_H)
 		}

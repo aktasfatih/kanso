@@ -26,13 +26,13 @@ test.describe('Card Activity feed', () => {
 	test('the Activity tab lists what happened to the card, newest-first', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Switch to the Activity tab.
 		await page.locator('.card-modal__discussion-tab', { hasText: 'Activity' }).click()
 
 		const rows = page.locator('.card-modal__activity-row')
-		await expect(rows.first()).toBeVisible({ timeout: 8_000 })
+		await expect(rows.first()).toBeVisible()
 		// created + commented + priority-change → at least 3 rows.
 		expect(await rows.count()).toBeGreaterThanOrEqual(3)
 
@@ -63,11 +63,11 @@ test.describe('Card Activity feed', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// The time-tracking list is on the main pane, before we go near Activity.
 		const trackedRow = page.locator('.card-modal__time-entry', { hasText: 'Pairing' })
-		await expect(trackedRow).toHaveCount(1, { timeout: 8_000 })
+		await expect(trackedRow).toHaveCount(1)
 		// UNCHANGED: still the relative label alone — no <time>, no exact stamp.
 		await expect(trackedRow.locator('.card-modal__activity-time')).toHaveCount(1)
 		await expect(trackedRow.locator('.card-modal__activity-time time')).toHaveCount(0)
@@ -75,7 +75,7 @@ test.describe('Card Activity feed', () => {
 
 		await page.locator('.card-modal__discussion-tab', { hasText: 'Activity' }).click()
 		const rows = page.locator('.card-modal__activity-row')
-		await expect(rows.first()).toBeVisible({ timeout: 8_000 })
+		await expect(rows.first()).toBeVisible()
 
 		// One exact stamp per row — no row is left with a relative label only.
 		const stamps = page.locator('.card-modal__activity-row time.card-modal__activity-exact')
@@ -112,12 +112,12 @@ test.describe('Card Activity feed', () => {
 
 		await ncLogin(page)
 		await page.goto(cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open the Activity tab and record what's there (just the "created" row).
 		await page.locator('.card-modal__discussion-tab', { hasText: 'Activity' }).click()
 		const rows = page.locator('.card-modal__activity-row')
-		await expect(rows.first()).toBeVisible({ timeout: 8_000 })
+		await expect(rows.first()).toBeVisible()
 		const before = await rows.count()
 
 		// Only start watching for console errors now that the app + modal have
@@ -184,12 +184,12 @@ test.describe('Card Activity feed', () => {
 
 		await ncLogin(page)
 		await page.goto(cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open the Activity tab and wait for a genuinely multi-entry feed.
 		await page.locator('.card-modal__discussion-tab', { hasText: 'Activity' }).click()
 		const rows = page.locator('.card-modal__activity-row')
-		await expect(rows.first()).toBeVisible({ timeout: 8_000 })
+		await expect(rows.first()).toBeVisible()
 		await expect.poll(async () => await rows.count()).toBeGreaterThanOrEqual(10)
 
 		// Let any straggling avatar/status requests settle.

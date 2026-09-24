@@ -269,6 +269,134 @@ class ParticipantServiceTest extends TestCase {
 		}
 	}
 
+	// ---- the cap, reported (#10704) ----------------------------------------
+	//
+	// The cap itself is old; what was missing is any way for a caller to know it
+	// bit. Without that the picker showed the first page as if it were the board
+	// and everyone past it was unassignable with nothing saying so.
+
+	/**
+	 * Board owned by alice, shared with one group of $size members named
+	 * "Member NN" (uid mNN).
+	 */
+	private function boardWithGroupOf(int $size): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->aclMapper->method('findByBoard')->with(1)
+			->willReturn([$this->groupAcl('devs')]);
+		$this->userManager->method('get')->with('alice')
+			->willReturn($this->user('alice', 'Alice Adams'));
+
+		$members = [];
+		for ($i = 0; $i < $size; $i++) {
+			$members[] = $this->user(sprintf('m%02d', $i), sprintf('Member %02d', $i));
+		}
+		$group = $this->createMock(IGroup::class);
+		$group->method('getUsers')->willReturn($members);
+		$this->groupManager->method('get')->with('devs')->willReturn($group);
+	}
+
+	public function testSearchReportsTheCapWhenItActuallyShedPeople(): void {
+		$this->boardWithGroupOf(40);
+
+		$page = $this->service->searchParticipants(1, 'alice', null);
+		self::assertCount(ParticipantService::RESULT_LIMIT, $page['participants']);
+		self::assertTrue($page['truncated']);
+		self::assertSame(ParticipantService::RESULT_LIMIT, $page['limit']);
+	}
+
+	public function testSearchReportsAShortBoardAsComplete(): void {
+		// Owner + 3 members: everybody fits, so the picker may say so and show
+		// no caveat at all. Over-reporting here would nag on every small board.
+		$this->boardWithGroupOf(3);
+
+		$page = $this->service->searchParticipants(1, 'alice', null);
+		self::assertCount(4, $page['participants']);
+		self::assertFalse($page['truncated']);
+	}
+
+	public function testSearchReportsAnExactlyFullPageAsComplete(): void {
+		// Owner + 24 members = exactly the cap, with nothing held back.
+		$this->boardWithGroupOf(ParticipantService::RESULT_LIMIT - 1);
+
+		$page = $this->service->searchParticipants(1, 'alice', null);
+		self::assertCount(ParticipantService::RESULT_LIMIT, $page['participants']);
+		self::assertFalse($page['truncated']);
+	}
+
+	public function testSearchReachesAMemberTheCapShedsAndReportsTheNarrowedListComplete(): void {
+		// THE defect: "Member 39" sorts past the cap, so no unfiltered page will
+		// ever list them. Searching for them must - and the narrowed result is
+		// itself complete, so the picker stops hedging.
+		$this->boardWithGroupOf(40);
+
+		$unfiltered = array_column($this->service->getParticipants(1, 'alice'), 'uid');
+		self::assertNotContains('m39', $unfiltered);
+
+		$page = $this->service->searchParticipants(1, 'alice', 'member 39');
+		self::assertSame([['uid' => 'm39', 'displayName' => 'Member 39']], $page['participants']);
+		self::assertFalse($page['truncated']);
+	}
+
+	public function testSearchReportsTheCapOnAQueryThatMatchesTooMany(): void {
+		// A substring broad enough to match everyone is capped like any other
+		// page, and says so rather than silently dropping the tail.
+		$this->boardWithGroupOf(40);
+
+		$page = $this->service->searchParticipants(1, 'alice', 'member');
+		self::assertCount(ParticipantService::RESULT_LIMIT, $page['participants']);
+		self::assertTrue($page['truncated']);
+	}
+
+	public function testSearchReportsTheCapWhenDirectMembersAlreadyFillIt(): void {
+		// 30 direct user ACLs plus a group share. The group is deliberately NOT
+		// expanded (that expansion is the cost the cap exists to avoid), so the
+		// answer is the safe one: partial.
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$acls = [];
+		$map = [['alice', $this->user('alice', 'Alice Adams')]];
+		for ($i = 0; $i < 30; $i++) {
+			$uid = sprintf('u%02d', $i);
+			$acls[] = $this->userAcl($uid);
+			$map[] = [$uid, $this->user($uid, sprintf('User %02d', $i))];
+		}
+		$acls[] = $this->groupAcl('devs');
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn($acls);
+		$this->userManager->method('get')->willReturnMap($map);
+		// Expanding the group would be the regression this guards against.
+		$this->groupManager->expects(self::never())->method('get');
+
+		$page = $this->service->searchParticipants(1, 'alice', null);
+		self::assertCount(ParticipantService::RESULT_LIMIT, $page['participants']);
+		self::assertTrue($page['truncated']);
+	}
+
+	public function testSearchRefusesANonMemberBeforeEnumeratingAnyone(): void {
+		// Denial: searching is still a read of the board's membership, so a
+		// non-member must not be able to probe who is on it one substring at a
+		// time. The check happens BEFORE any ACL or directory lookup.
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'mallory', PermissionService::PERMISSION_READ)
+			->willThrowException(new NotPermittedException());
+		$this->aclMapper->expects(self::never())->method('findByBoard');
+		$this->groupManager->expects(self::never())->method('get');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->searchParticipants(1, 'mallory', 'alice');
+	}
+
+	public function testSearchRejectsADeletedBoard(): void {
+		$board = $this->board();
+		$board->setDeletedAt(1234);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->aclMapper->expects(self::never())->method('findByBoard');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->searchParticipants(1, 'alice', 'alice');
+	}
+
 	public function testExternalRoleMembersAppearInTheAssigneePicker(): void {
 		// #3744: the picker is role-blind by design - an external (client-side)
 		// member must be assignable and @mentionable like anyone else.

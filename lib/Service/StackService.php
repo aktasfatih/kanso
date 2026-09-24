@@ -29,6 +29,13 @@ use OCP\IDBConnection;
  */
 class StackService {
 	private const MAX_TITLE_LENGTH = 100;
+	/**
+	 * Cap on a column's free-text description. A column blurb is a sentence or
+	 * two saying what belongs in the column - not a document (the card body is
+	 * where long text lives, at 64k). The column stores TEXT, so this is a
+	 * product limit, not a storage one.
+	 */
+	public const MAX_DESCRIPTION_LENGTH = 2000;
 
 	public function __construct(
 		private StackMapper $stackMapper,
@@ -92,10 +99,12 @@ class StackService {
 	 * Stack::ROLE_* constants (moving a card into a done-role stack stamps its
 	 * done_at - see CardService::move); `wipLimit` is a non-negative soft cap
 	 * (null clears it - no server-side enforcement, the client warns).
+	 * `description` is free-form plain text explaining what belongs in the
+	 * column ('' clears it), capped at {@see self::MAX_DESCRIPTION_LENGTH}.
 	 *
 	 * @throws DoesNotExistException if the stack or its board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not edit the board
-	 * @throws InvalidInputException on invalid title, role or wip limit
+	 * @throws InvalidInputException on invalid title, role, wip limit or an over-long description
 	 */
 	public function update(
 		int $id,
@@ -105,6 +114,7 @@ class StackService {
 		?int $wipLimit,
 		string $uid,
 		?string $color = null,
+		?string $description = null,
 	): Stack {
 		$stack = $this->loadStack($id);
 		$board = $this->loadBoard($stack->getBoardId());
@@ -126,6 +136,10 @@ class StackService {
 		if ($color !== null) {
 			// '' clears; otherwise the shared validator normalises to bare hex.
 			$stack->setColor($color === '' ? null : ColorValidator::assertValid($color));
+		}
+		if ($description !== null) {
+			// '' (or whitespace only) clears the description.
+			$stack->setDescription($this->validateDescription($description));
 		}
 
 		// Atomic entity-write + change-row (#3579); push after commit.
@@ -372,6 +386,37 @@ class StackService {
 			throw new InvalidInputException('WIP limit must not be negative');
 		}
 		return $wipLimit;
+	}
+
+	/**
+	 * The ONE normalisation rule for a column description: trimmed, and ''
+	 * (or whitespace only) means "no description", so clearing it from a client
+	 * is a plain empty submit. Public because {@see ImportService} normalises an
+	 * imported document by the same rule - a stack that arrives with "   " must
+	 * end up null there too, not as a blank line under the column title.
+	 *
+	 * Plain text throughout: nothing renders it as markdown or HTML.
+	 */
+	public static function normalizeDescription(?string $description): ?string {
+		if ($description === null) {
+			return null;
+		}
+		$description = trim($description);
+		return $description === '' ? null : $description;
+	}
+
+	/**
+	 * @return string|null null when cleared
+	 * @throws InvalidInputException if the description exceeds the cap
+	 */
+	private function validateDescription(string $description): ?string {
+		$normalized = self::normalizeDescription($description);
+		if ($normalized !== null && mb_strlen($normalized) > self::MAX_DESCRIPTION_LENGTH) {
+			throw new InvalidInputException(
+				'Description must not exceed ' . self::MAX_DESCRIPTION_LENGTH . ' characters'
+			);
+		}
+		return $normalized;
 	}
 
 	/**

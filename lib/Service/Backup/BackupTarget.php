@@ -51,6 +51,15 @@ interface BackupTarget {
 	 * Removes one file. A file that is already gone is success, not a failure -
 	 * retention must not blow up on a concurrent delete. Anything else throws.
 	 *
+	 * ONLY A FILE. A name that resolves to something else - a directory wearing
+	 * a backup filename, in a Files folder an admin can put anything in - is NOT
+	 * removed and is NOT silently treated as done; it raises
+	 * {@see \OCP\Files\NotFoundException}, the same answer {@see read()} gives.
+	 * The admin delete endpoint (#10675) passes a client-supplied name straight
+	 * through to here, and recursively deleting a directory it never wrote is
+	 * not something an implementation may do on Kanso's behalf.
+	 *
+	 * @throws \OCP\Files\NotFoundException when the name resolves to a non-file
 	 * @throws \Throwable when an existing file could not be removed
 	 */
 	public function delete(string $name): void;

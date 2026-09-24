@@ -9,18 +9,39 @@ async function openTrashPage(page) {
 	// Trash now lives in the consolidated ⋯ More overflow menu.
 	await page.getByRole('button', { name: 'More' }).click()
 	const trashBtn = page.getByRole('menuitem', { name: 'Deleted cards' })
-	await expect(trashBtn).toBeVisible({ timeout: 8000 })
+	await expect(trashBtn).toBeVisible()
 	await trashBtn.click()
 	// Deep-linkable routed page.
 	await expect(page).toHaveURL(/#\/board\/\d+\/trash/, { timeout: 8000 })
-	await page.waitForSelector('.trash-view', { timeout: 8000 })
+	await page.waitForSelector('.trash-view', { timeout: 15_000 })
 	// Give the trash query time to resolve.
 	await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
 }
 
+/**
+ * Make sure `cardId` is sitting in `boardId`'s trash, soft-deleting it if it is
+ * not.
+ *
+ * Every test here that reads or acts on the trash calls this, instead of
+ * inheriting the soft-delete performed by the first test. Playwright's retry
+ * re-runs ONLY the failing test in a fresh worker: `beforeAll` runs again and
+ * recreates a *live* card, while the sibling test that trashed it does not run
+ * at all. A sibling dependency therefore cannot be satisfied on retry — which
+ * is how one slow-runner miss became three identical failures.
+ *
+ * Reads the trash first rather than DELETEing blind: CardService::delete()
+ * loads the card through the non-deleted lookup, so re-deleting an already
+ * trashed card is a 404, not a no-op.
+ */
+async function ensureTrashed(boardId, cardId) {
+	const trash = await api.get(`/boards/${boardId}/trash`)
+	if (Array.isArray(trash) && trash.some((c) => c.id === cardId)) return
+	await api.delete(`/cards/${cardId}`)
+}
+
 async function backToBoard(page) {
 	await page.locator('.trash-view__back').click()
-	await page.waitForSelector('.board-view__header', { timeout: 8000 })
+	await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 }
 
 // ── Test suite ───────────────────────────────────────────────────────────────
@@ -65,10 +86,10 @@ test.describe('Trash', () => {
 	test('soft-deleted card appears in the Trash page', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// Soft-delete the card via the API (existing DELETE endpoint).
-		await api.delete(`/cards/${state.cardId}`)
+		await ensureTrashed(state.boardId, state.cardId)
 
 		// Reload so the board query reflects the deletion.
 		await page.reload()
@@ -83,21 +104,27 @@ test.describe('Trash', () => {
 
 		// The card should appear in the virtualized trash list.
 		const trashItem = page.locator('.trash-view__row-title').filter({ hasText: 'Trashable Card' })
-		await expect(trashItem).toBeVisible({ timeout: 8000 })
+		await expect(trashItem).toBeVisible()
 	})
 
 	test('the Trash page is deep-linkable via its route', async ({ page }) => {
+		// Self-sufficient: this test needs a trashed card, so it makes one.
+		await ensureTrashed(state.boardId, state.cardId)
+
 		await ncLogin(page)
 		// Navigate straight to the trash URL (deep link, no board visit first).
 		await page.goto(`${state.boardUrl}/trash`)
-		await page.waitForSelector('.trash-view', { timeout: 12_000 })
+		await page.waitForSelector('.trash-view', { timeout: 15_000 })
 		await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
 
 		const trashItem = page.locator('.trash-view__row-title').filter({ hasText: 'Trashable Card' })
-		await expect(trashItem).toBeVisible({ timeout: 8000 })
+		await expect(trashItem).toBeVisible()
 	})
 
 	test('restoring a card removes it from Trash and returns it to the board', async ({ page }) => {
+		// Self-sufficient: restoring needs something in the trash to restore.
+		await ensureTrashed(state.boardId, state.cardId)
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
@@ -107,12 +134,12 @@ test.describe('Trash', () => {
 
 		// The card must be present in the trash list.
 		const trashItem = page.locator('.trash-view__row-title').filter({ hasText: 'Trashable Card' })
-		await expect(trashItem).toBeVisible({ timeout: 8000 })
+		await expect(trashItem).toBeVisible()
 
 		// Click the Restore button on the card row.
 		const cardItem = page.locator('.trash-view__row').filter({ hasText: 'Trashable Card' })
 		const restoreBtn = cardItem.locator('button', { hasText: 'Restore' })
-		await expect(restoreBtn).toBeVisible({ timeout: 5000 })
+		await expect(restoreBtn).toBeVisible()
 		await restoreBtn.click()
 
 		// The item should disappear from the trash list (optimistic removal + invalidation).
@@ -123,12 +150,14 @@ test.describe('Trash', () => {
 
 		// The card should have reappeared on the board.
 		const boardCardTile = page.locator('.card-tile').filter({ hasText: 'Trashable Card' })
-		await expect(boardCardTile).toBeVisible({ timeout: 10_000 })
+		await expect(boardCardTile).toBeVisible()
 	})
 
 	test('permanently deleting a card removes it from Trash and it is not recoverable via API', async ({ page }) => {
-		// Re-soft-delete the card so it is in the trash again.
-		await api.delete(`/cards/${state.cardId}`)
+		// Re-soft-delete the card so it is in the trash again — unless the restore
+		// test did not run (a retry runs this test alone), in which case it is
+		// already there and a second DELETE would 404.
+		await ensureTrashed(state.boardId, state.cardId)
 
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
@@ -139,12 +168,12 @@ test.describe('Trash', () => {
 
 		// The card must appear in the trash.
 		const trashItem = page.locator('.trash-view__row-title').filter({ hasText: 'Trashable Card' })
-		await expect(trashItem).toBeVisible({ timeout: 8000 })
+		await expect(trashItem).toBeVisible()
 
 		// Click "Delete permanently" to reveal the inline confirm.
 		const cardItem = page.locator('.trash-view__row').filter({ hasText: 'Trashable Card' })
 		const deleteBtn = cardItem.locator('button', { hasText: 'Delete permanently' })
-		await expect(deleteBtn).toBeVisible({ timeout: 5000 })
+		await expect(deleteBtn).toBeVisible()
 		await deleteBtn.click()
 
 		// The confirm row should appear.

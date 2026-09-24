@@ -36,7 +36,7 @@ test.describe('Default board on start', () => {
 			(url) => url.hash.includes(`/board/${state.boardId}`),
 			{ timeout: 15_000 },
 		)
-		await expect(page.locator('.board-view__header')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.board-view__header')).toBeVisible()
 
 		// Clearing the preference restores the board-list landing.
 		expect((await api.put('/settings', { defaultBoardId: null })).defaultBoardId).toBeNull()
@@ -63,10 +63,10 @@ test.describe('Default board on start', () => {
 		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		await page.getByRole('tab', { name: /general/i }).click()
 		const startHere = page.getByText('Open this board when Kanso starts', { exact: true })
-		await expect(startHere).toBeVisible({ timeout: 10_000 })
+		await expect(startHere).toBeVisible()
 		await startHere.click()
 		await expect
-			.poll(async () => (await api.get('/settings')).defaultBoardId, { timeout: 10_000 })
+			.poll(async () => (await api.get('/settings')).defaultBoardId)
 			.toBe(state.boardId)
 		await page.locator('.bs-modal__close').click()
 		await expect(page.locator('.bs-modal')).toBeHidden({ timeout: 10_000 })
@@ -76,19 +76,19 @@ test.describe('Default board on start', () => {
 		//    the request shape that used to wipe the board on the way through.
 		await page.locator('[data-test="open-settings"]').click()
 		const dialog = page.getByRole('dialog', { name: /Kanso settings/i })
-		await expect(dialog).toBeVisible({ timeout: 10_000 })
+		await expect(dialog).toBeVisible()
 		await dialog.getByText('Show the discussion below the card', { exact: true }).click()
 		await expect(page.locator('input[data-test="setting-discussion-bottom"]')).toBeChecked()
 		await dialog.getByText('Show formatting toolbar', { exact: true }).click()
 		await dialog.getByText('Inbox', { exact: true }).click()
 		await expect
-			.poll(async () => (await api.get('/settings')).cardDiscussionPosition, { timeout: 10_000 })
+			.poll(async () => (await api.get('/settings')).cardDiscussionPosition)
 			.toBe('bottom')
 		await expect
-			.poll(async () => (await api.get('/settings')).editorToolbarHidden, { timeout: 10_000 })
+			.poll(async () => (await api.get('/settings')).editorToolbarHidden)
 			.toBe(true)
 		await expect
-			.poll(async () => (await api.get('/settings')).hiddenNavSections, { timeout: 10_000 })
+			.poll(async () => (await api.get('/settings')).hiddenNavSections)
 			.toEqual(['inbox'])
 		await page.keyboard.press('Escape')
 
@@ -104,7 +104,7 @@ test.describe('Default board on start', () => {
 			(url) => url.hash.includes(`/board/${state.boardId}`),
 			{ timeout: 15_000 },
 		)
-		await expect(page.locator('.board-view__header')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.board-view__header')).toBeVisible()
 
 		// 4. …and the stored preference really is intact, not merely re-derived.
 		expect((await api.get('/settings')).defaultBoardId).toBe(state.boardId)

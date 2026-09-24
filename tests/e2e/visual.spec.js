@@ -24,7 +24,7 @@ test.describe('Visual proportions', () => {
 		// Open the new-label color picker grid
 		await page.getByRole('button', { name: /pick color for new label/i }).click()
 		const option = page.locator('.label-settings__color-option').first()
-		await expect(option).toBeVisible({ timeout: 5000 })
+		await expect(option).toBeVisible()
 
 		// A circle must be square: rendered width and height match (within 1px).
 		const dims = await option.evaluate((el) => {

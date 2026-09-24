@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { request as apiRequest } from '@playwright/test'
-import { test, expect, ncLogin, authFor, ADMIN, TESTER, BASE } from './helpers.js'
+import { test, expect, ncLogin, authFor, makeApi, adminAuth, toast, ADMIN, TESTER, BASE } from './helpers.js'
 
 // GitHub #161 — where scheduled backups are written, and what the panel is
 // allowed to say about it.
@@ -39,6 +39,87 @@ test.describe('Kanso admin backup settings', () => {
 	// storageState guard).
 	test.use({ storageState: { cookies: [], origins: [] } })
 
+	// ── How this file stays safe on a SHARED dev stack (card #10707) ──────────
+	//
+	// Every other spec in this suite acts on a board it made. This one acts on
+	// INSTANCE state: the backup config lives in `oc_appconfig`, there is exactly
+	// one of it, and the archives it points at are shared by whoever else is
+	// using the same stack. E2E_ISOLATE cannot namespace any of that — it gives a
+	// worker its own USER, and there is only ever one admin panel. So the
+	// isolation is built here instead, and it is deliberately NOT "run this
+	// against a throwaway stack":
+	//
+	//   1. NOTHING IN THIS FILE MIGRATES. The spec drives an instance that is
+	//      already up; it never boots a stack, so it cannot move the schema under
+	//      another worktree. (Booting a stack from a feature worktree is the
+	//      hazard that kept e2e off this panel — a throwaway stack would have
+	//      brought that hazard back in a second copy rather than removing it.)
+	//   2. THE CONFIG IS SNAPSHOT AND PUT BACK after every test, so an aborted
+	//      run cannot leave the instance pointed at a destination, an account or
+	//      a retention count nobody chose. That is the only durable state the
+	//      panel writes.
+	//   3. DESTRUCTION IS SCOPED TO WHAT THIS SPEC MADE. The delete tests run
+	//      against the app-data destination only — never a real Files folder —
+	//      each one seeds its own throwaway board, and `afterAll` removes exactly
+	//      the archives that appeared while the file ran, by name, plus those
+	//      boards. An archive that was already there when it started is never
+	//      touched — that is the difference between a cleanup and a purge, and on
+	//      a backup panel it is the whole difference. Retention is
+	//      raised, not lowered, for the same reason: a run PRUNES to that number
+	//      per board, and a low one would delete somebody else's copies.
+	//
+	// What is deliberately NOT put back is the last-run record (`lastRunAt` /
+	// `lastRunStatus`): a backup really did run, and rewriting that line would
+	// make the panel lie about it. It is a fact about the instance, not a
+	// setting somebody chose.
+	//
+	// The result is a spec that leaves the instance byte-for-byte as it found it,
+	// and needs no privileges, ports or database of its own to do it.
+	//
+	// `api` from helpers.js is the WORKER's user under E2E_ISOLATE, which every
+	// endpoint below answers with a 403. These are genuine admin-only operations,
+	// so they get an explicitly admin-bound client.
+	const admin = makeApi(adminAuth)
+	const storedNames = async () => (await admin.get('/admin/backup/files')).files.map((f) => f.name)
+
+	let savedConfig = null
+	let archivesOnEntry = new Set()
+	const seededBoards = []
+
+	test.beforeAll(async () => {
+		savedConfig = await admin.get('/admin/backup')
+		archivesOnEntry = new Set(await storedNames())
+	})
+
+	test.afterEach(async () => {
+		// Whatever a test did to the instance-wide config, and however it ended.
+		if (savedConfig) {
+			await admin.put('/admin/backup', savedConfig)
+		}
+	})
+
+	test.afterAll(async () => {
+		// Only what this file added. A listing that cannot be read is left alone
+		// rather than guessed at — deleting on a guess is the one thing a cleanup
+		// for a backup panel must never do.
+		let names = []
+		try {
+			names = await storedNames()
+		} catch (e) {
+			return
+		}
+		for (const name of names) {
+			if (!archivesOnEntry.has(name)) {
+				await admin.raw('DELETE', '/admin/backup/files?name=' + encodeURIComponent(name))
+			}
+		}
+		// ...and the throwaway boards those archives were made from. One of them
+		// is deleted inside a test already, which is why this tolerates a 404.
+		for (const boardId of seededBoards) {
+			await admin.raw('DELETE', `/boards/${boardId}`)
+		}
+	})
+
 	// Claims the FILES-FOLDER copy may never make, scoped to the ACTIVITY entries
 	// rather than to notifications — a suppression verb applied to the activity
 	// stream. The legitimate notification wording ("Never", "Only when a backup
@@ -69,6 +150,10 @@ test.describe('Kanso admin backup settings', () => {
 		'#kanso-backup-account-hint',
 		'#kanso-backup-notify-hint',
 		'#kanso-backup-stored-hint',
+		// What deleting a stored backup costs, and what an orphaned row means
+		// (#10675) — held to the same cap as everything else on this page.
+		'#kanso-backup-delete-hint',
+		'#kanso-backup-orphan-hint',
 	]
 
 	// Fields and copy that only mean something when the archives go into Files.
@@ -78,6 +163,10 @@ test.describe('Kanso admin backup settings', () => {
 		'#kanso-backup-path',
 		'#kanso-backup-destination-hint-files',
 	]
+	// NOT in the list above, deliberately: #kanso-backup-delete-hint-files and
+	// its app-data twin follow the SAVED destination the listing reports, not the
+	// dropdown — they sit beside a button that acts on what is persisted, right
+	// now. Everything else here is forward-looking copy about the next run.
 
 	const gotoPanel = async (page) => {
 		await ncLogin(page, ADMIN)
@@ -85,6 +174,83 @@ test.describe('Kanso admin backup settings', () => {
 		const section = page.locator('#kanso-backup-settings')
 		await expect(section).toBeVisible()
 		return section
+	}
+
+	/**
+	 * Puts TWO archives this spec owns into the app-data store, by making two
+	 * boards of its own and running a backup from the panel — the same two clicks
+	 * an admin does, not an API call behind the panel's back.
+	 *
+	 * The second archive is the CONTROL row, and it is seeded rather than picked
+	 * out of whatever the instance happens to hold: it is what keeps "the row
+	 * went" from passing on a table that emptied itself, and "orphaned" from
+	 * passing on a badge painted onto every row, so it must exist on a CI
+	 * instance that has barely any boards yet (this file sorts first, so it runs
+	 * before most specs have made any).
+	 *
+	 * @param {import('@playwright/test').Page} page the admin's page
+	 * @return {Promise<{boardId: number, name: string, neighbour: string}>} seeded state
+	 */
+	const seedArchive = async (page) => {
+		const stamp = Date.now()
+		const board = await admin.post('/boards', { title: `Backup e2e ${stamp}` })
+		const other = await admin.post('/boards', { title: `Backup e2e control ${stamp}` })
+		seededBoards.push(board.id, other.id)
+
+		await gotoPanel(page)
+		await page.selectOption('#kanso-backup-destination', 'appdata')
+		// Nextcloud's .checkbox rule parks the input off-screen and paints the
+		// label, so the label is the only clickable half of the control.
+		const enabledBox = page.locator('#kanso-backup-enabled')
+		if (!await enabledBox.isChecked()) {
+			await page.click('label[for="kanso-backup-enabled"]')
+		}
+		await expect(enabledBox).toBeChecked()
+		// Far above anything a dev box holds. A run prunes each board down to this
+		// many archives, so a small number here would delete copies another
+		// session left behind — see the isolation note at the top of the file.
+		await page.fill('#kanso-backup-retention', '30')
+
+		await Promise.all([
+			page.waitForResponse((r) => r.url().includes('/api/admin/backup/run') && r.ok()),
+			page.click('#kanso-backup-run'),
+		])
+
+		const row = page.locator(`#kanso-backup-file-rows tr[data-name^="kanso-board-${board.id}-"]`)
+		const controlRow = page.locator(`#kanso-backup-file-rows tr[data-name^="kanso-board-${other.id}-"]`)
+		await expect(row).toHaveCount(1)
+		await expect(controlRow).toHaveCount(1)
+
+		return {
+			boardId: board.id,
+			name: await row.getAttribute('data-name'),
+			neighbour: await controlRow.getAttribute('data-name'),
+		}
+	}
+
+	/**
+	 * Clicks a row's Delete and answers the confirm it must raise.
+	 *
+	 * `window.confirm` blocks the page, and the click that opened it does not
+	 * resolve until somebody answers — so the answer is wired up BEFORE the
+	 * click rather than awaited after it. Returning the question is what makes
+	 * this assert rather than merely cope: a Delete that stopped asking would
+	 * leave `asked` null here, which is the whole point of the control.
+	 *
+	 * @param {import('@playwright/test').Page} page the admin's page
+	 * @param {import('@playwright/test').Locator} row the archive's row
+	 * @param {'accept'|'dismiss'} answer what to tell the confirm
+	 * @return {Promise<string>} the question it asked
+	 */
+	const clickDelete = async (page, row, answer) => {
+		let asked = null
+		page.once('dialog', async (dialog) => {
+			asked = dialog.message()
+			await (answer === 'accept' ? dialog.accept() : dialog.dismiss())
+		})
+		await row.locator('button.kanso-backup-delete').click()
+		expect(asked, 'Delete must ask before it removes anything').not.toBeNull()
+		return asked
 	}
 
 	test('the backup account field explains how to keep backups out of your own activity feed', async ({ page }) => {
@@ -433,6 +599,17 @@ test.describe('Kanso admin backup settings', () => {
 	})
 
 	test('a run into app data lists its backups and the download returns a real zip', async ({ page, request }) => {
+		// A board of this spec's own, BEFORE the run. A run archives every live
+		// board on the instance (BackupService::run over BoardMapper::findAll),
+		// so on an instance that happens to hold none it succeeds having written
+		// nothing: the listing is then legitimately empty and no wait can make a
+		// row appear. That is reachable on CI — a fresh stack holds no boards and
+		// the parallel worker's specs delete and recreate theirs — and it is what
+		// made this the one flaky test in the file. Every other test here already
+		// seeds through seedArchive() for exactly this reason.
+		const board = await admin.post('/boards', { title: `Backup e2e run ${Date.now()}` })
+		seededBoards.push(board.id)
+
 		await gotoPanel(page)
 
 		// Switch to app data and take a backup from the panel itself — the whole
@@ -445,22 +622,38 @@ test.describe('Kanso admin backup settings', () => {
 			await page.click('label[for="kanso-backup-enabled"]')
 		}
 		await expect(enabledBox).toBeChecked()
-		await page.fill('#kanso-backup-retention', '2')
-		await page.click('#kanso-backup-run')
+		// 30, not 2: a run prunes EVERY board down to this many archives, so a
+		// small number deletes copies another session left behind — the isolation
+		// note at the top of this file, which seedArchive() already honours.
+		await page.fill('#kanso-backup-retention', '30')
 
-		// The listing is the ONLY view of an app-data backup; a row must appear.
-		const rows = page.locator('#kanso-backup-file-rows tr')
-		await expect(rows.first()).toBeVisible({ timeout: 30_000 })
-		const firstName = await rows.first().locator('td').first().innerText()
+		// Wait for the run itself, not just for the DOM to catch up. The click
+		// handler only re-reads the listing when the POST resolves ok; on the
+		// error path it raises a toast and leaves the table exactly as it was, so
+		// polling the table alone turns a failed run into a timeout that says
+		// nothing about why.
+		await Promise.all([
+			page.waitForResponse((r) => r.url().includes('/api/admin/backup/run') && r.ok()),
+			page.click('#kanso-backup-run'),
+		])
+
+		// The listing is the ONLY view of an app-data backup; THIS spec's row must
+		// appear. Named rather than `first()`: the listing is instance-wide and
+		// sorted by name, so the top row can belong to another worker's board —
+		// and every assertion below (the download, the traversal refusals) would
+		// then be made about somebody else's archive.
+		const row = page.locator(`#kanso-backup-file-rows tr[data-name^="kanso-board-${board.id}-"]`)
+		await expect(row).toHaveCount(1)
+		const firstName = await row.getAttribute('data-name')
 		expect(firstName).toMatch(/^kanso-board-\d+-\d{8}-\d{6}\.zip$/)
 
 		// The setting round-tripped: a reload still shows app data, from the
 		// server-rendered template rather than from the form state.
 		await page.reload()
 		await expect(page.locator('#kanso-backup-destination')).toHaveValue('appdata')
-		await expect(page.locator('#kanso-backup-file-rows tr').first()).toBeVisible({ timeout: 30_000 })
+		await expect(row).toHaveCount(1)
 
-		const href = await page.locator('#kanso-backup-file-rows tr').first().locator('a.kanso-backup-download').getAttribute('href')
+		const href = await row.locator('a.kanso-backup-download').getAttribute('href')
 		expect(href).toContain('/api/admin/backup/download')
 
 		// The bytes: a zip an admin can actually open.
@@ -521,5 +714,235 @@ test.describe('Kanso admin backup settings', () => {
 		} finally {
 			await anonymous.dispose()
 		}
+	})
+
+	// ── Removing a stored backup (#10675) ────────────────────────────────────
+	//
+	// The destructive end of the panel, and the one the rest of it cannot stand
+	// in for: a run that misfires can be run again, a listing that lies can be
+	// reloaded, but an archive that is deleted is gone — hard-deleted under app
+	// data, and under a Files folder parked in an account's trashbin where this
+	// panel cannot reach it. So what is asserted here is not that a button
+	// exists: it is that the click asks first, that saying no changes nothing,
+	// that saying yes removes THAT archive and no other, and — the one an
+	// admin's data depends on — that a delete the storage refused arrives as a
+	// failure rather than as a row quietly vanishing from the table.
+
+	test('deleting a stored backup asks first, then takes that row and only that row away', async ({ page }) => {
+		const { name, neighbour } = await seedArchive(page)
+		const rows = page.locator('#kanso-backup-file-rows tr')
+		const row = page.locator(`#kanso-backup-file-rows tr[data-name="${name}"]`)
+		const control = page.locator(`#kanso-backup-file-rows tr[data-name="${neighbour}"]`)
+		await expect(row).toHaveCount(1)
+		await expect(control).toHaveCount(1)
+		const before = await rows.count()
+
+		// What the admin is told before clicking, and it follows the SAVED
+		// destination rather than the dropdown: this button acts now, on what is
+		// persisted, so being promised a trashbin by an unsaved selection while
+		// app data hard-deletes is exactly the wrong way round.
+		const appdataCost = page.locator('#kanso-backup-delete-hint-appdata')
+		const filesCost = page.locator('#kanso-backup-delete-hint-files')
+		await expect(appdataCost).toBeVisible()
+		await expect(filesCost).toBeHidden()
+		await page.selectOption('#kanso-backup-destination', 'files')
+		await expect(appdataCost, 'the delete cost must not follow the unsaved dropdown').toBeVisible()
+		await expect(filesCost).toBeHidden()
+
+		// ...and neither does the QUESTION in front of the button. Asked while the
+		// dropdown says Files but app data is what is SAVED, the confirm must still
+		// promise a hard delete: an admin told the archive lands in a trashbin,
+		// moments before it is destroyed outright, has been told the one thing that
+		// makes this click unrecoverable.
+		const underUnsavedFiles = await clickDelete(page, row, 'dismiss')
+		expect(underUnsavedFiles, 'the confirm must follow the SAVED destination').toMatch(/for good/i)
+		expect(underUnsavedFiles, 'app data has no trashbin to offer').not.toMatch(/trashbin/i)
+		expect(await storedNames(), 'a dismissed confirm must not delete anything').toContain(name)
+
+		await page.selectOption('#kanso-backup-destination', 'appdata')
+
+		// 1. It asks — and the question names the file and says what it costs,
+		// because there is nowhere to undo this from.
+		const question = await clickDelete(page, row, 'dismiss')
+		expect(question).toContain(name)
+		expect(question).toMatch(/for good/i)
+		expect(question, 'app data is a hard delete, so nothing may hint otherwise').not.toMatch(/trashbin/i)
+
+		// Saying no leaves the archive exactly where it was — in the table and in
+		// storage both.
+		await expect(row).toHaveCount(1)
+		expect(await storedNames(), 'a dismissed confirm must not delete anything').toContain(name)
+
+		// 2. Saying yes removes it, and says so.
+		//
+		// The delete's own round-trip is awaited first, at the 15s global, because
+		// the toast is raised only once it resolves: in src/admin-backup.js the
+		// `showSuccess` sits behind `await axios.delete(...)` and the listing
+		// reload after it. Starting the toast's short budget at the CLICK would
+		// hand a slow storage delete most of those 6s and fail a delete that in
+		// fact succeeded — the toast's budget has to measure the toast, not the
+		// storage. Awaiting the DELETE leaves only the listing read inside it,
+		// which is the same shape the recur-rule save uses. `page.waitFor*` is not
+		// covered by `expect.timeout`, hence the explicit 15s to match the global.
+		const deleted = page.waitForResponse(
+			(r) => r.url().includes('/api/admin/backup/files') && r.request().method() === 'DELETE',
+			{ timeout: 15_000 },
+		)
+		await clickDelete(page, row, 'accept')
+		expect((await deleted).ok(), 'the delete itself must succeed').toBe(true)
+
+		// A plain toast dismisses itself at TOAST_DEFAULT_TIMEOUT = 7s, so a 15s wait
+		// short-budget-ok: would outlive the toast and report the wrong failure
+		await expect(toast(page, 'Backup deleted')).toBeVisible({ timeout: 6_000 })
+		await expect(row).toHaveCount(0)
+
+		// ...and ONLY it. A neighbouring archive is still listed and exactly one
+		// row left the table, so this cannot pass on a listing that emptied
+		// itself or on a delete that took the board's whole history.
+		await expect(control).toHaveCount(1)
+		await expect(rows).toHaveCount(before - 1)
+
+		// 3. And it is gone from STORAGE, not merely from the DOM — which is why
+		// the panel re-reads the server after a delete instead of splicing the
+		// row out locally.
+		expect(await storedNames()).not.toContain(name)
+		await page.reload()
+		await expect(page.locator(`#kanso-backup-file-rows tr[data-name="${name}"]`)).toHaveCount(0)
+		await expect(page.locator(`#kanso-backup-file-rows tr[data-name="${neighbour}"]`)).toHaveCount(1)
+	})
+
+	test('a delete the server refuses is reported as a failure, never as a silent success', async ({ page }) => {
+		const { name } = await seedArchive(page)
+		const row = page.locator(`#kanso-backup-file-rows tr[data-name="${name}"]`)
+		await expect(row).toHaveCount(1)
+
+		// A destination that cannot be written to — a dead mount, a folder that is
+		// gone, an account that was removed. The endpoint answers 5xx rather than
+		// claiming the archive was removed, and the panel has to carry that all
+		// the way to the admin: reported as a success, this is the failure that
+		// sends someone away believing an archive is gone while it sits there
+		// intact, or believing it is deleted while it still holds every private
+		// card on the instance.
+		await page.route('**/api/admin/backup/files*', (route) => {
+			if (route.request().method() !== 'DELETE') {
+				return route.continue()
+			}
+			return route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({ message: 'the destination could not be read' }),
+			})
+		})
+
+		await clickDelete(page, row, 'accept')
+
+		// A plain toast dismisses itself at TOAST_DEFAULT_TIMEOUT = 7s, so a 15s wait
+		// short-budget-ok: would outlive the toast and report the wrong failure
+		await expect(toast(page, /could not delete the backup/i)).toBeVisible({ timeout: 6_000 })
+		// And never the other message. Asserted only once the error is on screen,
+		// so it cannot pass by being checked before either toast had rendered.
+		await expect(toast(page, 'Backup deleted')).toHaveCount(0)
+
+		// The row is still there because the SERVER still has the file: the panel
+		// reloads the listing after a failure rather than assuming an outcome —
+		// a delete can fail after the unlink as easily as before it.
+		await expect(row).toHaveCount(1)
+		expect(await storedNames()).toContain(name)
+	})
+
+	test('an archive whose board is gone is badged orphaned, and a live board\'s is not', async ({ page }) => {
+		const { boardId, name, neighbour } = await seedArchive(page)
+		const row = page.locator(`#kanso-backup-file-rows tr[data-name="${name}"]`)
+		const control = page.locator(`#kanso-backup-file-rows tr[data-name="${neighbour}"]`)
+
+		// Both boards are alive, so neither row carries the marker yet.
+		await expect(row).not.toHaveAttribute('data-orphaned', '1')
+		await expect(row.locator('.kanso-backup-orphan')).toHaveCount(0)
+		await expect(control.locator('.kanso-backup-orphan')).toHaveCount(0)
+
+		// The board goes. listBackups() reads the LIVE board set, which excludes a
+		// soft-deleted board, so its archives are orphaned at once — and these are
+		// exactly the rows retention will never prune again, because retention
+		// only runs for boards that still exist.
+		await admin.delete(`/boards/${boardId}`)
+		await page.reload()
+
+		await expect(row).toHaveAttribute('data-orphaned', '1')
+		const badge = row.locator('.kanso-backup-orphan')
+		await expect(badge).toBeVisible()
+		await expect(badge).toHaveText(/\(orphaned\)/)
+		await expect(badge).toHaveAttribute('title', /no longer exists/i)
+
+		// And the badge is a statement about THIS row rather than decoration on
+		// every row: an archive whose board survived carries none.
+		await expect(control).toHaveCount(1)
+		await expect(control).not.toHaveAttribute('data-orphaned', '1')
+		await expect(control.locator('.kanso-backup-orphan')).toHaveCount(0)
+	})
+
+	test('a non-admin reaches neither the backup panel nor the endpoints behind it', async ({ page, browser }) => {
+		// Seeded as the admin first so the refusals below are refusals of a REAL
+		// archive. A 403 on a name that does not exist would prove something about
+		// the filename allow-list and nothing at all about the gate.
+		const { name } = await seedArchive(page)
+
+		// Its own context: this page holds a live admin session, and ncLogin()
+		// returns straight away when it finds one, so reusing it would test the
+		// admin a second time.
+		const context = await browser.newContext({ storageState: { cookies: [], origins: [] } })
+		try {
+			const asTester = await context.newPage()
+			await ncLogin(asTester, TESTER)
+			const refusal = await asTester.goto(`${BASE}/settings/admin/kanso`)
+			expect(refusal.status()).toBe(403)
+
+			// Not one part of the panel is rendered — not hidden, not disabled,
+			// not present-but-inert. A read-only control still carries the copy
+			// that names the backup account and the folder it writes to.
+			for (const selector of [
+				'#kanso-backup-settings',
+				'#kanso-backup-destination',
+				'#kanso-backup-account',
+				'#kanso-backup-run',
+				'#kanso-backup-file-rows',
+			]) {
+				await expect(asTester.locator(selector), `${selector} must not reach a non-admin`).toHaveCount(0)
+			}
+		} finally {
+			await context.close()
+		}
+
+		// The page gate above is Nextcloud's, from the <admin> settings
+		// registration. These are Kanso's own, and they are the ones that matter:
+		// an archive is built at SYSTEM scope and holds every private card on the
+		// instance, so a stray #[NoAdminRequired] on any of them would hand the
+		// lot to whoever asked, panel or no panel.
+		const tester = makeApi(authFor(TESTER.user, TESTER.pass))
+		const probes = [
+			['GET', '/admin/backup', undefined],
+			// The saved config as the body, so that even if this one ever DID go
+			// through it could not rewrite the instance's destination.
+			['PUT', '/admin/backup', savedConfig],
+			['GET', '/admin/backup/files', undefined],
+			['POST', '/admin/backup/run', undefined],
+			['DELETE', '/admin/backup/files?name=' + encodeURIComponent(name), undefined],
+		]
+		for (const [method, path, body] of probes) {
+			const denied = await tester.raw(method, path, body)
+			expect(denied.status, `${method} ${path} must refuse a non-admin`).toBe(403)
+		}
+
+		const anonymous = await apiRequest.newContext()
+		try {
+			const denied = await anonymous.get(`${BASE}/index.php/apps/kanso/api/admin/backup/files`, {
+				headers: { 'OCS-APIRequest': 'true' },
+			})
+			expect(denied.status()).toBe(401)
+		} finally {
+			await anonymous.dispose()
+		}
+
+		// And nothing any of that tried actually went through.
+		expect(await storedNames()).toContain(name)
 	})
 })

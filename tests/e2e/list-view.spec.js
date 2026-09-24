@@ -64,25 +64,25 @@ test.describe('Board List view (#3444)', () => {
 		// Switch to List → card renders as a row, Board columns hidden.
 		await setView('List')
 		const row = page.locator('.board-list-row', { hasText: state.cardTitle })
-		await expect(row).toBeVisible({ timeout: 8_000 })
+		await expect(row).toBeVisible()
 		await expect(page.locator('.board-view__stacks-wrap')).toBeHidden()
 
 		// The group header surfaces a per-group overdue hint for the past-due card.
 		await expect(page.locator('.board-list-group__hint--overdue', { hasText: 'overdue' }))
-			.toBeVisible({ timeout: 8_000 })
+			.toBeVisible()
 
 		// Toggle back to Board → columns visible again (round-trip, no modal open).
 		await setView('Board')
-		await expect(page.locator('.board-view__stacks-wrap')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.board-view__stacks-wrap')).toBeVisible()
 
 		// Back to List, then open a card. dispatchEvent fires the handler directly:
 		// the row is a virtualized item on a list that refreshes on the board poll,
 		// so a coordinate click can race the re-render.
 		await setView('List')
-		await expect(row).toBeVisible({ timeout: 8_000 })
+		await expect(row).toBeVisible()
 		await row.dispatchEvent('click')
 		await expect(page).toHaveURL(new RegExp(`/board/${state.boardId}/card/`), { timeout: 8_000 })
-		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.card-modal')).toBeVisible()
 	})
 
 	test('collapsing a group hides its cards; expanding shows them again', async ({ page }) => {
@@ -96,7 +96,7 @@ test.describe('Board List view (#3444)', () => {
 
 		const row = page.locator('.board-list-row', { hasText: state.cardTitle })
 		const group = page.locator('.board-list-group', { hasText: 'To do' })
-		await expect(row).toBeVisible({ timeout: 8_000 })
+		await expect(row).toBeVisible()
 		await expect(group).toBeVisible()
 
 		// Collapse the group → its card row disappears from the virtualized list.
@@ -106,7 +106,7 @@ test.describe('Board List view (#3444)', () => {
 
 		// Expand again → the card row comes back.
 		await group.dispatchEvent('click')
-		await expect(row).toBeVisible({ timeout: 8_000 })
+		await expect(row).toBeVisible()
 	})
 })
 
@@ -118,6 +118,12 @@ test.describe('List view — quick-add composer', () => {
 		state.boardId = board.id
 		const stack = await api.post('/stacks', { boardId: board.id, title: 'Backlog' })
 		state.stackId = stack.id
+		// The "composer sits above the cards" test needs a card row to compare
+		// against, and used to borrow the one the composer test creates — which a
+		// retry never runs (it re-runs only the failing test on a fresh fixture).
+		// Seeding it here is safe: the composer test asserts on a row it types in
+		// itself, under its own unique title, so it stays just as falsifiable.
+		await api.post('/cards', { stackId: stack.id, title: 'Existing backlog card' })
 	})
 
 	test.afterAll(async () => {
@@ -133,7 +139,7 @@ test.describe('List view — quick-add composer', () => {
 		await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
 		await page.keyboard.press('Escape')
 		// Wait for the group header to appear (even when there are no cards yet).
-		await page.waitForSelector('.board-list-group', { timeout: 10_000 })
+		await page.waitForSelector('.board-list-group', { timeout: 15_000 })
 	}
 
 	test('composer renders above the group cards and creates a card on Enter', async ({ page }) => {
@@ -141,7 +147,7 @@ test.describe('List view — quick-add composer', () => {
 
 		// The "Add card…" input should be visible in the group's add row.
 		const input = page.locator('.board-list-table .card-composer__input').first()
-		await expect(input).toBeVisible({ timeout: 8_000 })
+		await expect(input).toBeVisible()
 
 		// Type a title and press Enter.
 		const newTitle = 'Quick add card ' + Date.now()
@@ -151,7 +157,7 @@ test.describe('List view — quick-add composer', () => {
 
 		// The new card row should appear in the list view.
 		const newRow = page.locator('.board-list-row', { hasText: newTitle })
-		await expect(newRow).toBeVisible({ timeout: 10_000 })
+		await expect(newRow).toBeVisible()
 
 		// The input should be cleared and refocused after creation.
 		await expect(input).toHaveValue('')
@@ -160,12 +166,12 @@ test.describe('List view — quick-add composer', () => {
 	test('composer is at the top of the group, above existing cards', async ({ page }) => {
 		await openListView(page)
 
-		// There should be at least one card in the stack from the previous test.
+		// The stack always holds at least the card seeded in beforeAll.
 		// The composer row (add type) should appear before card rows in the DOM.
 		const composerWrap = page.locator('.board-list-table .card-composer-wrap').first()
 		const firstCardRow = page.locator('.board-list-row').first()
 
-		await expect(composerWrap).toBeVisible({ timeout: 8_000 })
+		await expect(composerWrap).toBeVisible()
 
 		// Verify the composer appears before the first card row in the DOM order
 		// by checking their bounding boxes (composer Y < card Y).
@@ -180,7 +186,7 @@ test.describe('List view — quick-add composer', () => {
 		await openListView(page)
 
 		const input = page.locator('.board-list-table .card-composer__input').first()
-		await expect(input).toBeVisible({ timeout: 8_000 })
+		await expect(input).toBeVisible()
 
 		// Collapse the group.
 		const group = page.locator('.board-list-group', { hasText: 'Backlog' })
@@ -191,7 +197,7 @@ test.describe('List view — quick-add composer', () => {
 
 		// Expand again → composer reappears.
 		await group.dispatchEvent('click')
-		await expect(input).toBeVisible({ timeout: 8_000 })
+		await expect(input).toBeVisible()
 	})
 })
 
@@ -238,7 +244,7 @@ test.describe('List view — subtask tree (#4178)', () => {
 		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
 		await page.keyboard.press('Escape')
-		await page.waitForSelector('.board-list-row', { timeout: 10_000 })
+		await page.waitForSelector('.board-list-row', { timeout: 15_000 })
 	}
 
 	test('children are rendered indented under their parent (default expanded)', async ({ page }) => {
@@ -249,9 +255,9 @@ test.describe('List view — subtask tree (#4178)', () => {
 		const child2Row = page.locator('.board-list-row', { hasText: 'Sub-task Beta' })
 
 		// All three rows should be visible by default (subtasks expanded).
-		await expect(parentRow).toBeVisible({ timeout: 8_000 })
-		await expect(child1Row).toBeVisible({ timeout: 8_000 })
-		await expect(child2Row).toBeVisible({ timeout: 8_000 })
+		await expect(parentRow).toBeVisible()
+		await expect(child1Row).toBeVisible()
+		await expect(child2Row).toBeVisible()
 
 		// Child rows must carry the --child modifier class for indentation.
 		await expect(child1Row).toHaveClass(/board-list-row--child/)
@@ -270,7 +276,7 @@ test.describe('List view — subtask tree (#4178)', () => {
 		const child2Row = page.locator('.board-list-row', { hasText: 'Sub-task Beta' })
 
 		// Caret must be present and have an aria-label.
-		await expect(caret).toBeVisible({ timeout: 8_000 })
+		await expect(caret).toBeVisible()
 		const label = await caret.getAttribute('aria-label')
 		expect(['Expand sub-cards', 'Collapse sub-cards']).toContain(label)
 
@@ -285,8 +291,8 @@ test.describe('List view — subtask tree (#4178)', () => {
 
 		// Clicking caret again expands.
 		await caret.dispatchEvent('click')
-		await expect(child1Row).toBeVisible({ timeout: 8_000 })
-		await expect(child2Row).toBeVisible({ timeout: 8_000 })
+		await expect(child1Row).toBeVisible()
+		await expect(child2Row).toBeVisible()
 	})
 
 	test('clicking the caret does not open the parent card modal', async ({ page }) => {
@@ -295,7 +301,7 @@ test.describe('List view — subtask tree (#4178)', () => {
 		const parentRow = page.locator('.board-list-row', { hasText: 'Parent task' })
 		const caret = parentRow.locator('.board-list-row__caret')
 
-		await expect(caret).toBeVisible({ timeout: 8_000 })
+		await expect(caret).toBeVisible()
 		await caret.dispatchEvent('click')
 
 		// The URL must NOT gain a /card/ segment (i.e. no navigation occurred).
@@ -308,14 +314,14 @@ test.describe('List view — subtask tree (#4178)', () => {
 		await openListView(page)
 
 		const child1Row = page.locator('.board-list-row', { hasText: 'Sub-task Alpha' })
-		await expect(child1Row).toBeVisible({ timeout: 8_000 })
+		await expect(child1Row).toBeVisible()
 		await child1Row.dispatchEvent('click')
 
 		await expect(page).toHaveURL(
 			new RegExp(`/board/${state.boardId}/card/${state.child1Id}`),
 			{ timeout: 8_000 },
 		)
-		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.card-modal')).toBeVisible()
 	})
 })
 
@@ -378,7 +384,7 @@ test.describe('List view — drag-and-drop reorder', () => {
 		await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
 		await page.keyboard.press('Escape')
 		// Wait until card rows are visible.
-		await page.waitForSelector('.board-list-row', { timeout: 10_000 })
+		await page.waitForSelector('.board-list-row', { timeout: 15_000 })
 	}
 
 	test('drag L3 above L1 in List view — order changes and persists after reload', async ({ page }) => {
@@ -386,13 +392,13 @@ test.describe('List view — drag-and-drop reorder', () => {
 
 		// Initial order: L1 (top), L2, L3 (bottom).
 		const allRows = page.locator('.board-list-row-wrap')
-		await expect(allRows).toHaveCount(3, { timeout: 8_000 })
+		await expect(allRows).toHaveCount(3)
 
 		const rowL1 = page.locator('.board-list-row-wrap', { hasText: 'L1' })
 		const rowL3 = page.locator('.board-list-row-wrap', { hasText: 'L3' })
 
-		await expect(rowL1).toBeVisible({ timeout: 5_000 })
-		await expect(rowL3).toBeVisible({ timeout: 5_000 })
+		await expect(rowL1).toBeVisible()
+		await expect(rowL3).toBeVisible()
 
 		// Drag L3 above L1 (drop on top edge of L1 row).
 		await dragWithMouse(page, rowL3, rowL1, 'top')
@@ -416,9 +422,9 @@ test.describe('List view — drag-and-drop reorder', () => {
 			await page.locator('.board-view__display-menu button').first().click()
 			await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
 			await page.keyboard.press('Escape')
-			await page.waitForSelector('.board-list-row-wrap', { timeout: 10_000 })
+			await page.waitForSelector('.board-list-row-wrap', { timeout: 15_000 })
 		}
-		await expect(afterRows).toHaveCount(3, { timeout: 8_000 })
+		await expect(afterRows).toHaveCount(3)
 		await expect(afterRows.nth(0)).toContainText('L3', { timeout: 8_000 })
 		await expect(afterRows.nth(1)).toContainText('L1')
 		await expect(afterRows.nth(2)).toContainText('L2')
@@ -442,11 +448,11 @@ test.describe('List view — drag-and-drop reorder', () => {
 		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
 		await page.keyboard.press('Escape')
-		await page.waitForSelector('.board-list-row', { timeout: 10_000 })
+		await page.waitForSelector('.board-list-row', { timeout: 15_000 })
 
 		// The child row still renders indented…
 		const childRow = page.locator('.board-list-row--child', { hasText: 'Child' })
-		await expect(childRow).toBeVisible({ timeout: 8_000 })
+		await expect(childRow).toBeVisible()
 
 		// …and now sits inside the DnD host, marked draggable like any other row.
 		const childWrap = page.locator('.board-list-row-wrap', { hasText: 'Child' })
@@ -498,22 +504,22 @@ test.describe('List view — column composer (#9853)', () => {
 		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
 		await page.keyboard.press('Escape')
-		await page.waitForSelector('.board-list-group', { timeout: 10_000 })
+		await page.waitForSelector('.board-list-group', { timeout: 15_000 })
 	}
 
 	test('creates a column in place, and the new column takes a dragged card with no reload', async ({ page }) => {
 		await openListView(page)
 
 		const input = composer(page)
-		await expect(input).toBeVisible({ timeout: 8_000 })
+		await expect(input).toBeVisible()
 		await input.fill('In review')
 		await input.press('Enter')
 
 		// The column appears in the list itself — no switch to Board view.
 		await expect(page.locator('.board-list-group', { hasText: 'In review' }))
-			.toBeVisible({ timeout: 10_000 })
+			.toBeVisible()
 		// …and the composer clears + stays focused for a second column.
-		await expect(input).toHaveValue('', { timeout: 8_000 })
+		await expect(input).toHaveValue('')
 		await expect(input).toBeFocused()
 
 		// The server is the source of truth; grab the new column's real id.
@@ -522,23 +528,23 @@ test.describe('List view — column composer (#9853)', () => {
 			const { stacks } = await api.get(`/boards/${state.boardId}`)
 			newStackId = (stacks ?? []).find((s) => s.title === 'In review')?.id ?? 0
 			return newStackId
-		}, { timeout: 8_000 }).toBeGreaterThan(0)
+		}).toBeGreaterThan(0)
 
 		// A brand-new (empty) column must be a live drop target immediately — its
 		// only drop target is the group-header overlay (there is no card row to
 		// aim at), so this is the b5edae1 empty-column path on a fresh column.
 		const card = page.locator('.board-list-row-wrap').filter({ hasText: 'Movable card' })
 		const drop = page.locator(`.board-list-group-drop[data-stack-id="${newStackId}"]`)
-		await expect(drop).toHaveCount(1, { timeout: 8_000 })
+		await expect(drop).toHaveCount(1)
 		await dragWithMouse(page, card, drop, 'middle')
 
-		await expect(groupCount(page, 'In review')).toHaveText('1', { timeout: 8_000 })
+		await expect(groupCount(page, 'In review')).toHaveText('1')
 		await expect(groupCount(page, 'Inbox')).toHaveText('0')
 
 		// Both the column and the move survive a reload.
 		await page.reload()
 		await page.waitForSelector('.board-list-group', { timeout: 15_000 })
-		await expect(groupCount(page, 'In review')).toHaveText('1', { timeout: 10_000 })
+		await expect(groupCount(page, 'In review')).toHaveText('1')
 		await expect(groupCount(page, 'Inbox')).toHaveText('0')
 	})
 
@@ -560,11 +566,11 @@ test.describe('List view — column composer (#9853)', () => {
 		await input.fill('From the menu')
 		await input.press('Enter')
 		await expect(page.locator('.board-list-group', { hasText: 'From the menu' }))
-			.toBeVisible({ timeout: 10_000 })
+			.toBeVisible()
 		await expect.poll(async () => {
 			const { stacks } = await api.get(`/boards/${state.boardId}`)
 			return (stacks ?? []).some((s) => s.title === 'From the menu')
-		}, { timeout: 8_000 }).toBe(true)
+		}).toBe(true)
 	})
 
 	test('the composer keeps its focus and half-typed draft while the list recycles rows', async ({ page }) => {
@@ -601,7 +607,7 @@ test.describe('List view — column composer (#9853)', () => {
 			await page.locator('.board-view__display-menu button').first().click()
 			await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
 			await page.keyboard.press('Escape')
-			await page.waitForSelector('.board-list-row', { timeout: 10_000 })
+			await page.waitForSelector('.board-list-row', { timeout: 15_000 })
 
 			const input = composer(page)
 			await input.click()
@@ -613,10 +619,10 @@ test.describe('List view — column composer (#9853)', () => {
 			const list = page.locator('.board-list-table')
 			await list.evaluate((el) => { el.scrollTop = 0 })
 			await page.waitForTimeout(400)
-			await expect(page.locator('.board-list-row', { hasText: 'Row 01' })).toBeVisible({ timeout: 8_000 })
+			await expect(page.locator('.board-list-row', { hasText: 'Row 01' })).toBeVisible()
 			await list.evaluate((el) => { el.scrollTop = el.scrollHeight })
 			await page.waitForTimeout(400)
-			await expect(page.locator('.board-list-row', { hasText: 'Row 50' })).toBeVisible({ timeout: 8_000 })
+			await expect(page.locator('.board-list-row', { hasText: 'Row 50' })).toBeVisible()
 
 			// Neither the draft nor the focus was recycled away with the rows.
 			await expect(input).toHaveValue('Half typed')
@@ -662,18 +668,18 @@ test.describe('List view — add-column is editors only (#9853)', () => {
 			await page.locator('.board-view__display-menu button').first().click()
 			await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
 			await page.keyboard.press('Escape')
-			await page.waitForSelector('.board-list-group', { timeout: 10_000 })
+			await page.waitForSelector('.board-list-group', { timeout: 15_000 })
 
 			// The list renders for them…
 			await expect(page.locator('.board-list-row', { hasText: 'Read-only card' }))
-				.toBeVisible({ timeout: 8_000 })
+				.toBeVisible()
 			// …but neither the composer nor the menu action is offered.
 			await expect(page.locator('[data-test="list-add-column"]')).toHaveCount(0)
 			await page.getByRole('button', { name: 'More' }).click()
 			// Prove the menu actually opened before asserting an absence — a
 			// not-yet-rendered popover satisfies toHaveCount(0) for free.
 			await expect(page.getByRole('menuitem', { name: /deleted cards/i }))
-				.toBeVisible({ timeout: 8_000 })
+				.toBeVisible()
 			await expect(page.getByRole('menuitem', { name: 'Add column' })).toHaveCount(0)
 		} finally {
 			await ctx.close()

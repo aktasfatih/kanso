@@ -69,7 +69,7 @@ test.describe('Search', () => {
 	async function goToBoard(page) {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 	}
 
 	// ── Tests ──────────────────────────────────────────────────────────────────
@@ -78,21 +78,21 @@ test.describe('Search', () => {
 		await goToBoard(page)
 
 		const searchInput = page.locator('.search-box__input')
-		await expect(searchInput).toBeVisible({ timeout: 5000 })
+		await expect(searchInput).toBeVisible()
 
 		// Type "Alpha" - unique enough to match only "Alpha widget"
 		await searchInput.fill('Alpha')
 
 		// Dropdown should appear with the result
 		const dropdown = page.locator('.search-box__dropdown')
-		await expect(dropdown).toBeVisible({ timeout: 5000 })
+		await expect(dropdown).toBeVisible()
 
 		const alphaResult = dropdown.locator('.search-box__result').filter({ hasText: 'Alpha widget' })
-		await expect(alphaResult).toBeVisible({ timeout: 5000 })
+		await expect(alphaResult).toBeVisible()
 
 		// Click the result → card modal should open
 		await alphaResult.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Dropdown should close and search cleared after selecting a result
 		await expect(dropdown).not.toBeVisible({ timeout: 3000 }).catch(() => {})
@@ -102,17 +102,17 @@ test.describe('Search', () => {
 		await goToBoard(page)
 
 		const searchInput = page.locator('.search-box__input')
-		await expect(searchInput).toBeVisible({ timeout: 5000 })
+		await expect(searchInput).toBeVisible()
 
 		// "photosynthesis" is only in Beta gadget's description, not in any title
 		await searchInput.fill('photosynthesis')
 
 		const dropdown = page.locator('.search-box__dropdown')
-		await expect(dropdown).toBeVisible({ timeout: 5000 })
+		await expect(dropdown).toBeVisible()
 
 		// Beta gadget should appear
 		const betaResult = dropdown.locator('.search-box__result').filter({ hasText: 'Beta gadget' })
-		await expect(betaResult).toBeVisible({ timeout: 5000 })
+		await expect(betaResult).toBeVisible()
 
 		// Alpha widget should NOT appear
 		const alphaResult = dropdown.locator('.search-box__result').filter({ hasText: 'Alpha widget' })
@@ -123,17 +123,17 @@ test.describe('Search', () => {
 		await goToBoard(page)
 
 		const searchInput = page.locator('.search-box__input')
-		await expect(searchInput).toBeVisible({ timeout: 5000 })
+		await expect(searchInput).toBeVisible()
 
 		// "xylorimba" is only in Gamma fixture's comment
 		await searchInput.fill('xylorimba')
 
 		const dropdown = page.locator('.search-box__dropdown')
-		await expect(dropdown).toBeVisible({ timeout: 5000 })
+		await expect(dropdown).toBeVisible()
 
 		// Result should list Gamma fixture as the card title
 		const gammaResult = dropdown.locator('.search-box__result').filter({ hasText: 'Gamma fixture' })
-		await expect(gammaResult).toBeVisible({ timeout: 5000 })
+		await expect(gammaResult).toBeVisible()
 
 		// Should show the comment badge
 		const commentBadge = gammaResult.locator('.search-box__result-badge')
@@ -151,7 +151,7 @@ test.describe('Search', () => {
 		})
 
 		const searchInput = page.locator('.search-box__input')
-		await expect(searchInput).toBeVisible({ timeout: 5000 })
+		await expect(searchInput).toBeVisible()
 
 		await searchInput.fill('A')
 
@@ -170,16 +170,16 @@ test.describe('Search', () => {
 		await goToBoard(page)
 
 		const searchInput = page.locator('.search-box__input')
-		await expect(searchInput).toBeVisible({ timeout: 5000 })
+		await expect(searchInput).toBeVisible()
 
 		await searchInput.fill('zzzxqxqxq')
 
 		const dropdown = page.locator('.search-box__dropdown')
-		await expect(dropdown).toBeVisible({ timeout: 5000 })
+		await expect(dropdown).toBeVisible()
 
 		// Empty-state message should appear
 		const emptyState = dropdown.locator('.search-box__status--empty')
-		await expect(emptyState).toBeVisible({ timeout: 5000 })
+		await expect(emptyState).toBeVisible()
 		await expect(emptyState).toContainText('No matches')
 	})
 
@@ -198,9 +198,9 @@ test.describe('Search', () => {
 		await searchInput.fill('Wheelchair')
 
 		const dropdown = page.locator('.search-box__dropdown')
-		await expect(dropdown).toBeVisible({ timeout: 5000 })
+		await expect(dropdown).toBeVisible()
 		const rows = dropdown.locator('.search-box__result').filter({ hasText: 'Wheelchair repair Kaya' })
-		await expect(rows).toHaveCount(2, { timeout: 5000 })
+		await expect(rows).toHaveCount(2)
 
 		// Identical titles, so the column is the ONLY thing separating the rows.
 		const columns = await rows.locator('.search-box__result-column').allTextContents()
@@ -209,7 +209,7 @@ test.describe('Search', () => {
 		// A comment hit carries it too - it is a card hit by another route.
 		await searchInput.fill('xylorimba')
 		const commentRow = dropdown.locator('.search-box__result').filter({ hasText: 'Gamma fixture' })
-		await expect(commentRow).toBeVisible({ timeout: 5000 })
+		await expect(commentRow).toBeVisible()
 		await expect(commentRow.locator('.search-box__result-column')).toHaveText('Backlog')
 
 		await api.delete(`/cards/${twinA.id}`)
@@ -221,10 +221,10 @@ test.describe('Search', () => {
 		await goToBoard(page)
 
 		const searchInput = page.locator('.search-box__input')
-		await expect(searchInput).toBeVisible({ timeout: 5000 })
+		await expect(searchInput).toBeVisible()
 
 		await searchInput.fill('Alpha')
-		await expect(page.locator('.search-box__dropdown')).toBeVisible({ timeout: 5000 })
+		await expect(page.locator('.search-box__dropdown')).toBeVisible()
 
 		await searchInput.press('Escape')
 
@@ -242,10 +242,10 @@ test.describe('Search', () => {
 		await goToBoard(page)
 
 		const searchInput = page.locator('.search-box__input')
-		await expect(searchInput).toBeVisible({ timeout: 5000 })
+		await expect(searchInput).toBeVisible()
 
 		await searchInput.fill('Alpha')
-		await expect(page.locator('.search-box__dropdown')).toBeVisible({ timeout: 5000 })
+		await expect(page.locator('.search-box__dropdown')).toBeVisible()
 
 		await searchInput.press('Escape')
 

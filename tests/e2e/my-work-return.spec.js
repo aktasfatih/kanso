@@ -45,7 +45,7 @@ test.describe('Card close returns to its origin', () => {
 		// Land on the My Work hub (My tasks tab is the default).
 		await page.goto(`${BASE}/index.php/apps/kanso#/my-work`)
 		await expect(page.getByRole('heading', { name: 'My Work' })).toBeVisible({ timeout: 15_000 })
-		await expect(page.locator('.my-cards-view')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.my-cards-view')).toBeVisible()
 
 		// Open the assigned card from the My tasks list.
 		await page.getByText('Return Target Card').first().click()
@@ -60,7 +60,7 @@ test.describe('Card close returns to its origin', () => {
 		// We must land back on the My Work hub, NOT on the board.
 		await expect(page).toHaveURL(/#\/my-work/, { timeout: 10_000 })
 		await expect(page).not.toHaveURL(/#\/board\//)
-		await expect(page.getByRole('heading', { name: 'My Work' })).toBeVisible({ timeout: 10_000 })
+		await expect(page.getByRole('heading', { name: 'My Work' })).toBeVisible()
 	})
 
 	test('Board → open card → close returns to the board (no regression)', async ({ page }) => {

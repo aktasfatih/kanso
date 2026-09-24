@@ -117,6 +117,34 @@ async def test_create_stack_body_uses_boardId():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_update_stack_sends_and_parses_description():
+    # A column description (#10474) is what tells an agent what the column is
+    # FOR, so it has to survive both directions: sent on a write, parsed on the
+    # way back (and therefore off every stack in kanso_get_board).
+    route = respx.patch(f"{BASE}/stacks/11").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": 11,
+                "title": "Doing",
+                "boardId": 7,
+                "description": "Only cards with a reproducer.",
+            },
+        )
+    )
+    async with _client() as c:
+        stack = await c.update_stack(11, description="Only cards with a reproducer.")
+    import json as _json
+
+    # Only the field the caller set is sent.
+    assert _json.loads(route.calls.last.request.content) == {
+        "description": "Only cards with a reproducer."
+    }
+    assert stack.description == "Only cards with a reproducer."
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_move_stack_path_and_body():
     route = respx.post(f"{BASE}/stacks/11/move").mock(
         return_value=httpx.Response(200, json={})

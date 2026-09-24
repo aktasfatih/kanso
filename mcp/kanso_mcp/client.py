@@ -158,6 +158,7 @@ class KansoClient:
         archived: Optional[bool] = None,
         wip_limit: Optional[int] = None,
         color: Optional[str] = None,
+        description: Optional[str] = None,
     ) -> Stack:
         data = await self._request(
             "PATCH",
@@ -167,6 +168,7 @@ class KansoClient:
                 "archived": archived,
                 "wipLimit": wip_limit,
                 "color": color,
+                "description": description,
             },
         )
         return Stack.model_validate(data)

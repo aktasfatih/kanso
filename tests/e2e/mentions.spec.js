@@ -78,14 +78,23 @@ test.describe('@mentions in comments', () => {
 	})
 
 	test('a mention renders as a chip in the comment body', async ({ page }) => {
+		// The @BOB comment comes from the first test, which a retry of this one
+		// never runs — beforeAll hands it a fresh, comment-less card instead. Post
+		// it only if it is missing, so the card holds the same single mention either
+		// way and the chip below is unambiguously the first one.
+		const comments = await api.get(`/cards/${state.cardId}/comments`)
+		if (!comments.some((c) => c.body.includes(`@${BOB}`))) {
+			await api.post(`/cards/${state.cardId}/comments`, { body: `Heads up @${BOB} — take a look` })
+		}
+
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// The comment posted in the first test contains @BOB — it should render as
 		// a .kanso-mention chip in the sanitized markdown output.
 		const chip = page.locator('.card-modal__comment-body .kanso-mention').first()
-		await expect(chip).toBeVisible({ timeout: 8000 })
+		await expect(chip).toBeVisible()
 		await expect(chip).toContainText(`@${BOB}`)
 	})
 })

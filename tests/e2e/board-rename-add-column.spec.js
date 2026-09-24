@@ -32,14 +32,14 @@ test.describe('Board rename + Add column', () => {
 		await page.getByRole('tab', { name: /general/i }).click()
 
 		const nameInput = page.locator('#bs-board-name')
-		await expect(nameInput).toBeVisible({ timeout: 8_000 })
+		await expect(nameInput).toBeVisible()
 
 		const newTitle = 'Renamed board ' + Math.floor(Date.now() / 1000)
 		await nameInput.fill(newTitle)
 		await nameInput.press('Enter')
 
 		// Server reflects the rename…
-		await expect.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.title, { timeout: 8_000 })
+		await expect.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.title)
 			.toBe(newTitle)
 		// …and so does the header once the modal is dismissed.
 		await page.keyboard.press('Escape')
@@ -59,18 +59,18 @@ test.describe('Board rename + Add column', () => {
 		await page.getByRole('button', { name: 'More' }).click()
 		await page.getByRole('menuitem', { name: 'Add column' }).click()
 		const colInput = page.locator('.add-stack__input')
-		await expect(colInput).toBeVisible({ timeout: 8_000 })
+		await expect(colInput).toBeVisible()
 		await expect(colInput).toBeFocused({ timeout: 5_000 })
 		await colInput.fill('In review')
 		await colInput.press('Enter')
 
 		// The new column appears on the board.
 		await expect(page.locator('.stack-column__title', { hasText: 'In review' }))
-			.toBeVisible({ timeout: 8_000 })
+			.toBeVisible()
 		await expect.poll(async () => {
 			const { stacks } = await api.get(`/boards/${state.boardId}`)
 			return (stacks ?? []).some((s) => s.title === 'In review')
-		}, { timeout: 8_000 }).toBe(true)
+		}).toBe(true)
 	})
 
 	test('renaming a board updates the app-navigation sidebar live', async ({ page }) => {
@@ -84,7 +84,7 @@ test.describe('Board rename + Add column', () => {
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
 		const navLink = (title) => page.locator('.app-navigation .app-navigation-entry-link', { hasText: title })
-		await expect(navLink(before)).toBeVisible({ timeout: 8_000 })
+		await expect(navLink(before)).toBeVisible()
 
 		// Rename via Board settings → General.
 		await page.getByRole('button', { name: 'More' }).click()
@@ -92,14 +92,14 @@ test.describe('Board rename + Add column', () => {
 		await page.getByRole('tab', { name: /general/i }).click()
 		const after = 'Sidebar rename ' + Math.floor(Date.now() / 1000)
 		const nameInput = page.locator('#bs-board-name')
-		await expect(nameInput).toBeVisible({ timeout: 8_000 })
+		await expect(nameInput).toBeVisible()
 		await nameInput.fill(after)
 		await nameInput.press('Enter')
-		await expect.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.title, { timeout: 8_000 })
+		await expect.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.title)
 			.toBe(after)
 
 		// The sidebar reflects the new name and drops the old one — no manual reload.
-		await expect(navLink(after)).toBeVisible({ timeout: 8_000 })
+		await expect(navLink(after)).toBeVisible()
 		await expect(navLink(before)).toHaveCount(0, { timeout: 8_000 })
 	})
 })
@@ -143,7 +143,7 @@ test.describe('Add column is offered only where it works (#9856)', () => {
 		// Wait on an item that is always in this menu, so a count of 0 means the
 		// action is absent rather than the menu not having opened yet.
 		await expect(page.getByRole('menuitem', { name: 'Deleted cards' }))
-			.toBeVisible({ timeout: 8_000 })
+			.toBeVisible()
 		const count = await addColumnItem(page).count()
 		await page.keyboard.press('Escape')
 		await expect(page.getByRole('menuitem', { name: 'Deleted cards' }))
@@ -178,7 +178,7 @@ test.describe('Add column is offered only where it works (#9856)', () => {
 		await page.getByRole('button', { name: 'More' }).click()
 		await addColumnItem(page).click()
 		const colInput = page.locator('.add-stack__input')
-		await expect(colInput).toBeVisible({ timeout: 8_000 })
+		await expect(colInput).toBeVisible()
 		await expect(colInput).toBeFocused({ timeout: 5_000 })
 		await colInput.press('Escape')
 
@@ -200,12 +200,12 @@ test.describe('Add column is offered only where it works (#9856)', () => {
 
 		// Timeline renders no column composer at all → not offered.
 		await setDisplayOption(page, 'Timeline')
-		await expect(page.locator('.timeline')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.timeline')).toBeVisible()
 		expect(await addColumnItemCount(page)).toBe(0)
 
 		// List view owns its own composer → offered, and it still focuses it.
 		await setDisplayOption(page, 'List')
-		await page.waitForSelector('.board-list-group', { timeout: 10_000 })
+		await page.waitForSelector('.board-list-group', { timeout: 15_000 })
 		expect(await addColumnItemCount(page)).toBe(1)
 		await page.getByRole('button', { name: 'More' }).click()
 		await addColumnItem(page).click()
@@ -233,14 +233,14 @@ test.describe('Empty board onboarding composer', () => {
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
 		// The onboarding composer is present precisely because the board is empty.
-		await expect(page.locator('[data-test="empty-board-hint"]')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('[data-test="empty-board-hint"]')).toBeVisible()
 		const firstInput = page.locator('.add-stack__input')
 		await firstInput.fill('Backlog')
 		await firstInput.press('Enter')
 
 		// The first column is created and the onboarding composer disappears.
 		await expect(page.locator('.stack-column__title', { hasText: 'Backlog' }))
-			.toBeVisible({ timeout: 8_000 })
+			.toBeVisible()
 		await expect(page.locator('[data-test="empty-board-hint"]')).toHaveCount(0, { timeout: 8_000 })
 	})
 })

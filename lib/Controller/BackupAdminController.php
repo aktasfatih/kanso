@@ -16,13 +16,14 @@ use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\Http\StreamResponse;
 use OCP\Files\NotFoundException;
 use OCP\IRequest;
+use OCP\IUserSession;
 
 /**
  * Admin-only endpoints backing the Kanso backup settings panel (#3615): read /
  * write the app-wide backup config, trigger a backup on demand, and list /
- * download the stored backups. None of the actions carry #[NoAdminRequired] and
- * none is a public page, so Nextcloud gates every one of them to admins - the
- * panel is Kanso's first admin surface.
+ * download / delete the stored backups. None of the actions carry
+ * #[NoAdminRequired] and none is a public page, so Nextcloud gates every one of
+ * them to admins - the panel is Kanso's first admin surface.
  *
  * THE DOWNLOAD IS THE SENSITIVE ONE (#161). A backup archive is built at SYSTEM
  * scope: it holds every card on the instance, private ones included, and every
@@ -34,6 +35,10 @@ use OCP\IRequest;
  * {@see BackupService::isBackupName()} before it reaches storage, so it can
  * select nothing outside the backups folder. {@see \OCA\Kanso\Tests\Unit\Controller\BackupAdminControllerTest}
  * pins the gating so a future #[NoAdminRequired] cannot be added quietly.
+ *
+ * {@see delete()} is the destructive twin of that and carries the same rules:
+ * same admin gate, same filename allow-list, no path addressing - plus the CSRF
+ * check the download drops, because this one writes.
  */
 class BackupAdminController extends Controller {
 	use ApiErrorTrait;
@@ -42,6 +47,7 @@ class BackupAdminController extends Controller {
 		string $appName,
 		IRequest $request,
 		private BackupService $backupService,
+		private IUserSession $userSession,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -150,6 +156,58 @@ class BackupAdminController extends Controller {
 			$response->addHeader('Content-Length', (string)$backup['size']);
 		}
 		return $response;
+	}
+
+	/**
+	 * Removes ONE stored backup.
+	 *
+	 * GATED EXACTLY LIKE {@see download()} and for the same reason: the name is
+	 * the only input, it is allow-listed by
+	 * {@see BackupService::isBackupName()} before it reaches storage, and there
+	 * is no #[NoAdminRequired] here (nor at class level). The one difference from
+	 * the download is that this action KEEPS the CSRF check - it is a write, the
+	 * panel calls it with XHR, and nothing needs to link to it.
+	 *
+	 * A name that is not Kanso's, and a name that resolves to something other
+	 * than a file, are both 404. An allow-listed name with no file behind it is
+	 * 200: deleting is idempotent, so a second click is not an error - see
+	 * {@see BackupService::deleteBackup()} for why that asymmetry with the
+	 * download's no-oracle rule is deliberate rather than an oversight.
+	 *
+	 * A DESTINATION THAT COULD NOT BE READ IS NOT A DELETED BACKUP, the same
+	 * distinction {@see files()} draws one layer up: a dead mount, a missing
+	 * account or a folder that is gone answers 5xx carrying the reason, because
+	 * "deleted" would tell an admin an archive is gone while it sits intact
+	 * behind a storage failure, and a bare 500 would leave them without the one
+	 * sentence that names what to fix. This endpoint is admin-only and that is
+	 * exactly who has to fix it.
+	 */
+	public function delete(string $name = ''): JSONResponse {
+		return $this->respond(function () use ($name): JSONResponse {
+			try {
+				$this->backupService->deleteBackup($name, $this->currentUserId());
+			} catch (NotFoundException) {
+				return new JSONResponse(['message' => 'Backup not found'], Http::STATUS_NOT_FOUND);
+			} catch (\RuntimeException $e) {
+				return new JSONResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+			}
+
+			// The name reached here only by matching the allow-list, so echoing
+			// it back cannot carry anything the client did not already have in a
+			// shape Kanso itself would write.
+			return new JSONResponse(['deleted' => $name]);
+		});
+	}
+
+	/**
+	 * The administrator behind the request, for the delete's audit line. Empty
+	 * when there is somehow no session - the framework has already refused
+	 * anyone without one, so this is a belt-and-braces default rather than a
+	 * case to fail on: never lose the record of a deletion over the name of who
+	 * did it.
+	 */
+	private function currentUserId(): string {
+		return $this->userSession->getUser()?->getUID() ?? '';
 	}
 
 	/**

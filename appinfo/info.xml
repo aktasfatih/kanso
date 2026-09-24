@@ -445,15 +445,17 @@ Kanso 是一款为速度而生的 Nextcloud 看板应用。看板、列和卡片
 		     still runs on 8.1, so the server had no reason to refuse us; the
 		     app has to state its own floor.
 
-		     Invisible to CI by construction: unit-php runs 8.2/8.3, psalm's
-		     platform is pinned to 8.2.27, and every nextcloud:* image ships
-		     8.3 - so the one version that breaks is the one nothing executes.
-		     The declaration IS the guard: Nextcloud refuses to enable the app
-		     below this floor and says why.
+		     Invisible to CI by construction: unit-php starts AT this floor
+		     (8.2-8.5), psalm's platform is pinned to 8.2.27, and every
+		     nextcloud:* image ships 8.3 - so the one version that breaks is the
+		     one nothing executes. The declaration IS the guard: Nextcloud
+		     refuses to enable the app below this floor and says why.
 
 		     Deliberately no max-version: a ceiling would strand servers on a
 		     newer PHP that works fine, exactly as a patch-level nextcloud
-		     min-version would (see below). -->
+		     min-version would (see below). That open ceiling is no longer an
+		     untested promise - unit-php runs the suite on 8.4 and 8.5, and
+		     parse-checks this shipped tree on both. -->
 		<php min-version="8.2"/>
 		<!-- Floor is 32, not 30: opening the app binds
 		     IQueryBuilder::PARAM_DATETIME_MUTABLE in the boards-list stats, and

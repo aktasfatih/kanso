@@ -18,7 +18,7 @@ import { test, expect, api, ncLogin, toast, BASE } from './helpers.js'
 async function openColumnMenu(page) {
 	await page.locator('.stack-column__actions button').first().click()
 	const dialog = page.locator('[role="dialog"]').first()
-	await expect(dialog).toBeVisible({ timeout: 6_000 })
+	await expect(dialog).toBeVisible()
 	return dialog
 }
 
@@ -52,7 +52,7 @@ test.describe('Archive every card in a column (#10430)', () => {
 		// is what it delivers whether or not a filter or visibility narrows it.
 		const menu = await openColumnMenu(page)
 		const archiveAll = menu.getByRole('button', { name: 'Archive 3 cards' })
-		await expect(archiveAll).toBeVisible({ timeout: 8_000 })
+		await expect(archiveAll).toBeVisible()
 		await archiveAll.click()
 
 		// The column empties …
@@ -71,7 +71,7 @@ test.describe('Archive every card in a column (#10430)', () => {
 		await page.waitForSelector('.archived-view', { timeout: 15_000 })
 		for (const title of CARDS) {
 			await expect(page.locator('.archived-view__row-title').filter({ hasText: title }))
-				.toBeVisible({ timeout: 10_000 })
+				.toBeVisible()
 		}
 	})
 
@@ -88,14 +88,17 @@ test.describe('Archive every card in a column (#10430)', () => {
 		// radius of a single archive is exactly why this action needs a real undo
 		// rather than a confirm dialog. It is located by role + that label (see
 		// toast() in helpers.js), not by @nextcloud/dialogs' own class names.
-		// @nextcloud/dialogs gives an undo toast a 10s life, so assert on it with a
-		// budget UNDER that — a longer one would report "not visible" for a toast
-		// that appeared and simply expired, which reads as the wrong failure.
+		// @nextcloud/dialogs gives an undo toast a 10s life (TOAST_UNDO_TIMEOUT), so
+		// assert on it with a budget UNDER that — a longer one would report "not
+		// visible" for a toast that appeared and simply expired, which reads as the
+		// wrong failure and is a wait nothing could ever satisfy.
 		const undoToast = toast(page, '3 cards archived')
+		// short-budget-ok: the undo toast is gone at 10s (TOAST_UNDO_TIMEOUT)
 		await expect(undoToast).toBeVisible({ timeout: 8_000 })
 
 		const undoBtn = undoToast.getByRole('button', { name: 'Undo' })
-		await expect(undoBtn).toBeVisible({ timeout: 5_000 })
+		// short-budget-ok: lives inside the 10s toast asserted above
+		await expect(undoBtn).toBeVisible({ timeout: 3_000 })
 		await undoBtn.click()
 
 		// All three come back to the column …
@@ -127,7 +130,7 @@ test.describe('Archive every card in a column (#10430)', () => {
 		const emptyColumn = page.locator('.stack-column').filter({ hasText: 'Empty' })
 		await emptyColumn.locator('.stack-column__actions button').first().click()
 		const emptyMenu = page.locator('[role="dialog"]').first()
-		await expect(emptyMenu).toBeVisible({ timeout: 6_000 })
+		await expect(emptyMenu).toBeVisible()
 		await expect(emptyMenu.getByRole('button', { name: /^Archive/ })).toHaveCount(0)
 		await page.keyboard.press('Escape')
 
@@ -135,11 +138,11 @@ test.describe('Archive every card in a column (#10430)', () => {
 		// form the filter bar itself writes): the entry must stop claiming "all".
 		await page.goto(`${state.boardUrl}?fl=${label.id}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
-		await expect(page.locator('.card-tile')).toHaveCount(1, { timeout: 10_000 })
+		await expect(page.locator('.card-tile')).toHaveCount(1)
 
 		const menu = await openColumnMenu(page)
 		await expect(menu.getByRole('button', { name: 'Archive 1 visible card' }))
-			.toBeVisible({ timeout: 8_000 })
+			.toBeVisible()
 		// Not the unfiltered wording, and never a claim over the whole column.
 		await expect(menu.getByRole('button', { name: 'Archive 3 cards' })).toHaveCount(0)
 		await expect(menu.getByRole('button', { name: /^Archive all/ })).toHaveCount(0)

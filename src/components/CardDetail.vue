@@ -135,7 +135,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</template>
 							<ChevronRightIcon :size="14" class="card-modal__crumb-chevron" />
 							<span class="card-modal__attr card-modal__status-wrap">
+								<!-- Both halves of this switcher are writes: the column list calls
+								     CardService::move() and the status list CardService::update(),
+								     and BOTH assert PERMISSION_EDIT. The role model has no "may
+								     move but not edit" seat - the bits are READ/EDIT/SHARE/MANAGE
+								     and nothing else - so a member with READ only gets the chip as
+								     a plain label (#10732): the status still reads, the switcher
+								     goes. -->
 								<button
+									v-if="canEdit"
 									class="card-modal__status-chip card-modal__status-chip--btn"
 									:class="`card-modal__status-chip--${currentStatus}`"
 									:disabled="updateCard.isPending.value || stageMoving"
@@ -145,6 +153,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									{{ statusChipLabel }}
 									<ChevronDownIcon :size="12" />
 								</button>
+								<span
+									v-else
+									class="card-modal__status-chip"
+									:class="`card-modal__status-chip--${currentStatus}`">
+									{{ statusChipLabel }}
+								</span>
 								<div v-if="openPicker === 'status'" class="card-modal__popover">
 									<!-- Every live column is an option (#54); pick the exact one. Offered
 									     on every board, so a card can change column without changing
@@ -253,7 +267,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							@click="expandToPage">
 							<OpenInNewIcon :size="18" />
 						</button>
+						<!-- Marking done is CardService::update() under the hood, so it needs
+						     EDIT like every other status change (#10732). A member with READ
+						     only loses the button, not the information: the breadcrumb chip
+						     above still reads "DONE". -->
 						<button
+							v-if="canEdit"
 							class="card-modal__done-btn"
 							:class="{ 'card-modal__done-btn--done': isDone }"
 							:disabled="updateCard.isPending.value"
@@ -564,18 +583,30 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 				<!-- Attribute bar: every card attribute on one scannable row -->
 				<div class="card-modal__attrbar">
-					<!-- Priority -->
-					<div class="card-modal__attr">
-						<button
+					<!-- Priority.
+					     Every pill in this bar is its own value AND its own editor, so
+					     #10703's rule ("keep the data, drop the write affordance") needs
+					     one extra step here (#10732): for a member with READ only the pill
+					     renders as a plain span - the priority still reads, nothing opens.
+					     An UNSET attribute has no data to keep, so its dashed placeholder
+					     is pure affordance and drops out of the bar entirely.
+					     Setting any of these is PATCH /cards/{id} -> CardService::update(),
+					     which asserts PERMISSION_EDIT; the server check is untouched. -->
+					<div v-if="canEdit || currentPriority > 0" class="card-modal__attr">
+						<component
+							:is="canEdit ? 'button' : 'span'"
 							class="card-modal__pill"
 							data-pill="priority"
-							:class="currentPriority > 0 ? `card-modal__pill--priority-${currentPriority}` : 'card-modal__pill--dashed'"
-							:aria-expanded="openPicker === 'priority'"
-							@click="togglePicker('priority')">
+							:class="[
+								currentPriority > 0 ? `card-modal__pill--priority-${currentPriority}` : 'card-modal__pill--dashed',
+								{ 'card-modal__pill--static': !canEdit },
+							]"
+							:aria-expanded="canEdit ? openPicker === 'priority' : undefined"
+							@click="canEdit && togglePicker('priority')">
 							<FlagIcon v-if="currentPriority > 0" :size="14" />
 							<FlagOutlineIcon v-else :size="14" />
 							{{ currentPriority > 0 ? currentPriorityLevel.label : t('kanso', 'Priority') }}
-						</button>
+						</component>
 						<div v-if="openPicker === 'priority'" class="card-modal__popover">
 							<button
 								v-for="level in PRIORITY_LEVELS"
@@ -590,17 +621,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 					</div>
 
-					<!-- Type (#3402): exactly one built-in issue type, icon-first -->
-					<div class="card-modal__attr">
-						<button
+					<!-- Type (#3402): exactly one built-in issue type, icon-first.
+					     Same read-only treatment as Priority above (#10732). -->
+					<div v-if="canEdit || currentType" class="card-modal__attr">
+						<component
+							:is="canEdit ? 'button' : 'span'"
 							class="card-modal__pill"
 							data-pill="type"
-							:class="currentType ? `card-modal__pill--type-${currentType.value}` : 'card-modal__pill--dashed'"
-							:aria-expanded="openPicker === 'type'"
-							@click="togglePicker('type')">
+							:class="[
+								currentType ? `card-modal__pill--type-${currentType.value}` : 'card-modal__pill--dashed',
+								{ 'card-modal__pill--static': !canEdit },
+							]"
+							:aria-expanded="canEdit ? openPicker === 'type' : undefined"
+							@click="canEdit && togglePicker('type')">
 							<component :is="typeIcon(currentType?.value)" :size="14" />
 							{{ currentType ? currentType.label : t('kanso', 'Type') }}
-						</button>
+						</component>
 						<div v-if="openPicker === 'type'" class="card-modal__popover">
 							<button
 								class="card-modal__popover-opt"
@@ -623,21 +659,28 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 					</div>
 
-					<!-- Dates (due + start) -->
-					<div class="card-modal__attr">
-						<button
+					<!-- Dates (due + start).
+					     Same read-only treatment as Priority above (#10732) - the popover
+					     behind this pill edits both dates, the all-day flag and (for a
+					     manager) the repeat rule, all of them writes. -->
+					<div v-if="canEdit || cardData.duedate" class="card-modal__attr">
+						<component
+							:is="canEdit ? 'button' : 'span'"
 							class="card-modal__pill"
 							data-pill="due"
-							:class="cardData.duedate ? dueDateClass : 'card-modal__pill--dashed'"
-							:aria-expanded="openPicker === 'due'"
-							@click="togglePicker('due')">
+							:class="[
+								cardData.duedate ? dueDateClass : 'card-modal__pill--dashed',
+								{ 'card-modal__pill--static': !canEdit },
+							]"
+							:aria-expanded="canEdit ? openPicker === 'due' : undefined"
+							@click="canEdit && togglePicker('due')">
 							<!-- A recurring card swaps the calendar glyph for a repeat
 							     icon (#61 follow-up), matching the board tile cue for
 							     all viewers. Same footprint, so no layout shift. -->
 							<RepeatIcon v-if="cardIsRecurring" :size="14" :title="t('kanso', 'Repeats')" />
 							<CalendarIcon v-else :size="14" />
 							{{ cardData.duedate ? dueDateLabel : t('kanso', 'Due date') }}
-						</button>
+						</component>
 						<div v-if="openPicker === 'due'" class="card-modal__popover card-modal__popover--pad card-modal__popover--date">
 							<!-- A timed card is a Start → End window; an all-day card is a
 							     single day, so it collapses to one date field (no time). -->
@@ -744,16 +787,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 					</div>
 
-					<!-- Estimate -->
-					<div v-if="boardEstimateScale !== 'none'" class="card-modal__attr">
-						<button
+					<!-- Estimate. Same read-only treatment as Priority above (#10732). -->
+					<div v-if="boardEstimateScale !== 'none' && (canEdit || currentEstimate)" class="card-modal__attr">
+						<component
+							:is="canEdit ? 'button' : 'span'"
 							class="card-modal__pill"
-							:class="currentEstimate ? '' : 'card-modal__pill--dashed'"
-							:aria-expanded="openPicker === 'estimate'"
-							@click="togglePicker('estimate')">
+							data-pill="estimate"
+							:class="[
+								currentEstimate ? '' : 'card-modal__pill--dashed',
+								{ 'card-modal__pill--static': !canEdit },
+							]"
+							:aria-expanded="canEdit ? openPicker === 'estimate' : undefined"
+							@click="canEdit && togglePicker('estimate')">
 							<TimerSandIcon :size="14" />
 							{{ currentEstimate ? t('kanso', 'Estimate: {value}', { value: currentEstimate }) : t('kanso', 'Estimate') }}
-						</button>
+						</component>
 						<div v-if="openPicker === 'estimate'" class="card-modal__popover">
 							<div class="card-modal__popover-tokens">
 								<button
@@ -825,7 +873,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:hide-status="true"
 							:disable-tooltip="true" />
 						<span class="card-modal__assignee-name" :title="participantName(uid)">{{ participantName(uid) }}</span>
+						<!-- Unassigning is a write (#10703): a member shared in with READ
+						     only keeps the avatar and the name - the whole point of the
+						     pill - but is not offered a button the server answers 403 to. -->
 						<button
+							v-if="canEdit"
 							class="card-modal__pill-x"
 							:title="t('kanso', 'Remove assignee')"
 							:disabled="toggleAssignee.isPending.value"
@@ -833,21 +885,77 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<CloseIcon :size="12" />
 						</button>
 					</span>
-					<div v-if="unassignedParticipants.length > 0" class="card-modal__attr">
+					<!-- The assign control, built like the label picker below it: one
+					     pill that is ALWAYS present, and a popover listing every
+					     participant with the assigned ones ticked, toggled in place.
+					     It used to be a one-shot chooser that closed on the first pick
+					     and, worse, disappeared entirely once no unassigned candidate
+					     was left (`v-if="unassignedParticipants.length"`). On a board
+					     nobody else is a member of - the common personal board, one
+					     participant - assigning yourself removed the only assignee
+					     control on the card, which read as "one assignee is the
+					     maximum" and was the actual multi-assign dead-end (#10603).
+					     Staying open also makes adding a 2nd and 3rd person one click
+					     each instead of reopening the picker every time.
+					     Editors only (#10703) - assigning is a write, and the server
+					     answers 403 to a read-only member, so offering the pill only
+					     invited them to fail. Presentation gate; the server check is
+					     untouched and stays the real one. -->
+					<div v-if="canEdit" class="card-modal__attr">
 						<button
 							class="card-modal__pill card-modal__pill--dashed"
+							data-pill="assign"
 							:aria-expanded="openPicker === 'assign'"
-							@click="togglePicker('assign')">
+							@click="toggleAssignPicker()">
 							<AccountPlusIcon :size="14" />
-							{{ t('kanso', 'Assign') }}
+							{{ cardAssigneeIds.length > 0 ? t('kanso', 'Add assignee') : t('kanso', 'Assign') }}
 						</button>
 						<div v-if="openPicker === 'assign'" class="card-modal__popover">
+							<!-- The rows below are the FIRST PAGE of a payload the server caps, so on
+							     a board shared with more people than the cap they are not everyone.
+							     This box is how the rest are reached: it asks the server for the
+							     typed substring instead of filtering the page already in hand, and
+							     the note at the foot of the popover says which of the two lists is
+							     on screen whenever that list is partial (#10704). -->
+							<input
+								ref="assigneeSearchInput"
+								v-model="assigneeQuery"
+								type="text"
+								class="card-modal__assign-search"
+								data-assign-search
+								:placeholder="t('kanso', 'Search people…')"
+								:aria-label="t('kanso', 'Search the people with access to this board')"
+								@input="onAssigneeSearch">
+							<!-- Only once the participants query has actually answered - while
+							     it is still in flight an empty list is "not loaded yet", not
+							     "nobody has access". -->
+							<div
+								v-if="assignCandidates.length === 0 && !assigneeSearchActive && !participants.isPending.value"
+								class="card-modal__popover-empty">
+								{{ t('kanso', 'Nobody has access to this board yet.') }}
+							</div>
+							<div
+								v-if="assignCandidates.length === 0 && assigneeSearchActive && !assigneeSearching"
+								class="card-modal__popover-empty">
+								{{ t('kanso', 'Nobody with access to this board matches that.') }}
+							</div>
+							<!-- A row carries `aria-busy` for its in-flight window, never
+							     `disabled` (#10705). Disabling the element that currently HAS
+							     focus is one of the few things the browser undoes for you: it
+							     blurs it, and focus falls back towards `<body>` - so a
+							     keyboard user had to tab all the way back into this popover
+							     after every single pick, once per person added. `aria-busy`
+							     says the same thing to assistive tech and leaves the row in
+							     the focus order; the double-submit `disabled` was covering is
+							     handled in handleToggleAssignee instead. -->
 							<button
-								v-for="p in unassignedParticipants"
+								v-for="p in assignCandidates"
 								:key="p.uid"
 								class="card-modal__assign-option"
-								:disabled="toggleAssignee.isPending.value"
-								@click="handleToggleAssignee(p.uid, true)">
+								:class="{ 'card-modal__assign-option--active': p.assigned }"
+								:aria-pressed="p.assigned"
+								:aria-busy="assigneeTogglePending === p.uid ? 'true' : undefined"
+								@click="handleToggleAssignee(p.uid, !p.assigned)">
 								<NcAvatar
 									:user="p.uid"
 									:display-name="p.displayName"
@@ -855,7 +963,25 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:hide-status="true"
 									:disable-tooltip="true" />
 								<span :title="p.displayName">{{ p.displayName }}</span>
+								<CheckIcon v-if="p.assigned" :size="16" class="card-modal__assign-check" />
 							</button>
+							<!-- Everyone in the list is already on the card: say so, rather
+							     than leaving an empty-looking list that reads as a cap. It
+							     speaks about the LIST, not about the board: the participants
+							     payload is capped server-side (ParticipantService), so
+							     "everyone with access" would be a claim this cannot make. -->
+							<div
+								v-if="assignCandidates.length > 0 && unassignedParticipants.length === 0"
+								class="card-modal__popover-empty">
+								{{ t('kanso', 'Everyone shown here is already assigned to this card.') }}
+							</div>
+							<!-- …and the caveat the picker used to leave unsaid: what is listed is a
+							     page, not the board. Rendered only when the server actually held
+							     something back, so a board everyone fits on says nothing. -->
+							<div v-if="assigneeListNote" class="card-modal__assign-note" data-assign-note>
+								{{ assigneeListNote }}
+							</div>
+							<span v-if="assigneeSearchError" class="card-modal__save-error">{{ assigneeSearchError }}</span>
 						</div>
 					</div>
 					<span v-if="assigneeError" class="card-modal__save-error">{{ assigneeError }}</span>
@@ -874,17 +1000,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:hide-status="true"
 									:disable-tooltip="true" />
 								<span class="card-modal__assignee-name" :title="c.displayName">{{ c.displayName }}</span>
+								<!-- Unlinking is ContactService::unlink() -> PERMISSION_EDIT, so
+								     it follows the per-assignee "×" (#10703, #10732). The avatar
+								     and the name - the whole point of the chip - stay. -->
 								<button
+									v-if="canEdit"
 									class="card-modal__pill-x"
+									data-contact-x
 									:title="t('kanso', 'Unlink contact')"
 									:disabled="toggleContact.isPending.value"
 									@click="handleToggleContact(c, false)">
 									<CloseIcon :size="12" />
 								</button>
 							</span>
-							<div class="card-modal__attr">
+							<!-- Linking is ContactService::link() -> PERMISSION_EDIT (#10732). -->
+							<div v-if="canEdit" class="card-modal__attr">
 								<button
 									class="card-modal__pill card-modal__pill--dashed"
+									data-pill="contact"
 									:aria-expanded="openPicker === 'contact'"
 									@click="toggleContactPicker()">
 									<AccountBoxIcon :size="14" />
@@ -938,9 +1071,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:style="label.color ? { background: cssColor(label.color), color: readableColor(label.color) } : {}">
 						{{ label.title }}
 					</span>
-					<div class="card-modal__attr">
+					<!-- The chips above stay for everyone - they are the card's labels.
+					     The picker is the write half, so it follows the same rule as the
+					     assign control (#10703): editors only. -->
+					<div v-if="canEdit" class="card-modal__attr">
 						<button
 							class="card-modal__pill card-modal__pill--dashed card-modal__pill--sm"
+							data-pill="label"
 							:aria-expanded="openPicker === 'label'"
 							@click="togglePicker('label')">
 							<PlusIcon :size="12" />
@@ -950,6 +1087,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<div v-if="boardLabels.length === 0" class="card-modal__popover-empty">
 								{{ t('kanso', 'No labels on this board yet.') }}
 							</div>
+							<!-- Same rule as the assign rows above (#10705): `aria-busy`,
+							     never `disabled`, so activating a label by keyboard does not
+							     blur the row the user is standing on. -->
 							<button
 								v-for="label in boardLabels"
 								:key="label.id"
@@ -960,7 +1100,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								}"
 								:style="label.color ? { '--label-color': cssColor(label.color) } : {}"
 								:aria-pressed="cardLabelIds.has(label.id)"
-								:disabled="toggleLabel.isPending.value"
+								:aria-busy="labelTogglePending === label.id ? 'true' : undefined"
 								@click="handleToggleLabel(label)">
 								{{ label.title }}
 							</button>
@@ -1017,12 +1157,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 					</div>
 
-					<!-- Projects membership -->
+					<!-- Projects membership.
+					     Deliberately NOT gated on canEdit (#10732). A project is the
+					     viewer's OWN collection: ProjectService::addCard() loads the
+					     project as its owner and then asks only for PERMISSION_READ on the
+					     card's board, so collecting a card you can merely read is
+					     explicitly allowed. Hiding this pill would remove a working
+					     feature from read-only members, not a dead affordance. -->
 					<span class="card-modal__attr-divider" />
 
 					<div class="card-modal__attr">
 						<button
 							class="card-modal__pill card-modal__pill--dashed card-modal__pill--sm"
+							data-pill="project"
 							:aria-expanded="openPicker === 'project'"
 							@click="togglePicker('project')">
 							<FolderMultipleOutlineIcon :size="12" />
@@ -1192,7 +1339,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:disabled="isSaving"
 										:autofocus="true"
 										min-height="160px"
-										:participants="participants.data.value ?? []"
+										:participants="participantList"
 										:upload-image="(file) => uploadAttachment.mutateAsync(file)"
 										:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
 										:show-toolbar="!editorToolbarHidden"
@@ -2280,7 +2427,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												:disabled="addComment.isPending.value"
 												:autofocus="true"
 												min-height="60px"
-												:participants="participants.data.value ?? []"
+												:participants="participantList"
 												:upload-image="(file) => uploadAttachment.mutateAsync(file)"
 												:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
 												:show-toolbar="!editorToolbarHidden"
@@ -2321,7 +2468,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:placeholder="t('kanso', 'Start a new thread…')"
 										:disabled="addComment.isPending.value"
 										min-height="60px"
-										:participants="participants.data.value ?? []"
+										:participants="participantList"
 										:upload-image="(file) => uploadAttachment.mutateAsync(file)"
 										:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
 										:show-toolbar="!editorToolbarHidden"
@@ -2481,6 +2628,7 @@ import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutli
 import CrosshairsGpsIcon from 'vue-material-design-icons/CrosshairsGps.vue'
 import AccountBoxIcon from 'vue-material-design-icons/AccountBox.vue'
 import AccountPlusIcon from 'vue-material-design-icons/AccountPlus.vue'
+import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CommentMultipleOutlineIcon from 'vue-material-design-icons/CommentMultipleOutline.vue'
 import HistoryIcon from 'vue-material-design-icons/History.vue'
 import CommentOutlineIcon from 'vue-material-design-icons/CommentOutline.vue'
@@ -2536,7 +2684,7 @@ import { scaleTokens } from '../services/estimateScales.js'
 import { useLabels } from '../composables/useLabels.js'
 import { useAssignees } from '../composables/useAssignees.js'
 import { useContacts } from '../composables/useContacts.js'
-import { fetchCardContacts } from '../services/api.js'
+import { fetchCardContacts, fetchParticipants } from '../services/api.js'
 import { useReviews } from '../composables/useReviews.js'
 import { useRecurRules } from '../composables/useRecurRules.js'
 import { useReminders, reminderPresets } from '../composables/useReminders.js'
@@ -2882,7 +3030,23 @@ const cardLabelIds = computed(() => {
 const { toggleLabel, createLabel } = useLabels(boardId)
 const labelToggleError = ref('')
 
+// The id of the label whose toggle is in flight, or null when idle (#10705).
+// Two jobs, both of which `:disabled` on the rows used to do — badly, because
+// disabling the focused row blurs it:
+//   1. it drives `aria-busy` on that one row, so the in-flight state is still
+//      announced without taking the row out of the focus order;
+//   2. it serialises the picker. Set SYNCHRONOUSLY on entry (before the first
+//      await), so a keyboard user leaning on Enter can't fire a second write
+//      into the window — a mutation's own `isPending` flips through the query
+//      client's batched notifier and is NOT guaranteed to be true by the time
+//      the next key event is handled. Serialising also keeps the optimistic
+//      rollback honest: onError restores a snapshot taken before ITS mutation,
+//      which a concurrent second toggle would have made stale.
+const labelTogglePending = ref(null)
+
 async function handleToggleLabel(label) {
+	if (labelTogglePending.value !== null) return
+	labelTogglePending.value = label.id
 	const assign = !cardLabelIds.value.has(label.id)
 	labelToggleError.value = ''
 	try {
@@ -2896,6 +3060,8 @@ async function handleToggleLabel(label) {
 			: t('kanso', 'Label {label} removed', { label: label.title }))
 	} catch (err) {
 		labelToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update label.')
+	} finally {
+		labelTogglePending.value = null
 	}
 }
 
@@ -2944,31 +3110,185 @@ async function submitCreateLabel() {
 }
 
 // ── Assignees ────────────────────────────────────────────────────────────────
-const { participants, toggleAssignee } = useAssignees(boardId)
+const { participants, participantList, participantsTruncated, participantsLimit, toggleAssignee } = useAssignees(boardId)
 const assigneeError = ref('')
+
+// Picker search (#10704). The participants payload is capped server-side, so on
+// a board shared with more people than the cap the rest were simply unreachable
+// - the picker only ever rendered the cached first page. Typing here asks the
+// server for THAT substring instead, which is the only path to person N+1, and
+// the popover says which of the two lists it is showing.
+//
+// Deliberately NOT written into the participants query cache: that cache is also
+// the board-wide uid → display-name map (assignees, reviewers, swimlanes), and
+// replacing it with a search result would blank out names all over the board.
+const assigneeQuery = ref('')
+const assigneeSearchResults = ref([])
+const assigneeSearching = ref(false)
+const assigneeSearchTruncated = ref(false)
+const assigneeSearchLimit = ref(0)
+const assigneeSearchError = ref('')
+const assigneeSearchInput = ref(null)
+// Everyone a search has turned up in this modal, kept after the box is cleared.
+// The results list itself is transient, but a person the cached page cannot
+// resolve must keep their NAME on the pill once they are assigned - clearing
+// this with the query would put their bare uid back a keystroke later.
+const discoveredParticipants = ref(new Map())
+let assigneeSearchTimer = null
+let assigneeSearchSeq = 0
 
 const cardAssigneeIds = computed(() =>
 	Array.isArray(cardData.value?.assigneeIds) ? cardData.value.assigneeIds : [],
 )
 
+// uid → participant, for resolving display names. The cached page is the base;
+// anyone the picker's search turned up is folded in on top (#10704), so a person
+// the cap sheds still shows their NAME on the pill the moment you assign them,
+// instead of the bare uid the cached page alone can resolve them to.
 const participantMap = computed(() => {
-	const list = Array.isArray(participants.data.value) ? participants.data.value : []
-	return new Map(list.map((p) => [p.uid, p]))
+	const map = new Map(participantList.value.map((p) => [p.uid, p]))
+	for (const [uid, p] of discoveredParticipants.value) {
+		if (!map.has(uid)) map.set(uid, p)
+	}
+	return map
 })
 
 function participantName(uid) {
 	return participantMap.value.get(uid)?.displayName ?? uid
 }
 
+// True while the picker is showing search results rather than the cached page.
+const assigneeSearchActive = computed(() => assigneeQuery.value.trim() !== '')
+
+// The rows the picker is currently listing: the cached first page while idle,
+// the server's answer for the typed substring while searching.
+const assigneeSource = computed(() =>
+	assigneeSearchActive.value ? assigneeSearchResults.value : participantList.value,
+)
+
 const unassignedParticipants = computed(() => {
-	const list = Array.isArray(participants.data.value) ? participants.data.value : []
 	const assigned = new Set(cardAssigneeIds.value)
-	return list.filter((p) => !assigned.has(p.uid))
+	return assigneeSource.value.filter((p) => !assigned.has(p.uid))
 })
 
+/**
+ * Every listed participant, tagged with whether this card already has them. The
+ * picker renders ALL of them (assigned ones ticked and toggleable) rather
+ * than only the unassigned remainder, so the list can never run dry and take
+ * the control with it. The server's order (display name) is kept as-is on
+ * purpose: re-sorting the assigned ones to the top would move rows under the
+ * pointer between clicks, which is exactly when a second assignee is added.
+ */
+const assignCandidates = computed(() => {
+	const assigned = new Set(cardAssigneeIds.value)
+	return assigneeSource.value.map((p) => ({ ...p, assigned: assigned.has(p.uid) }))
+})
+
+/**
+ * What the popover says about the list it is showing, or '' when the list is
+ * everyone and needs no caveat. This is the part the bug was missing: the cap
+ * was applied silently, so a board with more members than the cap looked exactly
+ * like a board with fewer (#10704).
+ */
+const assigneeListNote = computed(() => {
+	if (assigneeSearchActive.value) {
+		if (!assigneeSearchTruncated.value) return ''
+		return t('kanso', 'Showing the first {count} matches. Keep typing to narrow them down.', {
+			count: assigneeSearchLimit.value,
+		})
+	}
+	if (!participantsTruncated.value) return ''
+	return t('kanso', 'Showing the first {count} people with access. Search to find anyone else.', {
+		count: participantsLimit.value,
+	})
+})
+
+/**
+ * Ask the server for the people matching `query`. `seq` discards an answer that
+ * a later keystroke has already superseded, so a slow response can never repaint
+ * the list with a stale substring's results.
+ *
+ * @param {string} query the typed substring; '' clears back to the cached page.
+ */
+async function runAssigneeSearch(query) {
+	const bId = resolvePickerBoardId()
+	if (bId === null || bId === undefined || bId === 'undefined') return
+	const seq = ++assigneeSearchSeq
+	if (query.trim() === '') {
+		assigneeSearching.value = false
+		assigneeSearchResults.value = []
+		assigneeSearchTruncated.value = false
+		assigneeSearchError.value = ''
+		return
+	}
+	assigneeSearching.value = true
+	assigneeSearchError.value = ''
+	try {
+		const page = await fetchParticipants(bId, query)
+		if (seq !== assigneeSearchSeq) return
+		assigneeSearchResults.value = page.items
+		const discovered = new Map(discoveredParticipants.value)
+		for (const p of page.items) discovered.set(p.uid, p)
+		discoveredParticipants.value = discovered
+		assigneeSearchTruncated.value = page.truncated
+		assigneeSearchLimit.value = page.limit
+	} catch (err) {
+		if (seq !== assigneeSearchSeq) return
+		assigneeSearchResults.value = []
+		assigneeSearchTruncated.value = false
+		assigneeSearchError.value = err?.response?.data?.error || t('kanso', 'Could not search the people on this board.')
+	} finally {
+		if (seq === assigneeSearchSeq) assigneeSearching.value = false
+	}
+}
+
+function onAssigneeSearch() {
+	if (assigneeSearchTimer) clearTimeout(assigneeSearchTimer)
+	assigneeSearchTimer = setTimeout(() => {
+		runAssigneeSearch(assigneeQuery.value)
+	}, 200)
+}
+
+/**
+ * Open (or close) the assignee picker, resetting its search each time so it
+ * always opens on the full first page rather than on the last thing typed.
+ *
+ * Focus goes to the search box on open. The rows themselves keep the focus
+ * behaviour #10705 fixed: nothing here runs on a toggle, so an in-flight pick
+ * still leaves focus exactly where the user put it.
+ */
+async function toggleAssignPicker() {
+	if (openPicker.value === 'assign') {
+		openPicker.value = null
+		return
+	}
+	openPicker.value = 'assign'
+	if (assigneeSearchTimer) clearTimeout(assigneeSearchTimer)
+	assigneeSearchSeq++
+	assigneeQuery.value = ''
+	assigneeSearchResults.value = []
+	assigneeSearchTruncated.value = false
+	assigneeSearching.value = false
+	assigneeSearchError.value = ''
+	await nextTick()
+	assigneeSearchInput.value?.focus?.()
+}
+
+// The uid whose toggle is in flight, or null when idle — the assignee twin of
+// labelTogglePending, and there for the same two reasons (#10705): it drives
+// `aria-busy` on the one row being written, and it serialises the picker in
+// place of the `disabled` that used to blur the focused row. Set before the
+// first await so a held-down Enter cannot slip a second write past it.
+const assigneeTogglePending = ref(null)
+
+// NB: this deliberately leaves `openPicker` alone. The picker is a multi-select
+// (same as the label one), so it stays open across picks - closing it after the
+// first assignee is what made a second one feel unreachable (#10603). It closes
+// on Escape / a click outside, like every other attribute-bar popover.
 async function handleToggleAssignee(uid, assign) {
+	if (assigneeTogglePending.value !== null) return
+	assigneeTogglePending.value = uid
 	assigneeError.value = ''
-	openPicker.value = null
 	try {
 		await toggleAssignee.mutateAsync({
 			cardId: Number(props.cardId),
@@ -2981,6 +3301,8 @@ async function handleToggleAssignee(uid, assign) {
 			: t('kanso', '{user} unassigned', { user: who }))
 	} catch (err) {
 		assigneeError.value = err?.response?.data?.error || t('kanso', 'Failed to update assignee.')
+	} finally {
+		assigneeTogglePending.value = null
 	}
 }
 
@@ -3009,7 +3331,7 @@ const cardContactUris = computed(() => new Set(cardContacts.value.map((c) => c.c
 // successful call as "available" and only hide on a hard failure). We surface
 // the picker whenever the card already has contacts, or the probe succeeded.
 async function runContactSearch(query) {
-	const bId = resolveContactBoardId()
+	const bId = resolvePickerBoardId()
 	// Board id not known yet (full-page route, card still loading). Skip the probe;
 	// the boardId watch below re-runs it once the id resolves. Avoids a bogus
 	// GET /boards/undefined/contacts.
@@ -3035,7 +3357,8 @@ async function runContactSearch(query) {
 	}
 }
 
-function resolveContactBoardId() {
+// Shared by both live pickers in this modal (contacts and the assignee search).
+function resolvePickerBoardId() {
 	const b = boardId
 	if (typeof b === 'function') return b()
 	// Return `.value` even when it's undefined (ref not resolved yet) rather than
@@ -3204,7 +3527,7 @@ const reviewsCompact = computed(() => cardReviews.value.length >= 3)
 // who already holds a review of the selected type - switching the type re-opens
 // them, which is how you add multiple reviews to one card.
 const unrequestedParticipants = computed(() => {
-	const list = Array.isArray(participants.data.value) ? participants.data.value : []
+	const list = participantList.value
 	const type = selectedReviewTypeId.value ?? 0
 	const requested = new Set(
 		cardReviews.value.filter((r) => (r.reviewTypeId ?? 0) === type).map((r) => r.reviewer),
@@ -3991,7 +4314,7 @@ function toggleStepMenu(item, type) {
 // All board participants (external members included - assigning a step to the
 // client side is the point of #3745) minus the current assignee.
 function stepAssignCandidates(item) {
-	const list = Array.isArray(participants.data.value) ? participants.data.value : []
+	const list = participantList.value
 	return list.filter((p) => p.uid !== item.assignedUser)
 }
 
@@ -5793,7 +6116,10 @@ async function copyBranchName() {
 }
 
 // ── File attachments (#3526) ─────────────────────────────────────────────────
-const { attachments: cardAttachmentsData, uploadAttachment, attachFromFiles, removeAttachment } = useCardAttachments(computed(() => props.cardId))
+// `boardId` too: attaching or removing a file changes the BOARD-wide
+// attachments listing as much as the card's own, and that lives under its own
+// cache key (#10738).
+const { attachments: cardAttachmentsData, uploadAttachment, attachFromFiles, removeAttachment } = useCardAttachments(computed(() => props.cardId), boardId)
 const cardAttachments = computed(() => cardAttachmentsData.value ?? [])
 const attachmentInput = ref(null)
 const attachmentError = ref('')
@@ -6027,7 +6353,7 @@ const watcherIds = computed(() =>
 // header/pill state desync).
 const displayedWatcherIds = computed(() => watcherIds.value.filter((uid) => uid !== currentUserId))
 const unwatchedParticipants = computed(() => {
-	const list = Array.isArray(participants.data.value) ? participants.data.value : []
+	const list = participantList.value
 	const watching = new Set(watcherIds.value)
 	// The actor manages themselves via the header Watch toggle.
 	return list.filter((p) => !watching.has(p.uid) && p.uid !== currentUserId)
@@ -7110,8 +7436,14 @@ async function handleToggleProject(projectId) {
 	cursor: pointer;
 	white-space: nowrap;
 }
-.card-modal__pill:hover {
+/* A pill rendered as a plain span for a member who cannot edit (#10732) still
+   carries the value, so it keeps the shape - but nothing about it may read as
+   clickable. */
+.card-modal__pill:not(.card-modal__pill--static):hover {
 	border-color: var(--color-primary-element);
+}
+.card-modal__pill--static {
+	cursor: default;
 }
 .card-modal__pill--sm {
 	height: 24px;
@@ -7350,8 +7682,26 @@ async function handleToggleProject(projectId) {
 	opacity: 0.5;
 	cursor: default;
 }
+/* Write in flight (#10705). The row keeps focus and stays in the tab order -
+   only `aria-busy` marks it - so this is the whole visual cue that the pick
+   has not been confirmed yet, matching the checklist rows' pending look. */
+.card-modal__assign-option[aria-busy='true'],
+.card-modal__label-toggle[aria-busy='true'] {
+	opacity: 0.65;
+}
+/* Already on the card. Marked like the label toggles above: the row stays in
+   the list (clicking it unassigns) instead of vanishing. */
+.card-modal__assign-option--active {
+	background: var(--color-background-dark);
+	font-weight: 600;
+}
+.card-modal__assign-check {
+	margin-left: auto;
+	color: var(--color-primary-element);
+}
 /* Contacts picker (#3530) */
-.card-modal__contact-search {
+.card-modal__contact-search,
+.card-modal__assign-search {
 	width: 100%;
 	margin-bottom: 4px;
 	padding: 4px 8px;
@@ -7360,6 +7710,14 @@ async function handleToggleProject(projectId) {
 	background: var(--color-main-background);
 	color: var(--color-main-text);
 	font-size: 0.8125rem;
+}
+/* The "this list is a page, not the board" caveat under the assignee rows. */
+.card-modal__assign-note {
+	padding: 6px 8px 2px;
+	border-top: 1px solid var(--color-border);
+	margin-top: 4px;
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
 }
 .card-modal__contact-option-text {
 	display: flex;
@@ -9240,6 +9598,45 @@ async function handleToggleProject(projectId) {
    stacked-layout query, so a fractional viewport width (zoom, display scaling)
    can never fall between the two and leave the toggle inert. */
 @media not all and (max-width: 680px) {
+	/* ── The discussion pane claims the modal's height (#10657) ───────────────
+	   NcModal grants the card container a `max-height` and no `height`, so it
+	   shrink-wrapped; the `flex: 1; min-height: 0` chain this file already
+	   declares (body -> discussion -> thread-scroll) then had no definite
+	   ancestor height to distribute, and the `64vh` caps below became the real
+	   constraint - a guess at what the modal affords that under-claimed it, and
+	   by more the taller the screen. CardModal.vue now states the container's
+	   height; these three rules carry it down to the comment scroller.
+
+	   Wide layout only, like everything else in this block. Below 680px the card
+	   is a single tabbed column that scrolls as ONE document inside the modal,
+	   and the phone description editor centres itself in whichever scroller it
+	   finds - pinning the panes there would shrink that scroller and put the
+	   caret back under the soft keyboard (tests/e2e/mobile-pwa.spec.js). */
+	.card-modal:not(.card-modal--mode-page) {
+		/* Fill the container instead of shrink-wrapping inside it. This is the
+		   link that makes the flex chain below effective at all: as a plain
+		   block child of NcModal's content wrapper, `.card-modal` sizes to its
+		   content, so giving the container a height alone changes nothing
+		   downstream. The full-page view is not inside a modal and keeps its
+		   height from the page. */
+		height: 100%;
+	}
+	.card-modal__body {
+		/* ONE row, and it may not outgrow the body. An implicit `auto` row is
+		   sized to its tallest item and only ever stretched, never shrunk, so a
+		   long thread would push the panes - and the composer pinned to the
+		   bottom of one - straight past the modal's clip. `minmax(0, 1fr)` pins
+		   the row to the body's own height, which is where the panes' internal
+		   scrollers take over. The bottom layout resets this below: there the
+		   body IS the scroller and its two stacked rows are meant to grow. */
+		grid-template-rows: minmax(0, 1fr);
+	}
+	.card-modal__content,
+	.card-modal__discussion {
+		/* Drop the 64vh guesses: the row above now has the modal's real height. */
+		max-height: none;
+	}
+
 	.card-modal--discussion-collapsed:not(.card-modal--discussion-bottom) .card-modal__body {
 		grid-template-columns: minmax(0, 1fr);
 	}
@@ -9262,12 +9659,17 @@ async function handleToggleProject(projectId) {
 	   by CSS structure, not by remembering to clear it. */
 	.card-modal--discussion-bottom .card-modal__body {
 		grid-template-columns: minmax(0, 1fr);
+		/* Undo the side layout's single pinned row: here the card and the
+		   discussion stack as two content-sized rows inside one scroller. */
+		grid-template-rows: auto auto;
 		overflow: auto;
-		/* The SAME 64vh the two panes each use in the side layout - it is what the
-		   modal container actually affords. Anything taller puts the bottom of the
-		   body past the modal's clip, and that is exactly where the sticky composer
-		   sits, so the Post button becomes unreachable. */
-		max-height: 64vh;
+		/* No vh cap. The body must end exactly where the modal's clip does - any
+		   taller and its bottom edge, where the sticky composer sits, is cut off
+		   and the Post button becomes unreachable. That used to be spelled as a
+		   fixed 64vh, a guess at what the container affords; the shell now states
+		   a real height (#10657) and the `flex: 1; min-height: 0` above sizes
+		   this to it exactly, at any viewport. */
+		max-height: none;
 	}
 	/* Hand scrolling to the body: the panes must grow to their content instead of
 	   each opening a nested scroller. */

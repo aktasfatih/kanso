@@ -34,6 +34,10 @@ msgstr "„overwrite.cli.url” nie jest ustawione w config.php — odnośniki w
 msgid "(empty)"
 msgstr "(puste)"
 
+#: src/admin-backup.js
+msgid "(orphaned)"
+msgstr ""
+
 #: lib/Notification/Notifier.php
 msgid "{actor} assigned you a step on {card}"
 msgstr "{actor} przypisał Ci krok w {card}"
@@ -277,7 +281,7 @@ msgstr[0] "%n karta"
 msgstr[1] "%n karty"
 msgstr[2] "%n kart"
 
-#: src/components/StackColumn.vue:983
+#: src/components/StackColumn.vue:1053
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] ""
@@ -312,14 +316,21 @@ msgstr[0] "Wykryto %n wiersz danych"
 msgstr[1] "Wykryto %n wiersze danych"
 msgstr[2] "Wykryto %n wierszy danych"
 
-#: src/components/CardDetail.vue:4392
+#: src/components/CardDetail.vue:4715
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dzień temu"
 msgstr[1] "%n dni temu"
 msgstr[2] "%n dni temu"
 
-#: src/components/CardDetail.vue:4390
+#: src/components/BoardAttachmentsModal.vue:14
+msgid "%n file"
+msgid_plural "%n files"
+msgstr[0] ""
+msgstr[1] ""
+msgstr[2] ""
+
+#: src/components/CardDetail.vue:4713
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n godzinę temu"
@@ -347,7 +358,7 @@ msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: src/components/CardDetail.vue:4388
+#: src/components/CardDetail.vue:4711
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minutę temu"
@@ -375,14 +386,14 @@ msgstr[0] "%n punkt"
 msgstr[1] "%n punkty"
 msgstr[2] "%n punktów"
 
-#: src/components/CardDetail.vue:1030
+#: src/components/CardDetail.vue:1177
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n projekt"
 msgstr[1] "%n projekty"
 msgstr[2] "%n projektów"
 
-#: src/components/CardDetail.vue:2044
+#: src/components/CardDetail.vue:2191
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -403,7 +414,7 @@ msgstr[0] "%n niezaplanowana karta"
 msgstr[1] "%n niezaplanowane karty"
 msgstr[2] "%n niezaplanowanych kart"
 
-#: src/components/CardDetail.vue:293
+#: src/components/CardDetail.vue:312
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n obserwujący"
@@ -488,6 +499,10 @@ msgstr "Dodaj podkartę…"
 #: src/components/CardDetail.vue
 msgid "Add an item…"
 msgstr "Dodaj element…"
+
+#: src/components/CardDetail.vue
+msgid "Add assignee"
+msgstr ""
 
 #: src/views/ProjectView.vue
 msgid "Add card"
@@ -657,14 +672,14 @@ msgstr "Zatwierdzone"
 msgid "Archive"
 msgstr "Zarchiwizuj"
 
-#: src/components/StackColumn.vue:196
+#: src/components/StackColumn.vue:218
 msgid "Archive %n card"
 msgid_plural "Archive %n cards"
 msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: src/components/StackColumn.vue:195
+#: src/components/StackColumn.vue:217
 msgid "Archive %n visible card"
 msgid_plural "Archive %n visible cards"
 msgstr[0] ""
@@ -794,6 +809,10 @@ msgstr "Załączanie…"
 msgid "Attachments"
 msgstr "Załączniki"
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Attachments on this board"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Auto-archive"
 msgstr "Autoarchiwizacja"
@@ -851,6 +870,10 @@ msgid "Backup completed"
 msgstr "Kopia zapasowa ukończona"
 
 #: src/admin-backup.js
+msgid "Backup deleted"
+msgstr ""
+
+#: src/admin-backup.js
 msgid "Backup failed"
 msgstr "Kopia zapasowa nie powiodła się"
 
@@ -861,6 +884,10 @@ msgstr "Zapisano ustawienia kopii zapasowych"
 #: src/admin-backup.js
 msgid "Backups are disabled"
 msgstr "Kopie zapasowe są wyłączone"
+
+#: templates/admin-backup.php
+msgid "Backups in the other location stay where they are; switch back to see them."
+msgstr ""
 
 #: templates/admin-backup.php
 msgid "Backups to keep per board"
@@ -913,6 +940,11 @@ msgstr "Działania na tablicy"
 #: src/views/BoardView.vue
 msgid "Board analytics"
 msgstr "Statystyki tablicy"
+
+#: src/components/BoardAttachmentsModal.vue
+#: src/views/BoardView.vue
+msgid "Board attachments"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Board background"
@@ -1281,9 +1313,18 @@ msgstr "Ukończone punkty list kontrolnych"
 msgid "Checklist incomplete"
 msgstr "Lista kontrolna nieukończona"
 
+#: src/components/CardPreview.vue
 #: src/components/CardTile.vue
 msgid "Checklist progress"
 msgstr "Postęp listy kontrolnej"
+
+#: src/components/CardPreview.vue:227
+#: src/components/CardTile.vue:464
+msgid "Checklist progress - %n overdue step"
+msgid_plural "Checklist progress - %n overdue steps"
+msgstr[0] ""
+msgstr[1] ""
+msgstr[2] ""
 
 #: src/components/CsvImportModal.vue
 msgid "Choose a board…"
@@ -1437,6 +1478,10 @@ msgid "Column deleted"
 msgstr "Kolumna usunięta"
 
 #: src/components/StackColumn.vue
+msgid "Column description"
+msgstr ""
+
+#: src/components/StackColumn.vue
 msgid "Column name"
 msgstr "Nazwa kolumny"
 
@@ -1558,6 +1603,10 @@ msgstr "Nie udało się skopiować do schowka"
 msgid "Could not copy to clipboard."
 msgstr "Nie udało się skopiować do schowka."
 
+#: src/admin-backup.js
+msgid "Could not delete the backup"
+msgstr ""
+
 #: src/composables/useBoardActions.js
 msgid "Could not delete the board."
 msgstr "Nie udało się usunąć tablicy."
@@ -1606,6 +1655,10 @@ msgstr "Nie udało się zaimportować tego pliku."
 msgid "Could not import that Trello file."
 msgstr "Nie udało się zaimportować tego pliku z Trello."
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Could not load more files. Try again."
+msgstr ""
+
 #: src/components/CsvImportModal.vue
 msgid "Could not load that board’s columns."
 msgstr "Nie udało się wczytać kolumn tej tablicy."
@@ -1641,6 +1694,10 @@ msgstr "Nie udało się zapisać ustawień przyjmowania zgłoszeń."
 #: src/components/CardDetail.vue
 msgid "Could not save the title"
 msgstr "Nie udało się zapisać tytułu"
+
+#: src/components/CardDetail.vue
+msgid "Could not search the people on this board."
+msgstr ""
 
 #: src/views/BoardList.vue
 msgid "Could not set up the starter board."
@@ -1792,7 +1849,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:2162
-#: src/components/CardDetail.vue:4581
+#: src/components/CardDetail.vue:4904
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dzień"
@@ -1816,6 +1873,7 @@ msgid "Default (no filter)"
 msgstr "Domyślny (bez filtra)"
 
 #: src/App.vue
+#: src/admin-backup.js
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 #: src/components/ManageTemplatesModal.vue
@@ -1837,6 +1895,18 @@ msgstr "Usunąć „{title}” wraz ze wszystkimi kartami dla wszystkich? Tej op
 #: src/components/BoardSettingsModal.vue
 msgid "Delete \"{title}\"?"
 msgstr "Usunąć „{title}”?"
+
+#: src/admin-backup.js
+msgid "Delete {name}? Kanso keeps no second copy of it."
+msgstr ""
+
+#: src/admin-backup.js
+msgid "Delete {name}? The file goes to the backup account's trashbin — Kanso keeps no second copy of it."
+msgstr ""
+
+#: src/admin-backup.js
+msgid "Delete {name}? This file is removed for good — Kanso keeps no second copy of it."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Delete and stop recurrence"
@@ -1936,6 +2006,10 @@ msgstr "Usunięte karty"
 #: src/components/CardDetail.vue
 msgid "deleted this card"
 msgstr "usunął tę kartę"
+
+#: templates/admin-backup.php
+msgid "Deleting a backup removes that file from this list; Kanso keeps no second copy of it."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/BoardList.vue
@@ -2060,7 +2134,12 @@ msgid "Down vs previous period"
 msgstr "Spadek wzgl. poprzedniego okresu"
 
 #: src/admin-backup.js
+#: src/components/BoardAttachmentsModal.vue
 msgid "Download"
+msgstr ""
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "Download {file}"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -2330,6 +2409,10 @@ msgstr[2] "Co %n lat"
 msgid "Everyone in the administrators group gets the message."
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Everyone shown here is already assigned to this card."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "Exit multi-select"
 msgstr "Wyjdź z zaznaczania wielokrotnego"
@@ -2585,6 +2668,10 @@ msgstr "Nie udało się wczytać zadań. Spróbuj ponownie."
 #: src/components/StackColumn.vue
 msgid "Failed to load templates."
 msgstr "Nie udało się wczytać szablonów."
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "Failed to load the board's attachments."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the calendar feed config."
@@ -2932,6 +3019,10 @@ msgstr "Typ pola"
 msgid "File an issue"
 msgstr "Zgłoś problem"
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Files attached to any card on this board are listed here."
+msgstr ""
+
 #: src/components/BoardFilterBar.vue
 msgid "Filter"
 msgstr "Filtr"
@@ -3117,6 +3208,10 @@ msgstr "Godziny"
 msgid "https://cloud.example.com/call/abc123"
 msgstr "https://cloud.example.com/call/abc123"
 
+#: templates/admin-backup.php
+msgid "If the board was only just deleted, its backup may be the only way to get it back."
+msgstr ""
+
 #: src/views/PublicBoard.vue
 msgid "Image"
 msgstr ""
@@ -3213,6 +3308,10 @@ msgstr "do {column}"
 msgid "Issue intake"
 msgstr "Przyjmowanie zgłoszeń"
 
+#: templates/admin-backup.php
+msgid "It is not in anyone's Files, so there is nowhere to undo it from."
+msgstr ""
+
 #: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
 msgid "Italic"
@@ -3222,7 +3321,7 @@ msgstr "Kursywa"
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6351
+#: src/components/CardDetail.vue:6677
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3282,6 +3381,10 @@ msgstr "Eksport Kanso (.zip)"
 
 #: templates/admin-backup.php
 msgid "Kanso keeps the files itself. Nothing goes into anyone's Files folder."
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Kanso never clears those on its own."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -3424,9 +3527,17 @@ msgstr "powiązał kontakt"
 msgid "List"
 msgstr "Lista"
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Load more files"
+msgstr ""
+
 #: src/views/InboxView.vue
 msgid "Loading inbox…"
 msgstr "Wczytywanie skrzynki odbiorczej…"
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "Loading more files…"
+msgstr ""
 
 #: src/views/ProjectView.vue
 msgid "Loading project…"
@@ -3539,7 +3650,7 @@ msgid "Mon"
 msgstr "Pn"
 
 #: src/components/BoardSettingsModal.vue:2164
-#: src/components/CardDetail.vue:4583
+#: src/components/CardDetail.vue:4906
 msgid "month"
 msgid_plural "months"
 msgstr[0] "miesiąc"
@@ -3768,6 +3879,10 @@ msgstr "Brak zarchiwizowanych kart"
 msgid "No archived cards match “{query}”."
 msgstr "Żadna zarchiwizowana karta nie pasuje do „{query}”."
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "No attachments yet"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "No auto-archive rules yet."
 msgstr "Brak reguł autoarchiwizacji."
@@ -3995,6 +4110,14 @@ msgstr "Brak wątków. Wszyscy obserwujący tę kartę dostaną powiadomienie, g
 msgid "No type"
 msgstr "Brak typu"
 
+#: src/components/CardDetail.vue
+msgid "Nobody has access to this board yet."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Nobody with access to this board matches that."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 #: src/composables/usePriority.js
@@ -4141,6 +4264,10 @@ msgstr "Otwórz Kanso"
 msgid "Open project chat in a new tab"
 msgstr "Otwórz czat projektu w nowej zakładce"
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Open the card this file is attached to"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Open the recurring card"
 msgstr "Otwórz kartę cykliczną"
@@ -4185,6 +4312,10 @@ msgstr "Pomarańczowy"
 #: src/components/MarkdownEditor.vue
 msgid "Ordered list"
 msgstr "Lista numerowana"
+
+#: templates/admin-backup.php
+msgid "Orphaned means the board a backup came from no longer exists."
+msgstr ""
 
 #: src/components/BoardTimelineView.vue
 msgid "Outside the visible range — click Fit to show"
@@ -4835,9 +4966,17 @@ msgstr "Szukaj kart…"
 msgid "Search contacts…"
 msgstr "Szukaj kontaktów…"
 
+#: src/components/CardDetail.vue
+msgid "Search people…"
+msgstr ""
+
 #: src/components/SearchBox.vue
 msgid "Search results"
 msgstr "Wyniki wyszukiwania"
+
+#: src/components/CardDetail.vue
+msgid "Search the people with access to this board"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Search users or groups"
@@ -4861,14 +5000,14 @@ msgstr "Sekret (skopiuj go teraz, jest pokazywany tylko raz)"
 msgid "Select"
 msgstr "Lista wyboru"
 
-#: src/components/StackColumn.vue:184
+#: src/components/StackColumn.vue:206
 msgid "Select %n card"
 msgid_plural "Select %n cards"
 msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
 
-#: src/components/StackColumn.vue:183
+#: src/components/StackColumn.vue:205
 msgid "Select %n visible card"
 msgid_plural "Select %n visible cards"
 msgstr[0] ""
@@ -4975,7 +5114,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr "Pokaż panel dyskusji"
 
-#: src/components/CardDetail.vue:6357
+#: src/components/CardDetail.vue:6683
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Pokaż panel dyskusji (%n komentarz)"
@@ -5001,6 +5140,18 @@ msgstr "Pokaż obserwujących"
 #: src/views/MyCardsView.vue
 msgid "Showing the {count} most recent tasks you completed in the last {days} days."
 msgstr "Wyświetlanych jest {count} najnowszych zadań ukończonych w ciągu ostatnich {days} dni."
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "Showing the {shown} most recent of {total} files."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Showing the first {count} matches. Keep typing to narrow them down."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Showing the first {count} people with access. Search to find anyone else."
+msgstr ""
 
 #: src/views/ViewPage.vue
 msgid "Showing the first {shown} of {total} matching cards — refine your filter to see the rest."
@@ -5239,6 +5390,10 @@ msgstr ""
 msgid "The backups then live in that account's Files."
 msgstr ""
 
+#: src/admin-backup.js
+msgid "The board this backup came from no longer exists."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "The chat link must be a http:// or https:// URL."
 msgstr "Odnośnik do czatu musi być adresem URL http:// lub https://."
@@ -5250,6 +5405,10 @@ msgstr "Plik CSV musi mieć wiersz nagłówka i co najmniej jeden wiersz danych.
 #: src/views/BoardList.vue
 msgid "The Deck app is not installed on this server, so there is nothing to import."
 msgstr "Aplikacja Deck nie jest zainstalowana na tym serwerze, więc nie ma czego importować."
+
+#: templates/admin-backup.php
+msgid "The file goes to that account's trashbin and keeps using space until that is emptied."
+msgstr ""
 
 #: templates/admin-backup.php
 msgid "The files use that account's quota, and each write shows up in its activity."
@@ -5539,6 +5698,7 @@ msgstr "Do"
 msgid "Until date"
 msgstr "Do dnia"
 
+#: src/components/BoardAttachmentsModal.vue
 #: src/components/ManageTemplatesModal.vue
 msgid "Untitled"
 msgstr "Bez tytułu"
@@ -5679,7 +5839,7 @@ msgid "Wed"
 msgstr "Śr"
 
 #: src/components/BoardSettingsModal.vue:2163
-#: src/components/CardDetail.vue:4582
+#: src/components/CardDetail.vue:4905
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "tydzień"
@@ -5693,6 +5853,10 @@ msgstr "Tydzień"
 #: src/components/CardDetail.vue
 msgid "Weekly"
 msgstr "Co tydzień"
+
+#: src/components/StackColumn.vue
+msgid "What belongs in this column?"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "What changes are needed? (posted as a comment)"
@@ -5769,7 +5933,7 @@ msgid "wrote"
 msgstr "napisał"
 
 #: src/components/BoardSettingsModal.vue:2165
-#: src/components/CardDetail.vue:4584
+#: src/components/CardDetail.vue:4907
 msgid "year"
 msgid_plural "years"
 msgstr[0] "rok"

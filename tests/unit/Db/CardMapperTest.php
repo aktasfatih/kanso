@@ -504,6 +504,91 @@ class CardMapperTest extends TestCase {
 		return $values;
 	}
 
+	// ---- the board-summary child-progress aggregate (#3743, pinned by #10709) --
+
+	/**
+	 * DENIAL: childProgressByBoard is viewer-scoped, so a child this viewer
+	 * cannot see never enters its parent's count - a private child must not
+	 * betray its existence through the parent tile's "2/5" badge.
+	 *
+	 * The three visibility branches are bound with the viewer's OWN role and uid
+	 * on BOTH counting passes; the un-aliased single-table query means the scope
+	 * addresses the bare columns. Deleting applyForViewer() from
+	 * countChildrenByBoard() empties every expectation below - the fed-rows
+	 * assertions elsewhere in this file would not notice.
+	 */
+	public function testChildProgressByBoardNeverCountsAChildHiddenFromTheViewer(): void {
+		$recorded = $this->recordQuery(
+			fn (CardMapper $m) => $m->childProgressByBoard(
+				7,
+				ViewerContext::forMember('alice', 7, ViewerContext::ROLE_EXTERNAL, true),
+			)
+		);
+
+		// Two passes (totals, then done-only), so each scope binding twice.
+		self::assertSame(
+			[
+				CardVisibilityScope::VISIBILITY_PUBLIC,
+				CardVisibilityScope::VISIBILITY_INTERNAL,
+				CardVisibilityScope::VISIBILITY_PRIVATE,
+				CardVisibilityScope::VISIBILITY_PUBLIC,
+				CardVisibilityScope::VISIBILITY_INTERNAL,
+				CardVisibilityScope::VISIBILITY_PRIVATE,
+			],
+			self::boundValues($recorded['predicates'], 'eq', 'visibility'),
+			'the visibility rule must be applied, on BOTH counting passes'
+		);
+		self::assertSame(
+			[ViewerContext::ROLE_EXTERNAL, ViewerContext::ROLE_EXTERNAL],
+			self::boundValues($recorded['predicates'], 'eq', 'creator_role'),
+			'the internal branch must bind the VIEWER\'s side, not a wildcard'
+		);
+		self::assertSame(
+			['alice', 'alice'],
+			self::boundValues($recorded['predicates'], 'eq', 'owner'),
+			'the private branch must bind the viewer as owner'
+		);
+		// Two board bindings per pass: the aggregate's own filter and the scope's.
+		self::assertSame([7, 7, 7, 7], self::boundValues($recorded['predicates'], 'eq', 'board_id'), 'must stay board-scoped');
+		self::assertSame([0], self::boundValues($recorded['predicates'], 'gt', 'done_at'), 'exactly one pass counts done children');
+	}
+
+	/**
+	 * The board-SET twin keeps the same scoping in cross-board mode: the role
+	 * that holds on EACH board is bound per side, so a viewer who is internal on
+	 * one board and external on another never picks up the other side's children.
+	 */
+	public function testChildProgressByBoardsScopesPerBoardRoleAndShortCircuitsOnAnEmptySet(): void {
+		$recorded = $this->recordQuery(
+			fn (CardMapper $m) => $m->childProgressByBoards(
+				[7, 9],
+				'alice',
+				[7 => ViewerContext::ROLE_INTERNAL, 9 => ViewerContext::ROLE_EXTERNAL],
+			)
+		);
+
+		$boardFilters = self::boundValues($recorded['predicates'], 'in', 'board_id');
+		self::assertSame([7, 9], $boardFilters[0] ?? null, 'the readable set is the outer filter');
+		foreach ($boardFilters as $bound) {
+			self::assertEmpty(array_diff((array)$bound, [7, 9]), 'no board outside the readable set may be queried');
+		}
+		self::assertSame(
+			[
+				ViewerContext::ROLE_INTERNAL, ViewerContext::ROLE_EXTERNAL,
+				ViewerContext::ROLE_INTERNAL, ViewerContext::ROLE_EXTERNAL,
+			],
+			self::boundValues($recorded['predicates'], 'eq', 'creator_role'),
+			'each board\'s own side must be bound, on both counting passes'
+		);
+		self::assertSame(['alice', 'alice'], self::boundValues($recorded['predicates'], 'eq', 'owner'));
+
+		// Denial: no readable boards means no query at all - never `IN ()`.
+		$db = $this->createMock(IDBConnection::class);
+		$db->expects(self::never())->method('getQueryBuilder');
+		$mapper = new CardMapper($db, new CardVisibilityScope());
+		self::assertSame([], $mapper->childProgressByBoards([], 'alice', []));
+	}
+
 	public function testFindWithDuedateByBoardAppliesTheCallersRowCap(): void {
 		// The ICS feed is the app's only ANONYMOUS card read and its caller
 		// serialises every row it gets, so the cap has to reach the SQL - not just

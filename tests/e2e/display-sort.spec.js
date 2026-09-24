@@ -41,7 +41,7 @@ test.describe('Display sort (#3442)', () => {
 
 		// Switch to List view for a deterministic row order.
 		await pick('List')
-		await expect(page.locator('.board-list-row').first()).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.board-list-row').first()).toBeVisible()
 
 		const titles = () => page.locator('.board-list-row__title').allTextContents()
 

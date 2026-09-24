@@ -156,17 +156,17 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 
 		// Wait for the card modal to appear
-		await page.waitForSelector('.card-modal__desc-rendered', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal__desc-rendered', { timeout: 15_000 })
 
 		// ── Positive assertions: safe markdown is rendered ────────────────────────
 
 		// <strong> element inside the rendered description
 		const strongEl = page.locator('.card-modal__desc-rendered strong')
-		await expect(strongEl).toBeVisible({ timeout: 5000 })
+		await expect(strongEl).toBeVisible()
 
 		// <a> linking to https://example.com
 		const linkEl = page.locator('.card-modal__desc-rendered a[href="https://example.com"]')
-		await expect(linkEl).toBeVisible({ timeout: 5000 })
+		await expect(linkEl).toBeVisible()
 
 		// Link should have safe rel + target
 		await expect(linkEl).toHaveAttribute('rel', 'noopener noreferrer')
@@ -212,14 +212,14 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal__desc-rendered', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal__desc-rendered', { timeout: 15_000 })
 
 		// Exactly ONE img element survives: the same-origin inline-attachment one.
 		// Every hostile img markdown produced NO rendered <img> (external/data:/
 		// protocol-relative/svg src stripped by the hook; javascript:/raw-<img>
 		// never became an element at all — they stay inert, escaped plain text).
 		const imgs = page.locator('.card-modal__desc-rendered img')
-		await expect(imgs).toHaveCount(1, { timeout: 5000 })
+		await expect(imgs).toHaveCount(1)
 		const src = await imgs.first().getAttribute('src')
 		expect(src).toContain(`/api/cards/${state.cardId}/attachments/1/inline`)
 
@@ -253,15 +253,15 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal__desc-rendered', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal__desc-rendered', { timeout: 15_000 })
 
 		// Reload to verify persistence
 		await page.reload()
-		await page.waitForSelector('.card-modal__desc-rendered', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal__desc-rendered', { timeout: 15_000 })
 
 		// Strong and link still rendered
-		await expect(page.locator('.card-modal__desc-rendered strong')).toBeVisible({ timeout: 5000 })
-		await expect(page.locator('.card-modal__desc-rendered a[href="https://example.com"]')).toBeVisible({ timeout: 5000 })
+		await expect(page.locator('.card-modal__desc-rendered strong')).toBeVisible()
+		await expect(page.locator('.card-modal__desc-rendered a[href="https://example.com"]')).toBeVisible()
 
 		// Still no XSS
 		const scriptCount = await page.locator('.card-modal__desc-rendered script').count()
@@ -283,7 +283,7 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 		await ncLogin(page)
 		await page.goto(state.listCardUrl)
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-		await page.waitForSelector('.card-modal__desc-rendered ul', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal__desc-rendered ul', { timeout: 15_000 })
 
 		const container = page.locator('.card-modal__desc-rendered')
 		const ul = container.locator('ul')
@@ -330,20 +330,17 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 		await ncLogin(page)
 		await page.goto(state.imgCardUrl)
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-		await page.waitForSelector('.card-modal__desc-rendered img', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal__desc-rendered img', { timeout: 15_000 })
 
 		const container = page.locator('.card-modal__desc-rendered')
 		const wide = container.locator(`img[src*="${state.wideSrc}"]`)
 		const small = container.locator(`img[src*="${state.smallSrc}"]`)
-		await expect(wide).toBeVisible({ timeout: 5000 })
-		await expect(small).toBeVisible({ timeout: 5000 })
+		await expect(wide).toBeVisible()
+		await expect(small).toBeVisible()
 
 		// The sanitiser sets loading="lazy", so wait for the bytes to actually
 		// arrive — an undecoded img has naturalWidth 0 and would fake a pass.
-		const decoded = (loc) => expect.poll(
-			async () => loc.evaluate((el) => el.complete && el.naturalWidth),
-			{ timeout: 10_000 },
-		)
+		const decoded = (loc) => expect.poll(async () => loc.evaluate((el) => el.complete && el.naturalWidth))
 		await decoded(wide).toBe(WIDE_PX)
 		await decoded(small).toBe(SMALL_PX)
 
@@ -373,7 +370,7 @@ test.describe('Markdown card descriptions - render and XSS safety', () => {
 		// comments, the quick preview, the project view and the public share as
 		// carrying the identical defect).
 		const commentImg = page.locator(`.card-modal__comment-body img[src*="${state.wideSrc}"]`).first()
-		await expect(commentImg).toBeVisible({ timeout: 10_000 })
+		await expect(commentImg).toBeVisible()
 		await decoded(commentImg).toBe(WIDE_PX)
 		const commentBody = page.locator('.card-modal__comment-body').first()
 		const commentImgBox = await box(commentImg)

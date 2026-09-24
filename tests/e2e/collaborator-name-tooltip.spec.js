@@ -65,7 +65,7 @@ test.describe('Collaborator name is not covered by the avatar tooltip (#126)', (
 		await page.locator('#bs-rail-tab-sharing').click()
 
 		const entry = page.locator('.sharing__entry', { hasText: peer.user })
-		await expect(entry).toBeVisible({ timeout: 8_000 })
+		await expect(entry).toBeVisible()
 
 		// The avatar must not repeat the name over the cursor.
 		const avatar = entry.locator('.avatardiv')
@@ -86,7 +86,7 @@ test.describe('Collaborator name is not covered by the avatar tooltip (#126)', (
 		await page.waitForSelector('.card-modal__content', { timeout: 15_000 })
 
 		const pill = page.locator('.card-modal__assignee-pill').first()
-		await expect(pill).toBeVisible({ timeout: 8_000 })
+		await expect(pill).toBeVisible()
 
 		const avatar = pill.locator('.avatardiv')
 		await expect(avatar).toBeVisible()
@@ -110,10 +110,10 @@ test.describe('Collaborator name is not covered by the avatar tooltip (#126)', (
 		// The caret beside the Watch button opens the watchers popover.
 		await page.locator('.card-modal__watch-caret').click()
 		const panel = page.locator('.card-modal__watch-panel')
-		await expect(panel).toBeVisible({ timeout: 8_000 })
+		await expect(panel).toBeVisible()
 
 		const row = panel.locator('.card-modal__watch-row').first()
-		await expect(row).toBeVisible({ timeout: 8_000 })
+		await expect(row).toBeVisible()
 
 		const avatar = row.locator('.avatardiv')
 		await expect(avatar).toBeVisible()
@@ -135,12 +135,12 @@ test.describe('Collaborator name is not covered by the avatar tooltip (#126)', (
 
 		// Typing `@` in the new-thread composer opens the suggestion list.
 		const prose = page.locator('.card-modal__composer .kanso-md-editor .ProseMirror').first()
-		await expect(prose).toBeVisible({ timeout: 10_000 })
+		await expect(prose).toBeVisible()
 		await prose.click()
 		await page.keyboard.type('@')
 
 		const item = page.locator('.kanso-md-editor__mention-item').first()
-		await expect(item).toBeVisible({ timeout: 8_000 })
+		await expect(item).toBeVisible()
 
 		const avatar = item.locator('.avatardiv')
 		await expect(avatar).toBeVisible()

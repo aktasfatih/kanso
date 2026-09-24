@@ -37,20 +37,20 @@ test.describe('Move card to top / bottom (card ⋯ menu)', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open the ⋯ menu and click "Move to top".
 		await page.locator('.card-modal__actions-menu button').first().click()
 		await page.getByRole('menuitem', { name: 'Move to top' }).click()
 		await expect
-			.poll(() => stackOrder(state.boardId, state.stackId), { timeout: 8_000 })
+			.poll(() => stackOrder(state.boardId, state.stackId))
 			.toEqual(['Card B', 'Card A', 'Card C'])
 
 		// Now move it to the bottom.
 		await page.locator('.card-modal__actions-menu button').first().click()
 		await page.getByRole('menuitem', { name: 'Move to bottom' }).click()
 		await expect
-			.poll(() => stackOrder(state.boardId, state.stackId), { timeout: 8_000 })
+			.poll(() => stackOrder(state.boardId, state.stackId))
 			.toEqual(['Card A', 'Card C', 'Card B'])
 	})
 })

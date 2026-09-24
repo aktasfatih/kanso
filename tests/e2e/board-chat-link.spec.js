@@ -8,7 +8,7 @@ async function openGeneralSettings(page) {
 	await page.getByRole('button', { name: 'More' }).click()
 	await page.getByRole('menuitem', { name: /board settings/i }).click()
 	await page.getByRole('tab', { name: /general/i }).click()
-	await expect(page.locator('#bs-pane-general')).toBeVisible({ timeout: 8_000 })
+	await expect(page.locator('#bs-pane-general')).toBeVisible()
 }
 
 // Project chat link (#3748): a per-board plain URL (typically a Talk room)
@@ -44,7 +44,7 @@ test.describe('Project chat link (#3748)', () => {
 		// The toolbar button appears, points at the URL, and opens a new tab
 		// (NcButton adds rel="nofollow noreferrer noopener" for href buttons).
 		const chatBtn = page.locator('[data-test="board-chat-btn"]')
-		await expect(chatBtn).toBeVisible({ timeout: 8_000 })
+		await expect(chatBtn).toBeVisible()
 		await expect(chatBtn).toHaveAttribute('href', CHAT_URL)
 		await expect(chatBtn).toHaveAttribute('target', '_blank')
 		await expect(chatBtn).toHaveAttribute('rel', /noopener/)
@@ -60,9 +60,15 @@ test.describe('Project chat link (#3748)', () => {
 	})
 
 	test('an invalid scheme is rejected inline and clearing removes the button', async ({ page }) => {
+		// Clearing proves nothing unless a URL is actually set, and a retry re-runs
+		// only this test — so set it over the API and assert the button first.
+		await api.send('PATCH', `/boards/${state.boardId}`, { chatUrl: CHAT_URL })
+
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+
+		await expect(page.locator('[data-test="board-chat-btn"]')).toBeVisible()
 
 		await openGeneralSettings(page)
 

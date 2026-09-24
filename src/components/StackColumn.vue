@@ -89,7 +89,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</span>
 				<!-- Stack actions menu - rendered whenever at least one edit action is wired -->
 			<NcActions
-				v-if="onDeleteStack || onRenameStack || onSetRole || onSetWip || onArchiveAllCards || onSelectAllCards"
+				v-if="onDeleteStack || onRenameStack || onSetRole || onSetWip || onSetDescription || onArchiveAllCards || onSelectAllCards"
 				class="stack-column__actions"
 				:force-menu="true"
 				:aria-label="t('kanso', 'Column actions')">
@@ -135,6 +135,28 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</NcActionInput>
 				</template>
 
+				<!-- Column description (#10474): free-form PLAIN TEXT saying what
+				     belongs in this column, for the people reading the board and for
+				     an agent reading it over the MCP. Submitting an empty field
+				     clears it (the server trims and treats '' as null). -->
+				<template v-if="onSetDescription">
+					<NcActionSeparator />
+					<!-- `name` renders the field's own <label for>, which IS the
+					     textarea's accessible name — an extra aria-label would only
+					     duplicate it (and land on the wrapping <li> too, since the
+					     component spreads $attrs without inheritAttrs: false). -->
+					<NcActionTextEditable
+						v-model="descriptionDraft"
+						:name="t('kanso', 'Column description')"
+						:placeholder="t('kanso', 'What belongs in this column?')"
+						:maxlength="STACK_DESCRIPTION_MAX"
+						@submit="handleSetDescription">
+						<template #icon>
+							<TextBoxOutlineIcon :size="20" />
+						</template>
+					</NcActionTextEditable>
+				</template>
+
 				<!-- Column colour -->
 				<template v-if="onSetColor">
 					<NcActionSeparator />
@@ -171,7 +193,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				     hidden outright when the column shows nothing.
 				     Archive-all is undoable, hence no confirm. -->
 				<template v-if="cards.length > 0 && (onSelectAllCards || onArchiveAllCards)">
-					<NcActionSeparator v-if="onRenameStack || onSetRole || onSetWip || onSetColor" />
+					<NcActionSeparator v-if="onRenameStack || onSetRole || onSetWip || onSetDescription || onSetColor" />
 					<NcActionButton
 						v-if="onSelectAllCards"
 						:close-after-click="true"
@@ -199,7 +221,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 				<!-- Delete -->
 				<template v-if="onDeleteStack">
-					<NcActionSeparator v-if="onRenameStack || onSetRole || onSetWip || onSetColor || ((onArchiveAllCards || onSelectAllCards) && cards.length > 0)" />
+					<NcActionSeparator v-if="onRenameStack || onSetRole || onSetWip || onSetDescription || onSetColor || ((onArchiveAllCards || onSelectAllCards) && cards.length > 0)" />
 					<NcActionButton
 						:close-after-click="true"
 						@click="handleDeleteStack">
@@ -211,6 +233,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 			</NcActions>
 			</div>
+
+			<!-- Column description (#10474): the subtitle under the column name,
+			     so what belongs in the column is readable without opening a menu.
+			     Clamped to two lines; the full text is the element's tooltip.
+			     Rendered as TEXT interpolation - never markdown, never HTML.
+			     Hidden inside a swimlane: a column is rendered once PER LANE
+			     there, so the blurb would be repainted N times for one column -
+			     the same reason lanes get no stack-level affordances (see
+			     SwimlaneRow.vue). The flat board is where column structure is
+			     read and edited. -->
+			<p
+				v-if="stack.description && !laneKey"
+				class="stack-column__description"
+				:title="stack.description">
+				{{ stack.description }}
+			</p>
 
 			<!-- WIP meter (mockup 1a): a 2px fill bar under the header. With a WIP
 			     limit set, the fill tracks fill ratio (capped at 100%) and turns to
@@ -365,6 +403,7 @@ import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
 import NcActionInput from '@nextcloud/vue/components/NcActionInput'
+import NcActionTextEditable from '@nextcloud/vue/components/NcActionTextEditable'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
 import NcActionText from '@nextcloud/vue/components/NcActionText'
@@ -374,6 +413,7 @@ import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
+import TextBoxOutlineIcon from 'vue-material-design-icons/TextBoxOutline.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
 import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
 import CardTile from './CardTile.vue'
@@ -541,6 +581,15 @@ const props = defineProps({
 	},
 	/** Optional callback (stackId, color|'') → void — set/clear the column colour. */
 	onSetColor: {
+		type: Function,
+		default: null,
+	},
+	/**
+	 * Async fn (stackId, description|'') → Promise — set/clear the column's
+	 * plain-text description (#10474). When provided, a description field
+	 * appears in the ⋯ menu; submitting it empty clears the description.
+	 */
+	onSetDescription: {
 		type: Function,
 		default: null,
 	},
@@ -719,6 +768,27 @@ async function handleSetWip() {
 	const limit = Number.isFinite(n) && n > 0 ? n : 0
 	try {
 		await props.onSetWip(props.stack.id, limit)
+	} catch {
+		// Parent surfaces errors
+	}
+}
+
+// ── Column description (#10474) ───────────────────────────────────────────────
+/** Server-side cap (StackService::MAX_DESCRIPTION_LENGTH) — kept in step here. */
+const STACK_DESCRIPTION_MAX = 2000
+
+/** Draft description — kept in sync with the current stack value. */
+const descriptionDraft = ref(props.stack.description ?? '')
+
+watch(() => props.stack.description, (val) => {
+	descriptionDraft.value = val ?? ''
+})
+
+async function handleSetDescription() {
+	if (!props.onSetDescription) return
+	try {
+		// '' is meaningful: it clears the description server-side.
+		await props.onSetDescription(props.stack.id, descriptionDraft.value)
 	} catch {
 		// Parent surfaces errors
 	}
@@ -1402,6 +1472,23 @@ async function createFromTemplate(templateId) {
 	margin-top: 6px;
 	font-size: 0.7rem;
 	color: color-mix(in srgb, var(--kanso-warning-legible) 85%, var(--color-main-text));
+}
+
+/* Column description (#10474) — a muted subtitle under the column name. Clamped
+   to two lines so a long blurb cannot push the card list down the viewport; the
+   full text stays reachable as the element's tooltip. */
+.stack-column__description {
+	margin: 4px 0 0;
+	font-size: 0.75rem;
+	line-height: 1.3;
+	color: var(--color-text-maxcontrast);
+	white-space: pre-line;
+	overflow: hidden;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	overflow-wrap: anywhere;
 }
 
 /* Card composer */

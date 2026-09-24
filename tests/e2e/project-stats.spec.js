@@ -39,13 +39,13 @@ test.describe('Project analytics — cross-board', () => {
 	test('the project analytics button opens the cross-board stats view', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
-		await expect(page.locator('.project-view')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.project-view')).toBeVisible()
 
 		await page.locator('.project-view__analytics-btn').click()
 
 		await expect(page).toHaveURL(new RegExp(`#/projects/${state.projectId}/stats`))
 		const view = page.locator('.board-stats__body')
-		await expect(view).toBeVisible({ timeout: 10_000 })
+		await expect(view).toBeVisible()
 
 		// At-a-glance counters render (project-specific "Cards in project" + Overdue).
 		await expect(page.getByText('Cards in project')).toBeVisible()

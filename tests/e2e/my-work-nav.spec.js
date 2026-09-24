@@ -43,24 +43,24 @@ test.describe('My Work split into three nav items with badges', () => {
 		await page.waitForSelector('.app-navigation', { timeout: 15_000 })
 
 		// All three entries are present as distinct nav items.
-		await expect(navItem(page, 'My Tasks').first()).toBeVisible({ timeout: 10_000 })
+		await expect(navItem(page, 'My Tasks').first()).toBeVisible()
 		await expect(navItem(page, 'My Reviews').first()).toBeVisible()
 		await expect(navItem(page, 'Inbox').first()).toBeVisible()
 
 		// My Tasks → standalone view with its own header (not the hub).
 		await navItem(page, 'My Tasks').first().click()
 		await expect(page).toHaveURL(/#\/my-tasks/, { timeout: 10_000 })
-		await expect(page.locator('.my-cards-view__header')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.my-cards-view__header')).toBeVisible()
 
 		// My Reviews → standalone reviews view.
 		await navItem(page, 'My Reviews').first().click()
 		await expect(page).toHaveURL(/#\/reviews/, { timeout: 10_000 })
-		await expect(page.locator('.my-reviews-view')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.my-reviews-view')).toBeVisible()
 
 		// Inbox → standalone inbox view.
 		await navItem(page, 'Inbox').first().click()
 		await expect(page).toHaveURL(/#\/inbox/, { timeout: 10_000 })
-		await expect(page.locator('.inbox-view')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.inbox-view')).toBeVisible()
 	})
 
 	test('My Reviews nav item shows a pending-review counter badge', async ({ page }) => {
@@ -73,9 +73,9 @@ test.describe('My Work split into three nav items with badges', () => {
 			has: page.locator('.app-navigation-entry-link', { hasText: 'My Reviews' }),
 		})
 		const counter = reviewsEntry.locator('.app-navigation-entry__counter-wrapper')
-		await expect(counter).toBeVisible({ timeout: 10_000 })
+		await expect(counter).toBeVisible()
 		// At least our one pending review is counted.
-		await expect(counter).toHaveText(/[1-9]\d*/, { timeout: 8_000 })
+		await expect(counter).toHaveText(/[1-9]\d*/)
 	})
 
 	test('close-to-origin: card opened from standalone My Reviews returns there (#3597)', async ({ page }) => {
@@ -87,7 +87,7 @@ test.describe('My Work split into three nav items with badges', () => {
 		await page.waitForSelector('.my-reviews-view', { timeout: 15_000 })
 
 		const row = page.locator('.review-row', { hasText: 'Nav Split Target Card' })
-		await expect(row).toBeVisible({ timeout: 8_000 })
+		await expect(row).toBeVisible()
 		await row.click()
 
 		// Opens with from=my-reviews threaded in the query.
@@ -98,6 +98,6 @@ test.describe('My Work split into three nav items with badges', () => {
 		await page.keyboard.press('Escape')
 		await expect(page).toHaveURL(/#\/reviews/, { timeout: 10_000 })
 		await expect(page).not.toHaveURL(/#\/board\//)
-		await expect(page.locator('.my-reviews-view')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.my-reviews-view')).toBeVisible()
 	})
 })

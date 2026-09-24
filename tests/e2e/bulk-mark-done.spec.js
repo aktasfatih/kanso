@@ -38,7 +38,7 @@ test.describe('Bulk mark done (multi-select)', () => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
-		await expect(page.locator('.card-tile', { hasText: 'Alpha' })).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.card-tile', { hasText: 'Alpha' })).toBeVisible()
 
 		// Enter multi-select mode via the consolidated ⋯ More overflow menu.
 		await page.getByRole('button', { name: 'More' }).click()
@@ -59,12 +59,12 @@ test.describe('Bulk mark done (multi-select)', () => {
 
 		// Both selected cards are stamped done server-side; Charlie is not.
 		await expect
-			.poll(() => doneByTitle(state.boardId, state.todoId), { timeout: 10_000 })
+			.poll(() => doneByTitle(state.boardId, state.todoId))
 			.toEqual({ Alpha: true, Bravo: true, Charlie: false })
 
 		// The board reflects the done state on the two tiles.
-		await expect(page.locator('.card-tile--done', { hasText: 'Alpha' })).toBeVisible({ timeout: 10_000 })
-		await expect(page.locator('.card-tile--done', { hasText: 'Bravo' })).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.card-tile--done', { hasText: 'Alpha' })).toBeVisible()
+		await expect(page.locator('.card-tile--done', { hasText: 'Bravo' })).toBeVisible()
 		await expect(page.locator('.card-tile--done', { hasText: 'Charlie' })).toHaveCount(0)
 	})
 })

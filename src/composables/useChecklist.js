@@ -15,10 +15,11 @@
  *      carries a negative temp id) for the server row, so the item is
  *      addressable by its real id without waiting for the settle refetch.
  *   5. On settled: invalidate the card detail query AND the board query so server
- *      truth eventually wins — plus, for the three mutations that move the
- *      {total,done} summary (add / toggle / delete), the cross-board feeds —
+ *      truth eventually wins — plus, for every mutation that moves the emitted
+ *      `checklist` summary (add / toggle / delete move {total,done}; setting a
+ *      step due date moves `overdue`, #10696), the cross-board feeds —
  *      `checklist` is a View filter facet, so a card can enter or leave a
- *      filtered View on one of them (#9898).
+ *      filtered View on one of them (#9898), and the feeds render the same tile.
  *
  * Items are sorted by sortKey using plain codepoint string comparison (< / >),
  * which matches the app's lexorank-style keys. Never use localeCompare here.
@@ -58,14 +59,23 @@ function resolve(v) {
 
 /**
  * Recompute checklist summary counts from a list of items.
+ *
+ * `overdue` mirrors ChecklistItemMapper::overdueByBoard() (#10696): steps that
+ * are still OPEN and already past their due date. Undated steps never count,
+ * and neither do done ones — the board tile tints its checklist badge off this,
+ * so the optimistic value has to derive the same way the server's does or the
+ * tint would flicker on every settle refetch.
+ *
  * @param {Array} items
- * @returns {{ total: number, done: number }}
+ * @returns {{ total: number, done: number, overdue: number }}
  */
 function summarise(items) {
-	if (!Array.isArray(items)) return { total: 0, done: 0 }
+	if (!Array.isArray(items)) return { total: 0, done: 0, overdue: 0 }
+	const now = Date.now()
 	return {
 		total: items.length,
 		done: items.filter((i) => i.done).length,
+		overdue: items.filter((i) => !i.done && i.dueDate && new Date(i.dueDate).getTime() < now).length,
 	}
 }
 
@@ -357,26 +367,35 @@ export function useChecklist(cardId, boardId) {
 	})
 
 	// ── Shared helper: optimistic per-item field patch (steps, #3745) ───────────
-	// Patches one item's fields in the checklist + card-detail caches. Summary
-	// counts are untouched (assignee/due don't change done/total), so the board
-	// cache needs no patch. Returns the rollback context.
-	async function patchItemFields(itemId, fields) {
+	// Patches one item's fields in the checklist + card-detail caches. Assignee
+	// and rename leave the summary alone (they move neither done/total nor
+	// overdue), so those skip the board cache entirely.
+	//
+	// A DUE DATE does move the summary: it is what `overdue` is derived from
+	// (#10696). Those callers pass syncBoardSummary so the tile's checklist badge
+	// picks up (or drops) its overdue tint immediately, the same way toggling a
+	// step already moves done/total there. Returns the rollback context.
+	async function patchItemFields(itemId, fields, { syncBoardSummary = false } = {}) {
 		const checklistKey = getChecklistKey()
 		const cardKey = getCardKey()
+		const boardKey = getBoardKey()
 
 		await queryClient.cancelQueries({ queryKey: checklistKey })
 		await queryClient.cancelQueries({ queryKey: cardKey })
+		if (syncBoardSummary) await queryClient.cancelQueries({ queryKey: boardKey })
 
 		const previousChecklist = queryClient.getQueryData(checklistKey)
 		const previousCard = queryClient.getQueryData(cardKey)
+		const previousBoard = syncBoardSummary ? queryClient.getQueryData(boardKey) : undefined
 
 		const nextItems = (Array.isArray(previousChecklist) ? previousChecklist : []).map((i) =>
 			i.id === itemId ? { ...i, ...fields } : i,
 		)
 		queryClient.setQueryData(checklistKey, nextItems)
 		patchCardDetailSummary(nextItems)
+		if (syncBoardSummary) patchBoardCardSummary(summarise(nextItems))
 
-		return { previousChecklist, previousCard }
+		return { previousChecklist, previousCard, previousBoard }
 	}
 
 	function rollbackItemFields(context) {
@@ -386,11 +405,21 @@ export function useChecklist(cardId, boardId) {
 		if (context?.previousCard !== undefined) {
 			queryClient.setQueryData(getCardKey(), context.previousCard)
 		}
+		if (context?.previousBoard !== undefined) {
+			queryClient.setQueryData(getBoardKey(), context.previousBoard)
+		}
 	}
 
-	function settleItemFields() {
+	function settleItemFields({ board = false } = {}) {
 		queryClient.invalidateQueries({ queryKey: getChecklistKey() })
 		queryClient.invalidateQueries({ queryKey: getCardKey() })
+		if (board) {
+			queryClient.invalidateQueries({ queryKey: getBoardKey() })
+			// Same rule as add/toggle/delete: a mutation that moves the emitted
+			// `checklist` shape moves it on the cross-board feeds too, which render
+			// the very same tile.
+			invalidateCrossBoardFeeds(queryClient)
+		}
 	}
 
 	// ── assignItem (#3745) ──────────────────────────────────────────────────────
@@ -400,7 +429,7 @@ export function useChecklist(cardId, boardId) {
 		mutationFn: ({ item, participant }) => apiAssignChecklistItem(item.id, participant),
 		onMutate: ({ item, participant }) => patchItemFields(item.id, { assignedUser: participant }),
 		onError: (_err, _vars, context) => rollbackItemFields(context),
-		onSettled: settleItemFields,
+		onSettled: () => settleItemFields(),
 	})
 
 	// ── unassignItem (#3745) ────────────────────────────────────────────────────
@@ -408,16 +437,19 @@ export function useChecklist(cardId, boardId) {
 		mutationFn: ({ item }) => apiUnassignChecklistItem(item.id),
 		onMutate: ({ item }) => patchItemFields(item.id, { assignedUser: null, assignedRole: null, assignedAt: null }),
 		onError: (_err, _vars, context) => rollbackItemFields(context),
-		onSettled: settleItemFields,
+		onSettled: () => settleItemFields(),
 	})
 
 	// ── setItemDue (#3745) ──────────────────────────────────────────────────────
 	// due: ISO 8601 string or null to clear (same wire format as the card due).
+	// The board summary rides along (#10696): the due date IS the card's overdue
+	// checklist signal, so setting or clearing one has to move the tile badge now
+	// and then settle against the server's own count.
 	const setItemDue = useMutation({
 		mutationFn: ({ item, due }) => apiSetChecklistItemDue(item.id, due),
-		onMutate: ({ item, due }) => patchItemFields(item.id, { dueDate: due ?? null }),
+		onMutate: ({ item, due }) => patchItemFields(item.id, { dueDate: due ?? null }, { syncBoardSummary: true }),
 		onError: (_err, _vars, context) => rollbackItemFields(context),
-		onSettled: settleItemFields,
+		onSettled: () => settleItemFields({ board: true }),
 	})
 
 	// ── moveItem ────────────────────────────────────────────────────────────────

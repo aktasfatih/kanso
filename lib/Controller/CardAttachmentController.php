@@ -54,6 +54,43 @@ class CardAttachmentController extends Controller {
 	}
 
 	/**
+	 * Every attachment on a BOARD the caller may see, newest first (#10670) -
+	 * what the board's "All attachments" view lists, so files are reachable
+	 * without opening each card in turn.
+	 *
+	 * Board-READ gated, and scoped to the caller's card visibility inside the
+	 * query: a card hidden from them contributes nothing here. The page is
+	 * hard-capped ({@see CardAttachmentService::BOARD_PAGE_LIMIT}); the response
+	 * is {items, total, capped} so a partial page says so rather than pretending
+	 * to be the whole board.
+	 *
+	 * Each item is the attachment's own metadata plus the uploader's display name
+	 * and the owning card's title - enough to list a file and jump to its card.
+	 * Downloads go through the existing per-card endpoint; no second byte path.
+	 */
+	#[NoAdminRequired]
+	public function board(int $boardId, int $limit = CardAttachmentService::BOARD_PAGE_LIMIT, int $offset = 0): JSONResponse {
+		return $this->respond(function () use ($boardId, $limit, $offset): JSONResponse {
+			$page = $this->attachmentService->listForBoard($boardId, $this->currentUserId(), $limit, $offset);
+
+			// One display-name cache across the page: a board's files usually come
+			// from a handful of people.
+			$nameCache = [];
+			$items = [];
+			foreach ($page['items'] as $row) {
+				$items[] = $this->serialize($row['attachment'], $nameCache)
+					+ ['cardTitle' => $row['cardTitle']];
+			}
+
+			return new JSONResponse([
+				'items' => $items,
+				'total' => $page['total'],
+				'capped' => $page['capped'],
+			]);
+		});
+	}
+
+	/**
 	 * Uploads one file onto a card (EDIT, multipart). Per-user rate limited: every
 	 * accepted upload writes up to
 	 * {@see \OCA\Kanso\Service\AttachmentSanitizer::MAX_SIZE} bytes into the app's

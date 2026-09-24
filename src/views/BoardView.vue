@@ -141,7 +141,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				class="board-view__filter-menu"
 				:state="filterState"
 				:labels="boardLabels"
-				:participants="participants.data.value ?? []"
+				:participants="participantList"
 				:saved-filters="savedFilters"
 				:active-saved-name="activeSavedName"
 				:estimate-scale="boardData?.board?.estimateScale ?? 'none'"
@@ -253,6 +253,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ t('kanso', 'Board analytics') }}
 				</NcActionButton>
 
+				<!-- Every file attached anywhere on this board (#10670), so an
+				     attachment is findable without opening each card in turn. -->
+				<NcActionButton
+					class="board-view__attachments-btn"
+					@click="showBoardAttachments = true">
+					<template #icon>
+						<PaperclipIcon :size="20" />
+					</template>
+					{{ t('kanso', 'Board attachments') }}
+				</NcActionButton>
+
 				<!-- Multi-select mode toggle -->
 				<NcActionButton
 					class="board-view__multiselect-btn"
@@ -291,7 +302,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:card-fields="boardData.cardFields ?? []"
 			:acl="boardData.acl ?? []"
 			:permissions="boardData.permissions ?? 0"
-			:participants="participants.data.value ?? []"
+			:participants="participantList"
 			:current-user-id="currentUserId"
 			:stacks="boardData.stacks ?? []"
 			:cards="boardData.cards ?? []"
@@ -309,6 +320,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:new-template-stack-id="firstStackId"
 			@edit="openTemplateForEdit"
 			@close="showManageTemplates = false" />
+
+		<!-- Board-wide attachment list (#10670). Read-only: it lists every file the
+		     viewer may see, opens the owning card, and downloads through the
+		     existing per-card endpoint. -->
+		<BoardAttachmentsModal
+			v-if="showBoardAttachments && boardData"
+			:board-id="Number(props.id)"
+			@open-card="openCardFromAttachments"
+			@close="showBoardAttachments = false" />
 
 		<!-- Screen-reader live region: announces the user's own card moves and
 		     label/assignee changes (drag-and-drop has no visible SR feedback). -->
@@ -372,6 +392,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:on-set-role="canEditBoard ? handleSetRole : null"
 					:on-set-wip="canEditBoard ? handleSetWip : null"
 					:on-set-color="canEditBoard ? handleSetColor : null"
+					:on-set-description="canEditBoard ? handleSetDescription : null"
 					:on-card-focus="(cardId) => { focusedCardId = cardId }"
 					:on-card-hover="(cardId) => { hoveredCardId = cardId }"
 					:selection-mode="bulk.selectionMode.value"
@@ -558,7 +579,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:card="previewCard"
 				:labels-by-id="labelsById"
 				:board-prefix="boardData?.board?.prefix ?? ''"
-				:participants="participants.data.value ?? []"
+				:participants="participantList"
 				:anchor-rect="previewAnchorRect"
 				@close="closePreview"
 				@open="openPreviewCard" />
@@ -579,7 +600,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:count="bulk.selectedCount.value"
 			:stacks="sortedStacks"
 			:labels="boardLabels"
-			:participants="participants.data.value ?? []"
+			:participants="participantList"
 			:applying="bulk.applying.value"
 			@move="onBulkMove"
 			@add-label="onBulkAddLabel"
@@ -644,6 +665,7 @@ import ViewAgendaIcon from 'vue-material-design-icons/ViewAgenda.vue'
 import ChartTimelineIcon from 'vue-material-design-icons/ChartTimeline.vue'
 import ChartBarIcon from 'vue-material-design-icons/ChartBar.vue'
 import SelectMultipleIcon from 'vue-material-design-icons/SelectMultiple.vue'
+import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import ForumOutlineIcon from 'vue-material-design-icons/ForumOutline.vue'
 import StackColumn from '../components/StackColumn.vue'
 import BulkActionBar from '../components/BulkActionBar.vue'
@@ -670,6 +692,7 @@ import {
 } from '../services/api.js'
 import BoardSettingsModal from '../components/BoardSettingsModal.vue'
 import ManageTemplatesModal from '../components/ManageTemplatesModal.vue'
+import BoardAttachmentsModal from '../components/BoardAttachmentsModal.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import CardPreview from '../components/CardPreview.vue'
 import { useBoard } from '../composables/useBoard.js'
@@ -1132,7 +1155,7 @@ const isBoardSubscribed = computed(() => boardData.value?.subscription?.subscrib
 function toggleBoardWatch() {
 	boardWatchToggle.mutate({ subscribed: !isBoardSubscribed.value })
 }
-const { participants } = useAssignees(boardId)
+const { participantList } = useAssignees(boardId)
 
 // Resolve current Nextcloud user id - OC.getCurrentUser() is always available in NC apps
 const currentUserId = (() => {
@@ -1184,6 +1207,21 @@ const firstStackId = computed(() => sortedStacks.value[0]?.id ?? null)
 function openTemplateForEdit(cardId) {
 	showManageTemplates.value = false
 	router.push({ name: 'card-modal', params: { id: props.id, cardId } })
+}
+
+// ── Board attachments (#10670) ────────────────────────────────────────────────
+// Board-scoped modal listing every file attached to any card the viewer may
+// see, so an attachment is findable without opening each card in turn.
+const showBoardAttachments = ref(false)
+
+/**
+ * Open the card a listed attachment belongs to. Same route the template manager
+ * uses; the listing closes behind it so returning from the card lands on the
+ * board rather than back in the list.
+ */
+function openCardFromAttachments(cardId) {
+	showBoardAttachments.value = false
+	router.push({ name: 'card-modal', params: { id: props.id, cardId: String(cardId) } })
 }
 
 // ── Command palette visibility ────────────────────────────────────────────────
@@ -1461,7 +1499,7 @@ const lanes = computed(() => {
 		swimlaneMode.value,
 		cardsByStack.value,
 		boardLabels.value,
-		participants.data.value ?? [],
+		participantList.value,
 	)
 })
 
@@ -2363,6 +2401,12 @@ async function handleSetWip(stackId, wipLimit) {
 
 async function handleSetColor(stackId, color) {
 	await updateStack.mutateAsync({ stackId, data: { color } })
+}
+
+// Column description (#10474). '' is sent as-is — the server trims it and
+// treats an empty value as "no description", which is how the field is cleared.
+async function handleSetDescription(stackId, description) {
+	await updateStack.mutateAsync({ stackId, data: { description } })
 }
 
 // ── Multi-select / bulk actions ───────────────────────────────────────────────

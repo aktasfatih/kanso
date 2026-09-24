@@ -38,11 +38,11 @@ test.describe('New cards on top', () => {
 		await page.getByRole('button', { name: 'More' }).click()
 		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		const generalTab = page.getByRole('tab', { name: 'General' })
-		await expect(generalTab).toBeVisible({ timeout: 10_000 })
+		await expect(generalTab).toBeVisible()
 		await generalTab.click()
 
 		const toggle = page.getByText('Add new cards to the top of a column')
-		await expect(toggle).toBeVisible({ timeout: 10_000 })
+		await expect(toggle).toBeVisible()
 
 		// Click the toggle and wait for the board-settings PATCH so the flag is
 		// actually persisted server-side before we create cards (the ordering is
@@ -57,7 +57,7 @@ test.describe('New cards on top', () => {
 
 		// Flag persisted (board fields are nested under `.board`).
 		await expect
-			.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.newCardsOnTop, { timeout: 10_000 })
+			.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.newCardsOnTop)
 			.toBe(true)
 
 		// New cards (via the real create path) now land at the top: B above A.
@@ -68,6 +68,6 @@ test.describe('New cards on top', () => {
 
 		// Assert the persisted server-side order (source of truth), polling so the
 		// second create's row is visible before we compare on slow infra.
-		await expect.poll(() => stackOrder(), { timeout: 10_000 }).toEqual(['Card B', 'Card A'])
+		await expect.poll(() => stackOrder()).toEqual(['Card B', 'Card A'])
 	})
 })

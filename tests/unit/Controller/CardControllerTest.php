@@ -219,6 +219,42 @@ class CardControllerTest extends TestCase {
 		self::assertSame(['bob', 'carol'], $data['assigneeIds']);
 	}
 
+	public function testShowReturnsTheViewersOwnProjectIds(): void {
+		$card = $this->card();
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($card);
+		// Alice has filed this card into her private project 4. The lookup must
+		// be made AS her - the uid is half the scoping (#10737).
+		$this->projectCardMapper = $this->createMock(ProjectCardMapper::class);
+		$this->projectCardMapper->expects(self::once())
+			->method('findProjectIdsByCard')
+			->with(9, 'alice')
+			->willReturn([4]);
+		$this->rebuildController();
+
+		self::assertSame([4], $this->controller->show(9)->getData()['projectIds']);
+	}
+
+	public function testShowHidesAnotherMembersProjectFromAReadOnlyPeer(): void {
+		// The denial case (#10737): alice collected the card into her private
+		// project 4; bob may read the card but owns no project of his own, so his
+		// payload must not so much as COUNT hers.
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('bob');
+		$this->userSession = $this->createMock(IUserSession::class);
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$collectedBy = ['alice' => [4]];
+		$this->projectCardMapper = $this->createMock(ProjectCardMapper::class);
+		$this->projectCardMapper->method('findProjectIdsByCard')
+			->willReturnCallback(
+				static fn (int $cardId, string $uid): array => $collectedBy[$uid] ?? []
+			);
+		$this->rebuildController();
+		$this->cardService->method('find')->with(9, 'bob')->willReturn($this->card());
+
+		self::assertSame([], $this->controller->show(9)->getData()['projectIds']);
+	}
+
 	public function testShowMarksCardRecurringWhenAnEnabledRuleExists(): void {
 		$card = $this->card();
 		$this->cardService->method('find')->with(9, 'alice')->willReturn($card);

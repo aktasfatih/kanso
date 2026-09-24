@@ -46,17 +46,17 @@ test.describe('CalDAV per-board calendar toggle (UI)', () => {
 		await page.getByRole('button', { name: 'More' }).click()
 		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		await page.getByRole('tab', { name: /general/i }).click()
-		await expect(page.locator('#bs-pane-general')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('#bs-pane-general')).toBeVisible()
 		// Personal calendar switch lives in the General pane (any member).
 		const toggle = page.getByText('Show this board in my calendar')
-		await expect(toggle).toBeVisible({ timeout: 8_000 })
+		await expect(toggle).toBeVisible()
 
 		// Turn it OFF → the board must drop out of the calendar-home.
 		await toggle.click()
-		await expect.poll(() => calendarPresent(state.boardId), { timeout: 8_000 }).toBe(false)
+		await expect.poll(() => calendarPresent(state.boardId)).toBe(false)
 
 		// Turn it back ON → it returns.
 		await toggle.click()
-		await expect.poll(() => calendarPresent(state.boardId), { timeout: 8_000 }).toBe(true)
+		await expect.poll(() => calendarPresent(state.boardId)).toBe(true)
 	})
 })

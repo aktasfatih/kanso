@@ -27,7 +27,7 @@ test.describe('Archived cards page', () => {
 	test('archived card appears on the routed page and unarchive returns it to the board', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// Archive the card via the API, then reload so the board reflects it.
 		await api.send('PATCH', `/cards/${state.cardId}`, { archived: true })
@@ -36,7 +36,7 @@ test.describe('Archived cards page', () => {
 
 		// The board has re-hydrated (the ⋯ menu trigger is present) and the card
 		// tile is gone from the board.
-		await page.waitForSelector('.board-view__more-menu', { timeout: 10_000 })
+		await page.waitForSelector('.board-view__more-menu', { timeout: 15_000 })
 		await expect(page.locator('.card-tile').filter({ hasText: 'Archivable Card' })).not.toBeVisible()
 
 		// The archived action lives in the consolidated ⋯ More overflow menu and is
@@ -46,21 +46,21 @@ test.describe('Archived cards page', () => {
 		// stay open while it appears.
 		await page.getByRole('button', { name: 'More' }).click()
 		const archivedBtn = page.getByRole('menuitem', { name: /Archived cards \(\d+\)/ })
-		await expect(archivedBtn).toBeVisible({ timeout: 10_000 })
+		await expect(archivedBtn).toBeVisible()
 		await archivedBtn.click()
 
 		// Routed, deep-linkable page.
 		await expect(page).toHaveURL(/#\/board\/\d+\/archived/, { timeout: 8000 })
-		await page.waitForSelector('.archived-view', { timeout: 8000 })
+		await page.waitForSelector('.archived-view', { timeout: 15_000 })
 
 		// The card shows in the virtualized archived list.
 		const archivedItem = page.locator('.archived-view__row-title').filter({ hasText: 'Archivable Card' })
-		await expect(archivedItem).toBeVisible({ timeout: 8000 })
+		await expect(archivedItem).toBeVisible()
 
 		// Unarchive from the row.
 		const row = page.locator('.archived-view__row').filter({ hasText: 'Archivable Card' })
 		const unarchiveBtn = row.locator('button', { hasText: 'Unarchive' })
-		await expect(unarchiveBtn).toBeVisible({ timeout: 5000 })
+		await expect(unarchiveBtn).toBeVisible()
 		await unarchiveBtn.click()
 
 		// It leaves the list (optimistic removal + db-first reconcile).
@@ -68,8 +68,8 @@ test.describe('Archived cards page', () => {
 
 		// Back to the board via the header affordance; card is back on the board.
 		await page.locator('.archived-view__back').click()
-		await page.waitForSelector('.board-view__header', { timeout: 8000 })
-		await expect(page.locator('.card-tile').filter({ hasText: 'Archivable Card' })).toBeVisible({ timeout: 10_000 })
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await expect(page.locator('.card-tile').filter({ hasText: 'Archivable Card' })).toBeVisible()
 	})
 
 	test('the Archived page is deep-linkable and shows an empty state when nothing is archived', async ({ page }) => {
@@ -78,11 +78,11 @@ test.describe('Archived cards page', () => {
 
 		await ncLogin(page)
 		await page.goto(`${state.boardUrl}/archived`)
-		await page.waitForSelector('.archived-view', { timeout: 12_000 })
+		await page.waitForSelector('.archived-view', { timeout: 15_000 })
 		await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
 
 		// Empty state renders (no archived cards).
-		await expect(page.locator('.archived-view__empty')).toBeVisible({ timeout: 8000 })
+		await expect(page.locator('.archived-view__empty')).toBeVisible()
 		await expect(page.getByText('No archived cards')).toBeVisible()
 	})
 })

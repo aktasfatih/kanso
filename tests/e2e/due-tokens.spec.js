@@ -40,15 +40,13 @@ test.describe('Composer due-date tokens', () => {
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		const composer = page.locator('.stack-column').first().locator('.card-composer__input')
-		await expect(composer).toBeVisible({ timeout: 10_000 })
+		await expect(composer).toBeVisible()
 
 		await composer.fill('Ship it !tomorrow')
 		await composer.press('Enter')
 
 		// The persisted card carries the stripped title + tomorrow's all-day due date.
-		await expect.poll(() => cards().then((cs) => cs.map((c) => c.title)), {
-			timeout: 10_000,
-		}).toEqual(['Ship it'])
+		await expect.poll(() => cards().then((cs) => cs.map((c) => c.title))).toEqual(['Ship it'])
 
 		const [card] = await cards()
 		expect(new Date(card.duedate).toISOString()).toBe(tomorrowAllDayIso())
@@ -61,15 +59,13 @@ test.describe('Composer due-date tokens', () => {
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		const composer = page.locator('.stack-column').first().locator('.card-composer__input')
-		await expect(composer).toBeVisible({ timeout: 10_000 })
+		await expect(composer).toBeVisible()
 
 		await composer.fill('Fix the !important bug')
 		await composer.press('Enter')
 
 		// The title is left intact and no due date is set.
-		await expect.poll(() => cards().then((cs) => cs.map((c) => c.title)), {
-			timeout: 10_000,
-		}).toContain('Fix the !important bug')
+		await expect.poll(() => cards().then((cs) => cs.map((c) => c.title))).toContain('Fix the !important bug')
 
 		const created = (await cards()).find((c) => c.title === 'Fix the !important bug')
 		expect(created).toBeTruthy()

@@ -44,7 +44,7 @@ test.describe('Card title length cap', () => {
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		const composer = page.locator('.stack-column').first().locator('.card-composer__input')
-		await expect(composer).toBeVisible({ timeout: 10_000 })
+		await expect(composer).toBeVisible()
 		await expect(composer).toHaveAttribute('maxlength', '100')
 
 		// fill() sets the value through the real input pipeline, so maxlength applies.
@@ -54,7 +54,7 @@ test.describe('Card title length cap', () => {
 		await composer.press('Enter')
 
 		// Created with exactly the 100-character prefix — no 400, no truncation surprise.
-		await expect.poll(() => titles(), { timeout: 10_000 }).toContain(capped('a'))
+		await expect.poll(() => titles()).toContain(capped('a'))
 	})
 
 	test('list-view composer truncates at 100', async ({ page }) => {
@@ -70,7 +70,7 @@ test.describe('Card title length cap', () => {
 		// Scope to the list table — the kanban composer stays in the DOM (hidden)
 		// behind the view switch, so an unscoped locator would match that one.
 		const composer = page.locator('.board-list-table .card-composer__input').first()
-		await expect(composer).toBeVisible({ timeout: 10_000 })
+		await expect(composer).toBeVisible()
 		await expect(composer).toHaveAttribute('maxlength', '100')
 
 		await composer.fill(tooLong('b'))
@@ -84,7 +84,7 @@ test.describe('Card title length cap', () => {
 
 		// Sub-card composer.
 		const addChild = page.getByPlaceholder('Add a sub-card…')
-		await expect(addChild).toBeVisible({ timeout: 10_000 })
+		await expect(addChild).toBeVisible()
 		await expect(addChild).toHaveAttribute('maxlength', '100')
 		await addChild.fill(tooLong('c'))
 		await expect(addChild).toHaveValue(capped('c'))
@@ -94,12 +94,12 @@ test.describe('Card title length cap', () => {
 		// Title rename: click the heading to swap it for the input.
 		await page.locator('.card-modal__title').click()
 		const titleInput = page.locator('.card-modal__title-input')
-		await expect(titleInput).toBeVisible({ timeout: 5_000 })
+		await expect(titleInput).toBeVisible()
 		await expect(titleInput).toHaveAttribute('maxlength', '100')
 		await titleInput.fill(tooLong('d'))
 		await expect(titleInput).toHaveValue(capped('d'))
 
 		await titleInput.press('Enter')
-		await expect.poll(() => titles(), { timeout: 10_000 }).toContain(capped('d'))
+		await expect.poll(() => titles()).toContain(capped('d'))
 	})
 })

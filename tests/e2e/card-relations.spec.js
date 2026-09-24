@@ -46,6 +46,13 @@ test.describe('Card relations (#3404)', () => {
 	})
 
 	test('a reverse blocks relation that would cycle is rejected', async () => {
+		// There is no cycle to reject without A→B, and a retry re-runs only this
+		// test — so ensure the relation here rather than inheriting it.
+		const a = await api.get(`/cards/${state.a}`)
+		if (!a.relations.blocks.map((r) => r.cardId).includes(state.b)) {
+			await api.post(`/cards/${state.a}/relations`, { otherCardId: state.b, kind: 'blocks' })
+		}
+
 		// A already blocks B, so "B blocks A" would close a cycle.
 		const r = await rawPost(`/cards/${state.b}/relations`, { otherCardId: state.a, kind: 'blocks' })
 		expect(r.ok).toBe(false)
@@ -88,7 +95,7 @@ test.describe('Card relations (#3404)', () => {
 		await page.locator('.card-modal__relation-add-btn', { hasText: /^Add$/ }).click()
 
 		const row = page.locator('.card-modal__relation-row', { hasText: state.cTitle })
-		await expect(row).toBeVisible({ timeout: 8_000 })
+		await expect(row).toBeVisible()
 
 		// Remove it again.
 		await row.locator('.card-modal__child-remove').click()
@@ -108,11 +115,11 @@ test.describe('Card relations (#3404)', () => {
 
 		// The related row's title is a button — clicking it navigates to that card.
 		const row = page.locator('.card-modal__relation-row', { hasText: state.cTitle })
-		await expect(row).toBeVisible({ timeout: 8_000 })
+		await expect(row).toBeVisible()
 		await row.locator('.card-modal__relation-title').click()
 
 		// The route (and the modal title) should now be card B.
 		await page.waitForURL(new RegExp(`/card/${state.b}(?!\\d)`), { timeout: 8_000 })
-		await expect(page.locator('.card-modal').getByText(state.cTitle).first()).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.card-modal').getByText(state.cTitle).first()).toBeVisible()
 	})
 })

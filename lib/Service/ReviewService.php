@@ -272,7 +272,18 @@ class ReviewService {
 	 */
 	private function stageOf(CardReview $review, array $stageMap): int {
 		$typeId = $review->getReviewTypeId();
-		return $typeId === 0 ? 0 : ($stageMap[$typeId] ?? 0);
+		// The null arm is NOT redundant with `=== 0`, despite the non-null
+		// `@method int getReviewTypeId()`: that annotation describes a review
+		// LOADED from the database, where the column is NOT NULL. An in-memory
+		// CardReview that has not been persisted yet - the one request() hands
+		// straight to the serializer - still carries the property's `null`
+		// default, and `$stageMap[null]` is a deprecated array offset as of PHP
+		// 8.5 ("Using null as an array offset is deprecated"), so on 8.5 every
+		// review request wrote a deprecation into the server log.
+		if ($typeId === null || $typeId === 0) {
+			return 0;
+		}
+		return $stageMap[$typeId] ?? 0;
 	}
 
 	/**

@@ -19,8 +19,9 @@ class DeckReaderTest extends TestCase {
 			$this->createMock(IDBConnection::class),
 			$this->createMock(IAppManager::class),
 		);
+		// No setAccessible(): private methods have been reflection-invokable
+		// without it since PHP 8.1, and the call is deprecated as of 8.5.
 		$m = new \ReflectionMethod($reader, 'dedupePerCard');
-		$m->setAccessible(true);
 		return $m->invoke($reader, $out);
 	}
 
@@ -30,7 +31,6 @@ class DeckReaderTest extends TestCase {
 			$this->createMock(IAppManager::class),
 		);
 		$m = new \ReflectionMethod($reader, 'bareColor');
-		$m->setAccessible(true);
 		return $m->invoke($reader, $in);
 	}
 

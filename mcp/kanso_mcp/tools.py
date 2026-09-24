@@ -248,6 +248,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         archived: Optional[bool] = None,
         wip_limit: Optional[int] = None,
         color: Optional[str] = None,
+        description: Optional[str] = None,
     ) -> dict:
         """Update a stack. Only the fields you pass are changed.
 
@@ -257,10 +258,17 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             archived: Archive (true) or unarchive (false) the stack.
             wip_limit: Work-in-progress card cap (null/omit to leave unchanged).
             color: New colour (6-hex, no '#').
+            description: Plain-text note saying what belongs in this column,
+                max 2000 characters ('' clears it, omit to leave unchanged).
         """
         return (
             await client.update_stack(
-                stack_id, title=title, archived=archived, wip_limit=wip_limit, color=color
+                stack_id,
+                title=title,
+                archived=archived,
+                wip_limit=wip_limit,
+                color=color,
+                description=description,
             )
         ).model_dump()
 

@@ -32,6 +32,10 @@ msgstr "config.php 中未设置 “overwrite.cli.url” — 后台任务生成�
 msgid "(empty)"
 msgstr "（空）"
 
+#: src/admin-backup.js
+msgid "(orphaned)"
+msgstr ""
+
 #: lib/Notification/Notifier.php
 msgid "{actor} assigned you a step on {card}"
 msgstr "{actor} 在 {card} 上为你指派了一个步骤"
@@ -269,7 +273,7 @@ msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] "%n 张卡片"
 
-#: src/components/StackColumn.vue:983
+#: src/components/StackColumn.vue:1053
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] ""
@@ -294,12 +298,17 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:4392
+#: src/components/CardDetail.vue:4715
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
 
-#: src/components/CardDetail.vue:4390
+#: src/components/BoardAttachmentsModal.vue:14
+msgid "%n file"
+msgid_plural "%n files"
+msgstr[0] ""
+
+#: src/components/CardDetail.vue:4713
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
@@ -319,7 +328,7 @@ msgid "%n label was not created and is missing from the imported cards: only boa
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
 msgstr[0] ""
 
-#: src/components/CardDetail.vue:4388
+#: src/components/CardDetail.vue:4711
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -339,12 +348,12 @@ msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n 点"
 
-#: src/components/CardDetail.vue:1030
+#: src/components/CardDetail.vue:1177
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
 
-#: src/components/CardDetail.vue:2044
+#: src/components/CardDetail.vue:2191
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -359,7 +368,7 @@ msgid "%n unscheduled card"
 msgid_plural "%n unscheduled cards"
 msgstr[0] "%n 张未排期的卡片"
 
-#: src/components/CardDetail.vue:293
+#: src/components/CardDetail.vue:312
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n 位关注者"
@@ -442,6 +451,10 @@ msgstr "添加子卡片…"
 #: src/components/CardDetail.vue
 msgid "Add an item…"
 msgstr "添加清单项…"
+
+#: src/components/CardDetail.vue
+msgid "Add assignee"
+msgstr ""
 
 #: src/views/ProjectView.vue
 msgid "Add card"
@@ -611,12 +624,12 @@ msgstr "已通过"
 msgid "Archive"
 msgstr "归档"
 
-#: src/components/StackColumn.vue:196
+#: src/components/StackColumn.vue:218
 msgid "Archive %n card"
 msgid_plural "Archive %n cards"
 msgstr[0] ""
 
-#: src/components/StackColumn.vue:195
+#: src/components/StackColumn.vue:217
 msgid "Archive %n visible card"
 msgid_plural "Archive %n visible cards"
 msgstr[0] ""
@@ -744,6 +757,10 @@ msgstr "附加中…"
 msgid "Attachments"
 msgstr "附件"
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Attachments on this board"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Auto-archive"
 msgstr "自动归档"
@@ -801,6 +818,10 @@ msgid "Backup completed"
 msgstr "备份已完成"
 
 #: src/admin-backup.js
+msgid "Backup deleted"
+msgstr ""
+
+#: src/admin-backup.js
 msgid "Backup failed"
 msgstr "备份失败"
 
@@ -811,6 +832,10 @@ msgstr "备份设置已保存"
 #: src/admin-backup.js
 msgid "Backups are disabled"
 msgstr "备份已禁用"
+
+#: templates/admin-backup.php
+msgid "Backups in the other location stay where they are; switch back to see them."
+msgstr ""
 
 #: templates/admin-backup.php
 msgid "Backups to keep per board"
@@ -863,6 +888,11 @@ msgstr "看板操作"
 #: src/views/BoardView.vue
 msgid "Board analytics"
 msgstr "看板分析"
+
+#: src/components/BoardAttachmentsModal.vue
+#: src/views/BoardView.vue
+msgid "Board attachments"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Board background"
@@ -1231,9 +1261,16 @@ msgstr "清单完成度"
 msgid "Checklist incomplete"
 msgstr "清单未完成"
 
+#: src/components/CardPreview.vue
 #: src/components/CardTile.vue
 msgid "Checklist progress"
 msgstr "清单进度"
+
+#: src/components/CardPreview.vue:227
+#: src/components/CardTile.vue:464
+msgid "Checklist progress - %n overdue step"
+msgid_plural "Checklist progress - %n overdue steps"
+msgstr[0] ""
 
 #: src/components/CsvImportModal.vue
 msgid "Choose a board…"
@@ -1387,6 +1424,10 @@ msgid "Column deleted"
 msgstr "列已删除"
 
 #: src/components/StackColumn.vue
+msgid "Column description"
+msgstr ""
+
+#: src/components/StackColumn.vue
 msgid "Column name"
 msgstr "列名称"
 
@@ -1508,6 +1549,10 @@ msgstr "无法复制到剪贴板"
 msgid "Could not copy to clipboard."
 msgstr "无法复制到剪贴板。"
 
+#: src/admin-backup.js
+msgid "Could not delete the backup"
+msgstr ""
+
 #: src/composables/useBoardActions.js
 msgid "Could not delete the board."
 msgstr "无法删除该看板。"
@@ -1556,6 +1601,10 @@ msgstr "无法导入该文件。"
 msgid "Could not import that Trello file."
 msgstr "无法导入该 Trello 文件。"
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Could not load more files. Try again."
+msgstr ""
+
 #: src/components/CsvImportModal.vue
 msgid "Could not load that board’s columns."
 msgstr "无法加载该看板的列。"
@@ -1591,6 +1640,10 @@ msgstr "无法保存 issue 接入设置。"
 #: src/components/CardDetail.vue
 msgid "Could not save the title"
 msgstr "无法保存标题"
+
+#: src/components/CardDetail.vue
+msgid "Could not search the people on this board."
+msgstr ""
 
 #: src/views/BoardList.vue
 msgid "Could not set up the starter board."
@@ -1742,7 +1795,7 @@ msgid "Date"
 msgstr "日期"
 
 #: src/components/BoardSettingsModal.vue:2162
-#: src/components/CardDetail.vue:4581
+#: src/components/CardDetail.vue:4904
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -1764,6 +1817,7 @@ msgid "Default (no filter)"
 msgstr "默认（不筛选）"
 
 #: src/App.vue
+#: src/admin-backup.js
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 #: src/components/ManageTemplatesModal.vue
@@ -1785,6 +1839,18 @@ msgstr "为所有人删除“{title}”及其全部卡片？此操作无法撤�
 #: src/components/BoardSettingsModal.vue
 msgid "Delete \"{title}\"?"
 msgstr "删除“{title}”？"
+
+#: src/admin-backup.js
+msgid "Delete {name}? Kanso keeps no second copy of it."
+msgstr ""
+
+#: src/admin-backup.js
+msgid "Delete {name}? The file goes to the backup account's trashbin — Kanso keeps no second copy of it."
+msgstr ""
+
+#: src/admin-backup.js
+msgid "Delete {name}? This file is removed for good — Kanso keeps no second copy of it."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Delete and stop recurrence"
@@ -1884,6 +1950,10 @@ msgstr "已删除的卡片"
 #: src/components/CardDetail.vue
 msgid "deleted this card"
 msgstr "删除了这张卡片"
+
+#: templates/admin-backup.php
+msgid "Deleting a backup removes that file from this list; Kanso keeps no second copy of it."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/BoardList.vue
@@ -2008,7 +2078,12 @@ msgid "Down vs previous period"
 msgstr "较上一周期下降"
 
 #: src/admin-backup.js
+#: src/components/BoardAttachmentsModal.vue
 msgid "Download"
+msgstr ""
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "Download {file}"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -2270,6 +2345,10 @@ msgstr[0] "每 %n 年"
 msgid "Everyone in the administrators group gets the message."
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Everyone shown here is already assigned to this card."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "Exit multi-select"
 msgstr "退出多选"
@@ -2525,6 +2604,10 @@ msgstr "加载任务失败，请重试。"
 #: src/components/StackColumn.vue
 msgid "Failed to load templates."
 msgstr "加载模板失败。"
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "Failed to load the board's attachments."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the calendar feed config."
@@ -2872,6 +2955,10 @@ msgstr "字段类型"
 msgid "File an issue"
 msgstr "提交问题反馈"
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Files attached to any card on this board are listed here."
+msgstr ""
+
 #: src/components/BoardFilterBar.vue
 msgid "Filter"
 msgstr "筛选"
@@ -3057,6 +3144,10 @@ msgstr "小时"
 msgid "https://cloud.example.com/call/abc123"
 msgstr "https://cloud.example.com/call/abc123"
 
+#: templates/admin-backup.php
+msgid "If the board was only just deleted, its backup may be the only way to get it back."
+msgstr ""
+
 #: src/views/PublicBoard.vue
 msgid "Image"
 msgstr ""
@@ -3153,6 +3244,10 @@ msgstr "到 {column}"
 msgid "Issue intake"
 msgstr "Issue 接入"
 
+#: templates/admin-backup.php
+msgid "It is not in anyone's Files, so there is nowhere to undo it from."
+msgstr ""
+
 #: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
 msgid "Italic"
@@ -3162,7 +3257,7 @@ msgstr "斜体"
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6351
+#: src/components/CardDetail.vue:6677
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3220,6 +3315,10 @@ msgstr "Kanso 导出文件（.zip）"
 
 #: templates/admin-backup.php
 msgid "Kanso keeps the files itself. Nothing goes into anyone's Files folder."
+msgstr ""
+
+#: templates/admin-backup.php
+msgid "Kanso never clears those on its own."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -3362,9 +3461,17 @@ msgstr "关联了一位联系人"
 msgid "List"
 msgstr "列表"
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Load more files"
+msgstr ""
+
 #: src/views/InboxView.vue
 msgid "Loading inbox…"
 msgstr "正在加载收件箱…"
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "Loading more files…"
+msgstr ""
 
 #: src/views/ProjectView.vue
 msgid "Loading project…"
@@ -3477,7 +3584,7 @@ msgid "Mon"
 msgstr "周一"
 
 #: src/components/BoardSettingsModal.vue:2164
-#: src/components/CardDetail.vue:4583
+#: src/components/CardDetail.vue:4906
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -3703,6 +3810,10 @@ msgstr "没有已归档的卡片"
 #: src/views/ArchivedView.vue
 msgid "No archived cards match “{query}”."
 msgstr "没有与“{query}”匹配的已归档卡片。"
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "No attachments yet"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "No auto-archive rules yet."
@@ -3931,6 +4042,14 @@ msgstr "暂无话题。你发起话题时，关注此卡片的所有人都会收
 msgid "No type"
 msgstr "无类型"
 
+#: src/components/CardDetail.vue
+msgid "Nobody has access to this board yet."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Nobody with access to this board matches that."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 #: src/composables/usePriority.js
@@ -4077,6 +4196,10 @@ msgstr "打开 Kanso"
 msgid "Open project chat in a new tab"
 msgstr "在新标签页中打开项目聊天"
 
+#: src/components/BoardAttachmentsModal.vue
+msgid "Open the card this file is attached to"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Open the recurring card"
 msgstr "打开重复卡片"
@@ -4121,6 +4244,10 @@ msgstr "橙色"
 #: src/components/MarkdownEditor.vue
 msgid "Ordered list"
 msgstr "有序列表"
+
+#: templates/admin-backup.php
+msgid "Orphaned means the board a backup came from no longer exists."
+msgstr ""
 
 #: src/components/BoardTimelineView.vue
 msgid "Outside the visible range — click Fit to show"
@@ -4771,9 +4898,17 @@ msgstr "搜索卡片…"
 msgid "Search contacts…"
 msgstr "搜索联系人…"
 
+#: src/components/CardDetail.vue
+msgid "Search people…"
+msgstr ""
+
 #: src/components/SearchBox.vue
 msgid "Search results"
 msgstr "搜索结果"
+
+#: src/components/CardDetail.vue
+msgid "Search the people with access to this board"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Search users or groups"
@@ -4797,12 +4932,12 @@ msgstr "密钥（请立即复制，只显示一次）"
 msgid "Select"
 msgstr "下拉选择"
 
-#: src/components/StackColumn.vue:184
+#: src/components/StackColumn.vue:206
 msgid "Select %n card"
 msgid_plural "Select %n cards"
 msgstr[0] ""
 
-#: src/components/StackColumn.vue:183
+#: src/components/StackColumn.vue:205
 msgid "Select %n visible card"
 msgid_plural "Select %n visible cards"
 msgstr[0] ""
@@ -4907,7 +5042,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:6357
+#: src/components/CardDetail.vue:6683
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -4931,6 +5066,18 @@ msgstr "显示关注者"
 #: src/views/MyCardsView.vue
 msgid "Showing the {count} most recent tasks you completed in the last {days} days."
 msgstr "显示你在过去 {days} 天内完成的最近 {count} 个任务。"
+
+#: src/components/BoardAttachmentsModal.vue
+msgid "Showing the {shown} most recent of {total} files."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Showing the first {count} matches. Keep typing to narrow them down."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Showing the first {count} people with access. Search to find anyone else."
+msgstr ""
 
 #: src/views/ViewPage.vue
 msgid "Showing the first {shown} of {total} matching cards — refine your filter to see the rest."
@@ -5169,6 +5316,10 @@ msgstr ""
 msgid "The backups then live in that account's Files."
 msgstr ""
 
+#: src/admin-backup.js
+msgid "The board this backup came from no longer exists."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "The chat link must be a http:// or https:// URL."
 msgstr "聊天链接必须是 http:// 或 https:// 开头的 URL。"
@@ -5180,6 +5331,10 @@ msgstr "CSV 需要一行表头和至少一行数据。"
 #: src/views/BoardList.vue
 msgid "The Deck app is not installed on this server, so there is nothing to import."
 msgstr "此服务器上未安装 Deck 应用，因此没有可导入的内容。"
+
+#: templates/admin-backup.php
+msgid "The file goes to that account's trashbin and keeps using space until that is emptied."
+msgstr ""
 
 #: templates/admin-backup.php
 msgid "The files use that account's quota, and each write shows up in its activity."
@@ -5469,6 +5624,7 @@ msgstr "直到"
 msgid "Until date"
 msgstr "直到某个日期"
 
+#: src/components/BoardAttachmentsModal.vue
 #: src/components/ManageTemplatesModal.vue
 msgid "Untitled"
 msgstr "无标题"
@@ -5609,7 +5765,7 @@ msgid "Wed"
 msgstr "周三"
 
 #: src/components/BoardSettingsModal.vue:2163
-#: src/components/CardDetail.vue:4582
+#: src/components/CardDetail.vue:4905
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -5621,6 +5777,10 @@ msgstr "周"
 #: src/components/CardDetail.vue
 msgid "Weekly"
 msgstr "每周"
+
+#: src/components/StackColumn.vue
+msgid "What belongs in this column?"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "What changes are needed? (posted as a comment)"
@@ -5697,7 +5857,7 @@ msgid "wrote"
 msgstr "写道"
 
 #: src/components/BoardSettingsModal.vue:2165
-#: src/components/CardDetail.vue:4584
+#: src/components/CardDetail.vue:4907
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"

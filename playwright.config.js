@@ -44,7 +44,12 @@ export default defineConfig({
 	// weaker: a positive assertion gets longer to succeed, and a negative one
 	// (`not.toBeVisible`, `toHaveCount(0)`) gets longer to catch the thing it
 	// forbids. Only a FAILING assertion spends the extra time.
-	expect: { timeout: 15_000 },
+	// `toPass` is the one retry helper that does NOT fall back to the number
+	// above: Playwright reads `expect.toPass.timeout` and otherwise uses 0, i.e.
+	// "retry until the 240s test cap". Stating it here means deleting a
+	// hand-rolled `toPass({ timeout: N })` lands on the same 15s as deleting one
+	// from any other wait, which is what the guard tells you to do.
+	expect: { timeout: 15_000, toPass: { timeout: 15_000 } },
 	// Warm the app once before any spec so the first spec doesn't race
 	// PHP/route-cache cold-start (a long-standing flake on `checklist`, which
 	// runs first alphabetically).

@@ -47,7 +47,7 @@ test.describe('NC nav-toggle vs page title (#3651)', () => {
 
 		const nav = page.locator('.app-navigation')
 		const toggle = page.locator('.app-navigation-toggle')
-		await expect(toggle).toBeVisible({ timeout: 10_000 })
+		await expect(toggle).toBeVisible()
 
 		// Ensure the nav is OPEN first (the common case the user reported).
 		if (await nav.evaluate((el) => el.classList.contains('app-navigation--closed'))) {

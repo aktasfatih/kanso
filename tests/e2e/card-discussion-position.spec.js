@@ -247,15 +247,12 @@ test.describe('Card view: discussion panel placement (#10408)', () => {
 		// It scrolled the card body down to the panel — and never hid it. The
 		// scroll is smooth/animated, so poll the settled position rather than
 		// measuring once the instant scrollTop first moves.
-		await expect.poll(
-			async () => discussion.evaluate((pane) => {
+		await expect.poll(async () => discussion.evaluate((pane) => {
 				const scroller = pane.closest('.card-modal__body')
 				// How far the panel's top sits below the scroller's visible bottom;
 				// <= 0 once it has been scrolled into view.
 				return Math.round(pane.getBoundingClientRect().top - scroller.getBoundingClientRect().bottom)
-			}),
-			{ timeout: 10_000 },
-		).toBeLessThanOrEqual(0)
+			})).toBeLessThanOrEqual(0)
 		expect(await body.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
 		await expect(discussion).toBeVisible()
 
@@ -315,7 +312,7 @@ test.describe('Card view: discussion panel placement (#10408)', () => {
 		// comments.spec.js uses).
 		const posted = 'Posted from the bottom layout ' + Date.now()
 		const prose = composer.locator('.kanso-md-editor .ProseMirror').first()
-		await expect(prose).toBeVisible({ timeout: 10_000 })
+		await expect(prose).toBeVisible()
 		await prose.click()
 		await page.keyboard.type(posted)
 		const post = composer.locator('.card-modal__composer-actions button').first()
@@ -325,7 +322,7 @@ test.describe('Card view: discussion panel placement (#10408)', () => {
 		// until the mutation settles, so an unscoped text match hits both.
 		await expect(
 			page.locator('.card-modal__comment-body').filter({ hasText: posted }),
-		).toBeVisible({ timeout: 10_000 })
+		).toBeVisible()
 	})
 
 	// ── THE trap: a collapse persisted in side mode must not survive the switch ──
@@ -413,10 +410,7 @@ test.describe('Card view: discussion panel placement (#10408)', () => {
 		await expect(toggle).toBeChecked()
 
 		// It reached the server (not localStorage) — that is the whole point.
-		await expect.poll(
-			async () => (await api.get('/settings')).cardDiscussionPosition,
-			{ timeout: 10_000 },
-		).toBe('bottom')
+		await expect.poll(async () => (await api.get('/settings')).cardDiscussionPosition).toBe('bottom')
 
 		// A brand-new browser context: empty localStorage, fresh login, same user.
 		const ctx = await browser.newContext()

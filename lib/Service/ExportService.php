@@ -122,6 +122,7 @@ class ExportService {
 				'role' => $stack->getRole(),
 				'wipLimit' => $stack->getWipLimit(),
 				'color' => $stack->getColor(),
+				'description' => $stack->getDescription(),
 			];
 		}
 

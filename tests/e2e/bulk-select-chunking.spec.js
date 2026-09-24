@@ -93,6 +93,7 @@ test.describe('Bulk action over a >100-card selection (#10435)', () => {
 		// The summary is the MERGED one across both chunks, so the count is the
 		// whole selection — not 100, and not a failure banner.
 		await expect(toast(page, `${CARD_COUNT} cards updated`))
+			// long-budget-ok: the 105-card move (~60s) precedes the toast, not the toast
 			.toBeVisible({ timeout: 60_000 })
 		await expect(page.getByText('Bulk action failed.')).toHaveCount(0)
 

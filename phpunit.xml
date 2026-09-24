@@ -9,6 +9,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 	colors="true"
 	failOnWarning="true"
 	failOnRisky="true"
+	failOnDeprecation="true"
+	failOnNotice="true"
 	cacheDirectory=".phpunit.cache">
 	<testsuites>
 		<testsuite name="unit">

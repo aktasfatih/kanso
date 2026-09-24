@@ -31,9 +31,9 @@ test.describe('Boards page — grid v1', () => {
 		await page.waitForSelector('.board-list-view', { timeout: 15_000 })
 
 		// The grid renders with tiles.
-		await expect(page.locator('.board-grid').first()).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.board-grid').first()).toBeVisible()
 		const activeTile = page.locator('.board-tile', { hasText: 'Grid Active ' + state.stamp })
-		await expect(activeTile.first()).toBeVisible({ timeout: 10_000 })
+		await expect(activeTile.first()).toBeVisible()
 
 		// The tile shows the stats meta line: a card count and a progress bar.
 		await expect(activeTile.first().locator('.board-tile__meta')).toContainText(/card/)
@@ -43,11 +43,11 @@ test.describe('Boards page — grid v1', () => {
 		const searchBox = page.locator('.board-list-search__input')
 		await searchBox.fill('Grid Active ' + state.stamp)
 		await expect(page.locator('.board-tile', { hasText: 'Grid Active ' + state.stamp }).first())
-			.toBeVisible({ timeout: 6_000 })
+			.toBeVisible()
 		await searchBox.fill('zzz-no-such-board-' + state.stamp)
 		// Target the search-empty message specifically: a leftover empty folder
 		// (from board-groups.spec) also renders a .board-section__empty node.
-		await expect(page.getByText('No boards match your search.')).toBeVisible({ timeout: 6_000 })
+		await expect(page.getByText('No boards match your search.')).toBeVisible()
 		await searchBox.fill('')
 
 		// The Active/Archived toggle switches the visible set.
@@ -55,7 +55,7 @@ test.describe('Boards page — grid v1', () => {
 			.toHaveCount(0)
 		await page.getByRole('button', { name: /Archived/ }).click()
 		await expect(page.locator('.board-tile__title', { hasText: 'Grid Archived ' + state.stamp }).first())
-			.toBeVisible({ timeout: 6_000 })
+			.toBeVisible()
 		// Active board is not in the archived set.
 		await expect(page.locator('.board-tile__title', { hasText: 'Grid Active ' + state.stamp }))
 			.toHaveCount(0)

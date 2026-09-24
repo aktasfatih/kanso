@@ -97,7 +97,7 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 
 		await page.locator('.card-modal__desc-placeholder').click()
 		const prose = descProse(page)
-		await expect(prose).toBeVisible({ timeout: 8_000 })
+		await expect(prose).toBeVisible()
 		await prose.click()
 		await page.keyboard.type('half-written description')
 		await expect(prose).toContainText('half-written description')
@@ -107,7 +107,7 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 		let pt = await backdropPoint(page)
 		await page.mouse.click(pt.x, pt.y)
 
-		await expect.poll(() => dialogs.messages.length, { timeout: 8_000 }).toBe(1)
+		await expect.poll(() => dialogs.messages.length).toBe(1)
 		expect(dialogs.messages[0]).toContain('unsaved changes')
 
 		// Cancelled → still on the card, editor still open, draft untouched.
@@ -141,7 +141,7 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 
 		await page.locator('.card-modal__desc-placeholder').click()
 		const prose = descProse(page)
-		await expect(prose).toBeVisible({ timeout: 8_000 })
+		await expect(prose).toBeVisible()
 		await prose.click()
 		await page.keyboard.type('draft typed before hitting X')
 		await expect(prose).toContainText('draft typed before hitting X')
@@ -168,7 +168,7 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 		dialogs.accept = false
 		await page.locator('.card-modal-modal .modal-container__close').click()
 
-		await expect.poll(() => dialogs.messages.length, { timeout: 8_000 }).toBe(1)
+		await expect.poll(() => dialogs.messages.length).toBe(1)
 		expect(dialogs.messages[0]).toContain('unsaved changes')
 
 		// Cancelled → the card is still up, never flashed away, draft intact.
@@ -193,7 +193,7 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 		await openCard(page, cardA)
 
 		await page.locator('.card-modal__desc-placeholder').click()
-		await expect(descProse(page)).toBeVisible({ timeout: 8_000 })
+		await expect(descProse(page)).toBeVisible()
 		await descProse(page).click()
 		await page.keyboard.type('draft that gets discarded')
 
@@ -241,11 +241,11 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 		await openCard(page, card)
 
 		const replyBtn = page.locator('.card-modal__comment-group > .card-modal__comment .card-modal__comment-link-btn').first()
-		await expect(replyBtn).toBeVisible({ timeout: 10_000 })
+		await expect(replyBtn).toBeVisible()
 		await replyBtn.click()
 
 		const prose = replyProse(page)
-		await expect(prose).toBeVisible({ timeout: 8_000 })
+		await expect(prose).toBeVisible()
 		await prose.click()
 		await page.keyboard.type('half-written reply')
 		await expect(prose).toContainText('half-written reply')
@@ -254,7 +254,7 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 		let pt = await backdropPoint(page)
 		await page.mouse.click(pt.x, pt.y)
 
-		await expect.poll(() => dialogs.messages.length, { timeout: 8_000 }).toBe(1)
+		await expect.poll(() => dialogs.messages.length).toBe(1)
 		expect(dialogs.messages[0]).toContain('unsaved changes')
 		await expect(page).toHaveURL(new RegExp(`/card/${card.id}`))
 		await expect(replyProse(page)).toContainText('half-written reply')
@@ -280,11 +280,11 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 
 		// Merely opening the editors is not "unsaved work".
 		await page.locator('.card-modal__desc-placeholder').click()
-		await expect(descProse(page)).toBeVisible({ timeout: 8_000 })
+		await expect(descProse(page)).toBeVisible()
 		const replyBtn = page.locator('.card-modal__comment-group > .card-modal__comment .card-modal__comment-link-btn').first()
-		await expect(replyBtn).toBeVisible({ timeout: 10_000 })
+		await expect(replyBtn).toBeVisible()
 		await replyBtn.click()
-		await expect(replyProse(page)).toBeVisible({ timeout: 8_000 })
+		await expect(replyProse(page)).toBeVisible()
 
 		// Escape at the card root closes it, silently.
 		dialogs.accept = true
@@ -304,7 +304,7 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 		await openCard(page, card)
 
 		await page.locator('.card-modal__desc-placeholder').click()
-		await expect(descProse(page)).toBeVisible({ timeout: 8_000 })
+		await expect(descProse(page)).toBeVisible()
 		await descProse(page).click()
 		await page.keyboard.type('typed then reloaded')
 
@@ -338,9 +338,9 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 
 		// A new-thread draft AND a reply draft on card A.
 		const replyBtnA = page.locator('.card-modal__comment-group > .card-modal__comment .card-modal__comment-link-btn').first()
-		await expect(replyBtnA).toBeVisible({ timeout: 10_000 })
+		await expect(replyBtnA).toBeVisible()
 		await replyBtnA.click()
-		await expect(replyProse(page)).toBeVisible({ timeout: 8_000 })
+		await expect(replyProse(page)).toBeVisible()
 		await replyProse(page).click()
 		await page.keyboard.type('reply meant for A')
 
@@ -351,7 +351,7 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 		// Card→card navigation (same route record, so the component is REUSED).
 		await page.goto(cardB.url)
 		await expect(page.locator('.card-modal__title')).toHaveText('Leak target B', { timeout: 15_000 })
-		await page.waitForSelector('.card-modal__comment', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal__comment', { timeout: 15_000 })
 
 		// The new-thread composer on B is empty…
 		await expect(composerProse(page)).toHaveText('')
@@ -360,7 +360,7 @@ test.describe('Unsaved changes are confirmed before leaving a card (#10069)', ()
 		// …and opening B's own reply box starts blank.
 		const replyBtnB = page.locator('.card-modal__comment-group > .card-modal__comment .card-modal__comment-link-btn').first()
 		await replyBtnB.click()
-		await expect(replyProse(page)).toBeVisible({ timeout: 8_000 })
+		await expect(replyProse(page)).toBeVisible()
 		await expect(replyProse(page)).toHaveText('')
 
 		// Card→card is not a dismissal, so it must not have prompted either.

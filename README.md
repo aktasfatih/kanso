@@ -163,7 +163,9 @@ your work, on your own Nextcloud, laid out plainly.
 
 ## Installation
 
-Kanso targets **Nextcloud 32–34** and **PHP 8.2–8.3**. It's on the
+Kanso targets **Nextcloud 32–34** and **PHP 8.2–8.5**, within whatever range
+your Nextcloud version itself supports — Nextcloud 32 tops out at PHP 8.4, so
+PHP 8.5 needs Nextcloud 33 or newer. It's on the
 **[Nextcloud App Store](https://apps.nextcloud.com/apps/kanso)**, so the quickest
 install is the one-click route: in Nextcloud open **Apps**, find **Kanso** under
 *Organization* (or *Office & text*), and click **Download and enable**. From the

@@ -7,6 +7,9 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Access\NotAMemberException;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -49,6 +52,7 @@ class CardAttachmentServiceTest extends TestCase {
 	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private ChangeDetailMapper&MockObject $changeDetailMapper;
 	private IConfig&MockObject $config;
+	private BoardAccess&MockObject $boardAccess;
 	private CardAttachmentService $service;
 
 	/**
@@ -100,6 +104,10 @@ class CardAttachmentServiceTest extends TestCase {
 			}
 		);
 
+		// The board-wide listing resolves the viewer through the SAME resolver
+		// every other board-scoped read uses; each test wires what it hands back.
+		$this->boardAccess = $this->createMock(BoardAccess::class);
+
 		$this->service = new CardAttachmentService(
 			$this->attachmentMapper,
 			$this->cardMapper,
@@ -113,6 +121,7 @@ class CardAttachmentServiceTest extends TestCase {
 			$this->changeDetailMapper,
 			$this->config,
 			$this->createMock(LoggerInterface::class),
+			$this->boardAccess,
 		);
 	}
 
@@ -191,6 +200,218 @@ class CardAttachmentServiceTest extends TestCase {
 			'tmp_name' => $tmp,
 			'error' => UPLOAD_ERR_OK,
 		], $override);
+	}
+
+	// ---- listForBoard (#10670) --------------------------------------------
+
+	/**
+	 * Wires a live board and a resolved membership on it, and returns the board.
+	 */
+	private function expectBoardLoaded(string $uid = 'bob', string $role = ViewerContext::ROLE_INTERNAL): Board {
+		$board = $this->board(4);
+		$this->boardMapper->method('find')->with(4)->willReturn($board);
+		$this->boardAccess->method('contextFor')
+			->with($board, $uid)
+			->willReturn(ViewerContext::forMember($uid, 4, $role, false));
+		return $board;
+	}
+
+	private function boardAttachment(int $id, int $cardId, string $filename): CardAttachment {
+		$a = new CardAttachment();
+		$a->setId($id);
+		$a->setCardId($cardId);
+		$a->setBoardId(4);
+		$a->setFilename($filename);
+		$a->setSize(10);
+		$a->setUploadedBy('bob');
+		$a->setCreatedAt(1700000000);
+		return $a;
+	}
+
+	/**
+	 * Happy path: the page carries each attachment with the owning card's title,
+	 * plus the viewer's true total - and is NOT flagged capped when it reached
+	 * the end of what they may see.
+	 */
+	public function testListForBoardReturnsThePageWithItsOwningCardTitles(): void {
+		$this->expectBoardLoaded();
+		$this->attachmentMapper->method('findByBoard')->willReturn([
+			['attachment' => $this->boardAttachment(1, 9, 'spec.pdf'), 'cardTitle' => 'Write the spec'],
+			['attachment' => $this->boardAttachment(2, 10, 'logo.png'), 'cardTitle' => 'Design'],
+		]);
+		$this->attachmentMapper->method('countByBoard')->willReturn(2);
+
+		$page = $this->service->listForBoard(4, 'bob');
+
+		self::assertSame(2, $page['total']);
+		self::assertFalse($page['capped']);
+		self::assertCount(2, $page['items']);
+		self::assertSame('spec.pdf', $page['items'][0]['attachment']->getFilename());
+		self::assertSame('Write the spec', $page['items'][0]['cardTitle']);
+	}
+
+	/**
+	 * DENIAL: a non-member is refused with the board-READ 403 BEFORE a single
+	 * attachment row is read - the listing never becomes a way to probe a board
+	 * the caller has no business seeing.
+	 */
+	public function testListForBoardRequiresReadAndReadsNothingForANonMember(): void {
+		$board = $this->board(4);
+		$this->boardMapper->method('find')->with(4)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'stranger', PermissionService::PERMISSION_READ)
+			->willThrowException(new NotPermittedException());
+		$this->attachmentMapper->expects(self::never())->method('findByBoard');
+		$this->attachmentMapper->expects(self::never())->method('countByBoard');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->listForBoard(4, 'stranger');
+	}
+
+	/**
+	 * DENIAL, second gate: board READ is not the whole answer. A user who lost
+	 * their membership between the permission read and here resolves to NO
+	 * viewer, and NotAMemberException is a NotPermittedException - a 403, still
+	 * with nothing read.
+	 */
+	public function testListForBoardRefusesACallerWithNoResolvableMembership(): void {
+		$board = $this->board(4);
+		$this->boardMapper->method('find')->with(4)->willReturn($board);
+		$this->boardAccess->method('contextFor')
+			->willThrowException(new NotAMemberException());
+		$this->attachmentMapper->expects(self::never())->method('findByBoard');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->listForBoard(4, 'ghost');
+	}
+
+	/**
+	 * THE leak test at the service seam: the listing is answered with the
+	 * viewer's OWN resolved context - their uid, their board, their side - which
+	 * is the only thing that makes the query's visibility branches match the
+	 * right rows. An external member must never be handed an internal viewer.
+	 *
+	 * The query-level half of this (that the context is actually turned into a
+	 * WHERE) is pinned in CardAttachmentMapperTest; together they close the path.
+	 */
+	public function testListForBoardScopesTheQueryToTheCallersOwnViewerContext(): void {
+		$this->expectBoardLoaded('exty', ViewerContext::ROLE_EXTERNAL);
+		$seen = null;
+		$this->attachmentMapper->expects(self::once())
+			->method('findByBoard')
+			->willReturnCallback(function (int $boardId, ViewerContext $viewer) use (&$seen): array {
+				$seen = $viewer;
+				return [];
+			});
+		$this->attachmentMapper->expects(self::once())
+			->method('countByBoard')
+			->with(4, self::callback(static fn (ViewerContext $v): bool => $v->userId === 'exty' && $v->role === ViewerContext::ROLE_EXTERNAL))
+			->willReturn(0);
+
+		$this->service->listForBoard(4, 'exty');
+
+		self::assertSame('exty', $seen->userId);
+		self::assertSame(4, $seen->boardId);
+		self::assertSame(ViewerContext::ROLE_EXTERNAL, $seen->role);
+	}
+
+	/**
+	 * PAGING IS NOT A WAY AROUND THE SCOPE (#10738). Now that the client walks
+	 * offsets rather than reading one page and stopping, EVERY page - not just
+	 * the first - has to be answered with the caller's own viewer context, and
+	 * the offset has to reach the query unchanged. A service that resolved the
+	 * viewer only for the first page, or dropped it on a paged call, would hand
+	 * a caller exactly the rows page one hid from them.
+	 */
+	public function testListForBoardScopesASecondPageToTheSameViewer(): void {
+		$this->expectBoardLoaded('exty', ViewerContext::ROLE_EXTERNAL);
+		$seen = [];
+		$this->attachmentMapper->expects(self::once())
+			->method('findByBoard')
+			->willReturnCallback(function (int $boardId, ViewerContext $viewer, int $limit, int $offset) use (&$seen): array {
+				$seen = ['viewer' => $viewer, 'limit' => $limit, 'offset' => $offset];
+				return [];
+			});
+		$this->attachmentMapper->expects(self::once())
+			->method('countByBoard')
+			->with(4, self::callback(static fn (ViewerContext $v): bool => $v->userId === 'exty' && $v->role === ViewerContext::ROLE_EXTERNAL))
+			->willReturn(60);
+
+		$this->service->listForBoard(4, 'exty', 25, 25);
+
+		self::assertSame('exty', $seen['viewer']->userId);
+		self::assertSame(4, $seen['viewer']->boardId);
+		self::assertSame(ViewerContext::ROLE_EXTERNAL, $seen['viewer']->role);
+		self::assertSame(25, $seen['limit']);
+		self::assertSame(25, $seen['offset'], 'the requested offset must reach the query');
+	}
+
+	/**
+	 * The page is HARD-capped server-side: a caller asking for the whole board in
+	 * one response gets the cap instead, and a negative offset reads as the
+	 * first page rather than a negative OFFSET the DB would reject.
+	 */
+	public function testListForBoardClampsAnOversizedPageRequest(): void {
+		$this->expectBoardLoaded();
+		$asked = [];
+		$this->attachmentMapper->method('findByBoard')
+			->willReturnCallback(function (int $boardId, ViewerContext $viewer, int $limit, int $offset) use (&$asked): array {
+				$asked = ['limit' => $limit, 'offset' => $offset];
+				return [];
+			});
+		$this->attachmentMapper->method('countByBoard')->willReturn(0);
+
+		$this->service->listForBoard(4, 'bob', 100000, -5);
+
+		self::assertSame(CardAttachmentService::BOARD_PAGE_LIMIT, $asked['limit']);
+		self::assertSame(0, $asked['offset']);
+	}
+
+	/**
+	 * A page that stops short of the total says so, so the UI can tell the reader
+	 * there is more rather than quietly showing a truncated board.
+	 */
+	public function testListForBoardFlagsAPartialPageAsCapped(): void {
+		$this->expectBoardLoaded();
+		$this->attachmentMapper->method('findByBoard')->willReturn([
+			['attachment' => $this->boardAttachment(1, 9, 'spec.pdf'), 'cardTitle' => 'Write the spec'],
+		]);
+		$this->attachmentMapper->method('countByBoard')->willReturn(7);
+
+		$page = $this->service->listForBoard(4, 'bob', 1, 0);
+
+		self::assertTrue($page['capped']);
+		self::assertSame(7, $page['total']);
+	}
+
+	/**
+	 * The LAST page of a long listing is not "capped" - offset + the rows on it
+	 * reach the total, so the reader is not told there is more when there isn't.
+	 */
+	public function testListForBoardDoesNotFlagTheLastPageAsCapped(): void {
+		$this->expectBoardLoaded();
+		$this->attachmentMapper->method('findByBoard')->willReturn([
+			['attachment' => $this->boardAttachment(9, 9, 'last.pdf'), 'cardTitle' => 'Write the spec'],
+		]);
+		$this->attachmentMapper->method('countByBoard')->willReturn(4);
+
+		$page = $this->service->listForBoard(4, 'bob', 3, 3);
+
+		self::assertFalse($page['capped']);
+	}
+
+	/**
+	 * A deleted board is gone for this listing too - it does not fall back to
+	 * "no attachments", which would make a trashed board look empty but alive.
+	 */
+	public function testListForBoardRefusesADeletedBoard(): void {
+		$board = $this->board(4);
+		$board->setDeletedAt(123);
+		$this->boardMapper->method('find')->with(4)->willReturn($board);
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->listForBoard(4, 'bob');
 	}
 
 	// ---- listForCard ------------------------------------------------------
@@ -745,6 +966,7 @@ class CardAttachmentServiceTest extends TestCase {
 			$this->changeDetailMapper,
 			$this->config,
 			$this->createMock(LoggerInterface::class),
+			$this->boardAccess,
 		);
 		$this->attachmentMapper->expects(self::once())->method('deleteByCard')->with(9);
 

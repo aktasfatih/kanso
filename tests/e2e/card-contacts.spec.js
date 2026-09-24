@@ -78,23 +78,23 @@ test.describe('Card contacts (#3530)', () => {
 
 		await ncLogin(page)
 		await page.goto(cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// The picker only appears when the Contacts app is available (feature-detected).
 		const linkBtn = page.locator('.card-modal__attr button', { hasText: /link contact/i })
-		await expect(linkBtn).toBeVisible({ timeout: 8000 })
+		await expect(linkBtn).toBeVisible()
 		await linkBtn.click()
 
 		// Search the address book for our seeded contact.
 		await page.locator('.card-modal__contact-search').fill('Casey')
 		const option = page.locator('.card-modal__assign-option', { hasText: CONTACT_FN })
-		await expect(option).toBeVisible({ timeout: 8000 })
+		await expect(option).toBeVisible()
 		await option.click()
 
 		// The chip appears in the attribute bar, no error.
 		await expect(
 			page.locator('.card-modal__assignee-pill', { hasText: CONTACT_FN }),
-		).toBeVisible({ timeout: 8000 })
+		).toBeVisible()
 		await expect(page.locator('.card-modal__save-error')).toHaveCount(0)
 
 		// The server persisted the link (denormalized display-name snapshot).
@@ -105,9 +105,9 @@ test.describe('Card contacts (#3530)', () => {
 
 		// And it survives a reload (persisted, not just optimistic UI).
 		await page.reload()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 		await expect(
 			page.locator('.card-modal__assignee-pill', { hasText: CONTACT_FN }),
-		).toBeVisible({ timeout: 8000 })
+		).toBeVisible()
 	})
 })

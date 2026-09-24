@@ -34,17 +34,14 @@ test.describe('Repeat from the card due-date menu (#55)', () => {
 		// Open the due-date popover, where the Repeat control lives.
 		await page.locator('[data-pill="due"]').click()
 		const freq = page.locator('select[data-recur="freq"]')
-		await expect(freq).toBeVisible({ timeout: 6_000 })
+		await expect(freq).toBeVisible()
 
 		// Choose "Weekly" → a rule is created with this card as its source and its
 		// own column as the target, on a FREQ=WEEKLY schedule. The quick Repeat
 		// control defaults to RESET mode (the card comes back each week rather than
 		// spawning a duplicate) — see the recurring-UX overhaul.
 		await freq.selectOption('WEEKLY')
-		await expect.poll(
-			async () => (await cardRule(state.boardId, state.cardId))?.rrule ?? null,
-			{ timeout: 8_000 },
-		).toContain('FREQ=WEEKLY')
+		await expect.poll(async () => (await cardRule(state.boardId, state.cardId))?.rrule ?? null).toContain('FREQ=WEEKLY')
 		let rule = await cardRule(state.boardId, state.cardId)
 		expect(Number(rule.templateCardId)).toBe(Number(state.cardId))
 		expect(Number(rule.targetStackId)).toBe(Number(state.stackId))
@@ -54,17 +51,11 @@ test.describe('Repeat from the card due-date menu (#55)', () => {
 		const interval = page.locator('input[data-recur="interval"]')
 		await interval.fill('2')
 		await interval.blur()
-		await expect.poll(
-			async () => (await cardRule(state.boardId, state.cardId))?.rrule ?? '',
-			{ timeout: 8_000 },
-		).toContain('INTERVAL=2')
+		await expect.poll(async () => (await cardRule(state.boardId, state.cardId))?.rrule ?? '').toContain('INTERVAL=2')
 
 		// Turn Repeat off → the rule is deleted.
 		await freq.selectOption('OFF')
-		await expect.poll(
-			async () => await cardRule(state.boardId, state.cardId),
-			{ timeout: 8_000 },
-		).toBeNull()
+		await expect.poll(async () => await cardRule(state.boardId, state.cardId)).toBeNull()
 	})
 })
 
@@ -104,12 +95,12 @@ test.describe('Recurring indicator on the board tile (#61)', () => {
 	test('repeat icon shows on the recurring tile and is absent on a normal tile', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const recurTile = page.locator('.card-tile').filter({ hasText: 'Recurring chore' })
 		const plainTile = page.locator('.card-tile').filter({ hasText: 'One-off chore' })
 
-		await expect(recurTile.locator('.card-tile__recurring')).toBeVisible({ timeout: 10_000 })
+		await expect(recurTile.locator('.card-tile__recurring')).toBeVisible()
 		await expect(plainTile.locator('.card-tile__recurring')).toHaveCount(0)
 	})
 })
@@ -152,14 +143,14 @@ test.describe('Recurring indicator on the open card Due Date pill (#61 follow-up
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.recurCardId}`)
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 15_000 })
 		const recurPill = page.locator('[data-pill="due"]')
-		await expect(recurPill.locator('.repeat-icon')).toBeVisible({ timeout: 10_000 })
+		await expect(recurPill.locator('.repeat-icon')).toBeVisible()
 		await expect(recurPill.locator('.calendar-icon')).toHaveCount(0)
 
 		// Non-recurring card → the calendar glyph stays, no repeat icon.
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.plainCardId}`)
 		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 15_000 })
 		const plainPill = page.locator('[data-pill="due"]')
-		await expect(plainPill.locator('.calendar-icon')).toBeVisible({ timeout: 10_000 })
+		await expect(plainPill.locator('.calendar-icon')).toBeVisible()
 		await expect(plainPill.locator('.repeat-icon')).toHaveCount(0)
 	})
 })

@@ -121,22 +121,31 @@ test.describe('Copy as prompt', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+
+		// The comment has to be on screen before the menu is opened. copyAsPrompt()
+		// falls back to `await commentsQuery.refetch()` whenever the comments have
+		// not landed yet (src/components/CardDetail.vue), and that round-trip would
+		// then be spent inside the toast's 6s budget below. Once the body is
+		// rendered the query holds data, so the fallback cannot fire.
+		await expect(page.getByText(COMMENT_BODY).first()).toBeVisible()
 
 		// Open the overflow (⋯) actions menu in the card modal header.
 		const menuTrigger = page.locator('.card-modal__actions-menu button').first()
-		await expect(menuTrigger).toBeVisible({ timeout: 5000 })
+		await expect(menuTrigger).toBeVisible()
 		await menuTrigger.click()
 
 		// Click the "Copy as prompt" item (rendered in a portal by NcActions).
 		const copyItem = page.getByRole('menuitem', { name: 'Copy as prompt' })
-		await expect(copyItem).toBeVisible({ timeout: 5000 })
+		await expect(copyItem).toBeVisible()
 		await copyItem.click()
 
 		// A success toast should confirm the copy. Its MESSAGE is the assertion —
 		// "a toast appeared" would also be satisfied by the error toast this very
 		// action raises when the clipboard is unavailable.
-		await expect(toast(page, 'Card copied as prompt.')).toBeVisible({ timeout: 6000 })
+		// A plain toast dismisses itself at TOAST_DEFAULT_TIMEOUT = 7s, so a 15s wait
+		// short-budget-ok: would outlive the toast and report the wrong failure
+		await expect(toast(page, 'Card copied as prompt.')).toBeVisible({ timeout: 6_000 })
 
 		// Read the clipboard back and assert it contains the title + comment body.
 		const clip = await page.evaluate(() => navigator.clipboard.readText())

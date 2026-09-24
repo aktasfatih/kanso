@@ -42,7 +42,7 @@ test.describe('Auto-archive rule editing (#10464)', () => {
 
 		const group = page.locator('#bs-automation-auto-archive')
 		const form = group.locator('.automation__create-form')
-		await expect(form.locator(`#archive-scope-${state.boardId}`)).toBeVisible({ timeout: 8_000 })
+		await expect(form.locator(`#archive-scope-${state.boardId}`)).toBeVisible()
 		return {
 			group,
 			form,

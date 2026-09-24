@@ -3,6 +3,29 @@
 
 import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
+/**
+ * Put MY review of `cardId` into the approved state over the API.
+ *
+ * A test that needs an approved review must create that state itself, not lean
+ * on a sibling test having clicked Approve. Playwright's retry re-runs ONLY the
+ * failing test in a fresh worker: `beforeAll` runs again and hands it a freshly
+ * created *pending* review, while the sibling that approved it does not run at
+ * all. So a sibling dependency cannot be satisfied on retry — it turns one slow
+ * runner into three identical failures.
+ *
+ * Idempotent: ReviewService::setState is a no-op when the state already matches
+ * (lib/Service/ReviewService.php), so this is safe whether or not the Approve
+ * test ran first.
+ */
+async function approveMyReviewOf(cardId) {
+	const mine = await api.get('/reviews/mine')
+	const review = Array.isArray(mine) ? mine.find((r) => r.cardId === cardId) : null
+	if (!review) {
+		throw new Error(`no review of card ${cardId} in /reviews/mine`)
+	}
+	await api.patch(`/cards/${cardId}/reviews/${review.id}`, { state: 'approved' })
+}
+
 test.describe('My Reviews page', () => {
 	const state = { boardId: 0, stackId: 0, cardId: 0, reviewsUrl: '' }
 
@@ -41,33 +64,33 @@ test.describe('My Reviews page', () => {
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 
 		// Wait for the page to finish loading
-		await page.waitForSelector('.my-reviews-view', { timeout: 10_000 })
+		await page.waitForSelector('.my-reviews-view', { timeout: 15_000 })
 
 		// The section heading must be present
 		const section = page.locator('.my-reviews-view__section').filter({
 			has: page.locator('.my-reviews-view__section-title', { hasText: 'Needs your review' }),
 		})
-		await expect(section).toBeVisible({ timeout: 8_000 })
+		await expect(section).toBeVisible()
 
 		// Scope to OUR card's row (the shared dev instance may hold other pending
 		// reviews for admin from earlier suites).
 		const row = section.locator('.review-row', { hasText: 'Review Me Please' })
-		await expect(row).toBeVisible({ timeout: 6_000 })
+		await expect(row).toBeVisible()
 
 		// Approve + Request changes buttons must be visible for the pending row
-		await expect(row.getByRole('button', { name: 'Approve' })).toBeVisible({ timeout: 4_000 })
-		await expect(row.getByRole('button', { name: 'Request changes' })).toBeVisible({ timeout: 4_000 })
+		await expect(row.getByRole('button', { name: 'Approve' })).toBeVisible()
+		await expect(row.getByRole('button', { name: 'Request changes' })).toBeVisible()
 	})
 
 	test('clicking Approve moves the row out of "Needs your review"', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.reviewsUrl)
-		await page.waitForSelector('.my-reviews-view', { timeout: 10_000 })
+		await page.waitForSelector('.my-reviews-view', { timeout: 15_000 })
 
 		const pendingSection = page.locator('.my-reviews-view__section').filter({
 			has: page.locator('.my-reviews-view__section-title', { hasText: 'Needs your review' }),
 		})
-		await expect(pendingSection).toBeVisible({ timeout: 8_000 })
+		await expect(pendingSection).toBeVisible()
 
 		// Click Approve on OUR card's pending row (scope past any other pending
 		// reviews the shared dev instance may hold for admin).
@@ -83,23 +106,26 @@ test.describe('My Reviews page', () => {
 		const approvedSection = page.locator('.my-reviews-view__section').filter({
 			has: page.locator('.my-reviews-view__section-title', { hasText: 'Approved' }),
 		})
-		await expect(approvedSection).toBeVisible({ timeout: 8_000 })
-		await expect(approvedSection.locator('.review-row__card-title', { hasText: 'Review Me Please' })).toBeVisible({ timeout: 6_000 })
+		await expect(approvedSection).toBeVisible()
+		await expect(approvedSection.locator('.review-row__card-title', { hasText: 'Review Me Please' })).toBeVisible()
 	})
 
 	test('clicking "Open card" affordance navigates to the card modal', async ({ page }) => {
+		// This test needs an APPROVED review, so it makes one itself rather than
+		// inheriting the click from the test above (see approveMyReviewOf).
+		await approveMyReviewOf(state.cardId)
+
 		await ncLogin(page)
 		await page.goto(state.reviewsUrl)
-		await page.waitForSelector('.my-reviews-view', { timeout: 10_000 })
+		await page.waitForSelector('.my-reviews-view', { timeout: 15_000 })
 
-		// After previous test the card is approved - click the approved row
 		const approvedSection = page.locator('.my-reviews-view__section').filter({
 			has: page.locator('.my-reviews-view__section-title', { hasText: 'Approved' }),
 		})
-		await expect(approvedSection).toBeVisible({ timeout: 8_000 })
+		await expect(approvedSection).toBeVisible()
 
 		const row = approvedSection.locator('.review-row', { hasText: 'Review Me Please' })
-		await expect(row).toBeVisible({ timeout: 6_000 })
+		await expect(row).toBeVisible()
 		await row.click()
 
 		// Should navigate to the card modal route: #/board/:id/card/:cardId
@@ -107,6 +133,6 @@ test.describe('My Reviews page', () => {
 			new RegExp(`/board/${state.boardId}/card/${state.cardId}`),
 			{ timeout: 8_000 },
 		)
-		await expect(page.locator('.card-modal')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.card-modal')).toBeVisible()
 	})
 })

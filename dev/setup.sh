@@ -192,6 +192,28 @@ if [ -n "$CARRIED_FROM" ] && [ "$CARRIED_FROM" != "$NC_VERSION" ]; then
 	exit 1
 fi
 
+# 3. The opcache override actually took. dev/php/opcache-dev.ini pins
+#    opcache.revalidate_freq=0 so the apache workers never execute bytecode
+#    compiled from a version of a mounted file that is no longer on disk — the
+#    stale-Stack-entity 500 that dev/upgrade-check.sh's verify step hit, and the
+#    local "edit a PHP file, check it, see the old behaviour for a minute" trap.
+#    Asserted rather than assumed because every way it can break is SILENT: PHP
+#    drops an .ini whole on a syntax error (comments must be `;`, not `#`) with
+#    one line on stderr nothing surfaces, and conf.d is applied alphabetically,
+#    so a mount target that stops sorting after the image's own
+#    opcache-recommended.ini is simply overridden. Either way the file is
+#    present, the stack is healthy, and the setting is quietly back to 60.
+OPCACHE_FREQ="$(docker exec kanso-dev php -r 'echo (int)ini_get("opcache.revalidate_freq");' 2>/dev/null || true)"
+if [ "$OPCACHE_FREQ" != "0" ]; then
+	echo >&2
+	echo "opcache.revalidate_freq is '${OPCACHE_FREQ}', expected 0 — dev/php/opcache-dev.ini" >&2
+	echo "did not take effect, so this stack can answer requests with stale bytecode and" >&2
+	echo "any check run seconds after a PHP change may prove nothing. Look at:" >&2
+	echo "  docker exec kanso-dev php --ini   # must list zz-opcache-dev.ini, and print no error" >&2
+	echo "(comments in that file must be ';' — PHP discards an .ini that uses '#')." >&2
+	exit 1
+fi
+
 # Docker pre-creates the mountpoint parent as root; hand it to the web user
 docker exec kanso-dev chown www-data:www-data /var/www/html/custom_apps
 

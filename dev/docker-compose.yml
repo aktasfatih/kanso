@@ -173,6 +173,14 @@ services:
       # recreated — leaving the daemon up, the push capability still advertised,
       # and /push/ws answering 404. See the file for the full story.
       - ./apache/notify_push.conf:/etc/apache2/conf-enabled/notify_push.conf:ro
+      # opcache.revalidate_freq=0, so the apache workers never execute bytecode
+      # compiled from a version of a file that is no longer on disk. The image
+      # ships 60s, which is correct in production and wrong for a live bind
+      # mount — see the file for the two ways it silently faked a result.
+      # The `zz-` on the TARGET is load-bearing: conf.d is applied in
+      # alphabetical order, so anything sorting before the image's own
+      # opcache-recommended.ini would simply be overridden by it.
+      - ./php/opcache-dev.ini:/usr/local/etc/php/conf.d/zz-opcache-dev.ini:ro
     depends_on:
       redis:
         condition: service_started

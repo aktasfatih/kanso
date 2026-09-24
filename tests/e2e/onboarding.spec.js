@@ -60,7 +60,7 @@ test.describe('First-run onboarding (#3413)', () => {
 		// Empty state: both onboarding actions are present.
 		const createCta = page.locator('[data-test="empty-create-board"]')
 		const templateCta = page.locator('[data-test="empty-start-template"]')
-		await expect(createCta).toBeVisible({ timeout: 10_000 })
+		await expect(createCta).toBeVisible()
 		await expect(templateCta).toBeVisible()
 
 		// "Start with a template" seeds the starter board and navigates to it.
@@ -70,22 +70,22 @@ test.describe('First-run onboarding (#3413)', () => {
 		// The three classic stacks are present.
 		for (const col of ['To do', 'Doing', 'Done']) {
 			await expect(page.locator('.stack-column', { hasText: col }).first())
-				.toBeVisible({ timeout: 10_000 })
+				.toBeVisible()
 		}
 
 		// A couple of the sample cards seeded across the stacks.
-		await expect(page.getByText('👋 Welcome to Kanso!').first()).toBeVisible({ timeout: 10_000 })
+		await expect(page.getByText('👋 Welcome to Kanso!').first()).toBeVisible()
 		await expect(page.getByText('Delete these sample cards whenever you like').first()).toBeVisible()
 
 		// The one-time shortcut discoverability hint appears on the board.
 		const hint = page.locator('[data-test="shortcuts-hint"]')
-		await expect(hint).toBeVisible({ timeout: 10_000 })
+		await expect(hint).toBeVisible()
 
 		// Dismiss it — it hides, and the dismissal is persisted server-side. Wait
 		// for the settings PUT so the assertion below doesn't race the write.
 		const putDone = page.waitForResponse(
 			(r) => r.url().includes('/apps/kanso/api/settings') && r.request().method() === 'PUT' && r.ok(),
-			{ timeout: 10_000 },
+			{ timeout: 15_000 },
 		)
 		await page.locator('[data-test="shortcuts-hint-dismiss"]').click()
 		await putDone

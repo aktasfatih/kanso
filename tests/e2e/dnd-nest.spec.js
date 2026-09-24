@@ -7,8 +7,9 @@
 // accept the relation (one level deep, no self-parent, a parent can't become a
 // child), so a user never gets an affordance that 400s.
 //
-// The tests run in file order against one board and build on each other, the
-// same way dnd.spec.js does.
+// The tests share one board, but none of them leans on a sibling having run:
+// a retry re-runs ONLY the failing test (beforeAll included, its siblings not),
+// so every test seeds the nesting it needs over the API first.
 
 import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
@@ -73,7 +74,7 @@ async function pickListView(page) {
 	await page.waitForTimeout(150)
 	await page.keyboard.press('Escape')
 	await page.waitForTimeout(200)
-	await expect(page.locator('.board-list-row').first()).toBeVisible({ timeout: 8_000 })
+	await expect(page.locator('.board-list-row').first()).toBeVisible()
 	// The virtualizer positions rows absolutely and re-lays them out once the
 	// group heights settle; grab bounding boxes only after that, or a drag can
 	// start on whatever row has since slid under the pointer.
@@ -87,6 +88,16 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 	const parentOf = async (title) => {
 		const card = await api.get(`/cards/${state.ids[title]}`)
 		return card.parentCardId ?? null
+	}
+
+	/**
+	 * Make NC a sub-card of NP over the API. Only the first test creates that
+	 * relation by dragging, and a retry re-runs the failing test alone — so every
+	 * test below that reads the relation puts it there itself. Setting a parent is
+	 * a single field write, so the state is the same whether or not the drag ran.
+	 */
+	const ensureNested = async () => {
+		await api.put(`/cards/${state.ids.NC}/parent`, { parentCardId: state.ids.NP })
 	}
 
 	const tile = (page, title) => page
@@ -123,7 +134,7 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
-		await expect(tile(page, 'NP')).toBeVisible({ timeout: 8_000 })
+		await expect(tile(page, 'NP')).toBeVisible()
 		expect(await parentOf('NC')).toBeNull()
 
 		await dragWithMouse(page, tile(page, 'NC'), tile(page, 'NP'), {
@@ -136,29 +147,31 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 			},
 		})
 
-		await expect.poll(async () => await parentOf('NC'), { timeout: 10_000 })
+		await expect.poll(async () => await parentOf('NC'))
 			.toBe(state.ids.NP)
 
 		// The parent tile grows its sub-card progress badge.
-		await expect(tile(page, 'NP').locator('.card-tile__children')).toHaveText('0/1', { timeout: 8_000 })
+		await expect(tile(page, 'NP').locator('.card-tile__children')).toHaveText('0/1')
 
 		// Server is the source of truth — the relation survives a reload.
 		await page.reload()
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
-		await expect(tile(page, 'NP').locator('.card-tile__children')).toHaveText('0/1', { timeout: 10_000 })
+		await expect(tile(page, 'NP').locator('.card-tile__children')).toHaveText('0/1')
 	})
 
 	test('a sub-card renders indented under its parent in list view', async ({ page }) => {
+		await ensureNested()
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 		await pickListView(page)
 
 		const child = page.locator('.board-list-row--child').filter({ hasText: 'NC' })
-		await expect(child).toBeVisible({ timeout: 8_000 })
+		await expect(child).toBeVisible()
 	})
 
 	test('dropping on a tile edge still reorders and leaves the parent untouched', async ({ page }) => {
+		await ensureNested()
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
@@ -191,10 +204,10 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 	})
 
 	test('a card that already has a parent offers no nest zone (one level only)', async ({ page }) => {
+		await ensureNested()
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
-		// NC is a sub-card of NP from the first test.
 		expect(await parentOf('NC')).toBe(state.ids.NP)
 
 		await dragWithMouse(page, tile(page, 'NX'), tile(page, 'NC'), {
@@ -217,6 +230,7 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 		// On a kanban board a sub-card is an ordinary-looking tile, so the everyday
 		// "drag this subtask into the next column" gesture must NOT quietly break
 		// the relation. Detaching stays an explicit action in the card detail panel.
+		await ensureNested()
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.stack-column', { timeout: 15_000 })
@@ -229,26 +243,32 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 		await expect.poll(async () => {
 			const card = await api.get(`/cards/${state.ids.NC}`)
 			return card.stackId
-		}, { timeout: 10_000 }).toBe(state.n2Id)
+		}).toBe(state.n2Id)
 		expect(await parentOf('NC')).toBe(state.ids.NP)
 		// The parent keeps its sub-card badge across the column move.
-		await expect(tile(page, 'NP').locator('.card-tile__children')).toHaveText('0/1', { timeout: 8_000 })
+		await expect(tile(page, 'NP').locator('.card-tile__children')).toHaveText('0/1')
 	})
 
 	test('list view nests on a centre drop and pulls the card into the parent column', async ({ page }) => {
 		// Detach NC through the API (the panel action drag-to-nest deliberately does
 		// NOT replace) so the drag below is a genuine re-nest from another column.
 		await api.put(`/cards/${state.ids.NC}/parent`, { parentCardId: null })
+		// …and park it in N2 ourselves rather than relying on the previous test's
+		// drag, which a retry of this test alone never runs. Only when it is not
+		// already there, so that test's own sort keys survive.
+		if ((await api.get(`/cards/${state.ids.NC}`)).stackId !== state.n2Id) {
+			await api.post(`/cards/${state.ids.NC}/move`, { targetStackId: state.n2Id, afterCardId: null })
+		}
 
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 		await pickListView(page)
 
-		// NC sits in N2 while its parent NP is in N1 (previous test), so the list
-		// renders it top-level. Re-nesting has to move it into its parent's column,
+		// NC sits in N2 while its parent-to-be NP is in N1, so the list renders it
+		// top-level. Re-nesting has to move it into its parent's column,
 		// or the list could never indent it.
-		await expect(row(page, 'NC')).toBeVisible({ timeout: 8_000 })
+		await expect(row(page, 'NC')).toBeVisible()
 
 		await dragWithMouse(page, row(page, 'NC'), row(page, 'NP'), {
 			position: 'middle',
@@ -258,15 +278,15 @@ test.describe('Drag a card onto another card to nest it (#5885)', () => {
 			},
 		})
 
-		await expect.poll(async () => await parentOf('NC'), { timeout: 10_000 })
+		await expect.poll(async () => await parentOf('NC'))
 			.toBe(state.ids.NP)
 
 		// Indented under NP, in NP's group.
 		const child = page.locator('.board-list-row--child').filter({ hasText: 'NC' })
-		await expect(child).toBeVisible({ timeout: 10_000 })
+		await expect(child).toBeVisible()
 		await expect.poll(async () => {
 			const card = await api.get(`/cards/${state.ids.NC}`)
 			return card.stackId
-		}, { timeout: 10_000 }).toBe(state.n1Id)
+		}).toBe(state.n1Id)
 	})
 })

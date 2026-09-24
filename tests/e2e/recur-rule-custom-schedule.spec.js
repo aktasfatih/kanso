@@ -64,7 +64,7 @@ test.describe('Editing an API-authored recurrence rule (#10045)', () => {
 
 		const recurring = page.locator('#bs-automation-recurring')
 		const item = recurring.locator('.automation__rule-item').filter({ hasText: 'Send the invoice' })
-		await expect(item).toBeVisible({ timeout: 8_000 })
+		await expect(item).toBeVisible()
 		await item.getByRole('button', { name: /^Edit$/ }).click()
 
 		// The schedule half of the editor is read-only: the raw rule is shown with
@@ -81,10 +81,7 @@ test.describe('Editing an API-authored recurrence rule (#10045)', () => {
 
 		// Read the rule back from the server. Both edited fields moved; the
 		// schedule string is untouched byte for byte, and the tally did not restart.
-		await expect.poll(
-			async () => Number((await storedRule())?.targetStackId),
-			{ timeout: 8_000 },
-		).toBe(Number(state.otherStackId))
+		await expect.poll(async () => Number((await storedRule())?.targetStackId)).toBe(Number(state.otherStackId))
 
 		const after = await storedRule()
 		expect(Number(after.duedatePolicy)).toBe(2)
@@ -132,23 +129,32 @@ test.describe('Saving a rule whose schedule was not touched (#10045)', () => {
 
 		const recurring = page.locator('#bs-automation-recurring')
 		const item = recurring.locator('.automation__rule-item').filter({ hasText: 'Write the update' })
-		await expect(item).toBeVisible({ timeout: 8_000 })
+		await expect(item).toBeVisible()
 		await item.getByRole('button', { name: /^Edit$/ }).click()
 
 		// This rule IS editable — it is only spelled more verbosely than the
 		// builder would spell it.
 		await expect(page.locator(`#recur-freq-${state.boardId}`)).toHaveValue('WEEKLY')
 		await page.locator(`#recur-stack-${state.boardId}`).selectOption(String(state.otherStackId))
+
+		// Wait for the save's own round-trip rather than polling the API and hoping
+		// the write lands inside the poll's budget. Polling alone conflates "the
+		// PATCH is still in flight" with "the PATCH stored the wrong value", and on
+		// a runner ~1.75x slower than usual it read as the latter on all three
+		// attempts (run 35825736166). `page.waitFor*` is not covered by
+		// `expect.timeout`, hence the explicit 15s to match the global.
+		const saved = page.waitForResponse(
+			(r) => /\/api\/recur-rules\/\d+$/.test(r.url()) && r.request().method() === 'PATCH',
+			{ timeout: 15_000 },
+		)
 		await page.getByRole('button', { name: /^Save rule$/ }).click()
+		expect((await saved).ok()).toBe(true)
 
 		const stored = async () => {
 			const rules = await api.get(`/boards/${state.boardId}/recur-rules`)
 			return rules.find((r) => Number(r.id) === Number(state.ruleId)) ?? null
 		}
-		await expect.poll(
-			async () => Number((await stored())?.targetStackId),
-			{ timeout: 8_000 },
-		).toBe(Number(state.otherStackId))
+		await expect.poll(async () => Number((await stored())?.targetStackId)).toBe(Number(state.otherStackId))
 
 		const after = await stored()
 		expect(after.rrule).toBe(VERBOSE_RRULE)
@@ -190,7 +196,7 @@ test.describe('Editing a rule the recurrence editor fully models (#10045)', () =
 
 		const recurring = page.locator('#bs-automation-recurring')
 		const item = recurring.locator('.automation__rule-item').filter({ hasText: 'Take the bins out' })
-		await expect(item).toBeVisible({ timeout: 8_000 })
+		await expect(item).toBeVisible()
 		await item.getByRole('button', { name: /^Edit$/ }).click()
 
 		// The real controls, populated from the stored rule — no read-only note.
@@ -205,6 +211,6 @@ test.describe('Editing a rule the recurrence editor fully models (#10045)', () =
 		await expect.poll(async () => {
 			const rules = await api.get(`/boards/${state.boardId}/recur-rules`)
 			return rules.find((r) => Number(r.id) === Number(state.ruleId))?.rrule ?? ''
-		}, { timeout: 8_000 }).toBe('FREQ=WEEKLY;INTERVAL=3;BYDAY=MO,WE')
+		}).toBe('FREQ=WEEKLY;INTERVAL=3;BYDAY=MO,WE')
 	})
 })

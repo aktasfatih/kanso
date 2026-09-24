@@ -14,6 +14,34 @@ function replyProse(page) {
 	return page.locator('.card-modal__reply-compose .kanso-md-editor .ProseMirror').first()
 }
 
+/**
+ * Put the card's thread into a known shape over the API.
+ *
+ * Every test below has to stand on its own. Playwright's retry re-runs ONLY the
+ * failing test in a fresh worker: `beforeAll` runs again and builds a brand-new
+ * board and card, while the sibling that posted the comment does not run at
+ * all — so a precondition inherited from an earlier test is simply absent, and
+ * one slow-runner miss turns into three identical failures.
+ *
+ * These ENSURE rather than ADD: they look before they post, so the card ends up
+ * holding exactly one top-level comment and one reply whether the siblings ran
+ * or not. Blindly posting would double the thread up on a clean run and break
+ * the tests that count it.
+ */
+async function ensureTopComment(cardId, body) {
+	const existing = await api.get(`/cards/${cardId}/comments`)
+	const top = existing.find((c) => c.parentCommentId == null)
+	if (top) return top
+	return api.post(`/cards/${cardId}/comments`, { body })
+}
+
+async function ensureReply(cardId, parentCommentId, body) {
+	const existing = await api.get(`/cards/${cardId}/comments`)
+	const reply = existing.find((c) => c.parentCommentId === parentCommentId)
+	if (reply) return reply
+	return api.post(`/cards/${cardId}/comments`, { body, parentCommentId })
+}
+
 test.describe('Comments / Discussion', () => {
 	const state = { boardId: 0, cardId: 0, boardUrl: '', cardUrl: '' }
 
@@ -45,16 +73,16 @@ test.describe('Comments / Discussion', () => {
 	test('post a top-level comment with markdown, assert rendering', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Discussion pane should be visible
 		const discussionSection = page.locator('.card-modal__discussion')
-		await expect(discussionSection).toBeVisible({ timeout: 5000 })
+		await expect(discussionSection).toBeVisible()
 
 		// The composer now uses a Tiptap WYSIWYG editor (MarkdownEditor.vue).
 		// Type into the ProseMirror contenteditable.
 		const prose = composerProse(page)
-		await expect(prose).toBeVisible({ timeout: 6000 })
+		await expect(prose).toBeVisible()
 		await prose.click()
 		// Type bold markdown via the keyboard — Tiptap stores and serialises markdown.
 		await prose.fill('Hello ')
@@ -69,31 +97,35 @@ test.describe('Comments / Discussion', () => {
 
 		// The comment body should appear and markdown should be rendered
 		const commentBody = page.locator('.card-modal__comment-body').first()
-		await expect(commentBody).toBeVisible({ timeout: 6000 })
+		await expect(commentBody).toBeVisible()
 
 		// **world** should render as <strong>world</strong>
 		const strongEl = commentBody.locator('strong')
-		await expect(strongEl).toBeVisible({ timeout: 4000 })
+		await expect(strongEl).toBeVisible()
 		await expect(strongEl).toHaveText('world')
 	})
 
 	test('post a reply under the top-level comment, assert nested rendering', async ({ page }) => {
+		// A reply needs something to reply TO, and the comment the test above posts
+		// is gone on a retry (see ensureTopComment).
+		await ensureTopComment(state.cardId, 'Hello **world** from test')
+
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Wait for the first comment to appear
-		await page.waitForSelector('.card-modal__comment', { timeout: 8000 })
+		await page.waitForSelector('.card-modal__comment', { timeout: 15_000 })
 
 		// Click the Reply button on the top-level comment (the top-level comment is
 		// the direct child of a comment-group; replies are nested under __replies).
 		const replyBtn = page.locator('.card-modal__comment-group > .card-modal__comment .card-modal__comment-link-btn').first()
-		await expect(replyBtn).toBeVisible({ timeout: 5000 })
+		await expect(replyBtn).toBeVisible()
 		await replyBtn.click()
 
 		// Reply compose box should appear — it also uses the Tiptap editor.
 		const prose = replyProse(page)
-		await expect(prose).toBeVisible({ timeout: 6000 })
+		await expect(prose).toBeVisible()
 
 		// Type bold reply text
 		await prose.click()
@@ -107,45 +139,54 @@ test.describe('Comments / Discussion', () => {
 
 		// The reply should appear nested under the top-level comment
 		const replies = page.locator('.card-modal__replies .card-modal__comment--reply')
-		await expect(replies).toHaveCount(1, { timeout: 6000 })
+		await expect(replies).toHaveCount(1)
 
 		// Check reply markdown renders
 		const replyBody = replies.locator('.card-modal__comment-body').first()
-		await expect(replyBody.locator('strong')).toBeVisible({ timeout: 4000 })
+		await expect(replyBody.locator('strong')).toBeVisible()
 	})
 
 	test('card tile shows commentCount badge after closing modal', async ({ page }) => {
+		// The badge counts the thread the two tests above build; on a retry neither
+		// ran, so put the same comment + reply on the card first.
+		const top = await ensureTopComment(state.cardId, 'Hello **world** from test')
+		await ensureReply(state.cardId, top.id, 'This is a **reply**')
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const tile = page.locator('.card-tile').filter({ hasText: 'Card With Discussion' })
-		await expect(tile).toBeVisible({ timeout: 5000 })
+		await expect(tile).toBeVisible()
 
 		// After 2 comments (1 top-level + 1 reply), the badge should show >= 2
 		const badge = tile.locator('.card-tile__comments')
-		await expect(badge).toBeVisible({ timeout: 5000 })
+		await expect(badge).toBeVisible()
 		const badgeText = await badge.innerText()
 		expect(Number(badgeText.trim())).toBeGreaterThanOrEqual(2)
 	})
 
 	test('edit the top-level comment and assert "edited" marker appears', async ({ page }) => {
+		// Something has to be there to edit — the first test's comment is absent on
+		// a retry. The edit itself still happens through the UI, which is the point.
+		await ensureTopComment(state.cardId, 'Hello **world** from test')
+
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Wait for the top-level comment and its author controls
 		const topComment = page.locator('.card-modal__comment-group > .card-modal__comment').first()
-		await expect(topComment).toBeVisible({ timeout: 8000 })
+		await expect(topComment).toBeVisible()
 
 		// Click the edit button (pencil icon) - the first non-danger icon button
 		const editBtn = topComment.locator('.card-modal__comment-icon-btn:not(.card-modal__comment-icon-btn--danger)').first()
-		await expect(editBtn).toBeVisible({ timeout: 5000 })
+		await expect(editBtn).toBeVisible()
 		await editBtn.click()
 
 		// The inline edit textarea should appear (comment editing still uses a plain textarea)
 		const editTa = topComment.locator('.card-modal__comment-edit-textarea')
-		await expect(editTa).toBeVisible({ timeout: 4000 })
+		await expect(editTa).toBeVisible()
 
 		// Change the body
 		await editTa.fill('Updated **comment** body')
@@ -153,22 +194,28 @@ test.describe('Comments / Discussion', () => {
 
 		// The "edited" marker should appear after saving
 		const editedMarker = topComment.locator('.card-modal__comment-edited')
-		await expect(editedMarker).toBeVisible({ timeout: 6000 })
+		await expect(editedMarker).toBeVisible()
 	})
 
 	test('delete top-level comment removes it and its reply from the UI', async ({ page }) => {
+		// This asserts on exactly one comment plus one reply, so it establishes that
+		// thread itself instead of inheriting it from the tests above (which a retry
+		// never runs). The delete under test is still the one done through the UI.
+		const top = await ensureTopComment(state.cardId, 'Hello **world** from test')
+		await ensureReply(state.cardId, top.id, 'This is a **reply**')
+
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Confirm the top-level comment and reply both exist
-		await expect(page.locator('.card-modal__comment-group > .card-modal__comment')).toHaveCount(1, { timeout: 8000 })
-		await expect(page.locator('.card-modal__comment--reply')).toHaveCount(1, { timeout: 5000 })
+		await expect(page.locator('.card-modal__comment-group > .card-modal__comment')).toHaveCount(1)
+		await expect(page.locator('.card-modal__comment--reply')).toHaveCount(1)
 
 		// Click the delete button (trash icon) on the top-level comment
 		const topComment = page.locator('.card-modal__comment-group > .card-modal__comment').first()
 		const deleteBtn = topComment.locator('.card-modal__comment-icon-btn--danger')
-		await expect(deleteBtn).toBeVisible({ timeout: 5000 })
+		await expect(deleteBtn).toBeVisible()
 		await deleteBtn.click()
 
 		// Both the comment and its reply should be gone
@@ -177,9 +224,25 @@ test.describe('Comments / Discussion', () => {
 	})
 
 	test('reload confirms deletion is persisted', async ({ page }) => {
+		// The subject is that a deletion made through the UI survives a fresh load,
+		// so this test does the deleting: on a retry the card beforeAll just made is
+		// empty anyway, and inheriting the delete above would leave "no comments"
+		// true for the wrong reason — a pass proving nothing. Ends at zero live
+		// comments either way, so the run order does not change the outcome.
+		const top = await ensureTopComment(state.cardId, 'Hello **world** from test')
+		await ensureReply(state.cardId, top.id, 'This is a **reply**')
+
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+
+		const topComment = page.locator('.card-modal__comment-group > .card-modal__comment').first()
+		await expect(topComment).toBeVisible()
+		await topComment.locator('.card-modal__comment-icon-btn--danger').click()
+		await expect(page.locator('.card-modal__comment')).toHaveCount(0, { timeout: 6000 })
+
+		await page.reload()
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// After reload there should be no comments
 		await expect(page.locator('.card-modal__comment')).toHaveCount(0, { timeout: 8000 })
@@ -195,7 +258,7 @@ test.describe('Comments / Discussion', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Post a comment containing an XSS payload.
 		// The Tiptap editor (html:false) stores and serialises plain markdown;
@@ -203,14 +266,14 @@ test.describe('Comments / Discussion', () => {
 		// escaped to inert text, never parsed as markup.
 		const xssPayload = 'Safe text <img src=x onerror=alert(1)> end'
 		const prose = composerProse(page)
-		await expect(prose).toBeVisible({ timeout: 6000 })
+		await expect(prose).toBeVisible()
 		await prose.click()
 		await prose.fill(xssPayload)
 		await page.locator('.card-modal__composer .card-modal__composer-actions button').first().click()
 
 		// Wait for the comment to appear
 		const commentBody = page.locator('.card-modal__comment-body').first()
-		await expect(commentBody).toBeVisible({ timeout: 6000 })
+		await expect(commentBody).toBeVisible()
 
 		// No alert should have fired
 		expect(alertFired).toBe(false)
@@ -227,7 +290,7 @@ test.describe('Comments / Discussion', () => {
 	test('a failed comment post keeps the typed text (no data loss) (#3510)', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Force the comment POST to fail.
 		await page.route('**/apps/kanso/api/cards/*/comments', (route) => {
@@ -242,7 +305,7 @@ test.describe('Comments / Discussion', () => {
 		})
 
 		const prose = composerProse(page)
-		await expect(prose).toBeVisible({ timeout: 6000 })
+		await expect(prose).toBeVisible()
 		await prose.click()
 		await prose.fill('this text must survive a failed post')
 		await page.locator('.card-modal__composer .card-modal__composer-actions button').first().click()

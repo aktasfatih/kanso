@@ -129,7 +129,7 @@ test.describe.serial('External collaboration + deep links (#3744)', () => {
 		await page.locator(`[data-test="board-options-menu-${state.boardId}"] button`).first().click()
 
 		// The menu is open (pin entry present) but the egress entries are not.
-		await expect(page.locator(`[data-test="toggle-pin-${state.boardId}"]`)).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator(`[data-test="toggle-pin-${state.boardId}"]`)).toBeVisible()
 		await expect(page.locator(`[data-test="tile-export-${state.boardId}"]`)).toHaveCount(0)
 		await expect(page.locator(`[data-test="tile-duplicate-with-cards-${state.boardId}"]`)).toHaveCount(0)
 	})

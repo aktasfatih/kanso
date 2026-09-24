@@ -66,12 +66,12 @@ test.describe('Labels', () => {
 
 		await ncLogin(page)
 		await page.goto(cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open the label popover (admin owns the board → MANAGE, so the create row shows).
 		await page.locator('.card-modal__attr button', { hasText: 'Label' }).first().click()
 		const createRow = page.locator('.card-modal__label-create')
-		await expect(createRow).toBeVisible({ timeout: 4000 })
+		await expect(createRow).toBeVisible()
 
 		// Pick a colour preset, name it, create.
 		await createRow.locator('.card-modal__label-swatch').click()
@@ -82,7 +82,7 @@ test.describe('Labels', () => {
 		// The new label is assigned to the card (chip appears in the attribute bar).
 		await expect(
 			page.locator('.card-modal__label-chip', { hasText: 'InlineFromCard' }),
-		).toBeVisible({ timeout: 8000 })
+		).toBeVisible()
 		await expect(page.locator('.card-modal__save-error')).toHaveCount(0)
 
 		// And it now exists on the board (visible in Board settings / everywhere).

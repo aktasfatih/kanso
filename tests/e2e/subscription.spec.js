@@ -80,10 +80,10 @@ test.describe('Card Subscriptions / Watchers', () => {
 	test('Watch button shows unsubscribed state initially', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const watchBtn = page.locator('.card-modal__watch-btn')
-		await expect(watchBtn).toBeVisible({ timeout: 5000 })
+		await expect(watchBtn).toBeVisible()
 
 		// Should NOT have the active class (not watching)
 		await expect(watchBtn).not.toHaveClass(/card-modal__watch-btn--active/)
@@ -99,10 +99,10 @@ test.describe('Card Subscriptions / Watchers', () => {
 	test('clicking Watch subscribes the user and shows count 1', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const watchBtn = page.locator('.card-modal__watch-btn')
-		await expect(watchBtn).toBeVisible({ timeout: 5000 })
+		await expect(watchBtn).toBeVisible()
 
 		// Click Watch
 		await watchBtn.click()
@@ -114,33 +114,52 @@ test.describe('Card Subscriptions / Watchers', () => {
 
 		// Count badge should show 1
 		const countBadge = watchBtn.locator('.card-modal__watch-count')
-		await expect(countBadge).toBeVisible({ timeout: 4000 })
+		await expect(countBadge).toBeVisible()
 		const countText = await countBadge.innerText()
 		expect(Number(countText.trim())).toBeGreaterThanOrEqual(1)
 	})
 
 	test('Watching state persists after page reload', async ({ page }) => {
+		// Own the whole round trip. A retry re-runs only this test, so the earlier
+		// Watch click never happened — clear the subscription over the API, then
+		// subscribe through the UI below, so the reload proves a UI write really
+		// reached the server rather than that a seeded row renders.
+		await api.delete(`/cards/${state.cardId}/subscription`)
+
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const watchBtn = page.locator('.card-modal__watch-btn')
-		await expect(watchBtn).toBeVisible({ timeout: 5000 })
+		await expect(watchBtn).toBeVisible()
 
-		// After prior test subscribed, this should still be active on fresh load,
+		// Subscribe through the UI, exactly as the Watch-click test does.
+		await watchBtn.click()
+		await expect(watchBtn).toHaveClass(/card-modal__watch-btn--active/, { timeout: 6000 })
+		await expect(watchBtn).toHaveAttribute('aria-pressed', 'true')
+
+		await page.reload()
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+
+		// After the reload this should still be active on the fresh load,
 		// with the count badge (not the "Watch" label) shown.
 		await expect(watchBtn).toHaveClass(/card-modal__watch-btn--active/, { timeout: 6000 })
 		await expect(watchBtn).toHaveAttribute('aria-pressed', 'true')
-		await expect(watchBtn.locator('.card-modal__watch-count')).toBeVisible({ timeout: 4000 })
+		await expect(watchBtn.locator('.card-modal__watch-count')).toBeVisible()
 	})
 
 	test('clicking Watching again unsubscribes and shows count 0', async ({ page }) => {
+		// Own the precondition — there has to be a subscription to click away. A
+		// retry re-runs only this test, so the earlier Watch click never happened;
+		// re-subscribing when it did is a no-op.
+		await api.put(`/cards/${state.cardId}/subscription`)
+
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const watchBtn = page.locator('.card-modal__watch-btn')
-		await expect(watchBtn).toBeVisible({ timeout: 5000 })
+		await expect(watchBtn).toBeVisible()
 
 		// Should currently be in Watching state
 		await expect(watchBtn).toHaveClass(/card-modal__watch-btn--active/, { timeout: 6000 })
@@ -176,10 +195,10 @@ test.describe('Card Subscriptions / Watchers', () => {
 
 		await ncLogin(page)
 		await page.goto(freshUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const watchBtn = page.locator('.card-modal__watch-btn')
-		await expect(watchBtn).toBeVisible({ timeout: 5000 })
+		await expect(watchBtn).toBeVisible()
 
 		// Admin should now be auto-subscribed - Watching state expected
 		await expect(watchBtn).toHaveClass(/card-modal__watch-btn--active/, { timeout: 8000 })
@@ -187,7 +206,7 @@ test.describe('Card Subscriptions / Watchers', () => {
 
 		// Count should be ≥ 1 (at least admin is watching)
 		const countBadge = watchBtn.locator('.card-modal__watch-count')
-		await expect(countBadge).toBeVisible({ timeout: 4000 })
+		await expect(countBadge).toBeVisible()
 		const countText = await countBadge.innerText()
 		expect(Number(countText.trim())).toBeGreaterThanOrEqual(1)
 	})
@@ -225,7 +244,7 @@ test.describe('Watchers dropdown UI (caret panel)', () => {
 	test('no standalone watchers section remains in the modal body', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// The old "Add watcher" pill lived in the attribute bar; it must be gone.
 		await expect(page.locator('.card-modal__attrbar')).not.toContainText('Add watcher')
@@ -236,31 +255,31 @@ test.describe('Watchers dropdown UI (caret panel)', () => {
 	test('caret opens the panel; add + remove a watcher from it', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const caret = page.locator('.card-modal__watch-caret')
-		await expect(caret).toBeVisible({ timeout: 5000 })
+		await expect(caret).toBeVisible()
 		await expect(caret).toHaveAttribute('aria-expanded', 'false')
 
 		// Open the dropdown.
 		await caret.click()
 		const panel = page.locator('.card-modal__watch-panel')
-		await expect(panel).toBeVisible({ timeout: 4000 })
+		await expect(panel).toBeVisible()
 		await expect(caret).toHaveAttribute('aria-expanded', 'true')
 
 		// Add BOB via the "Add watcher" picker inside the panel.
 		const addOption = panel.locator('.card-modal__assign-option', { hasText: BOB })
-		await expect(addOption).toBeVisible({ timeout: 4000 })
+		await expect(addOption).toBeVisible()
 		await addOption.click()
 
 		// Reopen (adding closes the popover) and verify BOB is now a listed watcher.
 		await caret.click()
-		await expect(panel).toBeVisible({ timeout: 4000 })
+		await expect(panel).toBeVisible()
 		const bobRow = panel.locator('.card-modal__watch-row', { hasText: BOB })
-		await expect(bobRow).toBeVisible({ timeout: 4000 })
+		await expect(bobRow).toBeVisible()
 
 		// Count badge should now reflect at least one watcher.
-		await expect(page.locator('.card-modal__watch-count')).toBeVisible({ timeout: 4000 })
+		await expect(page.locator('.card-modal__watch-count')).toBeVisible()
 
 		// Remove BOB via the × on his row.
 		await bobRow.locator('.card-modal__pill-x').click()
@@ -270,11 +289,11 @@ test.describe('Watchers dropdown UI (caret panel)', () => {
 	test('Escape closes the dropdown before the modal', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const caret = page.locator('.card-modal__watch-caret')
 		await caret.click()
-		await expect(page.locator('.card-modal__watch-panel')).toBeVisible({ timeout: 4000 })
+		await expect(page.locator('.card-modal__watch-panel')).toBeVisible()
 
 		// First Escape dismisses the panel but keeps the card open.
 		await page.keyboard.press('Escape')

@@ -34,7 +34,7 @@ test.describe('Import menu describes what each entry does', () => {
 		// CSV sits under its own caption because it does something else. This one
 		// assertion also pins that nothing extra (e.g. a "coming soon" item) renders.
 		const caption = page.locator('li.app-navigation-caption', { hasText: 'Import a board' })
-		await expect(caption).toBeVisible({ timeout: 6_000 })
+		await expect(caption).toBeVisible()
 		const entries = (await caption.locator('xpath=..').locator('> li').allInnerTexts())
 			.map((s) => s.trim())
 			.filter(Boolean)
@@ -57,13 +57,13 @@ test.describe('Import menu describes what each entry does', () => {
 		await page.locator('[data-test="csv-import-next"]').click()
 
 		const boardSelect = page.locator('[data-test="csv-import-board"]')
-		await expect(boardSelect).toBeVisible({ timeout: 6_000 })
+		await expect(boardSelect).toBeVisible()
 		await expect(page.locator('[data-test="csv-import-stack"]')).toBeVisible()
 		// The board we created up-front is offered as a target, which is only true
 		// of a picker over existing boards.
 		await boardSelect.selectOption({ label: state.boardTitle })
 		await expect(page.locator('[data-test="csv-import-stack"]').locator('option', { hasText: 'Inbox' }))
-			.toHaveCount(1, { timeout: 10_000 })
+			.toHaveCount(1)
 	})
 })
 

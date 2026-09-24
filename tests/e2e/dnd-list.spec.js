@@ -59,11 +59,24 @@ async function pickListView(page) {
 	await page.waitForTimeout(150)
 	await page.keyboard.press('Escape')
 	await page.waitForTimeout(200)
-	await expect(page.locator('.board-list-row').first()).toBeVisible({ timeout: 8_000 })
+	await expect(page.locator('.board-list-row').first()).toBeVisible()
 }
 
 test.describe('List view drag and drop', () => {
-	const state = { boardId: 0, l1Id: 0, l2Id: 0, boardUrl: '' }
+	const state = { boardId: 0, l1Id: 0, l2Id: 0, c1Id: 0, boardUrl: '' }
+
+	/**
+	 * Put C1 in the empty group L2 over the API. Only the first test drags it
+	 * there, and a retry re-runs the failing test on its own, so the two tests
+	 * that read that layout establish it themselves. Moving only when C1 is
+	 * elsewhere leaves the sort keys alone when that test did run.
+	 */
+	const ensureC1InL2 = async () => {
+		const c1 = await api.get(`/cards/${state.c1Id}`)
+		if (c1.stackId !== state.l2Id) {
+			await api.post(`/cards/${state.c1Id}/move`, { targetStackId: state.l2Id, afterCardId: null })
+		}
+	}
 
 	// Group headers carry a plain card count when no WIP limit is set — the
 	// cheapest way to assert which group a row belongs to in a flat row model.
@@ -84,7 +97,8 @@ test.describe('List view drag and drop', () => {
 		state.l1Id = l1.id
 		state.l2Id = l2.id
 		for (const title of ['C1', 'C2', 'C3']) {
-			await api.post('/cards', { stackId: l1.id, title })
+			const card = await api.post('/cards', { stackId: l1.id, title })
+			if (title === 'C1') state.c1Id = card.id
 		}
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 	})
@@ -100,12 +114,12 @@ test.describe('List view drag and drop', () => {
 		await pickListView(page)
 
 		expect(await rowTitles(page)).toEqual(['C1', 'C2', 'C3'])
-		await expect(groupCount(page, 'L1')).toHaveText('3', { timeout: 8_000 })
+		await expect(groupCount(page, 'L1')).toHaveText('3')
 		await expect(groupCount(page, 'L2')).toHaveText('0')
 
 		const c1 = page.locator('.board-list-row-wrap').filter({ hasText: 'C1' })
 		const l2Drop = page.locator(`.board-list-group-drop[data-stack-id="${state.l2Id}"]`)
-		await expect(c1).toBeVisible({ timeout: 5_000 })
+		await expect(c1).toBeVisible()
 
 		await dragWithMouse(page, c1, l2Drop, {
 			// The empty group must show a drop highlight while it is hovered.
@@ -115,14 +129,14 @@ test.describe('List view drag and drop', () => {
 		})
 
 		// C1 moved into the empty group; the flat row order follows the groups.
-		await expect(groupCount(page, 'L2')).toHaveText('1', { timeout: 8_000 })
+		await expect(groupCount(page, 'L2')).toHaveText('1')
 		await expect(groupCount(page, 'L1')).toHaveText('2')
 		await expect.poll(async () => await rowTitles(page)).toEqual(['C2', 'C3', 'C1'])
 
 		// Server is the source of truth — the move survives a reload.
 		await page.reload()
 		await expect(page.locator('.board-list-row').first()).toBeVisible({ timeout: 15_000 })
-		await expect(groupCount(page, 'L2')).toHaveText('1', { timeout: 8_000 })
+		await expect(groupCount(page, 'L2')).toHaveText('1')
 		await expect(groupCount(page, 'L1')).toHaveText('2')
 		await expect.poll(async () => await rowTitles(page)).toEqual(['C2', 'C3', 'C1'])
 	})
@@ -130,6 +144,7 @@ test.describe('List view drag and drop', () => {
 	test('the group header collapse toggle still responds to clicks', async ({ page }) => {
 		// Regression guard: the drop overlay covers the header button, so it must be
 		// inert whenever no drag is in flight.
+		await ensureC1InL2()
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
@@ -148,6 +163,7 @@ test.describe('List view drag and drop', () => {
 	})
 
 	test('dropping below the last card of a group still reorders within that group', async ({ page }) => {
+		await ensureC1InL2()
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })

@@ -43,12 +43,12 @@ test.describe('Move card… picker (keyboard / SR DnD alternative)', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open ⋯ → "Move card…" picker.
 		await page.locator('.card-modal__actions-menu button').first().click()
 		await page.getByRole('menuitem', { name: 'Move card…' }).click()
-		await page.waitForSelector('.card-modal__move-position', { timeout: 5_000 })
+		await page.waitForSelector('.card-modal__move-position', { timeout: 15_000 })
 
 		// Pick target column "Doing" and "After a specific card" is disabled there
 		// (empty stack) — the picker must degrade to top, never an invalid move.
@@ -59,21 +59,29 @@ test.describe('Move card… picker (keyboard / SR DnD alternative)', () => {
 
 		// Card B landed in Doing (moved via the shared queue → server reflects it).
 		await expect
-			.poll(() => cardStackId(state.boardId, state.bId), { timeout: 8_000 })
+			.poll(() => cardStackId(state.boardId, state.bId))
 			.toBe(state.doingId)
 		expect(await stackOrder(state.boardId, state.todoId)).toEqual(['Card A', 'Card C'])
 		expect(await stackOrder(state.boardId, state.doingId)).toEqual(['Card B'])
 	})
 
 	test('positions the card after a specific card in the same/other column', async ({ page }) => {
-		// Fresh state: Card C in To Do; move it to Doing AFTER Card B.
+		// Card B is the anchor this test picks in the "after" select, and it only
+		// reaches Doing via the test above — which a retry of this test alone never
+		// runs. Move it there ourselves when it is not already, so Doing holds
+		// exactly Card B whether or not that test ran.
+		if ((await cardStackId(state.boardId, state.bId)) !== state.doingId) {
+			await api.post(`/cards/${state.bId}/move`, { targetStackId: state.doingId, afterCardId: null })
+		}
+
+		// Card C is in To Do; move it to Doing AFTER Card B.
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.cId}`)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		await page.locator('.card-modal__actions-menu button').first().click()
 		await page.getByRole('menuitem', { name: 'Move card…' }).click()
-		await page.waitForSelector('.card-modal__move-position', { timeout: 5_000 })
+		await page.waitForSelector('.card-modal__move-position', { timeout: 15_000 })
 
 		await page.locator('.card-modal__copy-dialog select').first().selectOption({ label: 'Doing' })
 		await page.getByText('After a specific card').click()
@@ -82,7 +90,7 @@ test.describe('Move card… picker (keyboard / SR DnD alternative)', () => {
 		await page.getByRole('button', { name: 'Move', exact: true }).click()
 
 		await expect
-			.poll(() => stackOrder(state.boardId, state.doingId), { timeout: 8_000 })
+			.poll(() => stackOrder(state.boardId, state.doingId))
 			.toEqual(['Card B', 'Card C'])
 	})
 })

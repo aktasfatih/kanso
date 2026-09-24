@@ -45,21 +45,21 @@ test.describe('Copy card to another stack (card ⋯ menu)', () => {
 
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open the ⋯ menu and click "Copy to…".
 		await page.locator('.card-modal__actions-menu button').first().click()
 		await page.getByRole('menuitem', { name: 'Copy to…' }).click()
 
 		// The copy dialog opens; pick the target column and confirm.
-		await page.waitForSelector('.card-modal__copy-dialog', { timeout: 8_000 })
+		await page.waitForSelector('.card-modal__copy-dialog', { timeout: 15_000 })
 		await page.locator('.card-modal__copy-field select').nth(1)
 			.selectOption({ label: 'Target Column' })
 		await page.getByRole('button', { name: 'Copy', exact: true }).click()
 
 		// The duplicate appears in the target column titled "… (copy)".
 		await expect
-			.poll(() => stackTitles(state.boardId, state.doneId), { timeout: 8_000 })
+			.poll(() => stackTitles(state.boardId, state.doneId))
 			.toEqual(['Original card (copy)'])
 
 		// Fetch the duplicate and assert content was cloned, but NOT assignees.

@@ -44,21 +44,54 @@ test.describe('Parent / Child cards', () => {
 		}
 	})
 
+	// The sub-cards below are created through the UI by the first test — which is
+	// exactly what that test exists to prove, so they cannot be seeded in
+	// beforeAll without making it vacuous. A retry, though, re-runs ONLY the
+	// failing test: beforeAll hands it a pristine, CHILDLESS parent and the test
+	// that populated it never runs, so every later test here fails deterministically
+	// on every attempt. Each of them therefore asserts its own precondition into
+	// place first, creating only what is MISSING — on a normal full run the
+	// children are already there and nothing is added, so the counts stay 2.
+	async function fetchChildren() {
+		return (await api.get(`/cards/${state.parentCardId}`)).children ?? []
+	}
+
+	async function ensureTwoChildren() {
+		const children = await fetchChildren()
+		let created = false
+		for (const title of ['Sub-task Alpha', 'Sub-task Beta']) {
+			if (children.some((c) => c.title === title)) continue
+			const child = await api.post('/cards', { stackId: state.stackId, title })
+			await api.put(`/cards/${child.id}/parent`, { parentCardId: state.parentCardId })
+			created = true
+		}
+		return created ? await fetchChildren() : children
+	}
+
+	// …and the 1/2 progress the tests below read comes from the toggle test, so
+	// the done flag has to be ensured the same way.
+	async function ensureOneChildDone() {
+		const children = await ensureTwoChildren()
+		if (children.some((c) => Number(c.doneAt) > 0)) return children
+		await api.patch(`/cards/${children[0].id}`, { done: true })
+		return await fetchChildren()
+	}
+
 	test('add two sub-cards via UI, assert Children section shows 2 items and progress 0/2', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// Open the parent card modal
 		const parentTile = page.locator('.card-tile').filter({ hasText: 'Parent Card' })
-		await expect(parentTile).toBeVisible({ timeout: 5000 })
+		await expect(parentTile).toBeVisible()
 		await parentTile.click()
 
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// The add sub-card input should be present (this card has no parent)
 		const addChildInput = page.getByPlaceholder('Add a sub-card…')
-		await expect(addChildInput).toBeVisible({ timeout: 5000 })
+		await expect(addChildInput).toBeVisible()
 
 		// Add first sub-card "Sub-task Alpha"
 		await addChildInput.fill('Sub-task Alpha')
@@ -76,20 +109,19 @@ test.describe('Parent / Child cards', () => {
 			.toBeVisible({ timeout: 20_000 })
 
 		// Assert Children section shows 2 items
-		await expect(page.locator('.card-modal__child')).toHaveCount(2, { timeout: 5000 })
+		await expect(page.locator('.card-modal__child')).toHaveCount(2)
 
 		// Assert progress shows 0 / 2
 		await expect(page.locator('.card-modal__section-count'))
-			.toHaveText('0 / 2', { timeout: 5000 })
+			.toHaveText('0 / 2')
 	})
 
 	test('toggle one child done via API, reload parent modal, assert progress 1/2', async ({ page }) => {
-		await ncLogin(page)
-
-		// Fetch the parent card detail to find child ids
-		const parentDetail = await api.get(`/cards/${state.parentCardId}`)
-		const children = parentDetail.children ?? []
+		// Self-sufficient on a retry: the sub-cards come from the UI test above.
+		const children = await ensureTwoChildren()
 		expect(children.length).toBe(2)
+
+		await ncLogin(page)
 
 		// Mark the first child done via the API (set done: true)
 		const firstChild = children[0]
@@ -97,12 +129,12 @@ test.describe('Parent / Child cards', () => {
 
 		// Open the board and the parent card modal
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const parentTile = page.locator('.card-tile').filter({ hasText: 'Parent Card' })
-		await expect(parentTile).toBeVisible({ timeout: 5000 })
+		await expect(parentTile).toBeVisible()
 		await parentTile.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Progress should now show 1 / 2
 		await expect(page.locator('.card-modal__section-count'))
@@ -111,7 +143,7 @@ test.describe('Parent / Child cards', () => {
 		// The done child should have its done indicator active
 		const doneChildItem = page.locator('.card-modal__child').filter({ hasText: firstChild.title })
 		await expect(doneChildItem.locator('.card-modal__child-dot--done'))
-			.toBeVisible({ timeout: 5000 })
+			.toBeVisible()
 
 		// Close the modal
 		await page.keyboard.press('Escape')
@@ -125,9 +157,13 @@ test.describe('Parent / Child cards', () => {
 	})
 
 	test('reload board and assert parent tile persists child badge 1/2', async ({ page }) => {
+		// Self-sufficient on a retry: both the sub-cards and the done flag that
+		// makes this 1/2 are set by the two tests above.
+		await ensureOneChildDone()
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// Tile badge should show 1/2 after fresh load
 		const parentTile = page.locator('.card-tile').filter({ hasText: 'Parent Card' })
@@ -136,25 +172,28 @@ test.describe('Parent / Child cards', () => {
 
 		// Open and re-verify modal progress
 		await parentTile.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 		await expect(page.locator('.card-modal__section-count'))
 			.toHaveText('1 / 2', { timeout: 20_000 })
-		await expect(page.locator('.card-modal__child')).toHaveCount(2, { timeout: 5000 })
+		await expect(page.locator('.card-modal__child')).toHaveCount(2)
 	})
 
 	test('open a child card from parent modal - child shows its Parent row', async ({ page }) => {
+		// Self-sufficient on a retry: there is no child link to click otherwise.
+		await ensureTwoChildren()
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// Open parent modal
 		const parentTile = page.locator('.card-tile').filter({ hasText: 'Parent Card' })
 		await parentTile.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Click the first child link
 		const firstChildLink = page.locator('.card-modal__child-link').first()
-		await expect(firstChildLink).toBeVisible({ timeout: 5000 })
+		await expect(firstChildLink).toBeVisible()
 		await firstChildLink.click()
 
 		// Wait for the child card modal to open (URL changes to child cardId)
@@ -163,12 +202,12 @@ test.describe('Parent / Child cards', () => {
 			{ timeout: 20_000 },
 		)
 
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// The child card modal should show the "Parent card" section (not Sub-cards)
 		const parentSection = page.locator('.card-modal__parent-link')
 		await expect(parentSection).toBeVisible({ timeout: 20_000 })
-		await expect(parentSection).toHaveText('Parent Card', { timeout: 5000 })
+		await expect(parentSection).toHaveText('Parent Card')
 
 		// The "Add sub-card" input should NOT be present (one-level rule: a card
 		// with a parent shows the Parent section instead of the Sub-cards editor).
@@ -176,22 +215,22 @@ test.describe('Parent / Child cards', () => {
 	})
 
 	test('detach a child - parent progress drops to 0/1', async ({ page }) => {
-		await ncLogin(page)
-
-		// Fetch fresh parent detail to find the undone child
-		const parentDetail = await api.get(`/cards/${state.parentCardId}`)
-		const children = parentDetail.children ?? []
+		// Self-sufficient on a retry: this needs both children AND the one done
+		// flag, so that removing the undone one leaves 1 / 1.
+		const children = await ensureOneChildDone()
 		// Find the child that is NOT done
 		const undoneChild = children.find((c) => Number(c.doneAt) === 0)
 		expect(undoneChild).toBeTruthy()
 
+		await ncLogin(page)
+
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// Open the parent card modal
 		const parentTile = page.locator('.card-tile').filter({ hasText: 'Parent Card' })
 		await parentTile.click()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Hover the undone child item to reveal the remove button, then click it
 		const undoneChildItem = page.locator('.card-modal__child').filter({ hasText: undoneChild.title })
@@ -206,6 +245,6 @@ test.describe('Parent / Child cards', () => {
 			.toHaveText('1 / 1', { timeout: 20_000 })
 
 		// The list should now have 1 item
-		await expect(page.locator('.card-modal__child')).toHaveCount(1, { timeout: 5000 })
+		await expect(page.locator('.card-modal__child')).toHaveCount(1)
 	})
 })

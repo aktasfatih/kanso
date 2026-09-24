@@ -46,10 +46,10 @@ test.describe('Comment threads / resolve', () => {
 	test('resolve collapses the thread, survives a reload, and reopen restores it', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open to begin with: body + reply visible, no summary row.
-		await expect(page.locator(REPLIES)).toHaveCount(1, { timeout: 8000 })
+		await expect(page.locator(REPLIES)).toHaveCount(1)
 		await expect(page.locator(SUMMARY)).toHaveCount(0)
 
 		// Resolve it from the top-level comment's controls.
@@ -57,7 +57,7 @@ test.describe('Comment threads / resolve', () => {
 		await group.locator('.card-modal__comment-resolve-btn').click()
 
 		// Collapsed: one summary row, no reply rendered at all.
-		await expect(page.locator(SUMMARY)).toHaveCount(1, { timeout: 6000 })
+		await expect(page.locator(SUMMARY)).toHaveCount(1)
 		await expect(page.locator(SUMMARY)).toContainText('Resolved')
 		await expect(page.locator(REPLIES)).toHaveCount(0)
 		await expect(page.locator('.card-modal__comment-body')).toHaveCount(0)
@@ -66,8 +66,8 @@ test.describe('Comment threads / resolve', () => {
 		// client state, so a thread still collapsed here is collapsed because the
 		// SERVER said so (resolved_at), not because this tab remembered.
 		await page.reload()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
-		await expect(page.locator(SUMMARY)).toHaveCount(1, { timeout: 8000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+		await expect(page.locator(SUMMARY)).toHaveCount(1)
 		await expect(page.locator(REPLIES)).toHaveCount(0)
 
 		// The API agrees — resolvedAt is set on the top-level comment only.
@@ -79,7 +79,7 @@ test.describe('Comment threads / resolve', () => {
 
 		// Peek: expanding locally reveals the thread WITHOUT reopening it.
 		await page.locator('.card-modal__thread-summary-toggle').click()
-		await expect(page.locator(REPLIES)).toHaveCount(1, { timeout: 6000 })
+		await expect(page.locator(REPLIES)).toHaveCount(1)
 		const stillResolved = await api.get(`/cards/${state.cardId}/comments`)
 		expect(stillResolved.find((c) => c.id === state.topId).resolvedAt).toBeGreaterThan(0)
 
@@ -89,8 +89,8 @@ test.describe('Comment threads / resolve', () => {
 		await expect(page.locator(REPLIES)).toHaveCount(1)
 
 		await page.reload()
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
-		await expect(page.locator(REPLIES)).toHaveCount(1, { timeout: 8000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+		await expect(page.locator(REPLIES)).toHaveCount(1)
 		await expect(page.locator(SUMMARY)).toHaveCount(0)
 
 		const afterReopen = await api.get(`/cards/${state.cardId}/comments`)
@@ -104,11 +104,11 @@ test.describe('Comment threads / resolve', () => {
 
 		await ncLogin(page)
 		await page.goto(`${state.cardUrl}?comment=${state.replyId}`)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// The linked reply is rendered and reachable, despite the thread being
 		// resolved — and the thread is still resolved for everyone else.
-		await expect(page.locator(`#comment-${state.replyId}`)).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator(`#comment-${state.replyId}`)).toBeVisible()
 		await expect(page.locator(SUMMARY)).toHaveCount(0)
 		const comments = await api.get(`/cards/${state.cardId}/comments`)
 		expect(comments.find((c) => c.id === state.topId).resolvedAt).toBeGreaterThan(0)

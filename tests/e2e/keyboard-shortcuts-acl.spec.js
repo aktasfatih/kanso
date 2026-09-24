@@ -73,7 +73,7 @@ test.describe('Done / priority shortcuts are editors only (#9978)', () => {
 			await page.goto(state.boardUrl)
 			await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 			await expect(page.locator('.card-tile', { hasText: 'Read-only card' }))
-				.toBeVisible({ timeout: 10_000 })
+				.toBeVisible()
 
 			const patches = watchCardPatches(page)
 
@@ -97,7 +97,7 @@ test.describe('Done / priority shortcuts are editors only (#9978)', () => {
 			await page.keyboard.press('?')
 			const modal = page.locator('.modal-container, [role="dialog"]')
 				.filter({ hasText: 'Keyboard shortcuts' })
-			await expect(modal).toBeVisible({ timeout: 5000 })
+			await expect(modal).toBeVisible()
 			await expect(modal.getByText('Toggle done on focused card')).toHaveCount(0)
 			await expect(modal.getByText('Set priority on focused card', { exact: false })).toHaveCount(0)
 			// The read-only navigation rows are still listed — the overlay is
@@ -109,9 +109,9 @@ test.describe('Done / priority shortcuts are editors only (#9978)', () => {
 			// Swimlane render path (#9978): its :on-card-focus is unconditional too,
 			// so the gate has to live in the handler, not on the prop sites.
 			await setDisplay(page, 'Assignee')
-			await expect(page.locator('.swimlane')).toHaveCount(1, { timeout: 10_000 })
+			await expect(page.locator('.swimlane')).toHaveCount(1)
 			await expect(page.locator('.swimlane .card-tile', { hasText: 'Read-only card' }))
-				.toBeVisible({ timeout: 8_000 })
+				.toBeVisible()
 
 			patches.length = 0
 			await page.keyboard.press('j')
@@ -149,7 +149,7 @@ test.describe('Done / priority shortcuts still work for an editor (#9978)', () =
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 		const tile = page.locator('.card-tile', { hasText: 'Editable card' })
-		await expect(tile).toBeVisible({ timeout: 10_000 })
+		await expect(tile).toBeVisible()
 
 		const patches = watchCardPatches(page)
 
@@ -168,7 +168,7 @@ test.describe('Done / priority shortcuts still work for an editor (#9978)', () =
 		await page.keyboard.press('?')
 		const modal = page.locator('.modal-container, [role="dialog"]')
 			.filter({ hasText: 'Keyboard shortcuts' })
-		await expect(modal).toBeVisible({ timeout: 5000 })
+		await expect(modal).toBeVisible()
 		await expect(modal.getByText('Toggle done on focused card')).toHaveCount(1)
 		await expect(modal.getByText('Set priority on focused card', { exact: false })).toHaveCount(1)
 	})

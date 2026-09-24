@@ -264,7 +264,7 @@ test.describe('Card file attachments', () => {
 		await ncLogin(page)
 		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`
 		await page.goto(cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Upload a small file through the hidden file input.
 		await page.setInputFiles('.card-modal__file-input', {
@@ -275,7 +275,7 @@ test.describe('Card file attachments', () => {
 
 		// The attachment row appears with the filename.
 		const row = page.locator('.card-modal__link-row', { hasText: 'ui-upload.txt' })
-		await expect(row).toHaveCount(1, { timeout: 8000 })
+		await expect(row).toHaveCount(1)
 
 		// The download link points at the attachment endpoint.
 		const href = await row.locator('a.card-modal__link').getAttribute('href')
@@ -300,19 +300,19 @@ test.describe('Card file attachments', () => {
 		try {
 			await ncLogin(page)
 			await page.goto(`${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`)
-			await page.waitForSelector('.card-modal', { timeout: 10_000 })
+			await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 			// The copy-not-link semantics are stated in the section itself, not
 			// left to the code or to whoever opens the dialog.
 			await expect(page.locator('.card-modal__attachment-hint')).toContainText('copy')
 
 			await page.locator('.card-modal__attachment-from-files').click()
-			await expect(page.locator('.file-picker')).toBeVisible({ timeout: 10_000 })
+			await expect(page.locator('.file-picker')).toBeVisible()
 
 			// Narrow the list to the seeded file, select it, confirm.
 			await page.locator('.file-picker__filter-input input').fill(name)
 			const pickerRow = page.locator('[data-testid="file-list-row"]', { hasText: name })
-			await expect(pickerRow).toHaveCount(1, { timeout: 10_000 })
+			await expect(pickerRow).toHaveCount(1)
 			await pickerRow.click()
 			await page.getByRole('button', { name: 'Attach a copy' }).click()
 
@@ -361,19 +361,19 @@ test.describe('Card file attachments', () => {
 				}))
 
 			await page.goto(`${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`)
-			await page.waitForSelector('.card-modal', { timeout: 10_000 })
+			await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 			await page.locator('.card-modal__attachment-from-files').click()
-			await expect(page.locator('.file-picker')).toBeVisible({ timeout: 10_000 })
+			await expect(page.locator('.file-picker')).toBeVisible()
 			await page.locator('.file-picker__filter-input input').fill(name)
 			const pickerRow = page.locator('[data-testid="file-list-row"]', { hasText: name })
-			await expect(pickerRow).toHaveCount(1, { timeout: 10_000 })
+			await expect(pickerRow).toHaveCount(1)
 			await pickerRow.click()
 			await page.getByRole('button', { name: 'Attach a copy' }).click()
 
 			// The server's own sentence, not "Failed to attach the file."
 			const err = page.locator('.card-modal__save-error')
-			await expect(err).toHaveText(serverMessage, { timeout: 10_000 })
+			await expect(err).toHaveText(serverMessage)
 
 			// ...and nothing was attached.
 			await expect(page.locator('.card-modal__link-row', { hasText: name })).toHaveCount(0)
@@ -414,7 +414,7 @@ test.describe('Card file attachments', () => {
 				route.fulfill({ status: 429, contentType: 'application/json', body: '' }))
 
 			await page.goto(`${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`)
-			await page.waitForSelector('.card-modal', { timeout: 10_000 })
+			await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 			// (a) Upload button.
 			await page.setInputFiles('.card-modal__file-input', {
@@ -422,19 +422,19 @@ test.describe('Card file attachments', () => {
 				mimeType: 'text/plain',
 				buffer: Buffer.from('nope'),
 			})
-			await expect(err).toHaveText(RATE_LIMIT_MESSAGE, { timeout: 10_000 })
+			await expect(err).toHaveText(RATE_LIMIT_MESSAGE)
 			await expect(page.locator('.card-modal__link-row', { hasText: 'rate-limited.txt' })).toHaveCount(0)
 
 			// (b) Choose from Files — same cap, same endpoint family, same advice.
 			await page.locator('.card-modal__attachment-from-files').click()
-			await expect(page.locator('.file-picker')).toBeVisible({ timeout: 10_000 })
+			await expect(page.locator('.file-picker')).toBeVisible()
 			await page.locator('.file-picker__filter-input input').fill(name)
 			const pickerRow = page.locator('[data-testid="file-list-row"]', { hasText: name })
-			await expect(pickerRow).toHaveCount(1, { timeout: 10_000 })
+			await expect(pickerRow).toHaveCount(1)
 			await pickerRow.click()
 			await page.getByRole('button', { name: 'Attach a copy' }).click()
 
-			await expect(err).toHaveText(RATE_LIMIT_MESSAGE, { timeout: 10_000 })
+			await expect(err).toHaveText(RATE_LIMIT_MESSAGE)
 			await expect(page.locator('.card-modal__link-row', { hasText: name })).toHaveCount(0)
 		} finally {
 			await deleteUserFile(name)
@@ -449,7 +449,7 @@ test.describe('Card file attachments', () => {
 		await ncLogin(page)
 		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`
 		await page.goto(cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		await page.setInputFiles('.card-modal__file-input', {
 			name: 'dated.txt',
@@ -458,7 +458,7 @@ test.describe('Card file attachments', () => {
 		})
 
 		const row = page.locator('.card-modal__link-row', { hasText: 'dated.txt' })
-		await expect(row).toHaveCount(1, { timeout: 8000 })
+		await expect(row).toHaveCount(1)
 
 		// (a) The row itself now answers "when": a machine-readable <time> stamp
 		// beside a human relative label, and the uploader's name.
@@ -475,7 +475,7 @@ test.describe('Card file attachments', () => {
 		const discussionTab = page.locator('.card-modal__discussion-tab', { hasText: 'Discussion' })
 		await activityTab.click()
 		await expect(page.locator('.card-modal__activity-row', { hasText: 'attached dated.txt' }))
-			.toHaveCount(1, { timeout: 8000 })
+			.toHaveCount(1)
 
 		// ...and so does the removal - the case with no other trace, since the row
 		// and the bytes are both gone.
@@ -486,7 +486,7 @@ test.describe('Card file attachments', () => {
 		await discussionTab.click()
 		await activityTab.click()
 		await expect(page.locator('.card-modal__activity-row', { hasText: 'removed the attachment dated.txt' }))
-			.toHaveCount(1, { timeout: 8000 })
+			.toHaveCount(1)
 	})
 
 	// Paste an image into the description editor (#3525): it uploads via the
@@ -499,14 +499,14 @@ test.describe('Card file attachments', () => {
 		await ncLogin(page)
 		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`
 		await page.goto(cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Enter description edit mode (empty description shows a placeholder button).
 		await page.click('.card-modal__desc-placeholder')
 
 		// Wait for the Tiptap editor — the ProseMirror contenteditable is the paste target.
 		const prose = page.locator('.card-modal__section .kanso-md-editor .ProseMirror')
-		await expect(prose).toBeVisible({ timeout: 6000 })
+		await expect(prose).toBeVisible()
 		await prose.focus()
 
 		// Dispatch a real paste event carrying a PNG File on the ProseMirror element.
@@ -523,12 +523,12 @@ test.describe('Card file attachments', () => {
 		// The upload completes and the image node renders as an <img> inside the
 		// WYSIWYG editor (ProseMirror serialises it as ![alt](src) in markdown).
 		// Give the async upload up to 10s, then verify the inline <img> exists in the editor.
-		await expect(prose.locator('img')).toHaveCount(1, { timeout: 10_000 })
+		await expect(prose.locator('img')).toHaveCount(1)
 
 		// Save, then the rendered description shows the same-origin inline <img>.
 		await page.locator('.card-modal__desc-actions button', { hasText: 'Save' }).click()
 		const img = page.locator('.card-modal__desc-rendered img')
-		await expect(img).toHaveCount(1, { timeout: 8000 })
+		await expect(img).toHaveCount(1)
 		const src = await img.first().getAttribute('src')
 		expect(src).toContain(`/api/cards/${cardId}/attachments/`)
 		expect(src).toContain('/inline')

@@ -21,13 +21,13 @@ test.describe('Nav-footer help links', () => {
 
 	test('Help menu exposes issue + MCP links pointing at the exact URLs in a new tab', async ({ page }) => {
 		const nav = page.locator('.app-navigation, [class*="app-navigation"]').first()
-		await expect(nav).toBeVisible({ timeout: 10_000 })
+		await expect(nav).toBeVisible()
 
 		// The footer Help trigger is present regardless of which board/view is open.
 		// The footer now contains both a Settings button and the Help actions menu;
 		// target the Help trigger by its aria-label to avoid selecting the Settings gear.
 		const helpTrigger = page.locator('.app-nav__footer button[aria-label="Help"]')
-		await expect(helpTrigger).toBeVisible({ timeout: 10_000 })
+		await expect(helpTrigger).toBeVisible()
 		await helpTrigger.click()
 
 		// NcActionLink renders a real <a>; data-test lands on its <li> wrapper.

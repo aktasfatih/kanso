@@ -151,7 +151,7 @@ test.describe('Personal reminders (remind me)', () => {
 		const errors = collectConsoleErrors(page)
 
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// Open the card overflow menu and pick the preset.
 		await page.locator('.card-modal__actions-menu button').first().click()
@@ -159,7 +159,7 @@ test.describe('Personal reminders (remind me)', () => {
 
 		// A reminder chip appears in the header region.
 		const chip = page.locator('.card-modal__reminder-chip')
-		await expect(chip.first()).toBeVisible({ timeout: 6000 })
+		await expect(chip.first()).toBeVisible()
 
 		// Cancel it via the chip's × button.
 		await chip.first().locator('.card-modal__reminder-cancel').click()

@@ -62,9 +62,9 @@ test.describe('Review-type stage gating', () => {
 		// The QA chip should render distinctly gated in the modal.
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 12_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 		const gatedChip = page.locator('.card-modal__review-pill--gated')
-		await expect(gatedChip).toBeVisible({ timeout: 8_000 })
+		await expect(gatedChip).toBeVisible()
 		await expect(gatedChip.locator('.card-modal__review-type-badge')).toContainText('QA')
 
 		// Approve the Code review → QA un-gates and its deferred notification fires.
@@ -80,7 +80,7 @@ test.describe('Review-type stage gating', () => {
 
 		// The gated chip is gone in the UI after reload.
 		await page.reload()
-		await page.waitForSelector('.card-modal', { timeout: 12_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 		await expect(page.locator('.card-modal__review-pill--gated')).toHaveCount(0, { timeout: 8_000 })
 	})
 })

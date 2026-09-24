@@ -53,7 +53,7 @@ test.describe('Compact density (#3415)', () => {
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const firstTile = page.locator('.card-tile').first()
-		await expect(firstTile).toBeVisible({ timeout: 8_000 })
+		await expect(firstTile).toBeVisible()
 
 		// Comfortable (default): no compact class.
 		await expect(firstTile).not.toHaveClass(/card-tile--compact/)
@@ -86,7 +86,7 @@ test.describe('Compact density (#3415)', () => {
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		const cardList = page.locator('.stack-column__cards').first()
-		await expect(cardList).toBeVisible({ timeout: 8_000 })
+		await expect(cardList).toBeVisible()
 
 		// Scroll the column well down so we're inside the virtualized window
 		// (not at the top). A stale estimate/size-cache on the flip would jump
@@ -111,7 +111,7 @@ test.describe('Compact density (#3415)', () => {
 		const afterCount = await page.locator('.card-tile-wrap').count()
 		expect(afterCount).toBeLessThan(TOTAL_CARDS)
 		expect(afterCount).toBeGreaterThan(0)
-		await expect(page.locator('.card-tile-wrap').first()).toBeVisible({ timeout: 6_000 })
+		await expect(page.locator('.card-tile-wrap').first()).toBeVisible()
 
 		const scrollAfter = await cardList.evaluate((el) => el.scrollTop)
 		// The compact re-measure shrinks total height, so scrollTop can settle a

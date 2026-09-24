@@ -5,6 +5,7 @@ import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { translate as t } from '@nextcloud/l10n'
 import { toMyCardsFeed, toRecentlyDoneFeed } from './myCardsFeed.js'
+import { toBoundedPage } from './boundedList.js'
 
 const url = (path) => generateUrl('/apps/kanso' + path)
 
@@ -218,12 +219,19 @@ export const unassignLabel = (cardId, labelId) =>
 
 // Assignees
 // The participants payload is capped server-side. `q` (optional) filters by
-// display name / uid server-side for boards shared with large groups; today's
-// callers pass no q and receive the capped full list unchanged.
+// display name / uid server-side, which is the only way to reach somebody the
+// cap sheds on a board shared with a large group.
+//
+// The body stays a plain array (every other API client parses it that way); the
+// two facts about the bound ride in headers. Resolving to {items, truncated,
+// limit} rather than the bare array is what lets the picker say "showing the
+// first N" instead of presenting a truncated list as if it were everyone
+// (#10704). `truncated` is false unless the server positively said otherwise,
+// so an older server (no headers) degrades to "no claim made", not a false one.
 export const fetchParticipants = (boardId, q) =>
 	axios
 		.get(url(`/api/boards/${boardId}/participants`), q ? { params: { q } } : undefined)
-		.then((r) => r.data)
+		.then((r) => toBoundedPage(r.data, r.headers))
 
 export const assignUser = (cardId, userId) =>
 	axios.put(url(`/api/cards/${cardId}/assignees/${userId}`)).then((r) => r.data)
@@ -441,6 +449,19 @@ export const deleteCardAttachment = (cardId, attachmentId) =>
 // Content-Disposition: attachment). Board-READ gated server-side.
 export const cardAttachmentUrl = (cardId, attachmentId) =>
 	url(`/api/cards/${cardId}/attachments/${attachmentId}`)
+
+// Every attachment on a BOARD the viewer may see (#10670) - the board-wide
+// "All attachments" listing. Metadata only, hard-capped server-side: answers
+// {items, total, capped}, each item carrying the owning card's id and title.
+// Downloads still go through cardAttachmentUrl() above - there is no separate
+// board-scoped byte path.
+// ONE page of it: the server takes limit/offset and clamps limit to its own
+// BOARD_PAGE_LIMIT, so a board with more files than one page holds is reached
+// by asking for the next offset - not by raising the cap (#10738).
+export const fetchBoardAttachments = (boardId, { limit, offset } = {}) =>
+	axios.get(url(`/api/boards/${boardId}/attachments`), {
+		params: { limit, offset },
+	}).then((r) => r.data)
 
 // INLINE image URL (#3525). Server serves Content-Disposition: inline ONLY for
 // the raster-image allow-list (png/jpeg/gif/webp), everything else 404s. Used

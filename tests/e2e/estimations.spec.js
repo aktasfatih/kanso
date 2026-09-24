@@ -35,7 +35,11 @@ test.describe('Card estimations (#3443)', () => {
 	})
 
 	test('a card estimate must belong to the board scale', async () => {
-		// Board is fibonacci from the earlier test. A valid token sticks…
+		// Own the scale this validates against: a retry re-runs only this test, so
+		// the switch made by the earlier one never happened.
+		await api.patch(`/boards/${state.boardId}`, { estimateScale: 'fibonacci' })
+
+		// A valid token sticks…
 		await api.patch(`/cards/${state.cardId}`, { estimate: '8' })
 		expect((await api.get(`/cards/${state.cardId}`)).estimate).toBe('8')
 
@@ -57,7 +61,7 @@ test.describe('Card estimations (#3443)', () => {
 
 		// The estimate pill renders because the board scale is not 'none'.
 		const estimatePill = page.locator('.card-modal__attrbar button.card-modal__pill', { hasText: 'Estimate' })
-		await expect(estimatePill).toBeVisible({ timeout: 8_000 })
+		await expect(estimatePill).toBeVisible()
 
 		// Open the estimate popover and click the "8" token (exact text so it
 		// doesn't match "13"/"21").
@@ -67,12 +71,12 @@ test.describe('Card estimations (#3443)', () => {
 
 		// The pill now reflects the chosen estimate.
 		await expect(page.locator('.card-modal__attrbar button.card-modal__pill', { hasText: 'Estimate: 8' }))
-			.toBeVisible({ timeout: 6_000 })
+			.toBeVisible()
 
 		// Close the modal → the tile shows the estimate chip.
 		await page.keyboard.press('Escape')
 		const tile = page.locator('.card-tile', { hasText: state.title })
-		await expect(tile.locator('.card-tile__estimate')).toHaveText('8', { timeout: 8_000 })
+		await expect(tile.locator('.card-tile__estimate')).toHaveText('8')
 	})
 
 	test('switching scale warns and clears estimates that no longer fit', async ({ page }) => {
@@ -88,18 +92,18 @@ test.describe('Card estimations (#3443)', () => {
 		await page.getByRole('tab', { name: /workflow/i }).click()
 
 		const select = page.locator(`#estimate-scale-${state.boardId}`)
-		await expect(select).toBeVisible({ timeout: 8_000 })
+		await expect(select).toBeVisible()
 		await select.selectOption('tshirt')
 
 		// The confirmation names the affected count; confirm the destructive change.
 		await expect(page.getByText(/does not fit the new scale and will be cleared/i))
-			.toBeVisible({ timeout: 8_000 })
+			.toBeVisible()
 		await page.getByRole('button', { name: 'Change and clear' }).click()
 
-		await expect.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.estimateScale, { timeout: 8_000 })
+		await expect.poll(async () => (await api.get(`/boards/${state.boardId}`)).board.estimateScale)
 			.toBe('tshirt')
 		// The off-scale '8' was cleared server-side by the scale change.
-		await expect.poll(async () => (await api.get(`/cards/${state.cardId}`)).estimate, { timeout: 8_000 })
+		await expect.poll(async () => (await api.get(`/cards/${state.cardId}`)).estimate)
 			.toBeNull()
 	})
 
@@ -115,15 +119,15 @@ test.describe('Card estimations (#3443)', () => {
 		await page.getByRole('tab', { name: /workflow/i }).click()
 
 		const select = page.locator(`#estimate-scale-${state.boardId}`)
-		await expect(select).toBeVisible({ timeout: 8_000 })
+		await expect(select).toBeVisible()
 		// 'M' does not fit fibonacci → the confirmation appears; cancel it.
 		await select.selectOption('fibonacci')
 		await expect(page.getByText(/does not fit the new scale and will be cleared/i))
-			.toBeVisible({ timeout: 8_000 })
+			.toBeVisible()
 		await page.getByRole('button', { name: 'Cancel' }).click()
 
 		// Nothing changed: scale still tshirt, estimate still 'M', select reverted.
-		await expect(select).toHaveValue('tshirt', { timeout: 8_000 })
+		await expect(select).toHaveValue('tshirt')
 		expect((await api.get(`/boards/${state.boardId}`)).board.estimateScale).toBe('tshirt')
 		expect((await api.get(`/cards/${state.cardId}`)).estimate).toBe('M')
 	})
@@ -183,7 +187,7 @@ test.describe('Estimate sorting & filtering', () => {
 		await expect.poll(async () => {
 			const t = (await page.locator('.card-tile__title').allTextContents()).map((s) => s.trim())
 			return t.indexOf('EstBig') < t.indexOf('EstSmall') && t.indexOf('EstSmall') < t.indexOf('EstNone')
-		}, { timeout: 8_000 }).toBe(true)
+		}).toBe(true)
 
 		// Reopening the menu shows the active mode as selected (not blank).
 		await page.locator('.board-view__display-menu button').first().click()
@@ -197,7 +201,7 @@ test.describe('Estimate sorting & filtering', () => {
 		await expect.poll(async () => {
 			const t = (await page.locator('.card-tile__title').allTextContents()).map((s) => s.trim())
 			return t.indexOf('EstSmall') < t.indexOf('EstBig') && t.indexOf('EstBig') < t.indexOf('EstNone')
-		}, { timeout: 8_000 }).toBe(true)
+		}).toBe(true)
 	})
 
 	test('filter by estimate token, and by "Unestimated"', async ({ page }) => {

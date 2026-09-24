@@ -17,30 +17,30 @@ test.describe('Left Navigation App Shell', () => {
 	test('left nav shows Boards and three separate My Work items', async ({ page }) => {
 		// NcAppNavigation renders as nav with list items
 		const nav = page.locator('.app-navigation, [class*="app-navigation"]').first()
-		await expect(nav).toBeVisible({ timeout: 10_000 })
+		await expect(nav).toBeVisible()
 
 		// The personal surfaces are three distinct nav entries (#3610): My Tasks,
 		// My Reviews, and Inbox. The unified "My Work" hub entry is retired from
 		// the nav (its route still resolves for deep links).
-		await expect(page.getByRole('link', { name: 'Boards' })).toBeVisible({ timeout: 8_000 })
-		await expect(page.getByRole('link', { name: 'My Tasks' })).toBeVisible({ timeout: 8_000 })
-		await expect(page.getByRole('link', { name: 'My Reviews' })).toBeVisible({ timeout: 8_000 })
-		await expect(page.getByRole('link', { name: 'Inbox' })).toBeVisible({ timeout: 8_000 })
+		await expect(page.getByRole('link', { name: 'Boards' })).toBeVisible()
+		await expect(page.getByRole('link', { name: 'My Tasks' })).toBeVisible()
+		await expect(page.getByRole('link', { name: 'My Reviews' })).toBeVisible()
+		await expect(page.getByRole('link', { name: 'Inbox' })).toBeVisible()
 		await expect(page.getByRole('link', { name: 'My Work', exact: true })).toHaveCount(0)
 	})
 
 	test('the three My Work nav items route to their standalone views', async ({ page }) => {
 		await page.getByRole('link', { name: 'My Tasks' }).click()
 		await expect(page).toHaveURL(/#\/my-tasks/, { timeout: 10_000 })
-		await expect(page.locator('.my-cards-view')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.my-cards-view')).toBeVisible()
 
 		await page.getByRole('link', { name: 'My Reviews' }).click()
 		await expect(page).toHaveURL(/#\/reviews/, { timeout: 10_000 })
-		await expect(page.locator('.my-reviews-view')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.my-reviews-view')).toBeVisible()
 
 		await page.getByRole('link', { name: 'Inbox' }).click()
 		await expect(page).toHaveURL(/#\/inbox/, { timeout: 10_000 })
-		await expect(page.locator('.inbox-view')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.inbox-view')).toBeVisible()
 	})
 
 	test('clicking "Boards" from a personal view navigates back to #/', async ({ page }) => {
@@ -55,6 +55,6 @@ test.describe('Left Navigation App Shell', () => {
 		await expect(page).toHaveURL(/#\/$|#\/$/, { timeout: 10_000 })
 
 		// BoardList view should render (My Boards heading or board grid)
-		await expect(page.getByText('My Boards').first()).toBeVisible({ timeout: 10_000 })
+		await expect(page.getByText('My Boards').first()).toBeVisible()
 	})
 })

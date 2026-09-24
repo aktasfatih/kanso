@@ -12,6 +12,7 @@ use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardAssignee;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
@@ -246,6 +247,106 @@ class AssigneeServiceTest extends TestCase {
 			->willReturn($carolChange);
 
 		$service->assign(9, 'carol', 'alice');
+	}
+
+	/**
+	 * Card #10603 - a card takes a SECOND assignee, and the first one stays.
+	 *
+	 * Nothing anywhere asserted this: the fixed-return mocks in the tests above
+	 * can only ever answer for one assignment, so a `assign()` rewritten to
+	 * replace rather than append would sail through all of them. Here the mapper
+	 * is backed by an in-memory set instead, so "assign bob, then carol" is
+	 * answered with the accumulated state - and a delete-first implementation
+	 * fails on the final assertion rather than passing silently.
+	 */
+	public function testAssignAppendsASecondAssigneeAndKeepsTheFirst(): void {
+		$board = $this->board();
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->method('getPermissions')
+			->willReturn(PermissionService::PERMISSION_READ);
+
+		/** @var array<int, list<string>> $assigned */
+		$assigned = [];
+		// A closure with a BY-REFERENCE capture, not an arrow function: an arrow
+		// fn would snapshot the (empty) array at creation and answer "no" forever.
+		$this->cardAssigneeMapper->method('exists')
+			->willReturnCallback(function (int $cardId, string $uid) use (&$assigned): bool {
+				return in_array($uid, $assigned[$cardId] ?? [], true);
+			});
+		$this->cardAssigneeMapper->method('insertAssignment')
+			->willReturnCallback(function (int $cardId, string $uid) use (&$assigned): CardAssignee {
+				$assigned[$cardId][] = $uid;
+				$row = new CardAssignee();
+				$row->setCardId($cardId);
+				$row->setParticipant($uid);
+				$row->setType(CardAssignee::TYPE_USER);
+				return $row;
+			});
+		// The assign path must never remove an existing assignment.
+		$this->cardAssigneeMapper->expects(self::never())->method('deleteAssignment');
+
+		$change = new Change();
+		$change->setId(101);
+		// One change row (and one bell notification) per NEW assignee, not per call.
+		$this->changeNotifier->expects(self::exactly(2))->method('notify')->willReturn($change);
+		$this->notificationService->expects(self::exactly(2))->method('notifyCardAssigned');
+
+		$this->service->assign(9, 'bob', 'alice');
+		$this->service->assign(9, 'carol', 'alice');
+		// …and re-assigning one of them changes nothing (idempotent, no third row).
+		$this->service->assign(9, 'bob', 'alice');
+
+		self::assertSame(['bob', 'carol'], $assigned[9]);
+	}
+
+	/**
+	 * …and removing one of two assignees leaves the other on the card (#10603).
+	 * Same in-memory mapper, so the surviving assignment is real state rather
+	 * than a mocked return value.
+	 */
+	public function testUnassignRemovesOnlyTheNamedAssignee(): void {
+		$board = $this->board();
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->method('getPermissions')
+			->willReturn(PermissionService::PERMISSION_READ);
+
+		/** @var array<int, list<string>> $assigned */
+		$assigned = [];
+		// A closure with a BY-REFERENCE capture, not an arrow function: an arrow
+		// fn would snapshot the (empty) array at creation and answer "no" forever.
+		$this->cardAssigneeMapper->method('exists')
+			->willReturnCallback(function (int $cardId, string $uid) use (&$assigned): bool {
+				return in_array($uid, $assigned[$cardId] ?? [], true);
+			});
+		$this->cardAssigneeMapper->method('insertAssignment')
+			->willReturnCallback(function (int $cardId, string $uid) use (&$assigned): CardAssignee {
+				$assigned[$cardId][] = $uid;
+				$row = new CardAssignee();
+				$row->setCardId($cardId);
+				$row->setParticipant($uid);
+				$row->setType(CardAssignee::TYPE_USER);
+				return $row;
+			});
+		$this->cardAssigneeMapper->method('deleteAssignment')
+			->willReturnCallback(function (int $cardId, string $uid) use (&$assigned): int {
+				$before = count($assigned[$cardId] ?? []);
+				$assigned[$cardId] = array_values(array_filter(
+					$assigned[$cardId] ?? [],
+					static fn (string $u): bool => $u !== $uid,
+				));
+				return $before - count($assigned[$cardId]);
+			});
+		$change = new Change();
+		$change->setId(102);
+		$this->changeNotifier->method('notify')->willReturn($change);
+
+		$this->service->assign(9, 'bob', 'alice');
+		$this->service->assign(9, 'carol', 'alice');
+		$this->service->unassign(9, 'bob', 'alice');
+
+		self::assertSame(['carol'], $assigned[9]);
 	}
 
 	public function testAssignRejectsDeletedCard(): void {

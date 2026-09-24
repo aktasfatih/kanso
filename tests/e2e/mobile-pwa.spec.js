@@ -114,13 +114,13 @@ test('the command palette is reachable by touch alone', async ({ page }) => {
 	// and costs the (narrow) header no width.
 	await page.getByRole('button', { name: 'More board actions' }).tap()
 	const paletteItem = page.getByRole('menuitem', { name: 'Open command palette' })
-	await expect(paletteItem).toBeVisible({ timeout: 10_000 })
+	await expect(paletteItem).toBeVisible()
 	await paletteItem.tap()
 
 	// The palette itself was already touch-usable (its results carry @click and
 	// mobile.css enforces 44px targets) — only the way in was missing.
 	const palette = page.locator('.command-palette')
-	await expect(palette).toBeVisible({ timeout: 10_000 })
+	await expect(palette).toBeVisible()
 	await expect(palette.locator('.command-palette__input')).toBeVisible()
 })
 
@@ -166,7 +166,7 @@ async function waitForController(page, attempts = 3) {
 		const got = await page.waitForFunction(
 			() => !!navigator.serviceWorker.controller,
 			null,
-			{ timeout: 10_000 },
+			{ timeout: 15_000 },
 		).then(() => true).catch(() => false)
 		if (got) return true
 	}
@@ -543,7 +543,7 @@ test.describe('the description editor on a phone', () => {
 
 		const editor = page.locator(EDITOR)
 		await expect(editor).toBeVisible({ timeout: 15_000 })
-		await expect(editor.locator('.ProseMirror')).toBeVisible({ timeout: 10_000 })
+		await expect(editor.locator('.ProseMirror')).toBeVisible()
 
 		// The scroll lands a couple of frames after the editor mounts (the toolbar
 		// paints only once Tiptap is constructed, and it must run AFTER Tiptap's own
@@ -863,7 +863,7 @@ test.describe('the bulk action bar at a phone width', () => {
 
 		await act(page.getByRole('button', { name: moreButton }))
 		const selectItem = page.getByRole('menuitem', { name: 'Select multiple cards' })
-		await expect(selectItem).toBeVisible({ timeout: 10_000 })
+		await expect(selectItem).toBeVisible()
 		await act(selectItem)
 
 		await act(page.locator('.card-tile', { hasText: 'Bulk card one' }))
@@ -923,8 +923,8 @@ test.describe('the bulk action bar at a phone width', () => {
 			// button-only "Move to…" picker below.
 			await page.getByRole('button', { name: 'More actions' }).tap()
 			const more = page.getByRole('dialog', { name: 'More actions' })
-			await expect(more.getByRole('button', { name: 'Remove label Bug' })).toBeVisible({ timeout: 10_000 })
-			await expect(more.getByRole('button', { name: /^Assign to / }).first()).toBeVisible({ timeout: 10_000 })
+			await expect(more.getByRole('button', { name: 'Remove label Bug' })).toBeVisible()
+			await expect(more.getByRole('button', { name: /^Assign to / }).first()).toBeVisible()
 			await expect(more.getByRole('button', { name: 'Clear due date' })).toBeVisible()
 			await expect(more.getByRole('button', { name: 'Archive selected' })).toBeVisible()
 			await expect(more.getByRole('button', { name: 'Delete selected' })).toBeVisible()
@@ -935,7 +935,7 @@ test.describe('the bulk action bar at a phone width', () => {
 			// used to sit at x = -71 and x = 431 both respond to a real tap now.
 			await page.getByRole('button', { name: 'Move to…' }).tap()
 			const moveMenu = page.getByRole('menu')
-			await expect(moveMenu.getByRole('menuitem', { name: 'Done' })).toBeVisible({ timeout: 10_000 })
+			await expect(moveMenu.getByRole('menuitem', { name: 'Done' })).toBeVisible()
 			await moveMenu.getByRole('menuitem', { name: 'Done' }).tap()
 			await expect
 				.poll(async () => {

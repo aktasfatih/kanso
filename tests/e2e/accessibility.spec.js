@@ -25,7 +25,7 @@ test.describe('Accessibility smoke', () => {
 	test('board + card modal expose an accessible tree with an aria-live region', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
-		await page.waitForSelector('.board-view', { timeout: 10_000 })
+		await page.waitForSelector('.board-view', { timeout: 15_000 })
 
 		// The single polite aria-live region for own-action announcements exists.
 		await expect(page.locator('.board-view [aria-live="polite"]')).toHaveCount(1)
@@ -46,7 +46,7 @@ test.describe('Accessibility smoke', () => {
 
 		// Open the card modal → it must be a dialog with an accessible name.
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 		const dialog = page.getByRole('dialog').first()
 		await expect(dialog).toBeVisible()
 		// The modal mounts before the card detail fetch resolves; snapshotting

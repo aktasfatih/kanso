@@ -17,6 +17,8 @@ use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\StreamResponse;
 use OCP\Files\NotFoundException;
 use OCP\IRequest;
+use OCP\IUser;
+use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -32,10 +34,15 @@ use PHPUnit\Framework\TestCase;
  */
 class BackupAdminControllerTest extends TestCase {
 	/** The actions the controller exposes. Adding one is a conscious change. */
-	private const ACTIONS = ['index', 'update', 'run', 'files', 'download'];
+	private const ACTIONS = ['index', 'update', 'run', 'files', 'download', 'delete'];
 
-	private function controller(BackupService $service): BackupAdminController {
-		return new BackupAdminController('kanso', $this->createMock(IRequest::class), $service);
+	private function controller(BackupService $service, string $uid = 'alice'): BackupAdminController {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($uid);
+		$session = $this->createMock(IUserSession::class);
+		$session->method('getUser')->willReturn($user);
+
+		return new BackupAdminController('kanso', $this->createMock(IRequest::class), $service, $session);
 	}
 
 	public function testEveryActionIsAdminOnly(): void {
@@ -135,6 +142,85 @@ class BackupAdminControllerTest extends TestCase {
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertSame(['destination' => 'appdata', 'files' => []], $response->getData());
+	}
+
+	/**
+	 * Nextcloud's SecurityMiddleware decides "may this account call this action"
+	 * from exactly two inputs: the #[NoAdminRequired] attribute on the method or
+	 * its class, and whether the session user is in the admin group. Neither is
+	 * reachable from a unit test - there is no app container here - so this
+	 * reproduces that decision over the REAL controller's real attributes and
+	 * asserts the answer for a non-admin caller.
+	 *
+	 * It is not decorative: adding #[NoAdminRequired] to delete() - the one edit
+	 * that would actually open the endpoint up - flips this to "allowed" and
+	 * fails the test. And delete() is the action that most needs it: it destroys
+	 * an archive that, under the app-data destination, exists nowhere else.
+	 */
+	public function testDeleteIsRefusedToANonAdmin(): void {
+		$class = new \ReflectionClass(BackupAdminController::class);
+		// The middleware's own rule, in one line.
+		$statusFor = static function (string $action, bool $callerIsAdmin) use ($class): int {
+			$open = $class->getMethod($action)->getAttributes(NoAdminRequired::class) !== []
+				|| $class->getAttributes(NoAdminRequired::class) !== [];
+			return ($open || $callerIsAdmin) ? Http::STATUS_OK : Http::STATUS_FORBIDDEN;
+		};
+
+		self::assertSame(
+			Http::STATUS_FORBIDDEN,
+			$statusFor('delete', false),
+			'a non-admin must never be able to delete a stored backup',
+		);
+		// ...and the same gate as the download it mirrors, so the two can never
+		// drift apart.
+		self::assertSame(Http::STATUS_FORBIDDEN, $statusFor('download', false));
+		// The control: an admin is not refused, so the assertion above is about
+		// the gate rather than about everything being refused.
+		self::assertSame(Http::STATUS_OK, $statusFor('delete', true));
+	}
+
+	public function testDeleteOfAnUnknownOrHostileNameIs404(): void {
+		// deleteBackup() raises the same NotFoundException for a name that is not
+		// an allow-listed Kanso backup name as for one with no file behind it, so
+		// the endpoint never confirms which names are even well-formed.
+		$service = $this->createMock(BackupService::class);
+		$service->method('deleteBackup')->willThrowException(new NotFoundException('No such backup'));
+
+		$response = $this->controller($service)->delete('../../../../etc/passwd');
+
+		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+	}
+
+	public function testDeleteRemovesExactlyTheNamedBackupAndRecordsWhoAskedForIt(): void {
+		// The audit line is the only trace a stored archive ever stopped
+		// existing - under app data the file is in nobody's Files - so it has to
+		// carry the administrator, not just the filename.
+		$service = $this->createMock(BackupService::class);
+		$service->expects(self::once())
+			->method('deleteBackup')
+			->with('kanso-board-7-20260804-153000.zip', 'alice');
+
+		$response = $this->controller($service, 'alice')->delete('kanso-board-7-20260804-153000.zip');
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+	}
+
+	public function testDeleteDoesNotReportAStorageFailureAsADeletedBackup(): void {
+		// The same distinction files() draws: a destination that could not be
+		// reached is a server error, never "deleted". Answering 200 here would
+		// tell an admin their archive is gone while it sits intact behind a dead
+		// mount - and the body carries the reason, because a bare 500 leaves the
+		// one person who can fix it without the sentence naming what broke.
+		$service = $this->createMock(BackupService::class);
+		$service->method('deleteBackup')
+			->willThrowException(new \RuntimeException('Backup folder does not exist: /kanso-bakcups'));
+
+		$response = $this->controller($service)->delete('kanso-board-7-20260804-153000.zip');
+
+		self::assertSame(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+		$data = (array)$response->getData();
+		self::assertArrayNotHasKey('deleted', $data);
+		self::assertStringContainsString('/kanso-bakcups', (string)($data['message'] ?? ''));
 	}
 
 	public function testDownloadStreamsWithoutAnEtag(): void {

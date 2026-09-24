@@ -66,9 +66,9 @@ test.describe('Column actions and card drag are editors only (#9897)', () => {
 			await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
 			// Kanban — the columns and the card render for them…
-			await expect(page.locator('.stack-column')).toHaveCount(2, { timeout: 10_000 })
+			await expect(page.locator('.stack-column')).toHaveCount(2)
 			await expect(page.locator('.card-tile', { hasText: 'Read-only card' }))
-				.toBeVisible({ timeout: 8_000 })
+				.toBeVisible()
 			// …but the whole actions menu is gone (all six callbacks are null), so
 			// there is no "Delete column" entry to reach and no rename affordance.
 			await expect(page.locator('.stack-column__actions')).toHaveCount(0)
@@ -89,9 +89,9 @@ test.describe('Column actions and card drag are editors only (#9897)', () => {
 
 			// List view — the row renders, but it is not a drag source either.
 			await setDisplay(page, 'List')
-			await page.waitForSelector('.board-list-group', { timeout: 10_000 })
+			await page.waitForSelector('.board-list-group', { timeout: 15_000 })
 			await expect(page.locator('.board-list-row', { hasText: 'Read-only card' }))
-				.toBeVisible({ timeout: 8_000 })
+				.toBeVisible()
 			await expect(page.locator('.board-list-row-wrap[draggable="true"]')).toHaveCount(0)
 			await expect(page.locator('.board-list-row--draggable')).toHaveCount(0)
 		} finally {
@@ -123,9 +123,9 @@ test.describe('Column actions and card drag stay available to editors (#9897)', 
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
 		// Kanban — the menu is there and still offers the destructive entry.
-		await expect(page.locator('.stack-column__actions')).toHaveCount(1, { timeout: 10_000 })
+		await expect(page.locator('.stack-column__actions')).toHaveCount(1)
 		await page.locator('.stack-column__actions button').first().click()
-		await expect(page.getByRole('button', { name: 'Delete column' })).toBeVisible({ timeout: 8_000 })
+		await expect(page.getByRole('button', { name: 'Delete column' })).toBeVisible()
 		// …and the bulk archive entry (#10430), which the viewer above does not get.
 		// One card in the column, so the entry names exactly that (#10438).
 		await expect(page.getByRole('button', { name: 'Archive 1 card' })).toBeVisible()
@@ -137,9 +137,9 @@ test.describe('Column actions and card drag stay available to editors (#9897)', 
 
 		// List view keeps its row drag.
 		await setDisplay(page, 'List')
-		await page.waitForSelector('.board-list-group', { timeout: 10_000 })
+		await page.waitForSelector('.board-list-group', { timeout: 15_000 })
 		await expect(page.locator('.board-list-row', { hasText: 'Editable card' }))
-			.toBeVisible({ timeout: 8_000 })
+			.toBeVisible()
 		await expect(page.locator('.board-list-row-wrap[draggable="true"]')).toHaveCount(1)
 	})
 })

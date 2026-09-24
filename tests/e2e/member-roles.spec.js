@@ -39,7 +39,7 @@ test.describe('Board member roles (internal/external)', () => {
 
 		// The peer entry renders with the role selector, defaulted internal.
 		const entry = page.locator('.sharing__entry', { hasText: peer.user })
-		await expect(entry).toBeVisible({ timeout: 8_000 })
+		await expect(entry).toBeVisible()
 		const select = entry.locator('[data-test="acl-role-select"]')
 		await expect(select).toBeVisible()
 		await expect(select).toHaveValue('internal')
@@ -57,6 +57,6 @@ test.describe('Board member roles (internal/external)', () => {
 		expect(acl.role).toBe('external')
 
 		// The selector reflects the persisted value after the cache refresh.
-		await expect(select).toHaveValue('external', { timeout: 8_000 })
+		await expect(select).toHaveValue('external')
 	})
 })

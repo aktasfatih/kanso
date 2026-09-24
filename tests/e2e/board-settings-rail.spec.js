@@ -29,7 +29,7 @@ test.describe('Board settings section rail', () => {
 
 		// The rail exposes a proper vertical tablist (holding only the section tabs).
 		const rail = page.locator('.bs-rail .bs-rail__tabs[role="tablist"]')
-		await expect(rail).toBeVisible({ timeout: 8_000 })
+		await expect(rail).toBeVisible()
 
 		// Click through the rail sections and assert the matching pane shows.
 		await page.getByRole('tab', { name: 'General' }).click()
@@ -79,7 +79,7 @@ test.describe('Board settings section rail', () => {
 
 		// Column automations starts expanded → its rule form is visible.
 		const header = page.getByRole('button', { name: /Column automations/i })
-		await expect(header).toBeVisible({ timeout: 8_000 })
+		await expect(header).toBeVisible()
 		await expect(header).toHaveAttribute('aria-expanded', 'true')
 		const roleSelect = page.locator(`#auto-role-${state.boardId}`)
 		await expect(roleSelect).toBeVisible()

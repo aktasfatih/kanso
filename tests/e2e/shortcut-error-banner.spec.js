@@ -69,7 +69,7 @@ test.describe('Shortcut error banner auto-clears on success (#10008)', () => {
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 		const tile = page.locator('.card-tile', { hasText: 'Banner card' })
-		await expect(tile).toBeVisible({ timeout: 10_000 })
+		await expect(tile).toBeVisible()
 		await page.keyboard.press('j')
 		await expect(tile).toBeFocused({ timeout: 5000 })
 		return tile

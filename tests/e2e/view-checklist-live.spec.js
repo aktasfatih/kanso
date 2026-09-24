@@ -167,7 +167,7 @@ test.describe('Cross-board feed invalidation, the missed paths (#9898)', () => {
 			await expect(page.locator('.card-modal__checklist-count')).toHaveText('2 / 2', { timeout: 15_000 })
 			await refetch
 
-			await expect(completeRow).toHaveCount(1, { timeout: 10_000 })
+			await expect(completeRow).toHaveCount(1)
 
 			// …and every bit of that happened in place, with the overlay still open.
 			await expect(page.locator('.card-modal-modal')).toBeVisible()

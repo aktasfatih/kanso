@@ -23,13 +23,13 @@ test.describe('Responsive board header', () => {
 		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
 		// One Display control; the old standalone view/sort menus are gone.
-		await expect(page.locator('.board-view__display-menu')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.board-view__display-menu')).toBeVisible()
 		await expect(page.locator('.board-view__view-menu')).toHaveCount(0)
 		await expect(page.locator('.board-view__sort-menu')).toHaveCount(0)
 
 		// It holds View + Sort (+ Group + Density).
 		await page.locator('.board-view__display-menu button').first().click()
-		await expect(page.getByRole('menuitemradio', { name: 'Timeline' })).toBeVisible({ timeout: 8_000 })
+		await expect(page.getByRole('menuitemradio', { name: 'Timeline' })).toBeVisible()
 		await expect(page.getByRole('menuitemradio', { name: 'Manual', exact: true })).toBeVisible()
 	})
 
@@ -50,6 +50,6 @@ test.describe('Responsive board header', () => {
 		// Display still drives the view: switch to List from it.
 		await display.click()
 		await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
-		await expect(page.locator('.board-list-table')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.board-list-table')).toBeVisible()
 	})
 })

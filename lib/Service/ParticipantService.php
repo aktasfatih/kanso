@@ -27,8 +27,12 @@ class ParticipantService {
 	 * so both member-facing pickers bound their payload the same way - a board
 	 * shared with a several-thousand-member group must never serialize every
 	 * member into the assignee picker.
+	 *
+	 * Public because the cap is not an implementation detail to the client: the
+	 * picker reports the number back to the user ("showing the first 25") rather
+	 * than hardcoding a copy of it that could drift from this one.
 	 */
-	private const RESULT_LIMIT = 25;
+	public const RESULT_LIMIT = 25;
 
 	public function __construct(
 		private BoardMapper $boardMapper,
@@ -63,6 +67,26 @@ class ParticipantService {
 	 * @throws NotPermittedException if the user may not read the board
 	 */
 	public function getParticipants(int $boardId, string $uid, ?string $q = null): array {
+		return $this->searchParticipants($boardId, $uid, $q)['participants'];
+	}
+
+	/**
+	 * The same bounded page as {@see getParticipants()}, plus the two facts the
+	 * caller needs to tell the user what they are looking at: the cap that was
+	 * applied, and whether it actually shed anyone.
+	 *
+	 * Without `capped` a client cannot tell a complete 25-person board from the
+	 * first 25 of a thousand, so it would have to either stay silent (the bug:
+	 * everyone past the cap is unreachable with nothing saying so) or hedge on
+	 * every board. With it, the picker shows its search and says the list is
+	 * partial exactly when it is.
+	 *
+	 * @param string|null $q optional case-insensitive filter over display name / uid
+	 * @return array{participants: list<array{uid: string, displayName: string}>, truncated: bool, limit: int}
+	 * @throws DoesNotExistException if the board does not exist or is deleted
+	 * @throws NotPermittedException if the user may not read the board
+	 */
+	public function searchParticipants(int $boardId, string $uid, ?string $q = null): array {
 		$board = $this->loadBoard($boardId);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
 
@@ -87,7 +111,17 @@ class ParticipantService {
 
 		$selected = $this->sortByDisplayName($direct);
 		if (count($selected) >= self::RESULT_LIMIT) {
-			return array_slice($selected, 0, self::RESULT_LIMIT);
+			// The cap is already full from direct members, so the group ACLs are
+			// deliberately NOT expanded here - that expansion is the cost the cap
+			// exists to avoid. That leaves "would a group have added anyone?"
+			// unknown, and unknown is reported as capped: over-reporting only
+			// offers a search that finds nothing new, while under-reporting would
+			// be the original bug (a truncated list presented as everyone).
+			return [
+				'participants' => array_slice($selected, 0, self::RESULT_LIMIT),
+				'truncated' => count($selected) > self::RESULT_LIMIT || $groupAcls !== [],
+				'limit' => self::RESULT_LIMIT,
+			];
 		}
 
 		// Fill the remaining slots from group members, skipping anyone already
@@ -104,10 +138,16 @@ class ParticipantService {
 			}
 		}
 
+		// Both tiers are fully known here, so this arm reports the cap exactly.
+		$truncated = count($selected) + count($group) > self::RESULT_LIMIT;
 		$remaining = self::RESULT_LIMIT - count($selected);
 		$group = array_slice($this->sortByDisplayName($group), 0, $remaining);
 
-		return array_merge($selected, $group);
+		return [
+			'participants' => array_merge($selected, $group),
+			'truncated' => $truncated,
+			'limit' => self::RESULT_LIMIT,
+		];
 	}
 
 	/**

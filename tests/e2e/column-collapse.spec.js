@@ -37,14 +37,14 @@ test.describe('Column collapse (#3677)', () => {
 		await page.waitForSelector('.stack-column__header', { timeout: 15_000 })
 
 		// Cards visible in the expanded state.
-		await expect(page.locator('.card-tile', { hasText: 'Alpha card' })).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.card-tile', { hasText: 'Alpha card' })).toBeVisible()
 
 		// Collapse via the header toggle button.
 		await page.locator('.stack-column__collapse-btn').first().click()
 
 		// The rail appears with the column title + card count; cards are hidden.
 		const rail = page.locator('.stack-column__rail')
-		await expect(rail).toBeVisible({ timeout: 6_000 })
+		await expect(rail).toBeVisible()
 		await expect(rail.locator('.stack-column__rail-title')).toHaveText('Foldable')
 		await expect(rail.locator('.stack-column__rail-count')).toHaveText('2')
 		await expect(page.locator('.card-tile', { hasText: 'Alpha card' })).toBeHidden({ timeout: 6_000 })
@@ -54,14 +54,14 @@ test.describe('Column collapse (#3677)', () => {
 		// Persisted per user: reload → still collapsed.
 		await page.reload()
 		await page.waitForSelector('.stack-column__rail', { timeout: 15_000 })
-		await expect(page.locator('.stack-column__rail')).toBeVisible({ timeout: 6_000 })
+		await expect(page.locator('.stack-column__rail')).toBeVisible()
 		await expect(page.locator('.card-tile', { hasText: 'Alpha card' })).toBeHidden({ timeout: 6_000 })
 
 		// Expand by clicking the rail → cards come back, rail gone.
 		await page.locator('.stack-column__rail').click()
 		await expect(page.locator('.stack-column__rail')).toHaveCount(0, { timeout: 6_000 })
-		await expect(page.locator('.card-tile', { hasText: 'Alpha card' })).toBeVisible({ timeout: 8_000 })
-		await expect(page.locator('.card-composer__input').first()).toBeVisible({ timeout: 6_000 })
+		await expect(page.locator('.card-tile', { hasText: 'Alpha card' })).toBeVisible()
+		await expect(page.locator('.card-composer__input').first()).toBeVisible()
 	})
 })
 

@@ -16,17 +16,30 @@ async function openColumnMenu(page) {
 	await page.locator('.stack-column__actions button').first().click()
 	// Wait for the teleported menu dialog to appear
 	const dialog = page.locator('[role="dialog"]').first()
-	await expect(dialog).toBeVisible({ timeout: 6_000 })
+	await expect(dialog).toBeVisible()
 	return dialog
 }
 
+/**
+ * Submit the WIP-limit field. The menu holds MORE THAN ONE submittable field
+ * (the column description arrived in #10474), and every one of them renders a
+ * control whose accessible name is "Submit" — so the button is looked up inside
+ * the WIP field's own <form>, not anywhere in the menu.
+ */
+async function submitWipField(page, dialog) {
+	const wipForm = dialog.locator('form', {
+		has: page.getByRole('spinbutton', { name: /wip limit/i }),
+	})
+	await wipForm.getByRole('button', { name: /^submit$/i }).click()
+}
+
 test.describe('Column controls (role + WIP limit)', () => {
-	const state = { boardId: 0, boardUrl: '' }
+	const state = { boardId: 0, stackId: 0, boardUrl: '' }
 
 	test.beforeAll(async () => {
 		const board = await api.send('POST', '/boards', { title: 'Column Controls E2E' })
 		state.boardId = board.id
-		await api.send('POST', '/stacks', { boardId: board.id, title: 'Control Column' })
+		state.stackId = (await api.send('POST', '/stacks', { boardId: board.id, title: 'Control Column' })).id
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 	})
 
@@ -49,17 +62,17 @@ test.describe('Column controls (role + WIP limit)', () => {
 		// avoids the pointer-events blocker on the SVG.
 		// The listitem contains a radio + a text node with the role label.
 		const doneItem = dialog.locator('li', { hasText: /^done$/i })
-		await expect(doneItem).toBeVisible({ timeout: 6_000 })
+		await expect(doneItem).toBeVisible()
 		await doneItem.click()
 
 		// Role chip should now show "Done"
 		const chip = page.locator('.stack-column__role-chip', { hasText: 'Done' })
-		await expect(chip).toBeVisible({ timeout: 8_000 })
+		await expect(chip).toBeVisible()
 
 		// Persisted: reload and still shows "Done"
 		await page.reload()
 		await page.waitForSelector('.stack-column__header', { timeout: 15_000 })
-		await expect(page.locator('.stack-column__role-chip', { hasText: 'Done' })).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.stack-column__role-chip', { hasText: 'Done' })).toBeVisible()
 	})
 
 	// ── Test: Set WIP limit via ⋯ menu → badge shows limit ──────────────────────
@@ -72,36 +85,42 @@ test.describe('Column controls (role + WIP limit)', () => {
 
 		// NcActionInput renders as role="spinbutton" with accessible name "WIP limit"
 		const wipInput = dialog.getByRole('spinbutton', { name: /wip limit/i })
-		await expect(wipInput).toBeVisible({ timeout: 6_000 })
+		await expect(wipInput).toBeVisible()
 		await wipInput.fill('3')
-		// Submit via the NcActionInput's submit button inside the dialog
-		await dialog.getByRole('button', { name: /^submit$/i }).click()
+		// Submit via the NcActionInput's own submit button
+		await submitWipField(page, dialog)
 
 		// Close menu if still open
 		await page.keyboard.press('Escape')
 
 		// WIP badge should reflect the new limit (e.g. "0 / 3")
 		const badge = page.locator('.stack-column__badge', { hasText: '/ 3' })
-		await expect(badge).toBeVisible({ timeout: 8_000 })
+		await expect(badge).toBeVisible()
 
 		// Persisted: reload and still shows limit
 		await page.reload()
 		await page.waitForSelector('.stack-column__header', { timeout: 15_000 })
-		await expect(page.locator('.stack-column__badge', { hasText: '/ 3' })).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.stack-column__badge', { hasText: '/ 3' })).toBeVisible()
 	})
 
 	// ── Test: Clear WIP limit (set to 0) removes the "/ N" from badge ───────────
 	test('Clear WIP limit (set to 0) removes the "/ N" from badge', async ({ page }) => {
+		// Clearing proves nothing unless a limit is actually there to clear, and a
+		// retry re-runs only this test — so set it over the API and assert it first.
+		await api.send('PATCH', `/stacks/${state.stackId}`, { wipLimit: 3 })
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
 		await page.waitForSelector('.stack-column__header', { timeout: 15_000 })
 
+		await expect(page.locator('.stack-column__badge', { hasText: '/ 3' })).toBeVisible()
+
 		const dialog = await openColumnMenu(page)
 
 		const wipInput = dialog.getByRole('spinbutton', { name: /wip limit/i })
-		await expect(wipInput).toBeVisible({ timeout: 6_000 })
+		await expect(wipInput).toBeVisible()
 		await wipInput.fill('0')
-		await dialog.getByRole('button', { name: /^submit$/i }).click()
+		await submitWipField(page, dialog)
 
 		await page.keyboard.press('Escape')
 
@@ -120,17 +139,17 @@ test.describe('Column controls (role + WIP limit)', () => {
 
 		// Verify the Rename column action exists in the menu.
 		const renameItem = dialog.locator('li', { hasText: /rename column/i })
-		await expect(renameItem).toBeVisible({ timeout: 6_000 })
+		await expect(renameItem).toBeVisible()
 		const renameBtn = renameItem.locator('button')
 		await renameBtn.click()
 
 		// The app guards the rename field against the closing menu's focus-trap
 		// blur (StackColumn.onTitleBlur), so the input stays open on its own.
 		const input = page.locator('.stack-column__title-input')
-		await expect(input).toBeVisible({ timeout: 4_000 })
+		await expect(input).toBeVisible()
 		await input.fill('Renamed via Menu')
 		await input.press('Enter')
 
-		await expect(page.locator('.stack-column__title', { hasText: 'Renamed via Menu' })).toBeVisible({ timeout: 6_000 })
+		await expect(page.locator('.stack-column__title', { hasText: 'Renamed via Menu' })).toBeVisible()
 	})
 })

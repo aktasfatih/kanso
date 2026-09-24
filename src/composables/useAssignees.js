@@ -9,7 +9,7 @@ import {
 	unassignUser as apiUnassignUser,
 } from '../services/api.js'
 import { boardQueryKey } from './useBoard.js'
-import { invalidateCrossBoardFeeds } from './queryKeys.js'
+import { invalidateCrossBoardFeeds, participantsQueryKey } from './queryKeys.js'
 
 /**
  * Resolve a boardId argument that may be a plain value, a Vue ref (.value),
@@ -48,17 +48,34 @@ export function useAssignees(boardId) {
 	}
 
 	// ── Participants query ──────────────────────────────────────────────────────
-	// staleTime: 3 minutes - participants list changes rarely.
+	// staleTime: 3 minutes - participants list changes rarely. That is a cache
+	// policy, not a freshness mechanism: the one action that DOES change the list
+	// is a share add/change/revoke, and useAcl invalidates participantsQueryKey on
+	// settle, so the picker repaints on the share itself rather than waiting out
+	// the window. Do not shorten this staleTime to chase freshness - that would
+	// only blur the symptom and cost a refetch every three minutes.
 	// Key/fetch/enabled are all reactive to boardId: on the full-page card route the
 	// board id is undefined at setup and only resolves once the card loads, so a
 	// non-reactive read would freeze this query on the unresolved value and never
 	// refetch (a broken assignee picker). Guarded so it doesn't fire until known.
 	const participants = useQuery({
-		queryKey: computed(() => ['participants', resolveBoardId(boardId)]),
+		queryKey: computed(() => participantsQueryKey(resolveBoardId(boardId))),
 		queryFn: () => apiFetchParticipants(resolveBoardId(boardId)),
 		enabled: computed(() => isUsableBoardId(resolveBoardId(boardId))),
 		staleTime: 3 * 60 * 1000,
 	})
+
+	// The cached page is {items, truncated, limit} (#10704). `participantList` is the
+	// array every consumer wants; `participantsTruncated` says whether the server had
+	// MORE to give than this page - the one fact that separates "this is everyone
+	// on the board" from "these are the first `participantsLimit`", and so the one
+	// thing that decides whether the picker may present the list as complete.
+	const participantList = computed(() => {
+		const page = participants.data.value
+		return Array.isArray(page?.items) ? page.items : []
+	})
+	const participantsTruncated = computed(() => participants.data.value?.truncated === true)
+	const participantsLimit = computed(() => participants.data.value?.limit ?? 0)
 
 	// ── Toggle assignee on a card (assign / unassign) ───────────────────────────
 	// assign = true → assign, assign = false → unassign
@@ -123,6 +140,9 @@ export function useAssignees(boardId) {
 
 	return {
 		participants,
+		participantList,
+		participantsTruncated,
+		participantsLimit,
 		toggleAssignee,
 	}
 }

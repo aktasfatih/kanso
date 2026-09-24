@@ -30,6 +30,8 @@ use OCP\DB\Types;
  * @method void setWipLimit(?int $wipLimit)
  * @method string|null getColor()
  * @method void setColor(?string $color)
+ * @method string|null getDescription()
+ * @method void setDescription(?string $description)
  * @method int getDeletedAt()
  * @method void setDeletedAt(int $deletedAt)
  */
@@ -54,6 +56,8 @@ class Stack extends Entity implements \JsonSerializable {
 	protected ?int $role = null;
 	protected ?int $wipLimit = null;
 	protected ?string $color = null;
+	/** Free-text explanation of what belongs in this column. Plain text, never markdown. */
+	protected ?string $description = null;
 	protected ?int $deletedAt = null;
 
 	public function __construct() {
@@ -64,11 +68,12 @@ class Stack extends Entity implements \JsonSerializable {
 		$this->addType('role', Types::INTEGER);
 		$this->addType('wipLimit', Types::INTEGER);
 		$this->addType('color', Types::STRING);
+		$this->addType('description', Types::STRING);
 		$this->addType('deletedAt', Types::INTEGER);
 	}
 
 	/**
-	 * @return array{id: int, boardId: ?int, title: ?string, sortKey: ?string, archived: bool, role: int, wipLimit: ?int, color: ?string}
+	 * @return array{id: int, boardId: ?int, title: ?string, sortKey: ?string, archived: bool, role: int, wipLimit: ?int, color: ?string, description: ?string}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -81,6 +86,7 @@ class Stack extends Entity implements \JsonSerializable {
 			'role' => $this->role ?? self::ROLE_NONE,
 			'wipLimit' => $this->wipLimit,
 			'color' => $this->color,
+			'description' => $this->description,
 		];
 	}
 }

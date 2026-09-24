@@ -31,6 +31,71 @@ export function boardQueryKey(id) {
 }
 
 /**
+ * Returns the TanStack Query key for a board's participant list - the data
+ * source behind the assignee picker, the BoardFilterBar assignee/owner facets
+ * and the @-mention autocomplete.
+ *
+ * Single-sourced here, next to boardQueryKey and for the same reason: the list
+ * has exactly one producer (useAssignees) and its consumers sit in a different
+ * composable (useAcl, whose share mutations are what CHANGE the list). A key
+ * spelled out by hand at both ends is how the cache became an island that no
+ * mutation could reach - sharing a board left the picker serving the old list
+ * until a hard reload.
+ *
+ * The id is coerced to a String for the same reason boardQueryKey does it: the
+ * board id reaches these call sites sometimes as a route param (a string) and
+ * sometimes off a numeric API field, and `['participants', 14]` is a different
+ * cache entry from `['participants', '14']` - an invalidation that silently
+ * matches nothing.
+ *
+ * Accepts a ref, a getter function, or a plain primitive.
+ *
+ * @param {number|string|import('vue').Ref|Function} id
+ * @returns {[string, string]}
+ */
+export function participantsQueryKey(id) {
+	let value = id
+	if (typeof value === 'function') {
+		value = value()
+	} else if (value !== null && typeof value === 'object' && value.value !== undefined) {
+		value = value.value
+	}
+	return ['participants', String(value)]
+}
+
+/**
+ * Returns the TanStack Query key for a board's ATTACHMENT listing - the
+ * board-wide "All attachments" modal (#10670).
+ *
+ * Here for the same reason as the two keys above: the listing has one
+ * producer (useBoardAttachments, mounted only while the modal is open) and its
+ * invalidators live somewhere else entirely - the per-CARD attachment mutations
+ * in useCardAttachments, which is what actually adds and removes the rows this
+ * listing shows. Spelled out by hand at both ends, the modal kept serving the
+ * pre-upload list until a reload (#10738).
+ *
+ * String-coerced like the two above, and for the identical trap: the modal
+ * resolves the board id off a component prop that may be a Number, while the
+ * mutation side derives it from the route param (a string). `['board-attachments', 14]`
+ * and `['board-attachments', '14']` are different cache entries - an
+ * invalidation that silently matches nothing.
+ *
+ * Accepts a ref, a getter function, or a plain primitive.
+ *
+ * @param {number|string|import('vue').Ref|Function} id
+ * @returns {[string, string]}
+ */
+export function boardAttachmentsQueryKey(id) {
+	let value = id
+	if (typeof value === 'function') {
+		value = value()
+	} else if (value !== null && typeof value === 'object' && value.value !== undefined) {
+		value = value.value
+	}
+	return ['board-attachments', String(value)]
+}
+
+/**
  * Key family for the cross-board "My Work" feeds (My Tasks / My Reviews /
  * Inbox). These queries live outside the per-board cache, so board-scoped
  * invalidation and delta sync never touch them (#3766).

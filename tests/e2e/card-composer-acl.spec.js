@@ -60,26 +60,26 @@ test.describe('Card composer is editors only (#9857)', () => {
 			await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
 			// Kanban — the column and its card render for them…
-			await expect(page.locator('.stack-column')).toHaveCount(1, { timeout: 10_000 })
+			await expect(page.locator('.stack-column')).toHaveCount(1)
 			await expect(page.locator('.card-tile', { hasText: 'Read-only card' }))
-				.toBeVisible({ timeout: 8_000 })
+				.toBeVisible()
 			// …but neither the composer nor the "from template" picker is offered.
 			await expect(page.locator('.card-composer__input')).toHaveCount(0)
 			await expect(page.locator('.card-composer__templates')).toHaveCount(0)
 
 			// Swimlanes — grouping by label always yields at least the "No label" lane.
 			await setDisplay(page, 'Label')
-			await expect(page.locator('.swimlane')).toHaveCount(1, { timeout: 10_000 })
+			await expect(page.locator('.swimlane')).toHaveCount(1)
 			await expect(page.locator('.swimlane .card-tile', { hasText: 'Read-only card' }))
-				.toBeVisible({ timeout: 8_000 })
+				.toBeVisible()
 			await expect(page.locator('.swimlane .card-composer__input')).toHaveCount(0)
 			await setDisplay(page, 'None')
 
 			// List view.
 			await setDisplay(page, 'List')
-			await page.waitForSelector('.board-list-group', { timeout: 10_000 })
+			await page.waitForSelector('.board-list-group', { timeout: 15_000 })
 			await expect(page.locator('.board-list-row', { hasText: 'Read-only card' }))
-				.toBeVisible({ timeout: 8_000 })
+				.toBeVisible()
 			await expect(page.locator('.board-list-table .card-composer__input')).toHaveCount(0)
 			await expect(page.locator('.board-list-table .card-composer__templates')).toHaveCount(0)
 		} finally {
@@ -111,33 +111,33 @@ test.describe('Card composer stays available to editors (#9857)', () => {
 
 		// Kanban — composer present and functional; the picker rides along.
 		const kanbanComposer = page.locator('.stack-column .card-composer__input')
-		await expect(kanbanComposer).toBeVisible({ timeout: 10_000 })
+		await expect(kanbanComposer).toBeVisible()
 		await expect(page.locator('.stack-column .card-composer__templates')).toHaveCount(1)
 		await kanbanComposer.fill('Added from kanban')
 		await kanbanComposer.press('Enter')
 		await expect(page.locator('.card-tile', { hasText: 'Added from kanban' }))
-			.toBeVisible({ timeout: 10_000 })
+			.toBeVisible()
 
 		// Swimlanes — the lane's column keeps its composer.
 		await setDisplay(page, 'Label')
-		await expect(page.locator('.swimlane')).toHaveCount(1, { timeout: 10_000 })
+		await expect(page.locator('.swimlane')).toHaveCount(1)
 		const laneComposer = page.locator('.swimlane .card-composer__input').first()
-		await expect(laneComposer).toBeVisible({ timeout: 8_000 })
+		await expect(laneComposer).toBeVisible()
 		await laneComposer.fill('Added from swimlane')
 		await laneComposer.press('Enter')
 		await expect(page.locator('.swimlane .card-tile', { hasText: 'Added from swimlane' }))
-			.toBeVisible({ timeout: 10_000 })
+			.toBeVisible()
 		await setDisplay(page, 'None')
 
 		// List view.
 		await setDisplay(page, 'List')
-		await page.waitForSelector('.board-list-group', { timeout: 10_000 })
+		await page.waitForSelector('.board-list-group', { timeout: 15_000 })
 		const listComposer = page.locator('.board-list-table .card-composer__input').first()
-		await expect(listComposer).toBeVisible({ timeout: 8_000 })
+		await expect(listComposer).toBeVisible()
 		await expect(page.locator('.board-list-table .card-composer__templates')).toHaveCount(1)
 		await listComposer.fill('Added from list')
 		await listComposer.press('Enter')
 		await expect(page.locator('.board-list-row', { hasText: 'Added from list' }))
-			.toBeVisible({ timeout: 10_000 })
+			.toBeVisible()
 	})
 })

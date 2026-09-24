@@ -41,7 +41,7 @@ test.describe('Projects — cross-board card collections', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
 
 		const view = page.locator('.project-view')
-		await expect(view).toBeVisible({ timeout: 10_000 })
+		await expect(view).toBeVisible()
 
 		// Both cards, from two different boards, are listed.
 		await expect(view).toContainText('Alpha cross-board task')
@@ -60,19 +60,19 @@ test.describe('Projects — cross-board card collections', () => {
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects`)
 
 		const list = page.locator('.projects-view__list')
-		await expect(list).toBeVisible({ timeout: 10_000 })
+		await expect(list).toBeVisible()
 		const row = page.locator('.projects-view__row', { hasText: 'Q3 Initiative' }).first()
 		await expect(row).toBeVisible()
 
 		await row.click()
-		await expect(page.locator('.project-view')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.project-view')).toBeVisible()
 		await expect(page).toHaveURL(new RegExp(`#/projects/${state.projectId}`))
 	})
 
 	test('removing a card from the project via the UI drops it from the feed', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
-		await expect(page.locator('.project-view__row')).toHaveCount(2, { timeout: 10_000 })
+		await expect(page.locator('.project-view__row')).toHaveCount(2)
 
 		// A single-action NcActions with force-menu=false renders the action as an
 		// inline icon button labelled by its text — click it directly (fall back to
@@ -87,7 +87,7 @@ test.describe('Projects — cross-board card collections', () => {
 			await page.getByRole('menuitem', { name: /Remove from project/ }).click()
 		}
 
-		await expect(page.locator('.project-view__row')).toHaveCount(1, { timeout: 8_000 })
+		await expect(page.locator('.project-view__row')).toHaveCount(1)
 
 		// Server agrees the membership is gone.
 		const remaining = await api.get(`/projects/${state.projectId}/cards`)
@@ -97,7 +97,7 @@ test.describe('Projects — cross-board card collections', () => {
 	test('renders the project description as markdown and round-trips the editor', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
-		await expect(page.locator('.project-view')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.project-view')).toBeVisible()
 
 		// Open the edit dialog (Edit project lives in the header NcActions menu).
 		const openEdit = async () => {
@@ -106,7 +106,7 @@ test.describe('Projects — cross-board card collections', () => {
 		}
 		await openEdit()
 		const dialog = page.locator('.project-view__form')
-		await expect(dialog).toBeVisible({ timeout: 8_000 })
+		await expect(dialog).toBeVisible()
 
 		const md = '**bold text**\n\n- first item\n- second item'
 		const textarea = page.locator('#edit-project-desc')
@@ -136,7 +136,7 @@ test.describe('Projects — cross-board card collections', () => {
 
 		// Reopening the editor shows the raw markdown source again (not HTML).
 		await openEdit()
-		await expect(page.locator('#edit-project-desc')).toHaveValue(md, { timeout: 8_000 })
+		await expect(page.locator('#edit-project-desc')).toHaveValue(md)
 	})
 
 	test('edits the description in place under the title and persists across reload', async ({ page }) => {
@@ -145,17 +145,17 @@ test.describe('Projects — cross-board card collections', () => {
 
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
-		await expect(page.locator('.project-view')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.project-view')).toBeVisible()
 
 		// The description is prominent under the title (its own region, rendered md).
 		const descView = page.locator('.project-view__desc-view')
-		await expect(descView).toBeVisible({ timeout: 8_000 })
+		await expect(descView).toBeVisible()
 		await expect(descView).toContainText('Starting note')
 
 		// Click it to edit in place — no dialog: the inline toolbar + textarea appear.
 		await descView.click()
 		const textarea = page.locator('.project-view__desc-textarea')
-		await expect(textarea).toBeVisible({ timeout: 5_000 })
+		await expect(textarea).toBeVisible()
 		await expect(page.locator('.project-view__description .project-view__md-toolbar')).toBeVisible()
 
 		const md = '## Overview\n\nA **detailed** project note with:\n\n- point one\n- point two'
@@ -178,15 +178,15 @@ test.describe('Projects — cross-board card collections', () => {
 
 		// Persists across a full reload (database-first, not just optimistic UI).
 		await page.reload()
-		await expect(page.locator('.project-view')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.project-view')).toBeVisible()
 		const renderedAfter = page.locator('.project-view__desc-view .project-view__desc-rendered')
-		await expect(renderedAfter.locator('h2')).toHaveText('Overview', { timeout: 8_000 })
+		await expect(renderedAfter.locator('h2')).toHaveText('Overview')
 		await expect(renderedAfter.locator('li')).toHaveCount(2)
 
 		// Escape cancels an in-place edit without persisting.
 		await page.locator('.project-view__desc-view').click()
 		const ta2 = page.locator('.project-view__desc-textarea')
-		await expect(ta2).toBeVisible({ timeout: 5_000 })
+		await expect(ta2).toBeVisible()
 		await ta2.fill('discarded edit')
 		await ta2.press('Escape')
 		await expect(page.locator('.project-view__desc-textarea')).toBeHidden({ timeout: 5_000 })
@@ -200,15 +200,15 @@ test.describe('Projects — cross-board card collections', () => {
 
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
-		await expect(page.locator('.project-view')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.project-view')).toBeVisible()
 
 		// Empty state: a subtle "Add a description…" affordance under the title.
 		const placeholder = page.locator('.project-view__desc-placeholder')
-		await expect(placeholder).toBeVisible({ timeout: 8_000 })
+		await expect(placeholder).toBeVisible()
 		await placeholder.click()
 
 		const textarea = page.locator('.project-view__desc-textarea')
-		await expect(textarea).toBeVisible({ timeout: 5_000 })
+		await expect(textarea).toBeVisible()
 		await textarea.fill('First description added inline')
 		await page.getByRole('button', { name: /^Save$/ }).click()
 
@@ -226,18 +226,18 @@ test.describe('Projects — cross-board card collections', () => {
 
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
-		await expect(page.locator('.project-view')).toBeVisible({ timeout: 10_000 })
+		await expect(page.locator('.project-view')).toBeVisible()
 
 		await page.locator('.project-view__add-btn').click()
 		// The picker was extracted into the shared CardSearchPicker component (#3645).
 		await page.locator('.card-search-picker__input').fill(uniqueTitle)
 
 		const result = page.locator('.card-search-picker__item', { hasText: uniqueTitle }).first()
-		await expect(result).toBeVisible({ timeout: 8_000 })
+		await expect(result).toBeVisible()
 		await result.click()
 
 		// The picked card now shows in the project feed…
-		await expect(page.locator('.project-view__row', { hasText: uniqueTitle })).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.project-view__row', { hasText: uniqueTitle })).toBeVisible()
 		// …and the server recorded the membership.
 		const cards = await api.get(`/projects/${state.projectId}/cards`)
 		expect(cards.some((c) => c.title === uniqueTitle)).toBe(true)

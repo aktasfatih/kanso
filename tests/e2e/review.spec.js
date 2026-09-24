@@ -37,15 +37,15 @@ test.describe('Card review flow', () => {
 	test('modal shows the pending review chip and a verdict prompt', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		const chip = page.locator('.card-modal__review-pill--pending')
-		await expect(chip).toBeVisible({ timeout: 6000 })
+		await expect(chip).toBeVisible()
 		await expect(chip.locator('.card-modal__review-state--pending')).toContainText('Pending')
 
 		// The current user is the pending reviewer, so the verdict banner shows.
 		const verdict = page.locator('.card-modal__verdict')
-		await expect(verdict).toBeVisible({ timeout: 4000 })
+		await expect(verdict).toBeVisible()
 		await expect(verdict.getByRole('button', { name: 'Approve' })).toBeVisible()
 		await expect(verdict.getByRole('button', { name: 'Request changes' })).toBeVisible()
 	})
@@ -53,21 +53,30 @@ test.describe('Card review flow', () => {
 	test('approving flips the review chip to approved', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		await page.locator('.card-modal__verdict').getByRole('button', { name: 'Approve' }).click()
 
-		await expect(page.locator('.card-modal__review-pill--approved')).toBeVisible({ timeout: 6000 })
+		await expect(page.locator('.card-modal__review-pill--approved')).toBeVisible()
 		// Once approved, the "needs verdict" banner is gone.
 		await expect(page.locator('.card-modal__verdict')).toHaveCount(0, { timeout: 4000 })
 	})
 
 	test('board tile shows the review-state chip', async ({ page }) => {
+		// The approval comes from the test above, which a retry of this one never
+		// runs: beforeAll re-runs and hands it a freshly requested PENDING review
+		// instead. Approve it here over the API — idempotent, since
+		// ReviewService::setState no-ops when the state already matches.
+		const mine = await api.get('/reviews/mine')
+		const review = Array.isArray(mine) ? mine.find((r) => r.cardId === state.cardId) : null
+		if (!review) throw new Error(`no review of card ${state.cardId} in /reviews/mine`)
+		await api.patch(`/cards/${state.cardId}/reviews/${review.id}`, { state: 'approved' })
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.card-tile', { timeout: 10_000 })
+		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 
 		// After the approval above, the tile carries an approved review chip.
-		await expect(page.locator('.card-tile__review--approved').first()).toBeVisible({ timeout: 8000 })
+		await expect(page.locator('.card-tile__review--approved').first()).toBeVisible()
 	})
 })

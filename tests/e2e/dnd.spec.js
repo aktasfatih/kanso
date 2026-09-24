@@ -97,7 +97,7 @@ test.describe('Card drag and drop', () => {
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 
 		// Wait for stacks to render
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		// Use nth(0)/nth(1) since there are exactly 2 stacks (S1=first, S2=second by sortKey)
 		const s1 = page.locator('.stack-column').nth(0)
@@ -106,15 +106,15 @@ test.describe('Card drag and drop', () => {
 		const cardA = s1.locator('.card-tile-wrap .card-tile').filter({ hasText: 'A' })
 		const cardB = s2.locator('.card-tile-wrap .card-tile').filter({ hasText: 'B' })
 
-		await expect(cardA).toBeVisible({ timeout: 5000 })
-		await expect(cardB).toBeVisible({ timeout: 5000 })
+		await expect(cardA).toBeVisible()
+		await expect(cardB).toBeVisible()
 
 		// Drag A to top of B (above B in S2)
 		await dragWithMouse(page, cardA, cardB, 'top')
 
 		// After drop: S2 should show A then B
 		const s2Cards = s2.locator('.card-tile-wrap .card-tile')
-		await expect(s2Cards).toHaveCount(2, { timeout: 8000 })
+		await expect(s2Cards).toHaveCount(2)
 		await expect(s2Cards.nth(0)).toContainText('A')
 		await expect(s2Cards.nth(1)).toContainText('B')
 
@@ -124,21 +124,30 @@ test.describe('Card drag and drop', () => {
 
 		// Reload and verify persistence
 		await page.reload()
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		const s2After = page.locator('.stack-column').nth(1)
 		const s2CardsAfter = s2After.locator('.card-tile-wrap .card-tile')
-		await expect(s2CardsAfter).toHaveCount(2, { timeout: 8000 })
+		await expect(s2CardsAfter).toHaveCount(2)
 		await expect(s2CardsAfter.nth(0)).toContainText('A')
 		await expect(s2CardsAfter.nth(1)).toContainText('B')
 	})
 
 	test('rapid successive drags end in server-consistent order', async ({ page }) => {
+		// This test starts from "both cards in S2, S1 empty" — the state the test
+		// above drags into. A retry re-runs only the failing test, so put card A in
+		// S2 ourselves, and only when it is not already there, so the sort keys are
+		// untouched when that test did run.
+		const a = await api.get(`/cards/${state.cardAId}`)
+		if (a.stackId !== state.stackS2Id) {
+			await api.post(`/cards/${state.cardAId}/move`, { targetStackId: state.stackS2Id, afterCardId: null })
+		}
+
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
-		// After test 1: A and B are both in S2. S1 is empty.
+		// A and B are both in S2. S1 is empty.
 		const s1 = page.locator('.stack-column').nth(0)
 		const s2 = page.locator('.stack-column').nth(1)
 
@@ -146,8 +155,8 @@ test.describe('Card drag and drop', () => {
 		const cardB = s2.locator('.card-tile-wrap .card-tile').filter({ hasText: 'B' })
 		const s1CardList = s1.locator('.stack-column__cards')
 
-		await expect(cardA).toBeVisible({ timeout: 5000 })
-		await expect(cardB).toBeVisible({ timeout: 5000 })
+		await expect(cardA).toBeVisible()
+		await expect(cardB).toBeVisible()
 
 		// Drag A to S1 (empty column drop)
 		const s1Box = await s1CardList.boundingBox()
@@ -192,13 +201,13 @@ test.describe('Card drag and drop', () => {
 
 		// Reload to confirm server persisted both moves
 		await page.reload()
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		const s1After = page.locator('.stack-column').nth(0)
 		const s2After = page.locator('.stack-column').nth(1)
 
 		const s1CardsAfter = s1After.locator('.card-tile-wrap .card-tile')
-		await expect(s1CardsAfter).toHaveCount(2, { timeout: 8000 })
+		await expect(s1CardsAfter).toHaveCount(2)
 
 		const s2CardsAfter = s2After.locator('.card-tile-wrap .card-tile')
 		await expect(s2CardsAfter).toHaveCount(0, { timeout: 5000 })
@@ -207,11 +216,11 @@ test.describe('Card drag and drop', () => {
 	test('drag stack S2 header to the left edge of S1 flips column order, persists after reload', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		// Starting order: S1, S2
 		const titles = page.locator('.stack-column__title')
-		await expect(titles.nth(0)).toHaveText('S1', { timeout: 5000 })
+		await expect(titles.nth(0)).toHaveText('S1')
 		await expect(titles.nth(1)).toHaveText('S2')
 
 		// Drag S2's HEADER (the stack drag handle) onto the LEFT edge of S1
@@ -220,15 +229,15 @@ test.describe('Card drag and drop', () => {
 		await dragWithMouse(page, s2Header, s1Column, 'left')
 
 		// Column order flips: S2, S1
-		await expect(titles.nth(0)).toHaveText('S2', { timeout: 8000 })
+		await expect(titles.nth(0)).toHaveText('S2')
 		await expect(titles.nth(1)).toHaveText('S1')
 
 		// Reload and verify persistence
 		await page.reload()
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		const titlesAfter = page.locator('.stack-column__title')
-		await expect(titlesAfter.nth(0)).toHaveText('S2', { timeout: 8000 })
+		await expect(titlesAfter.nth(0)).toHaveText('S2')
 		await expect(titlesAfter.nth(1)).toHaveText('S1')
 	})
 
@@ -236,13 +245,13 @@ test.describe('Card drag and drop', () => {
 		await ncLogin(page)
 		await page.goto(reorder.boardUrl)
 		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 
 		const col = page.locator('.stack-column').nth(0)
 		const cards = col.locator('.card-tile-wrap .card-tile')
 
 		// Initial order (top-to-bottom): R1, R2, R3
-		await expect(cards).toHaveCount(3, { timeout: 8000 })
+		await expect(cards).toHaveCount(3)
 		await expect(cards.nth(0)).toContainText('R1')
 		await expect(cards.nth(1)).toContainText('R2')
 		await expect(cards.nth(2)).toContainText('R3')
@@ -261,10 +270,10 @@ test.describe('Card drag and drop', () => {
 
 		// Persist across reload (server is source of truth for the sort keys)
 		await page.reload()
-		await page.waitForSelector('.stack-column', { timeout: 10_000 })
+		await page.waitForSelector('.stack-column', { timeout: 15_000 })
 		const colAfter = page.locator('.stack-column').nth(0)
 		const cardsAfter = colAfter.locator('.card-tile-wrap .card-tile')
-		await expect(cardsAfter).toHaveCount(3, { timeout: 8000 })
+		await expect(cardsAfter).toHaveCount(3)
 		await expect(cardsAfter.nth(0)).toContainText('R3', { timeout: 8000 })
 		await expect(cardsAfter.nth(1)).toContainText('R1')
 		await expect(cardsAfter.nth(2)).toContainText('R2')

@@ -35,7 +35,7 @@ test.describe('Board analytics', () => {
 	test('the header analytics button opens the stats page with distributions', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
-		await page.waitForSelector('.board-view__header', { timeout: 10_000 })
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
 
 		// Board analytics now lives in the consolidated ⋯ More overflow menu.
 		await page.getByRole('button', { name: 'More' }).click()
@@ -43,7 +43,7 @@ test.describe('Board analytics', () => {
 
 		await expect(page).toHaveURL(new RegExp(`#/board/${state.boardId}/stats`))
 		const view = page.locator('.board-stats__body')
-		await expect(view).toBeVisible({ timeout: 10_000 })
+		await expect(view).toBeVisible()
 
 		// The "Cards by stack" distribution renders with humanized stack titles.
 		await expect(page.getByText('Cards by stack')).toBeVisible()

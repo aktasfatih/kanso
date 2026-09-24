@@ -1088,6 +1088,253 @@ class BackupServiceTest extends TestCase {
 		self::assertSame(['kanso-board-7-20260804-153000.zip'], array_keys($written));
 	}
 
+	// ---- deleting one stored backup (#10675) ------------------------------
+	//
+	// Retention is the only other thing that removes a backup, and it only ever
+	// visits boards that still exist during a run that actually happens - so a
+	// deleted board's archives, and everything on an instance that has since
+	// switched backups off, are never pruned again. Under app data the files are
+	// in nobody's Files, so without this there is no way at all to remove one
+	// specific export - and every export is a full board, private cards and
+	// attachments included.
+
+	public function testDeleteBackupRemovesTheNamedFileFromAppData(): void {
+		$this->enableAppData();
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder([
+			'kanso-board-7-20260101-000000.zip' => 'old',
+			'kanso-board-7-20260804-153000.zip' => 'new',
+		], $written, $deleted);
+
+		$this->service->deleteBackup('kanso-board-7-20260101-000000.zip');
+
+		// Exactly the named one, and nothing else.
+		self::assertSame(['kanso-board-7-20260101-000000.zip'], $deleted);
+		self::assertSame([], $written);
+	}
+
+	public function testDeleteBackupRemovesTheNamedFileFromAFilesFolder(): void {
+		// The same call against the other destination: one backup body, one
+		// delete path, so the two can never drift into disagreeing about what
+		// "remove this archive" does.
+		$this->enable();
+		$deleted = [];
+		$node = $this->createMock(File::class);
+		$node->method('getName')->willReturn('kanso-board-3-20260804-153000.zip');
+		$node->method('delete')->willReturnCallback(static function () use (&$deleted): void {
+			$deleted[] = 'kanso-board-3-20260804-153000.zip';
+		});
+
+		$target = $this->createMock(Folder::class);
+		$target->method('isCreatable')->willReturn(true);
+		$target->method('nodeExists')->willReturnCallback(
+			static fn (string $name): bool => $name === 'kanso-board-3-20260804-153000.zip',
+		);
+		$target->method('get')->willReturn($node);
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('nodeExists')->willReturn(true);
+		$userFolder->method('get')->willReturn($target);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+
+		$this->service->deleteBackup('kanso-board-3-20260804-153000.zip');
+
+		self::assertSame(['kanso-board-3-20260804-153000.zip'], $deleted);
+	}
+
+	/**
+	 * The delete endpoint's entire input validation, and the reason it can be
+	 * offered at all: the name is checked against the allow-list BEFORE it
+	 * reaches storage, so a client-supplied string can never select a path. Same
+	 * list the download is held to - a delete that accepted a traversal would be
+	 * strictly worse than a download that did.
+	 */
+	public function testDeleteBackupRefusesAnythingButAKansoBackupName(): void {
+		$this->enableAppData();
+		// Not even a lookup: a rejected name never reaches the storage layer, so
+		// there is no path for it to address in the first place.
+		$this->appData->expects(self::never())->method('getFolder');
+		$this->appDataFolder->expects(self::never())->method('getFile');
+
+		$hostile = [
+			'',
+			'../../../../etc/passwd',
+			'kanso-board-7-20260804-153000.zip/../../secret.zip',
+			'../kanso-board-7-20260804-153000.zip',
+			'/kanso-backups/kanso-board-7-20260804-153000.zip',
+			'kanso-board-7-20260804-153000.zip.php',
+			'kanso-board-7-20260804-153000.txt',
+			'KANSO-BOARD-7-20260804-153000.zip',
+			"kanso-board-7-20260804-153000.zip\0.png",
+			// PCRE's `$` also matches before a FINAL newline, so an allow-list
+			// anchored with it accepted this - and with it the CR/LF-free
+			// property the download's Content-Disposition header depends on.
+			// Hence `\z` in NAME_PATTERN.
+			"kanso-board-7-20260804-153000.zip\n",
+			"kanso-board-7-20260804-153000.zip\r\n",
+			'*',
+		];
+		foreach ($hostile as $name) {
+			self::assertFalse(BackupService::isBackupName($name), 'must not be accepted: ' . $name);
+			try {
+				$this->service->deleteBackup($name);
+				self::fail('deleteBackup accepted a hostile name: ' . $name);
+			} catch (NotFoundException) {
+				// Expected - and indistinguishable from "no such backup".
+			}
+		}
+	}
+
+	public function testDeleteBackupRefusesANodeThatIsNotAFile(): void {
+		// A Files folder is a real folder an admin can put anything in, and the
+		// delete is the first caller ever to hand a target a CLIENT-supplied
+		// name. A DIRECTORY wearing a backup filename passes the allow-list, so
+		// without the target's own guard it would be deleted recursively with
+		// everything inside it - and listFiles() keeps such a node off the panel,
+		// so nobody would have seen what was destroyed.
+		$this->enable();
+		$folderNode = $this->createMock(Folder::class);
+		$folderNode->expects(self::never())->method('delete');
+
+		$target = $this->createMock(Folder::class);
+		$target->method('isCreatable')->willReturn(true);
+		$target->method('nodeExists')->willReturn(true);
+		$target->method('get')->willReturn($folderNode);
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('nodeExists')->willReturn(true);
+		$userFolder->method('get')->willReturn($target);
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+
+		$this->expectException(NotFoundException::class);
+		$this->service->deleteBackup('kanso-board-7-20260804-153000.zip');
+	}
+
+	public function testDeleteBackupLogsWhoAskedForIt(): void {
+		// The only trace an archive ever stopped existing: under app data the
+		// file is in nobody's Files, so nothing else records it. An audit line
+		// that cannot attribute is barely one on a multi-admin instance.
+		$this->enableAppData();
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder(['kanso-board-7-20260804-153000.zip' => 'bytes'], $written, $deleted);
+		$this->logger->expects(self::once())
+			->method('info')
+			->with(
+				self::stringContains('deleted a stored backup'),
+				self::callback(static function (array $context): bool {
+					return ($context['backup'] ?? null) === 'kanso-board-7-20260804-153000.zip'
+						&& ($context['actor'] ?? null) === 'alice'
+						&& ($context['destination'] ?? null) === BackupService::DEST_APPDATA;
+				}),
+			);
+
+		$this->service->deleteBackup('kanso-board-7-20260804-153000.zip', 'alice');
+
+		self::assertSame(['kanso-board-7-20260804-153000.zip'], $deleted);
+	}
+
+	public function testDeleteBackupOfAMissingFileIsNotAFailure(): void {
+		// The admin asked for that archive not to be there, and it is not. A
+		// second click, or a retention sweep that got there first, must not raise
+		// an error over a state that already matches the request - and the
+		// well-formed-but-absent name must not become an oracle either.
+		$this->enableAppData();
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder(['kanso-board-7-20260804-153000.zip' => 'new'], $written, $deleted);
+
+		$this->service->deleteBackup('kanso-board-99-20200101-000000.zip');
+
+		self::assertSame([], $deleted);
+	}
+
+	public function testDeleteBackupFromAnUnwrittenAppDataStoreIsNotAFailure(): void {
+		// Nothing has ever been written, so there is no file of any name to
+		// remove - and nothing failed. It must not create the folder to find that
+		// out either.
+		$this->enableAppData();
+		$appData = $this->createMock(IAppData::class);
+		$appData->method('getFolder')->willThrowException(new NotFoundException('no folder'));
+		$appData->expects(self::never())->method('newFolder');
+
+		$this->serviceWith($appData)->deleteBackup('kanso-board-7-20260804-153000.zip');
+	}
+
+	public function testDeleteBackupNeverCreatesAMissingFilesFolder(): void {
+		// A delete is not a run: a typo'd path must fail as an unreadable
+		// destination, not quietly build that folder and report a successful
+		// delete of a file it never held.
+		$this->enable('/kanso-bakcups');
+		$userFolder = $this->createMock(Folder::class);
+		$userFolder->method('nodeExists')->willReturn(false);
+		$userFolder->method('isCreatable')->willReturn(true);
+		$userFolder->expects(self::never())->method('newFolder');
+		$this->rootFolder->method('getUserFolder')->willReturn($userFolder);
+
+		try {
+			$this->service->deleteBackup('kanso-board-7-20260804-153000.zip');
+			self::fail('a destination that is not there must not report a successful delete');
+		} catch (NotFoundException) {
+			self::fail('a missing destination must not masquerade as a missing backup');
+		} catch (\RuntimeException $e) {
+			self::assertStringContainsString('/kanso-bakcups', $e->getMessage());
+		}
+	}
+
+	// ---- orphaned archives are labelled, never swept (#10675) -------------
+
+	public function testListBackupsMarksArchivesOfBoardsThatNoLongerExist(): void {
+		$this->enableAppData();
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder([
+			'kanso-board-7-20260804-153000.zip' => 'live',
+			'kanso-board-99-20200101-000000.zip' => 'orphan',
+		], $written, $deleted);
+		// Board 99 is gone; retention will therefore never visit its archives
+		// again, which is exactly what the label has to tell the admin.
+		$this->boardMapper->method('findAll')->willReturn([$this->board(7)]);
+
+		$list = $this->service->listBackups();
+
+		$byName = array_column($list, 'orphaned', 'name');
+		self::assertFalse($byName['kanso-board-7-20260804-153000.zip']);
+		self::assertTrue($byName['kanso-board-99-20200101-000000.zip']);
+	}
+
+	public function testListingAnOrphanNeverDeletesIt(): void {
+		// The decided policy: orphaned archives are surfaced, not swept. An
+		// export of a deleted board is exactly the thing someone may still need,
+		// so the admin removes it deliberately or not at all.
+		$this->enableAppData();
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder(['kanso-board-99-20200101-000000.zip' => 'orphan'], $written, $deleted);
+		$this->boardMapper->method('findAll')->willReturn([]);
+
+		$list = $this->service->listBackups();
+
+		self::assertTrue($list[0]['orphaned']);
+		self::assertSame([], $deleted);
+	}
+
+	public function testAFailingBoardLookupMarksNothingAsOrphaned(): void {
+		// The flag is a label on a listing, never a precondition. A database that
+		// answered badly must not accuse every live board's backup of being
+		// abandoned - nor fail the listing an admin may want precisely because
+		// something is broken.
+		$this->enableAppData();
+		$written = [];
+		$deleted = [];
+		$this->stubAppDataFolder(['kanso-board-7-20260804-153000.zip' => 'live'], $written, $deleted);
+		$this->boardMapper->method('findAll')->willThrowException(new \RuntimeException('database is away'));
+
+		$list = $this->service->listBackups();
+
+		self::assertCount(1, $list);
+		self::assertFalse($list[0]['orphaned']);
+	}
+
 	public function testIsBackupNameAcceptsWhatTheRunWrites(): void {
 		// The other half of the guard: it must not refuse Kanso's own filenames,
 		// or the download button would be dead for every backup.

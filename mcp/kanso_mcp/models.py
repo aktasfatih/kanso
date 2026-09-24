@@ -73,6 +73,8 @@ class Stack(_Base):
     role: Optional[int] = None
     wipLimit: Optional[int] = None
     color: Optional[str] = None
+    # Free-text, plain (never markdown): what belongs in this column.
+    description: Optional[str] = None
 
 
 class Label(_Base):

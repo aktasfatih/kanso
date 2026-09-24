@@ -36,7 +36,7 @@ test.describe('Name length caps differ per entity', () => {
 		await page.getByRole('button', { name: 'New project' }).click()
 
 		const title = page.locator('#project-title')
-		await expect(title).toBeVisible({ timeout: 10_000 })
+		await expect(title).toBeVisible()
 		await expect(title).toHaveAttribute('maxlength', String(PROJECT_CAP))
 
 		// fill() goes through the real input pipeline, so maxlength applies.
@@ -52,7 +52,7 @@ test.describe('Name length caps differ per entity', () => {
 			const match = projects.find((p) => p.title === 'p'.repeat(PROJECT_CAP))
 			if (match) created.projectIds.push(match.id)
 			return match?.title?.length ?? 0
-		}, { timeout: 10_000 }).toBe(PROJECT_CAP)
+		}).toBe(PROJECT_CAP)
 	})
 
 	test('the board title input caps at 100 — a different cap on the same sweep', async ({ page }) => {
@@ -63,7 +63,7 @@ test.describe('Name length caps differ per entity', () => {
 		await page.getByRole('button', { name: 'Create board' }).first().click()
 
 		const name = page.getByPlaceholder('New board name…')
-		await expect(name).toBeVisible({ timeout: 10_000 })
+		await expect(name).toBeVisible()
 		await expect(name).toHaveAttribute('maxlength', String(BOARD_CAP))
 
 		await name.fill(overlong('b'))
@@ -76,7 +76,7 @@ test.describe('Name length caps differ per entity', () => {
 			const match = boards.find((b) => b.title === 'b'.repeat(BOARD_CAP))
 			if (match) created.boardIds.push(match.id)
 			return match?.title?.length ?? 0
-		}, { timeout: 10_000 }).toBe(BOARD_CAP)
+		}).toBe(BOARD_CAP)
 
 		// The contrast itself, asserted rather than implied: had the sweep used a
 		// single shared number, these two would be equal.

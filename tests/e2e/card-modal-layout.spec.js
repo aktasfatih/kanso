@@ -87,7 +87,7 @@ test.describe('Card modal two-column layout', () => {
 		// other attribute pills being added/reordered). Opening it reveals the
 		// padded date popover with the date input.
 		await attrbar.locator('button.card-modal__pill[data-pill="due"]').click()
-		await expect(page.locator('.card-modal__popover--pad .card-modal__date-input').first()).toBeVisible({ timeout: 5_000 })
+		await expect(page.locator('.card-modal__popover--pad .card-modal__date-input').first()).toBeVisible()
 	})
 
 	test('.card-modal__content is to the LEFT of .card-modal__discussion on wide viewport', async ({ page }) => {
@@ -124,7 +124,7 @@ test.describe('Card modal two-column layout', () => {
 		// Open the priority popover
 		await priorityPill.click()
 		const popover = page.locator('.card-modal__popover')
-		await expect(popover.first()).toBeVisible({ timeout: 5_000 })
+		await expect(popover.first()).toBeVisible()
 
 		// Set None first
 		await popover.locator('.card-modal__popover-opt', { hasText: /^None$/ }).click()
@@ -133,7 +133,7 @@ test.describe('Card modal two-column layout', () => {
 		// Now set High - the pill picks up the --priority-3 modifier
 		await priorityPill.click()
 		await page.locator('.card-modal__popover .card-modal__popover-opt', { hasText: /^High$/ }).click()
-		await expect(attrbar.locator('.card-modal__pill--priority-3')).toBeVisible({ timeout: 5_000 })
+		await expect(attrbar.locator('.card-modal__pill--priority-3')).toBeVisible()
 	})
 
 	test('body stacks to a single column on narrow viewport', async ({ page }) => {
@@ -151,7 +151,7 @@ test.describe('Card modal two-column layout', () => {
 
 		// Switching to the Discussion tab reveals the discussion pane.
 		await page.locator('.card-modal__tab', { hasText: 'Discussion' }).click()
-		await expect(page.locator('.card-modal__discussion')).toBeVisible({ timeout: 5_000 })
+		await expect(page.locator('.card-modal__discussion')).toBeVisible()
 	})
 
 	// #60 / #4057 — on a phone-width viewport the card attribute bar stays at the
@@ -199,12 +199,12 @@ test.describe('Card modal two-column layout', () => {
 		// Switch to Discussion → the composer is shown AND the attribute bar stays
 		// visible at the top on this tab too.
 		await tabs.nth(1).click()
-		await expect(page.locator('.card-modal__discussion')).toBeVisible({ timeout: 5_000 })
+		await expect(page.locator('.card-modal__discussion')).toBeVisible()
 		await expect(attrbar).toBeVisible()
 
 		// Back to Card → content returns, attribute bar still visible.
 		await tabs.nth(0).click()
-		await expect(page.locator('.card-modal__content')).toBeVisible({ timeout: 5_000 })
+		await expect(page.locator('.card-modal__content')).toBeVisible()
 		await expect(attrbar).toBeVisible()
 	})
 
@@ -231,17 +231,17 @@ test.describe('Card modal two-column layout', () => {
 			//    which stays visible at the top on mobile (no separate Details tab).
 			await page.goto(cardUrl)
 			await page.waitForSelector('.card-modal__tabbar', { timeout: 15_000 })
-			await expect(page.locator('.card-modal__attrbar')).toBeVisible({ timeout: 5_000 })
+			await expect(page.locator('.card-modal__attrbar')).toBeVisible()
 
 			const requestBtn = page.locator('.card-modal__attr-right button.card-modal__pill--dashed', { hasText: 'Request' })
-			await expect(requestBtn).toBeVisible({ timeout: 5_000 })
+			await expect(requestBtn).toBeVisible()
 			await requestBtn.click()
 
 			// The custom (absolutely-positioned) review picker popover must render fully
 			// on-screen — no clipping by an overflow ancestor, no spilling past either
 			// viewport edge.
 			const popover = page.locator('.card-modal__popover--right')
-			await expect(popover).toBeVisible({ timeout: 5_000 })
+			await expect(popover).toBeVisible()
 			const vw = page.viewportSize().width
 			const popBox = await popover.boundingBox()
 			expect(popBox).not.toBeNull()
@@ -299,7 +299,7 @@ test.describe('Card modal two-column layout', () => {
 		// has a due date set in beforeAll) to reveal its round clear (×) button.
 		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
 		const clearBtn = page.locator('.card-modal__field-clear').first()
-		await expect(clearBtn).toBeVisible({ timeout: 5_000 })
+		await expect(clearBtn).toBeVisible()
 
 		// A circle: width and height must be equal (±1px), never squished into an oval.
 		const box = await clearBtn.boundingBox()
@@ -315,7 +315,7 @@ test.describe('Card modal two-column layout', () => {
 
 		// Open an attribute popover (the due-date pill).
 		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
-		await expect(page.locator('.card-modal__popover').first()).toBeVisible({ timeout: 5_000 })
+		await expect(page.locator('.card-modal__popover').first()).toBeVisible()
 
 		// First Escape closes ONLY the popover — the modal stays open.
 		await page.locator('.card-modal').press('Escape')
@@ -366,7 +366,7 @@ test.describe('Card modal two-column layout', () => {
 
 		// Open an attribute popover (the due-date pill).
 		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
-		await expect(page.locator('.card-modal__popover').first()).toBeVisible({ timeout: 5_000 })
+		await expect(page.locator('.card-modal__popover').first()).toBeVisible()
 
 		// A backdrop press while a popover is open dismisses the popover first,
 		// mirroring the Escape precedence — the modal must stay open.

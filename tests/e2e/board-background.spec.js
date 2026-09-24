@@ -32,7 +32,7 @@ test.describe('Board background preset (#3528)', () => {
 		await page.getByRole('button', { name: 'More' }).click()
 		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		await page.getByRole('tab', { name: /general/i }).click()
-		await expect(page.locator('#bs-pane-general')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('#bs-pane-general')).toBeVisible()
 
 		// Pick the "ocean" preset from the curated palette.
 		await page.locator('[data-test="board-bg-ocean"]').click()
@@ -52,7 +52,7 @@ test.describe('Board background preset (#3528)', () => {
 		await page.getByRole('button', { name: 'More' }).click()
 		await page.getByRole('menuitem', { name: /board settings/i }).click()
 		await page.getByRole('tab', { name: /general/i }).click()
-		await expect(page.locator('#bs-pane-general')).toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('#bs-pane-general')).toBeVisible()
 		await page.locator('[data-test="board-bg-none"]').click()
 		await expect(page.locator('.board-view')).not.toHaveClass(/board-view--has-background/, { timeout: 8_000 })
 	})

@@ -171,14 +171,14 @@ test.describe('Cross-board Views (#3815)', () => {
 			await expect(page.locator('.view-kanban-col__title', { hasText: /ViewsBoardB/ })).toBeVisible()
 
 			// Each card renders as a CardTile; both test cards are present.
-			await expect(page.locator('.card-tile__title', { hasText: state.cardA })).toBeVisible({ timeout: 10_000 })
+			await expect(page.locator('.card-tile__title', { hasText: state.cardA })).toBeVisible()
 			const tileB = page.locator('.card-tile__title', { hasText: state.cardB })
 			await expect(tileB).toBeVisible()
 
 			// Tile parity (#3950): the Kanban tile carries the real human ref (KAN-…
 			// style prefix + seq) and the label chip renders with its board colour, not
 			// a neutral dot — same as the board tiles. Card B's label is green (00ff00).
-			await expect(page.locator('.view-kanban-col .card-tile__ref').first()).toBeVisible({ timeout: 10_000 })
+			await expect(page.locator('.view-kanban-col .card-tile__ref').first()).toBeVisible()
 			const chipBg = await page.locator('.view-kanban-col__cards .card-tile__label-chip', { hasText: /vlabelB/ })
 				.first().evaluate((el) => getComputedStyle(el).backgroundColor)
 			// A coloured chip resolves to a non-transparent rgb() background.
@@ -195,7 +195,7 @@ test.describe('Cross-board Views (#3815)', () => {
 			await expect(page).toHaveURL(new RegExp(`/views/${kanbanViewId}`))
 			expect(page.url()).not.toMatch(/\/board\//)
 			// The overlay shows card B's content.
-			await expect(modal.getByText(state.cardB, { exact: false }).first()).toBeVisible({ timeout: 10_000 })
+			await expect(modal.getByText(state.cardB, { exact: false }).first()).toBeVisible()
 
 			// Close the overlay (Escape) → the modal is gone and we are STILL in the
 			// View at /views/:id, not on any board.
@@ -209,14 +209,14 @@ test.describe('Cross-board Views (#3815)', () => {
 			// Switch to List, then back to Kanban via the switcher to prove the toggle
 			// works in-session too.
 			await page.locator('.view-page__display-btn', { hasText: 'List' }).click()
-			await expect(page.locator('.board-list-row__title', { hasText: state.cardA })).toBeVisible({ timeout: 10_000 })
+			await expect(page.locator('.board-list-row__title', { hasText: state.cardA })).toBeVisible()
 			await kanbanBtn.click()
-			await expect(columns.first()).toBeVisible({ timeout: 10_000 })
+			await expect(columns.first()).toBeVisible()
 
 			// Reload → the saved display:'kanban' still re-seeds Kanban.
 			await page.reload()
 			await expect(kanbanBtn).toHaveClass(/view-page__display-btn--active/, { timeout: 15_000 })
-			await expect(page.locator('.view-kanban-col').first()).toBeVisible({ timeout: 10_000 })
+			await expect(page.locator('.view-kanban-col').first()).toBeVisible()
 		} finally {
 			await api.delete(`/views/${kanbanViewId}`).catch(() => {})
 		}
@@ -266,7 +266,7 @@ test.describe('Cross-board Views (#3815)', () => {
 			await page.locator('.board-filter-bar__dim-row[data-dim="types"]').click()
 			await page.locator('.board-filter-bar__opt', { hasText: /^Bug$/ }).click()
 			// Only the bug card (A) survives; the feature card (B) drops out.
-			await expect(rowA).toBeVisible({ timeout: 10_000 })
+			await expect(rowA).toBeVisible()
 			await expect(rowB).toHaveCount(0, { timeout: 10_000 })
 
 			// Reset the TYPE facet itself (toggle "Bug" back off) before exercising the
@@ -275,28 +275,28 @@ test.describe('Cross-board Views (#3815)', () => {
 			// longer touches the View's own saved label filter; but resetting the one
 			// facet under test keeps this step's undo exact and independent of that.
 			await page.locator('.board-filter-bar__opt', { hasText: /^Bug$/ }).click()
-			await expect(rowB).toBeVisible({ timeout: 10_000 })
+			await expect(rowB).toBeVisible()
 			await page.locator('.board-filter-bar__back').click()
 
 			// ── New filter dimension #2: COMMENTS (single-select radio) ──────────────
 			await page.locator('.board-filter-bar__dim-row[data-dim="comments"]').click()
 			await page.locator('.board-filter-bar__opt', { hasText: /Has comments/ }).click()
 			// Only card A (which has a comment) remains.
-			await expect(rowA).toBeVisible({ timeout: 10_000 })
+			await expect(rowA).toBeVisible()
 			await expect(rowB).toHaveCount(0, { timeout: 10_000 })
 
 			// Reset the COMMENTS facet with its own "Any" radio, close the popover.
 			await page.locator('.board-filter-bar__opt', { hasText: /^Any$/ }).click()
 			await page.locator('.board-filter-bar__back').click()
 			await page.keyboard.press('Escape')
-			await expect(rowB).toBeVisible({ timeout: 10_000 })
+			await expect(rowB).toBeVisible()
 
 			// ── New group-by: switch to REVIEW ──────────────────────────────────────
 			// Neither card has a review requested, so a "No review" group appears.
 			const groupSelect = page.locator('.view-page__select .vs__dropdown-toggle')
 			await groupSelect.click()
 			await page.locator('.vs__dropdown-option', { hasText: /^Review$/ }).click()
-			await expect(page.locator('.board-list-group__title', { hasText: /No review/ })).toBeVisible({ timeout: 10_000 })
+			await expect(page.locator('.board-list-group__title', { hasText: /No review/ })).toBeVisible()
 		} finally {
 			await api.delete(`/views/${filterViewId}`).catch(() => {})
 		}
@@ -648,13 +648,13 @@ test.describe('Cross-board Views (#3815)', () => {
 		const newName = 'UI View ' + Math.floor(Date.now() / 1000)
 		await page.locator('.view-page__title').click()
 		const input = page.locator('.view-page__title-input')
-		await expect(input).toBeVisible({ timeout: 5_000 })
+		await expect(input).toBeVisible()
 		await input.fill(newName)
 		await input.press('Enter')
 
 		await expect(
 			page.locator('.app-navigation').getByText(newName, { exact: true }),
-		).toBeVisible({ timeout: 10_000 })
+		).toBeVisible()
 
 		// Cleanup the UI-created view.
 		await api.delete(`/views/${uiViewId}`).catch(() => {})

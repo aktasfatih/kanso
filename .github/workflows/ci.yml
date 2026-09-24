@@ -168,16 +168,36 @@ jobs:
         run: composer psalm
 
   # Unit tests DO exercise the runtime, so run them across the supported PHP
-  # range (8.2 for NC 30–33, 8.3 for NC 34) to catch version-specific breakage.
+  # range to catch version-specific breakage.
+  #
+  # The range is 8.2-8.5, not 8.2-8.3. 8.2 is the floor `appinfo/info.xml`
+  # declares (`<php min-version="8.2"/>`); there is deliberately NO max-version,
+  # so Nextcloud will happily run Kanso on 8.4 and 8.5 and until now nothing
+  # executed either - the same blind spot that let #158 ship, just at the other
+  # end. setup-php lists 8.4 and 8.5 as Stable on self-hosted runners, so both
+  # legs are real, not aspirational.
+  #
+  # These legs are only worth having because `phpunit.xml` sets
+  # `failOnDeprecation`/`failOnNotice`. Without them PHPUnit 10.5 prints
+  # "OK, but there were issues!" and exits 0 on a deprecation, so a newer-PHP
+  # leg would go green while ignoring precisely what it was added to catch -
+  # measured: PHP 8.5 flagged 3 deprecations (one of them a real runtime bug in
+  # lib/Service/ReviewService.php) and still exited 0 before those flags landed.
+  # Do not remove them to "quieten" a leg.
   unit-php:
     runs-on: kanso-runners
-    # One value covers both legs, so it is sized for the slow one: 8.2 has been
-    # observed at 2-6m but 8.3 at 3-21m.
+    # One value covers every leg, so it is sized for the slow one: 8.2 has been
+    # observed at 2-6m but 8.3 at 3-21m. The 8.4/8.5 legs run the identical
+    # suite (measured at ~6s of phpunit each locally, i.e. the runtime here is
+    # almost entirely checkout + setup-php + composer), and they run in
+    # PARALLEL with the existing two, so they add runner load but not wall
+    # clock - the ~1.5h figure for the whole workflow is set by `e2e`, which
+    # this does not touch.
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['8.2', '8.3']
+        php-version: ['8.2', '8.3', '8.4', '8.5']
     steps:
       - uses: actions/checkout@v7
       # See cs-check above for why this step exists and why it is not `grep -q`.
@@ -219,6 +239,68 @@ jobs:
           tools: composer
       - name: Verify the PHP binary starts
         run: php -v
+      # Parse the tree that actually SHIPS (lib/, appinfo/, templates/) on every
+      # PHP in the matrix, so a construct that a NEWER PHP rejects or deprecates
+      # is caught the way info.xml's min-version catches an older one. The
+      # install-matrix cannot cover this: every nextcloud:* image pins its own
+      # PHP (8.3 today), so no job there ever sees 8.4 or 8.5.
+      #
+      # Crucially this does NOT trust the exit code alone. `php -l` returns
+      # non-zero ONLY for a parse error; a COMPILE-time deprecation is printed
+      # and the exit status stays 0. Measured on this repo's containers:
+      #
+      #   $ php -l implicit_nullable.php   # PHP 8.4 / 8.5
+      #   Deprecated: f(): Implicitly marking parameter $x as nullable is
+      #   deprecated, the explicit nullable type must be used instead ...
+      #   No syntax errors detected in implicit_nullable.php
+      #   $ echo $?
+      #   0
+      #
+      # The same file is silent on 8.3. So an exit-code-only check would be
+      # vacuous on exactly the newer legs it exists for - which is the whole
+      # point of the step. Instead every line of output is inspected and
+      # anything that is not "No syntax errors detected" fails the job.
+      #
+      # Which makes the RUNNER's own PHP part of the contract, and it is not
+      # always clean. setup-php installs the php8.x-* extension packages without
+      # necessarily installing the system libraries they link against, so every
+      # invocation can print, before it ever looks at the file:
+      #
+      #   PHP Warning:  PHP Startup: Unable to load dynamic library 'pdo_pgsql'
+      #   ... (libpq.so.5: cannot open shared object file ...) in Unknown on line 0
+      #
+      # and still report "No syntax errors detected" for all of them. That is
+      # how this step spent 2 minutes failing on PHP 8.5 with zero syntax errors
+      # (run 35825736166): a broken runner build wearing a syntax error's face.
+      #
+      # `-n` is the fix rather than another grep exclusion: with no php.ini read,
+      # no extension is loaded, so a startup warning cannot be emitted at all.
+      # A filter would have to grow an entry per broken extension, and each
+      # entry is a hole a real diagnostic could hide in. Parsing needs no
+      # extension - implicit-nullable and its kin are raised by the compiler.
+      #
+      # `-n` also discards the ini's error_reporting/display_errors, so both are
+      # re-asserted explicitly: printing deprecations is the ENTIRE reason this
+      # step reads output instead of the exit code, and fixing the false red must
+      # not quietly trade that away. log_errors=0 keeps each diagnostic to one
+      # line instead of a stdout/stderr pair.
+      - name: Parse-check the shipped tree
+        run: |
+          set -uo pipefail
+          out="$(mktemp)"
+          rc=0
+          find lib appinfo templates -name '*.php' -print0 \
+            | xargs -0 -r -n1 php -n -d error_reporting=E_ALL -d display_errors=1 -d log_errors=0 -l \
+              > "$out" 2>&1 || rc=$?
+          # Drop the per-file success lines and the blank lines PHP prints
+          # before a diagnostic; whatever survives is a real complaint.
+          noise="$(grep -vE '^(No syntax errors detected in |$)' "$out" || true)"
+          if [ "$rc" -ne 0 ] || [ -n "$noise" ]; then
+            echo "::error::php -l reported problems in the shipped tree on PHP $(php -n -r 'echo PHP_VERSION;')"
+            printf '%s\n' "$noise"
+            exit 1
+          fi
+          echo "Shipped tree parses cleanly and silently on PHP $(php -n -r 'echo PHP_VERSION;')"
       - name: Install dependencies
         run: composer install --no-interaction --no-progress
       - name: Run unit tests
@@ -339,6 +421,29 @@ jobs:
         run: npm run test:l10n
       - name: Lint translation catalogues (syntax + placeholders)
         run: npm run l10n:lint
+      # Guard: no e2e wait may give itself LESS time than the suite-wide budget.
+      # playwright.config.js sets `expect: { timeout: 15_000 }` because this
+      # runner pool is shared and round-trips degrade 1.8-3x when it is
+      # saturated; an explicit `{ timeout: 5000 }` on a positive wait silently
+      # opts back out of that headroom. That is what made the suite
+      # load-sensitive — three runs of the same commit tripped seven different
+      # specs, none of them twice. Negative waits and `waitForTimeout` are left
+      # alone (a short budget there is load-bearing), and a deliberately short
+      # positive wait can be annotated `// short-budget-ok: <reason>`.
+      #
+      # It lives here rather than in `e2e` on purpose: this job takes ~2min and
+      # the browser suite takes ~1.7h, so a re-tightened timeout is caught in
+      # minutes instead of costing a full e2e cycle.
+      #
+      # Self-tests first, same reason as the l10n pair above: a guard that has
+      # quietly stopped catching anything is worse than no guard, because the
+      # green run then reads as proof. The fixtures assert both directions — a
+      # reintroduced `{ timeout: 5000 }` is caught, and the exempt shapes
+      # (negative assertions, `state: 'hidden'`, `short-budget-ok`) are not.
+      - name: e2e timeout guard self-tests
+        run: npm run test:e2e-timeouts
+      - name: Guard e2e wait budgets
+        run: npm run lint:e2e-timeouts
 
   # Cross-version × cross-DB install/migration matrix. This is what actually
   # VALIDATES the info.xml claim of NC 32–34: for each (version, db) combo it
@@ -352,24 +457,44 @@ jobs:
   # runner's dind network can't reach the internet from inside a container, so a
   # container can't fetch composer to install the (gitignored) dev deps.
   #
-  # DB coverage rationale:
+  # DB coverage rationale — the full cross-product, every DB on every version:
   #   - sqlite: no service container, cheap, and it's the backend that surfaced
-  #     the default-index-name migration bug — so it runs on every NC version.
-  #   - postgres: the production/dev default — runs on every NC version.
-  #   - mysql (mariadb): added on NC 34 only (the newest target) to catch
-  #     MySQL-dialect issues without a 5x combo blow-up. See PR notes / the TODO
-  #     to widen mysql across versions if a dialect issue ever surfaces.
+  #     the default-index-name migration bug.
+  #   - postgres: the production/dev default.
+  #   - mysql (mariadb): used to run on NC 34 alone (the newest target), to
+  #     catch MySQL-dialect issues without a combo blow-up — a deliberate cost
+  #     trade that named its own revisiting condition ("widen mysql across
+  #     versions if a dialect issue ever surfaces"). Two user reports then
+  #     landed in exactly the cells that had never run: GH #158 on NC 32 +
+  #     MySQL, GH #155 on NC 33 + MySQL. Neither is diagnosed and this matrix is
+  #     NOT a fix for either — the owner could not reproduce #158 on three
+  #     separate MariaDB builds, so the odds it reddens here are low. What it
+  #     buys is that info.xml's NC 32–34 claim is validated on every DB we tell
+  #     users to run, instead of on two of three: a MySQL-only migration or
+  #     dialect bug on NC 32/33 now fails here rather than shipping green.
+  #
+  # Measured cost (15 successful ci.yml runs, 2026-09-14..22): each leg is ~8min
+  # median, the mysql leg ~10min, and the runner pool ran all 7 legs
+  # concurrently in 12 of those 15 runs, so the matrix span stayed ~15min
+  # against a 30min cap. The two added legs are expected to ride along in
+  # parallel; even if the pool serialises them the span lands ~25min, still well
+  # inside the cap and nowhere near the ~36min e2e that sets the PR feedback
+  # loop.
   install-matrix:
     runs-on: kanso-runners
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      # fail-fast stays false on purpose: one red DB must not cancel the others,
+      # or a dialect bug hides the version it also affects.
       matrix:
+        # Written as a plain cross-product rather than a base matrix plus an
+        # `include:` row — with mysql in the list the matrix states the
+        # invariant directly (every supported NC version × every supported DB)
+        # and there is no second place to edit when a version or a DB is added
+        # or dropped.
         nc-version: ['32', '33', '34']
-        db: ['sqlite', 'postgres']
-        include:
-          - nc-version: '34'
-            db: 'mysql'
+        db: ['sqlite', 'postgres', 'mysql']
     name: install (NC ${{ matrix.nc-version }} · ${{ matrix.db }})
     env:
       NC_VERSION: ${{ matrix.nc-version }}
@@ -518,7 +643,7 @@ jobs:
   #
   # ONE Nextcloud version and ONE database on purpose (34 + postgres, the
   # production/dev default). This class of bug is caught by one leg; spreading it
-  # over install-matrix's ten combos would multiply CI cost for nothing. Widen
+  # over install-matrix's nine combos would multiply CI cost for nothing. Widen
   # only if a defect ever slips through this leg.
   #
   # Proven non-vacuous before merge: a temporary migration adding a NOT NULL

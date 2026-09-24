@@ -94,18 +94,18 @@ test.describe('Card GitHub links', () => {
 
 		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`
 		await page.goto(cardUrl)
-		await page.waitForSelector('.card-modal', { timeout: 10_000 })
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
 		// The link row is present.
 		const linkRow = page.locator('.card-modal__link-row')
-		await expect(linkRow).toHaveCount(1, { timeout: 8000 })
+		await expect(linkRow).toHaveCount(1)
 
 		// Click the per-row remove button.
 		await linkRow.locator('.card-modal__child-remove').first().click()
 
 		// The DELETE fails → the link must reappear (optimistic revert) and an
 		// error must be shown to the user.
-		await expect(linkRow).toHaveCount(1, { timeout: 8000 })
-		await expect(page.locator('.card-modal__save-error')).toBeVisible({ timeout: 5000 })
+		await expect(linkRow).toHaveCount(1)
+		await expect(page.locator('.card-modal__save-error')).toBeVisible()
 	})
 })

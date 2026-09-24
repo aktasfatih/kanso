@@ -163,8 +163,16 @@ class BackupService {
 	 * an allow-list, not a sanitizer: the download endpoint refuses anything that
 	 * does not match rather than trying to clean it up, which is what keeps a
 	 * client-supplied name from ever selecting a path.
+	 *
+	 * The anchor is `\z`, not `$`. PCRE's `$` also matches immediately BEFORE a
+	 * final newline, so the plain version accepted
+	 * `kanso-board-7-20260804-153000.zip\n` - which falsifies the "no CR/LF"
+	 * property the download endpoint relies on when it puts this name in a
+	 * Content-Disposition header. Nothing reachable exploited it (both targets
+	 * look the literal name up and miss), but an allow-list that does not mean
+	 * what its callers document is one refactor away from mattering.
 	 */
-	private const NAME_PATTERN = '/^kanso-board-[0-9]+-[0-9]{8}-[0-9]{6}\.(?:zip|json)$/';
+	private const NAME_PATTERN = '/^kanso-board-[0-9]+-[0-9]{8}-[0-9]{6}\.(?:zip|json)\z/';
 
 	/** Default kept-per-board count when unset/blank. */
 	public const DEFAULT_RETENTION = 7;
@@ -496,7 +504,17 @@ class BackupService {
 	 * make that folder appear in the account's Files, and then report the empty
 	 * folder it had just created as "no backups".
 	 *
-	 * @return list<array{name: string, size: int, mtime: int, boardId: int}>
+	 * ORPHANED entries are flagged rather than hidden or swept. Retention only
+	 * ever visits boards {@see BoardMapper::findAll()} still returns, so the
+	 * archives of a DELETED board are never pruned again and simply stay - and
+	 * each one is a full export of that board, private cards and attachments
+	 * included. They were always in this listing (the filter is
+	 * {@see isBackupName()}, not board existence); what was missing is any way to
+	 * TELL, so an admin could not see which files nothing will ever clean up.
+	 * Nothing here deletes them: an archive of a deleted board is exactly the
+	 * thing someone may still need, and the admin decides per file.
+	 *
+	 * @return list<array{name: string, size: int, mtime: int, boardId: int, orphaned: bool}>
 	 * @throws \RuntimeException when the configured destination cannot be read
 	 */
 	public function listBackups(): array {
@@ -517,16 +535,22 @@ class BackupService {
 			return [];
 		}
 
+		$liveBoardIds = $this->liveBoardIds();
 		$backups = [];
 		foreach ($target->listFiles() as $file) {
 			if (!self::isBackupName($file['name'])) {
 				continue;
 			}
+			$boardId = $this->boardIdFromName($file['name']);
 			$backups[] = [
 				'name' => $file['name'],
 				'size' => $file['size'],
 				'mtime' => $file['mtime'],
-				'boardId' => $this->boardIdFromName($file['name']),
+				'boardId' => $boardId,
+				// Unknown board set => nothing is claimed to be orphaned. A label
+				// that cannot be computed must not turn into a false accusation
+				// that a live board's backup is abandoned.
+				'orphaned' => $liveBoardIds !== null && !isset($liveBoardIds[$boardId]),
 			];
 		}
 		usort($backups, static fn (array $a, array $b): int => strcmp($b['name'], $a['name']));
@@ -591,6 +615,79 @@ class BackupService {
 	}
 
 	/**
+	 * Removes ONE stored backup at an administrator's request.
+	 *
+	 * WHY THIS EXISTS AT ALL. Retention is the only other thing that deletes a
+	 * backup, and it only ever runs for boards that still exist, during a run
+	 * that actually happens - so a deleted board's archives, and every archive on
+	 * an instance that has since switched backups off, are never cleaned up
+	 * again. Each of them is a full export of a board: every card, private ones
+	 * included, and every attachment. Under {@see DEST_APPDATA} - the default for
+	 * a new install - the files are in nobody's Files, so without this there is
+	 * no way at all to remove a specific export. That is a retention-control gap,
+	 * not a disk-usage one, which is why the fix is a deliberate per-file delete
+	 * and NOT a sweep: nothing here removes anything the admin did not name.
+	 *
+	 * The input handling is the download endpoint's, verbatim and for the same
+	 * reason: the name is allow-listed by {@see isBackupName()} BEFORE it reaches
+	 * a target, so it holds no separator, no `..` and no CR/LF, and the targets
+	 * are filename-addressed rather than path-addressed. Nothing a client can
+	 * send here selects a file outside the backups folder.
+	 *
+	 * DELETING NEVER CREATES THE DESTINATION either ({@see resolveReadTarget()}):
+	 * a typo'd Files path must fail as an unreadable destination, not quietly
+	 * make that folder and report a successful delete of a file it never had.
+	 *
+	 * ALREADY GONE IS SUCCESS, AND THAT IS WHY THIS IS NOT SYMMETRIC WITH THE
+	 * DOWNLOAD. {@see openBackup()} answers the same {@see NotFoundException} for
+	 * a malformed name and for an absent file, so it is no oracle for which names
+	 * exist. This method deliberately does not: a malformed name throws, while an
+	 * allow-listed name with no file behind it SUCCEEDS. Deleting is idempotent -
+	 * the admin asked for that archive not to be there, and a second click, or a
+	 * retention sweep that got there first, must not raise an error over a state
+	 * that already matches the request. The oracle that costs is a real one only
+	 * if the answer is not already public: well-formedness is decided by a
+	 * documented regex over a name the listing on the same screen hands out, and
+	 * the endpoint is admin-only. It tells a caller nothing they could not
+	 * compute.
+	 *
+	 * WHAT "DELETED" MEANS STILL DIFFERS BY DESTINATION and the panel says so:
+	 * app data hard-deletes, while a Files folder moves the file to that
+	 * account's trashbin, where it keeps using space until that is emptied. That
+	 * is Nextcloud's behaviour for a Files delete, the same one retention already
+	 * gets, and it is not changed here.
+	 *
+	 * @param string $actor uid of the administrator who asked, for the audit line
+	 * @throws NotFoundException when the name is not an allow-listed backup name, or resolves to a non-file
+	 * @throws \RuntimeException when the destination cannot be reached or the file could not be removed
+	 */
+	public function deleteBackup(string $name, string $actor = ''): void {
+		if (!self::isBackupName($name)) {
+			// Not ours, so there is nothing here to delete - and the caller is
+			// told the same thing the download tells them.
+			throw new NotFoundException('No such backup');
+		}
+
+		$target = $this->resolveReadTarget();
+		if ($target === null) {
+			// App data with nothing written into it yet holds no backup of any
+			// name, so there is nothing left to do and nothing failed.
+			return;
+		}
+
+		$target->delete($name);
+		// A destructive admin action on data no other log records: the archives
+		// are not in anyone's Files under app data, so nothing else would leave a
+		// trace that this export stopped existing. It names WHO - an audit line
+		// that cannot attribute is barely one on a multi-admin instance.
+		$this->logger->info('Kanso backup: an administrator deleted a stored backup', [
+			'backup' => $name,
+			'destination' => $this->getDestination(),
+			'actor' => $actor === '' ? 'unknown' : $actor,
+		]);
+	}
+
+	/**
 	 * Whether a name is one Kanso itself would have written. The download
 	 * endpoint's whole input validation, and the listing's filter.
 	 */
@@ -601,6 +698,35 @@ class BackupService {
 	/** The board id embedded in a backup filename (0 if it somehow has none). */
 	private function boardIdFromName(string $name): int {
 		return preg_match('/^kanso-board-([0-9]+)-/', $name, $m) === 1 ? (int)$m[1] : 0;
+	}
+
+	/**
+	 * The ids of the boards that still exist, as a lookup set - the same set
+	 * {@see run()} backs up, so "orphaned" in the listing means exactly "this
+	 * board is no longer one a run would visit, and therefore one retention will
+	 * never prune again".
+	 *
+	 * Null when the board set could not be read. The orphan flag is a LABEL on a
+	 * listing, never a precondition for anything, so a database that answered
+	 * badly must degrade to saying nothing rather than failing a listing the
+	 * admin may need precisely because something is broken - or, worse, marking
+	 * every live board's backup as abandoned.
+	 *
+	 * @return array<int, true>|null
+	 */
+	private function liveBoardIds(): ?array {
+		try {
+			$ids = [];
+			foreach ($this->boardMapper->findAll() as $board) {
+				$ids[(int)$board->getId()] = true;
+			}
+			return $ids;
+		} catch (\Throwable $e) {
+			$this->logger->warning('Kanso backup: could not determine which boards still exist', [
+				'exception' => $e,
+			]);
+			return null;
+		}
 	}
 
 	// ---- helpers ----------------------------------------------------------
