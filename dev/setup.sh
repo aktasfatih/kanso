@@ -7,7 +7,11 @@
 # Configurable for the cross-version / cross-DB CI matrix (and local use):
 #   NC_VERSION  Nextcloud major version → image nextcloud:<NC_VERSION>-apache
 #               (default 34)
-#   KANSO_DB    database driver: postgres (default) | mysql | sqlite
+#   KANSO_DB    database driver: postgres (default) | mariadb | sqlite
+#               (`mysql` is accepted as a synonym of `mariadb` — the compose
+#               profile and Nextcloud's own dbtype are both called mysql, but
+#               the engine that boots is mariadb:11, and CI's matrix cell is
+#               named `mariadb` for that reason)
 #   KANSO_SKIP_OPTIONAL_APPS=1
 #               don't side-load the optional apps two e2e specs need (deck,
 #               contacts) — see install-optional-apps.sh
@@ -24,7 +28,7 @@
 # Examples:
 #   ./setup.sh                                  # NC 34 + postgres (default)
 #   NC_VERSION=32 KANSO_DB=sqlite ./setup.sh    # NC 32 + sqlite (no db service)
-#   NC_VERSION=33 KANSO_DB=mysql  ./setup.sh    # NC 33 + mariadb
+#   NC_VERSION=33 KANSO_DB=mariadb ./setup.sh   # NC 33 + mariadb:11
 set -eu
 cd "$(dirname "$0")"
 
@@ -70,7 +74,7 @@ case "$KANSO_DB" in
 		ENV
 		;;
 	*)
-		echo "Unknown KANSO_DB='$KANSO_DB' (want: postgres | mysql | sqlite)" >&2
+		echo "Unknown KANSO_DB='$KANSO_DB' (want: postgres | mariadb (aka mysql) | sqlite)" >&2
 		exit 2
 		;;
 esac
