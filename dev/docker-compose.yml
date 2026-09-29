@@ -75,9 +75,61 @@ services:
     profiles: ["mysql"]
     # Nextcloud wants READ-COMMITTED isolation on MariaDB. Binary-logging /
     # row-format are production replication settings, not needed to verify
-    # install + migrations, and their first-boot init occasionally exits the
-    # container in CI, so they are omitted here.
+    # install + migrations, so they are omitted here.
     command: --transaction-isolation=READ-COMMITTED
+    # Why this one service gets a heavier CPU weight than anything else here.
+    #
+    # On a saturated CI runner this container used to exit 1 during its FIRST
+    # boot, and the symptom everyone read was three layers downstream of it:
+    #
+    #   Container kanso-dev-db  Skipped: optional dependency "db-mysql" failed to start
+    #   getaddrinfo for db failed: No address associated with hostname
+    #   Installing of nextcloud failed!
+    #
+    # The DB-log dump CI now takes on failure caught the actual line, and it is
+    # the image's own entrypoint giving up. /usr/local/bin/docker-entrypoint.sh
+    # in mariadb:11, docker_temp_server_start():
+    #
+    #   for i in {30..0}; do
+    #     if docker_process_sql ... <<<'SELECT 1' &> /dev/null; then break; fi
+    #     sleep 1
+    #   done
+    #   if [ "$i" = 0 ]; then mysql_error "Unable to start server."; fi
+    #
+    # First boot runs mariadb-install-db, then starts a TEMPORARY server to
+    # create the database and user, and gives it 31 one-second probes to answer.
+    # That budget is a literal in the script: every MARIADB_*/MYSQL_* variable
+    # the entrypoint reads was enumerated and none of them extends it. So the
+    # only way to stay inside it is to make the server finish starting sooner.
+    # Under CPU contention it does not — the stall is plain scheduling
+    # starvation (the last log line is "Initializing installed plugins", and
+    # mysql.plugin is empty in a fresh datadir, so there is no plugin to blame;
+    # InnoDB init had already completed a second earlier).
+    #
+    # cpu_shares is the lever that actually moves it, and it is reproducible:
+    # pin 40 busy containers plus this one to a single CPU, and at the default
+    # weight the wait blows the budget in 5 of 7 first boots (mean 36s), while
+    # at 10240 it is 0 of 6 (mean 10s). Weights only bite when the host is
+    # oversubscribed, so an idle dev machine sees no change, and while the
+    # Nextcloud installer is parked on depends_on the DB genuinely IS the
+    # critical path it would be stealing from.
+    #
+    # Measured and ruled out, so nobody re-adds them as "the fix":
+    #   * --innodb-use-native-aio=0. The io_uring EPERM in the log is Docker's
+    #     seccomp profile, not a broken host, and MariaDB falls back to libaio
+    #     successfully. Forcing the aio path off did not help — 1 of 3 boots
+    #     failed at a starvation level where the control passed 3 of 3.
+    #   * A bigger healthcheck start_period. It cannot help: the container exits
+    #     on its own, so there is no unhealthy container left for a longer grace
+    #     period to wait on. The 30s below is still right for the second boot,
+    #     which is why it stays.
+    #   * restart: on-failure. Actively harmful. The entrypoint treats a datadir
+    #     as initialised the moment $DATADIR/mysql exists — which mariadb-
+    #     install-db creates BEFORE the wait that fails — so a restart skips
+    #     setup entirely. Verified: the container then comes back up *running*
+    #     with no `nextcloud` database, no `nextcloud` user, and an unset root
+    #     password.
+    cpu_shares: 10240
     environment:
       MARIADB_DATABASE: nextcloud
       MARIADB_USER: nextcloud
