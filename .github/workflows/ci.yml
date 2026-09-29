@@ -621,9 +621,17 @@ jobs:
       - name: Smoke — schema present
         run: ./dev/smoke.sh
 
+      # The database container is dumped too, and first: when its first-boot
+      # init exits (a known mariadb flake, see dev/docker-compose.yml) the app
+      # container only ever reports that host `db` did not resolve, so without
+      # this the actual crash reason is unrecoverable and the run is written off
+      # as flake. `|| true` is load-bearing on the sqlite rows of this matrix —
+      # they have no db service at all, and a missing container must not fail
+      # the dump and mask the real failure.
       - name: Dump Nextcloud logs on failure
         if: ${{ failure() }}
         run: |
+          docker logs kanso-dev-db --tail 200 || true
           docker logs kanso-dev --tail 200 || true
           docker exec kanso-dev tail -n 120 /var/www/html/data/nextcloud.log || true
 
@@ -730,6 +738,7 @@ jobs:
       - name: Dump Nextcloud logs on failure
         if: ${{ failure() }}
         run: |
+          docker logs kanso-dev-db --tail 200 || true
           docker logs kanso-dev --tail 200 || true
           docker exec kanso-dev tail -n 120 /var/www/html/data/nextcloud.log || true
 
@@ -877,10 +886,13 @@ jobs:
           if-no-files-found: ignore
 
       # Surface container logs when the stack or a spec fails so failures are
-      # diagnosable without re-running locally.
+      # diagnosable without re-running locally. The db container comes first
+      # because when it is the thing that died, the app container can only
+      # report that host `db` did not resolve.
       - name: Dump Nextcloud logs on failure
         if: ${{ failure() }}
         run: |
+          docker logs kanso-dev-db --tail 200 || true
           docker logs kanso-dev --tail 200 || true
           docker exec kanso-dev tail -n 100 /var/www/html/data/nextcloud.log || true
 
