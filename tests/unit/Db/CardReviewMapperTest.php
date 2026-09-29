@@ -108,4 +108,128 @@ class CardReviewMapperTest extends TestCase {
 		self::assertSame([7 => 2], $map);
 		self::assertArrayNotHasKey(9, $map);
 	}
+
+	// ---- the visibility filter on the aggregate (#10734) --------------------
+
+	/**
+	 * A spying expression builder recording every comparison as
+	 * (operator, column, bound value) - the structure the plain exprSink above
+	 * swallows. Lets a test assert WHICH filters the query really emits, so
+	 * deleting one turns an assertion red instead of silently passing on the fed
+	 * rows. Same helper as the sibling mapper tests.
+	 *
+	 * @param list<array{op: string, col: mixed, value: mixed}> $collector
+	 */
+	private static function predicateSpy(array &$collector): object {
+		return new class($collector) {
+			/** @param list<array{op: string, col: mixed, value: mixed}> $seen */
+			public function __construct(
+				private array &$seen,
+			) {
+			}
+
+			public function __call(string $name, array $args): string {
+				$this->seen[] = [
+					'op' => $name,
+					'col' => $args[0] ?? null,
+					'value' => $args[1] ?? null,
+				];
+				return '';
+			}
+		};
+	}
+
+	/**
+	 * Runs $call against a mapper whose query builder records every predicate.
+	 *
+	 * @param callable(CardReviewMapper): mixed $call
+	 * @return list<array{op: string, col: mixed, value: mixed}>
+	 */
+	private function recordQuery(callable $call): array {
+		$predicates = [];
+
+		$qb = $this->createMock(IQueryBuilder::class);
+		foreach (['select', 'selectAlias', 'addSelect', 'from', 'innerJoin', 'where', 'andWhere', 'groupBy'] as $method) {
+			$qb->method($method)->willReturnSelf();
+		}
+		$qb->method('expr')->willReturn(self::predicateSpy($predicates));
+		$qb->method('func')->willReturn(self::exprSink());
+		// Identity, so the recorded predicates carry the real bound values.
+		$qb->method('createNamedParameter')->willReturnCallback(static fn ($value) => $value);
+		$qb->method('createFunction')->willReturn('fn');
+
+		$result = $this->createMock(IResult::class);
+		$result->method('fetch')->willReturn(false);
+		$qb->method('executeQuery')->willReturn($result);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturn($qb);
+		$call(new CardReviewMapper($db, new CardVisibilityScope()));
+
+		return $predicates;
+	}
+
+	/**
+	 * @param list<array{op: string, col: mixed, value: mixed}> $predicates
+	 * @return list<mixed> the bound values of every $op comparison on $column
+	 */
+	private static function boundValues(array $predicates, string $op, string $column): array {
+		$values = [];
+		foreach ($predicates as $predicate) {
+			if ($predicate['op'] === $op && $predicate['col'] === $column) {
+				$values[] = $predicate['value'];
+			}
+		}
+		return $values;
+	}
+
+	/**
+	 * DENIAL: being ASKED for a review grants no visibility over the card, so
+	 * the boards-list needs-review badge is viewer-scoped. Without it, a review
+	 * request on a private or opposite-side card would raise a board's badge -
+	 * telling the viewer that hidden work is waiting on someone.
+	 *
+	 * The role that holds on EACH board is bound per side, so a viewer who is
+	 * internal on one board and external on another never picks up the other
+	 * side's open reviews. Remove the apply() call and every assertion below
+	 * goes red; the fed-rows tests above would not notice.
+	 */
+	public function testNeedsReviewCountByBoardsNeverCountsACardHiddenFromTheViewer(): void {
+		$predicates = $this->recordQuery(
+			fn (CardReviewMapper $m) => $m->needsReviewCountByBoards(
+				[7, 9],
+				'alice',
+				[7 => ViewerContext::ROLE_INTERNAL, 9 => ViewerContext::ROLE_EXTERNAL],
+			)
+		);
+
+		self::assertSame(
+			[
+				CardVisibilityScope::VISIBILITY_PUBLIC,
+				CardVisibilityScope::VISIBILITY_INTERNAL,
+				CardVisibilityScope::VISIBILITY_PRIVATE,
+			],
+			self::boundValues($predicates, 'eq', 'c.visibility'),
+			'the visibility rule must be applied to the joined cards table'
+		);
+		self::assertSame(
+			[ViewerContext::ROLE_INTERNAL, ViewerContext::ROLE_EXTERNAL],
+			self::boundValues($predicates, 'eq', 'c.creator_role'),
+			'both sides must be bound - the board-to-side PAIRING is pinned by CardVisibilityScopeTest'
+		);
+		self::assertSame(
+			['alice'],
+			self::boundValues($predicates, 'eq', 'c.owner'),
+			'the private branch must bind the viewer as owner'
+		);
+
+		// Several `board_id IN (…)` bindings: the aggregate's own readable-set
+		// filter plus the scope's per-side lists. None may leave the set.
+		$boardFilters = self::boundValues($predicates, 'in', 'c.board_id');
+		self::assertSame([7, 9], $boardFilters[0] ?? null, 'the readable set is the outer filter');
+		self::assertCount(3, $boardFilters, 'plus one per-side list from the scope');
+		foreach ($boardFilters as $bound) {
+			self::assertEmpty(array_diff((array)$bound, [7, 9]), 'no board outside the readable set may be queried');
+		}
+	}
 }

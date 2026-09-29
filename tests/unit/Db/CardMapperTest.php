@@ -969,4 +969,361 @@ class CardMapperTest extends TestCase {
 		self::assertLessThanOrEqual(1024, $length, 'but must stay a small multiple of it, not a whole document');
 		self::assertSame($aliases['description'], 'SUBSTR(description, 1, ' . $length . ')');
 	}
+
+	// ---- the visibility filters OUTSIDE the summary path (#10734) -----------
+	//
+	// #10709 pinned the board-SUMMARY aggregates; these pin SIXTEEN further
+	// `applyForViewer()` / `apply()` / `applyPublicOnly()` call sites - one test
+	// each. They exist for exactly one mutation: delete that ONE scope call and
+	// this ONE test goes red. Without them the filter is invisible to CI - a
+	// refactor can drop it and every fed-rows assertion in this file keeps
+	// passing, because the rows come back regardless of the WHERE.
+	//
+	// This is NOT every scope call in CardMapper, deliberately. The board card
+	// feed (findSummariesByBoard / ByBoards / ByIds), search (searchInBoards),
+	// the My Tasks OPEN feed (findAssignedInBoards), the trash listing
+	// (findDeletedByBoard), the export (findExportableByBoard), the per-stack
+	// count (countByStack) and the public snapshot (findPublicByBoard) are pinned
+	// END-TO-END instead, by tests/e2e/visibility-leak-matrix.spec.js - real HTTP
+	// over real SQL with two real users, which is the stronger leg where it
+	// exists. These sixteen are the ones neither leg covered.
+	//
+	// Each test therefore asserts the BOUND VALUES, not just that a column was
+	// touched: the three visibility classes in order, the internal branch
+	// carrying the VIEWER's own side (never a wildcard), and the private branch
+	// carrying the viewer's OWN uid. The anonymous reads assert the complement -
+	// 'public' and NO role/owner branch at all.
+
+	/** An EXTERNAL-side viewer, so the internal branch binds a value 'internal' cannot be confused with. */
+	private static function externalViewer(int $boardId = 7, string $uid = 'exty'): ViewerContext {
+		return ViewerContext::forMember($uid, $boardId, ViewerContext::ROLE_EXTERNAL, true);
+	}
+
+	/**
+	 * Asserts the three visibility branches of the BOARD-SCOPED scope are bound
+	 * on the un-aliased single-table query $call issues, with the viewer's own
+	 * side and uid.
+	 *
+	 * @param callable(CardMapper): mixed $call
+	 * @param int $boardBindings how many `board_id` bindings the query emits in
+	 *                           total - the query's own filter plus the scope's (1 where the query is
+	 *                           not board-addressed and the scope is the only board constraint)
+	 */
+	private function assertBoardScopedDenial(callable $call, int $boardBindings = 2): void {
+		$recorded = $this->recordQuery($call);
+		$predicates = $recorded['predicates'];
+
+		self::assertSame(
+			[
+				CardVisibilityScope::VISIBILITY_PUBLIC,
+				CardVisibilityScope::VISIBILITY_INTERNAL,
+				CardVisibilityScope::VISIBILITY_PRIVATE,
+			],
+			self::boundValues($predicates, 'eq', 'visibility'),
+			'all three visibility branches must be bound'
+		);
+		self::assertSame(
+			[ViewerContext::ROLE_EXTERNAL],
+			self::boundValues($predicates, 'eq', 'creator_role'),
+			'the internal branch must bind the VIEWER\'s side, not a wildcard'
+		);
+		self::assertSame(
+			['exty'],
+			self::boundValues($predicates, 'eq', 'owner'),
+			'the private branch must bind the viewer as owner'
+		);
+		self::assertSame(
+			array_fill(0, $boardBindings, 7),
+			self::boundValues($predicates, 'eq', 'board_id'),
+			'and the read must stay on the viewer\'s board'
+		);
+	}
+
+	/**
+	 * DENIAL: a `PREFIX-<seq>` cross-reference to a card the viewer may not see
+	 * must resolve to null - indistinguishable from a reference to a card that
+	 * never existed. Without the scope the point read would hand back the
+	 * hidden card's title, which is what the reference renders.
+	 */
+	public function testFindByBoardAndSeqNeverResolvesACardHiddenFromTheViewer(): void {
+		$this->assertBoardScopedDenial(
+			fn (CardMapper $m) => $m->findByBoardAndSeq(7, 12, self::externalViewer())
+		);
+	}
+
+	/**
+	 * DENIAL: the template picker is a card list like any other, so a private or
+	 * opposite-side template is not offered as a blueprint.
+	 */
+	public function testFindTemplatesByBoardNeverListsATemplateHiddenFromTheViewer(): void {
+		$this->assertBoardScopedDenial(
+			fn (CardMapper $m) => $m->findTemplatesByBoard(7, self::externalViewer())
+		);
+	}
+
+	/**
+	 * DENIAL: the CalDAV VTODO sync is the authenticated twin of the anonymous
+	 * ICS feed, so it must carry the viewer's scope - a hidden due card must not
+	 * appear in a board member's calendar client.
+	 */
+	public function testFindDuedateSummariesByBoardNeverSyncsACardHiddenFromTheViewer(): void {
+		$this->assertBoardScopedDenial(
+			fn (CardMapper $m) => $m->findDuedateSummariesByBoard(7, self::externalViewer())
+		);
+	}
+
+	/**
+	 * DENIAL: the per-priority distribution is a count, and a count is a leak
+	 * too - a hidden card must not raise any bar on the chart.
+	 */
+	public function testCountByPriorityNeverCountsACardHiddenFromTheViewer(): void {
+		$this->assertBoardScopedDenial(
+			fn (CardMapper $m) => $m->countByPriority(7, self::externalViewer())
+		);
+	}
+
+	/** DENIAL: the aging bucket counts only cards the viewer may see. */
+	public function testAgingCountNeverCountsACardHiddenFromTheViewer(): void {
+		$this->assertBoardScopedDenial(
+			fn (CardMapper $m) => $m->agingCount(7, 1_700_000_000, self::externalViewer())
+		);
+	}
+
+	/** DENIAL: same for the overdue count. */
+	public function testOverdueCountNeverCountsACardHiddenFromTheViewer(): void {
+		$this->assertBoardScopedDenial(
+			fn (CardMapper $m) => $m->overdueCount(7, new \DateTime('@1700000000'), self::externalViewer())
+		);
+	}
+
+	/**
+	 * DENIAL: the throughput timeline returns raw `done_at` stamps, so an
+	 * unscoped read would leak WHEN a hidden card was completed.
+	 */
+	public function testDoneTimelineNeverIncludesACardHiddenFromTheViewer(): void {
+		$this->assertBoardScopedDenial(
+			fn (CardMapper $m) => $m->doneTimeline(7, 1_699_000_000, 1_700_000_000, self::externalViewer())
+		);
+	}
+
+	/**
+	 * DENIAL: the cycle-time read returns (created_at, done_at, estimate) per
+	 * card - richer than the timeline, so the same filter matters more.
+	 */
+	public function testDoneCycleTimesNeverIncludesACardHiddenFromTheViewer(): void {
+		$this->assertBoardScopedDenial(
+			fn (CardMapper $m) => $m->doneCycleTimes(7, 1_699_000_000, 1_700_000_000, self::externalViewer())
+		);
+	}
+
+	/** DENIAL: and the created-timeline half of the same chart. */
+	public function testCreatedTimelineNeverIncludesACardHiddenFromTheViewer(): void {
+		$this->assertBoardScopedDenial(
+			fn (CardMapper $m) => $m->createdTimeline(7, 1_699_000_000, 1_700_000_000, self::externalViewer())
+		);
+	}
+
+	/**
+	 * DENIAL: the per-stack estimate sum is derived from raw estimate tokens, so
+	 * a hidden card must contribute none of its points to any column total.
+	 */
+	public function testEstimateByStackNeverSumsACardHiddenFromTheViewer(): void {
+		$this->assertBoardScopedDenial(
+			fn (CardMapper $m) => $m->estimateByStack(7, self::externalViewer())
+		);
+	}
+
+	/**
+	 * DENIAL: the card-detail child list is the VIEWER-facing twin of the
+	 * unscoped findChildren() (which internal auto-complete logic needs). This
+	 * is the one that reaches a response body, so it is the one that must be
+	 * scoped - and, being parent-addressed, it carries no board filter of its
+	 * own: the scope's board predicate is the ONLY thing keeping it on board 7.
+	 */
+	public function testFindVisibleChildrenNeverReturnsAChildHiddenFromTheViewer(): void {
+		$this->assertBoardScopedDenial(
+			fn (CardMapper $m) => $m->findVisibleChildren(42, self::externalViewer()),
+			1
+		);
+	}
+
+	/**
+	 * DENIAL: being ASSIGNED a card grants no visibility over it, so the
+	 * recently-done half of My Tasks applies the cross-board scope exactly like
+	 * the open feed - the role that holds on EACH board, per side.
+	 */
+	public function testFindAssignedDoneSinceInBoardsNeverReturnsACardHiddenFromTheViewer(): void {
+		$recorded = $this->recordQuery(
+			fn (CardMapper $m) => $m->findAssignedDoneSinceInBoards(
+				['alice'],
+				[7, 9],
+				'alice',
+				[7 => ViewerContext::ROLE_INTERNAL, 9 => ViewerContext::ROLE_EXTERNAL],
+				1_699_000_000,
+				50,
+			)
+		);
+		$predicates = $recorded['predicates'];
+
+		self::assertSame(
+			[
+				CardVisibilityScope::VISIBILITY_PUBLIC,
+				CardVisibilityScope::VISIBILITY_INTERNAL,
+				CardVisibilityScope::VISIBILITY_PRIVATE,
+			],
+			self::boundValues($predicates, 'eq', 'c.visibility'),
+			'assignment is not visibility - the scope must still be applied'
+		);
+		self::assertSame(
+			[ViewerContext::ROLE_INTERNAL, ViewerContext::ROLE_EXTERNAL],
+			self::boundValues($predicates, 'eq', 'c.creator_role'),
+			'both sides must be bound - the board-to-side PAIRING is pinned by CardVisibilityScopeTest'
+		);
+		self::assertSame(['alice'], self::boundValues($predicates, 'eq', 'c.owner'));
+
+		// Several `board_id IN (…)` bindings: the feed's own readable-set filter
+		// plus the scope's per-side lists. None may name a board outside the set.
+		$boardFilters = self::boundValues($predicates, 'in', 'c.board_id');
+		self::assertSame([7, 9], $boardFilters[0] ?? null, 'the readable set is the outer filter');
+		self::assertCount(3, $boardFilters, 'plus one per-side list from the scope');
+		foreach ($boardFilters as $bound) {
+			self::assertEmpty(array_diff((array)$bound, [7, 9]), 'no board outside the readable set may be queried');
+		}
+	}
+
+	/**
+	 * DENIAL: the boards-list progress % is TWO grouped queries (total, then
+	 * done) and BOTH must be scoped. A done half that saw more than the total
+	 * half would not just leak - it could report a ratio above 100 %.
+	 *
+	 * Asserting the exact pair of bindings is what makes this catch the DONE
+	 * query specifically: drop the scope from countDoneByBoards() alone and the
+	 * counts fall from two to one.
+	 */
+	public function testDoneRatioByBoardsScopesTheDoneHalfAsWellAsTheTotal(): void {
+		$recorded = $this->recordQuery(
+			fn (CardMapper $m) => $m->doneRatioByBoards(
+				[7, 9],
+				'alice',
+				[7 => ViewerContext::ROLE_INTERNAL, 9 => ViewerContext::ROLE_EXTERNAL],
+			)
+		);
+		$predicates = $recorded['predicates'];
+
+		self::assertSame(
+			[
+				CardVisibilityScope::VISIBILITY_PUBLIC,
+				CardVisibilityScope::VISIBILITY_INTERNAL,
+				CardVisibilityScope::VISIBILITY_PRIVATE,
+				CardVisibilityScope::VISIBILITY_PUBLIC,
+				CardVisibilityScope::VISIBILITY_INTERNAL,
+				CardVisibilityScope::VISIBILITY_PRIVATE,
+			],
+			self::boundValues($predicates, 'eq', 'visibility'),
+			'both the total and the done query must be viewer-scoped'
+		);
+		self::assertSame(
+			[
+				ViewerContext::ROLE_INTERNAL, ViewerContext::ROLE_EXTERNAL,
+				ViewerContext::ROLE_INTERNAL, ViewerContext::ROLE_EXTERNAL,
+			],
+			self::boundValues($predicates, 'eq', 'creator_role'),
+			'each board\'s own side must be bound, on both passes'
+		);
+		self::assertSame(['alice', 'alice'], self::boundValues($predicates, 'eq', 'owner'));
+		self::assertSame([0], self::boundValues($predicates, 'gt', 'done_at'), 'exactly one pass counts done cards');
+
+		$boardFilters = self::boundValues($predicates, 'in', 'board_id');
+		self::assertCount(6, $boardFilters, 'two readable-set filters plus two per-side lists each');
+		foreach ($boardFilters as $bound) {
+			self::assertEmpty(array_diff((array)$bound, [7, 9]), 'no board outside the readable set may be queried');
+		}
+	}
+
+	/**
+	 * DENIAL: the boards-list overdue badge is the cross-board twin of
+	 * overdueCount(), so a hidden overdue card must not redden another board's
+	 * tile in the list either.
+	 */
+	public function testOverdueCountByBoardsNeverCountsACardHiddenFromTheViewer(): void {
+		$recorded = $this->recordQuery(
+			fn (CardMapper $m) => $m->overdueCountByBoards(
+				[7, 9],
+				new \DateTime('@1700000000'),
+				'alice',
+				[7 => ViewerContext::ROLE_INTERNAL, 9 => ViewerContext::ROLE_EXTERNAL],
+			)
+		);
+		$predicates = $recorded['predicates'];
+
+		self::assertSame(
+			[
+				CardVisibilityScope::VISIBILITY_PUBLIC,
+				CardVisibilityScope::VISIBILITY_INTERNAL,
+				CardVisibilityScope::VISIBILITY_PRIVATE,
+			],
+			self::boundValues($predicates, 'eq', 'visibility')
+		);
+		self::assertSame(
+			[ViewerContext::ROLE_INTERNAL, ViewerContext::ROLE_EXTERNAL],
+			self::boundValues($predicates, 'eq', 'creator_role'),
+			'both sides must be bound - the board-to-side PAIRING is pinned by CardVisibilityScopeTest'
+		);
+		self::assertSame(['alice'], self::boundValues($predicates, 'eq', 'owner'));
+
+		$boardFilters = self::boundValues($predicates, 'in', 'board_id');
+		self::assertSame([7, 9], $boardFilters[0] ?? null, 'the readable set is the outer filter');
+		self::assertCount(3, $boardFilters);
+	}
+
+	// ---- the two ANONYMOUS card reads (#10734) ------------------------------
+	//
+	// A share link and a calendar feed token authenticate a BOARD, not a person,
+	// so there is no role to match and no owner to compare. These two must bind
+	// the public-only scope and grow NO role or private branch - "unreachable",
+	// not merely "unmatched".
+
+	/**
+	 * DENIAL: the public share's inline-image gate addresses ONE card by id, and
+	 * the anonymous scope IS its WHERE clause - a private or internal card must
+	 * not be addressable at all. Dropping applyPublicOnly() would let any card
+	 * id on the board be probed through a share link.
+	 */
+	public function testFindPublicByBoardAndIdAddressesPublicCardsOnly(): void {
+		$recorded = $this->recordQuery(
+			fn (CardMapper $m) => $m->findPublicByBoardAndId(7, 42)
+		);
+		$predicates = $recorded['predicates'];
+
+		self::assertSame(
+			[CardVisibilityScope::VISIBILITY_PUBLIC],
+			self::boundValues($predicates, 'eq', 'visibility'),
+			'an anonymous point read may only ever reach a public card'
+		);
+		self::assertSame([], self::boundValues($predicates, 'eq', 'creator_role'), 'a share link has no role to match');
+		self::assertSame([], self::boundValues($predicates, 'eq', 'owner'), 'and no owner to match either');
+		self::assertSame([42], self::boundValues($predicates, 'eq', 'id'));
+		self::assertSame([7], self::boundValues($predicates, 'eq', 'board_id'));
+	}
+
+	/**
+	 * DENIAL: the ICS due-date feed is the app's only anonymous card LIST, and
+	 * its caller serialises every row into a calendar. Dropping the public-only
+	 * scope would publish every hidden card's title and due date to anyone
+	 * holding the board's feed token.
+	 */
+	public function testFindWithDuedateByBoardFeedsPublicCardsOnly(): void {
+		$recorded = $this->recordQuery(
+			fn (CardMapper $m) => $m->findWithDuedateByBoard(7, 2000)
+		);
+		$predicates = $recorded['predicates'];
+
+		self::assertSame(
+			[CardVisibilityScope::VISIBILITY_PUBLIC],
+			self::boundValues($predicates, 'eq', 'visibility'),
+			'the calendar feed may only ever carry public cards'
+		);
+		self::assertSame([], self::boundValues($predicates, 'eq', 'creator_role'), 'a feed token has no role to match');
+		self::assertSame([], self::boundValues($predicates, 'eq', 'owner'), 'and no owner to match either');
+	}
 }
