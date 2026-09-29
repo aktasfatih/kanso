@@ -118,7 +118,7 @@ msgstr "{card} movido para {stack}"
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "{count} cartão(ões) têm uma estimativa que não cabe na nova escala e serão limpos. Isso não pode ser desfeito."
 
-#: src/components/BulkActionBar.vue
+#: src/components/BulkSelectionBar.vue
 msgid "{count} selected"
 msgstr "{count} selecionados"
 
@@ -167,14 +167,17 @@ msgstr "{n}d"
 msgid "{n}h"
 msgstr "{n}h"
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} cards updated"
 msgstr "{ok} cartões atualizados"
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} cards updated before the action failed"
 msgstr ""
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} updated, {skipped} skipped"
 msgstr "{ok} atualizados, {skipped} ignorados"
@@ -984,11 +987,12 @@ msgstr "Bug"
 msgid "Built-in sections"
 msgstr "Seções internas"
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "Bulk action failed."
 msgstr "Não foi possível executar a ação em massa."
 
-#: src/components/BulkActionBar.vue
+#: src/components/BulkSelectionBar.vue
 msgid "Bulk card actions"
 msgstr "Ações em massa de cartões"
 
@@ -2381,11 +2385,12 @@ msgstr ""
 msgid "Everyone shown here is already assigned to this card."
 msgstr ""
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "Exit multi-select"
 msgstr "Sair da seleção múltipla"
 
-#: src/components/BulkActionBar.vue
+#: src/components/BulkSelectionBar.vue
 msgid "Exit selection mode"
 msgstr "Sair do modo de seleção"
 
@@ -4783,6 +4788,10 @@ msgstr ""
 msgid "Restore"
 msgstr "Restaurar"
 
+#: src/views/ArchivedView.vue
+msgid "Restore selected"
+msgstr ""
+
 #: src/components/CommandPalette.vue
 msgid "Results"
 msgstr "Resultados"
@@ -4968,12 +4977,14 @@ msgid "Select"
 msgstr "Seleção"
 
 #: src/components/StackColumn.vue:206
+#: src/views/ArchivedView.vue:406
 msgid "Select %n card"
 msgid_plural "Select %n cards"
 msgstr[0] ""
 msgstr[1] ""
 
 #: src/components/StackColumn.vue:205
+#: src/views/ArchivedView.vue:405
 msgid "Select %n visible card"
 msgid_plural "Select %n visible cards"
 msgstr[0] ""
@@ -4995,6 +5006,7 @@ msgstr "Selecione uma pessoa…"
 msgid "Select a stack…"
 msgstr "Selecione uma coluna…"
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "Select multiple cards"
 msgstr "Selecionar vários cartões"

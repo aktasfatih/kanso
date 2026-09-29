@@ -2499,7 +2499,9 @@ function warnOnSkipped(summary) {
  *
  * On a partial failure it still RETURNS the cards that landed rather than
  * throwing them away: the undo is the whole reason this action ships without a
- * confirm dialog, and the Archived page only restores one card at a time.
+ * confirm dialog. (The Archived page can restore a whole selection since #10440,
+ * but that is a trip through another view — the undo is still the cheap way
+ * back.)
  *
  * DESIGN DECISION (#10438) — scoped to what the actor can see, on purpose, and
  * the hidden remainder is NOT reported. `cardsForStack` derives from

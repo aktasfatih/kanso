@@ -119,7 +119,7 @@ msgstr "{card} перемещена в {stack}"
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "Карточек с оценкой, не подходящей под новую шкалу: {count}. Их оценки будут очищены. Это действие нельзя отменить."
 
-#: src/components/BulkActionBar.vue
+#: src/components/BulkSelectionBar.vue
 msgid "{count} selected"
 msgstr "Выбрано: {count}"
 
@@ -168,14 +168,17 @@ msgstr "{n}д"
 msgid "{n}h"
 msgstr "{n}ч"
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} cards updated"
 msgstr "Обновлено карточек: {ok}"
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} cards updated before the action failed"
 msgstr ""
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} updated, {skipped} skipped"
 msgstr "Обновлено: {ok}, пропущено: {skipped}"
@@ -1010,11 +1013,12 @@ msgstr "Ошибка"
 msgid "Built-in sections"
 msgstr "Встроенные разделы"
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "Bulk action failed."
 msgstr "Не удалось выполнить массовое действие."
 
-#: src/components/BulkActionBar.vue
+#: src/components/BulkSelectionBar.vue
 msgid "Bulk card actions"
 msgstr "Массовые действия с карточками"
 
@@ -2413,11 +2417,12 @@ msgstr ""
 msgid "Everyone shown here is already assigned to this card."
 msgstr ""
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "Exit multi-select"
 msgstr "Выйти из множественного выбора"
 
-#: src/components/BulkActionBar.vue
+#: src/components/BulkSelectionBar.vue
 msgid "Exit selection mode"
 msgstr "Выйти из режима выбора"
 
@@ -4817,6 +4822,10 @@ msgstr ""
 msgid "Restore"
 msgstr "Восстановить"
 
+#: src/views/ArchivedView.vue
+msgid "Restore selected"
+msgstr ""
+
 #: src/components/CommandPalette.vue
 msgid "Results"
 msgstr "Результаты"
@@ -5002,6 +5011,7 @@ msgid "Select"
 msgstr "Список"
 
 #: src/components/StackColumn.vue:206
+#: src/views/ArchivedView.vue:406
 msgid "Select %n card"
 msgid_plural "Select %n cards"
 msgstr[0] ""
@@ -5009,6 +5019,7 @@ msgstr[1] ""
 msgstr[2] ""
 
 #: src/components/StackColumn.vue:205
+#: src/views/ArchivedView.vue:405
 msgid "Select %n visible card"
 msgid_plural "Select %n visible cards"
 msgstr[0] ""
@@ -5031,6 +5042,7 @@ msgstr "Выберите человека…"
 msgid "Select a stack…"
 msgstr "Выберите колонку…"
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "Select multiple cards"
 msgstr "Выбрать несколько карточек"

@@ -117,7 +117,7 @@ msgstr ""
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr ""
 
-#: src/components/BulkActionBar.vue
+#: src/components/BulkSelectionBar.vue
 msgid "{count} selected"
 msgstr ""
 
@@ -166,14 +166,17 @@ msgstr ""
 msgid "{n}h"
 msgstr ""
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} cards updated"
 msgstr ""
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} cards updated before the action failed"
 msgstr ""
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} updated, {skipped} skipped"
 msgstr ""
@@ -983,11 +986,12 @@ msgstr ""
 msgid "Built-in sections"
 msgstr ""
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "Bulk action failed."
 msgstr ""
 
-#: src/components/BulkActionBar.vue
+#: src/components/BulkSelectionBar.vue
 msgid "Bulk card actions"
 msgstr ""
 
@@ -2380,11 +2384,12 @@ msgstr ""
 msgid "Everyone shown here is already assigned to this card."
 msgstr ""
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "Exit multi-select"
 msgstr ""
 
-#: src/components/BulkActionBar.vue
+#: src/components/BulkSelectionBar.vue
 msgid "Exit selection mode"
 msgstr ""
 
@@ -4782,6 +4787,10 @@ msgstr ""
 msgid "Restore"
 msgstr ""
 
+#: src/views/ArchivedView.vue
+msgid "Restore selected"
+msgstr ""
+
 #: src/components/CommandPalette.vue
 msgid "Results"
 msgstr ""
@@ -4967,12 +4976,14 @@ msgid "Select"
 msgstr ""
 
 #: src/components/StackColumn.vue:206
+#: src/views/ArchivedView.vue:406
 msgid "Select %n card"
 msgid_plural "Select %n cards"
 msgstr[0] ""
 msgstr[1] ""
 
 #: src/components/StackColumn.vue:205
+#: src/views/ArchivedView.vue:405
 msgid "Select %n visible card"
 msgid_plural "Select %n visible cards"
 msgstr[0] ""
@@ -4994,6 +5005,7 @@ msgstr ""
 msgid "Select a stack…"
 msgstr ""
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "Select multiple cards"
 msgstr ""

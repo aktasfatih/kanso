@@ -117,7 +117,7 @@ msgstr "{card} 已移动到 {stack}"
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "有 {count} 张卡片的估算值不适用于新刻度，将被清除。此操作无法撤销。"
 
-#: src/components/BulkActionBar.vue
+#: src/components/BulkSelectionBar.vue
 msgid "{count} selected"
 msgstr "已选择 {count} 项"
 
@@ -166,14 +166,17 @@ msgstr "{n} 天"
 msgid "{n}h"
 msgstr "{n} 小时"
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} cards updated"
 msgstr "已更新 {ok} 张卡片"
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} cards updated before the action failed"
 msgstr ""
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} updated, {skipped} skipped"
 msgstr "已更新 {ok} 张，跳过 {skipped} 张"
@@ -958,11 +961,12 @@ msgstr "缺陷"
 msgid "Built-in sections"
 msgstr "内置分区"
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "Bulk action failed."
 msgstr "批量操作失败。"
 
-#: src/components/BulkActionBar.vue
+#: src/components/BulkSelectionBar.vue
 msgid "Bulk card actions"
 msgstr "卡片批量操作"
 
@@ -2349,11 +2353,12 @@ msgstr ""
 msgid "Everyone shown here is already assigned to this card."
 msgstr ""
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "Exit multi-select"
 msgstr "退出多选"
 
-#: src/components/BulkActionBar.vue
+#: src/components/BulkSelectionBar.vue
 msgid "Exit selection mode"
 msgstr "退出选择模式"
 
@@ -4749,6 +4754,10 @@ msgstr ""
 msgid "Restore"
 msgstr "恢复"
 
+#: src/views/ArchivedView.vue
+msgid "Restore selected"
+msgstr ""
+
 #: src/components/CommandPalette.vue
 msgid "Results"
 msgstr "结果"
@@ -4934,11 +4943,13 @@ msgid "Select"
 msgstr "下拉选择"
 
 #: src/components/StackColumn.vue:206
+#: src/views/ArchivedView.vue:406
 msgid "Select %n card"
 msgid_plural "Select %n cards"
 msgstr[0] ""
 
 #: src/components/StackColumn.vue:205
+#: src/views/ArchivedView.vue:405
 msgid "Select %n visible card"
 msgid_plural "Select %n visible cards"
 msgstr[0] ""
@@ -4959,6 +4970,7 @@ msgstr "选择成员…"
 msgid "Select a stack…"
 msgstr "选择列…"
 
+#: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "Select multiple cards"
 msgstr "选择多张卡片"
