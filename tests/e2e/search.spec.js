@@ -223,19 +223,28 @@ test.describe('Search', () => {
 	// cards. They are out of search by default now; the archive is still the
 	// project's history, so one chip widens the search back over it.
 	test('archived cards leave search until "Include archived" is on', async ({ page }) => {
-		// Title match on an archived card…
-		const shelvedCard = await api.post('/cards', { stackId: state.stackId, title: 'Quagga retrospective' })
-		// …and a COMMENT match on an archived card whose own title does NOT carry
-		// the term, so this row can only arrive through the comment source.
-		const shelvedCommented = await api.post('/cards', { stackId: state.stackId, title: 'Okapi ledger' })
-		await api.post(`/cards/${shelvedCommented.id}/comments`, { body: 'The quagga decision was taken here.' })
-		// A live card with the same term: without it, "no archived rows" would
-		// pass just as well on a query that returned nothing at all.
-		const liveCard = await api.post('/cards', { stackId: state.stackId, title: 'Quagga live work' })
-		await api.patch(`/cards/${shelvedCard.id}`, { archived: true })
-		await api.patch(`/cards/${shelvedCommented.id}`, { archived: true })
-
+		// Every card this spec makes, recorded the instant the create returns. The
+		// fixture setup is INSIDE the try for the same reason the assertions are:
+		// this file's specs share one board, so a create that succeeds followed by
+		// an archive that fails would otherwise strand "Quagga" cards on it and
+		// change what the specs after this one see.
+		const created = []
 		try {
+			// Title match on an archived card…
+			const shelvedCard = await api.post('/cards', { stackId: state.stackId, title: 'Quagga retrospective' })
+			created.push(shelvedCard.id)
+			// …and a COMMENT match on an archived card whose own title does NOT carry
+			// the term, so this row can only arrive through the comment source.
+			const shelvedCommented = await api.post('/cards', { stackId: state.stackId, title: 'Okapi ledger' })
+			created.push(shelvedCommented.id)
+			await api.post(`/cards/${shelvedCommented.id}/comments`, { body: 'The quagga decision was taken here.' })
+			// A live card with the same term: without it, "no archived rows" would
+			// pass just as well on a query that returned nothing at all.
+			const liveCard = await api.post('/cards', { stackId: state.stackId, title: 'Quagga live work' })
+			created.push(liveCard.id)
+			await api.patch(`/cards/${shelvedCard.id}`, { archived: true })
+			await api.patch(`/cards/${shelvedCommented.id}`, { archived: true })
+
 			await goToBoard(page)
 			const searchInput = page.locator('.search-box__input')
 			await searchInput.fill('Quagga')
@@ -267,11 +276,14 @@ test.describe('Search', () => {
 			await expect(row('Quagga retrospective')).toHaveCount(0)
 			await expect(row('Okapi ledger')).toHaveCount(0)
 		} finally {
-			// Unconditional: a failed assertion must not leave two archived cards on
-			// the board this file's other specs search.
-			await api.delete(`/cards/${shelvedCard.id}`)
-			await api.delete(`/cards/${shelvedCommented.id}`)
-			await api.delete(`/cards/${liveCard.id}`)
+			// Unconditional, and over exactly what was created: a failed assertion
+			// — or a failed create/archive halfway through the setup above — must
+			// not leave "Quagga" cards on the board this file's other specs search.
+			// Swallowed per card so one failing delete cannot skip the rest, nor
+			// replace the real failure this block is unwinding.
+			for (const id of created) {
+				await api.delete(`/cards/${id}`).catch(() => {})
+			}
 		}
 	})
 

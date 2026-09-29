@@ -420,6 +420,10 @@ msgstr "Uma nova cópia é criada a cada vez; este cartão continua sendo a orig
 msgid "A new one replaces the last, so a backup that keeps failing does not pile up."
 msgstr ""
 
+#: templates/admin-backup.php
+msgid "A separate account only changes whose quota they spend; to bound disk use, empty that trashbin or keep the backups inside Kanso."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Accept mail from (one address or @domain per line — leave empty to accept anyone)"
 msgstr ""
@@ -1294,14 +1298,14 @@ msgstr "Checklist incompleto"
 #: src/components/BoardListView.vue
 #: src/components/CardPreview.vue
 #: src/components/CardTile.vue
-msgid "Checklist progress"
-msgstr "Progresso do checklist"
+msgid "Checklist progress {done} of {total}"
+msgstr ""
 
-#: src/components/BoardListView.vue:1060
-#: src/components/CardPreview.vue:227
-#: src/components/CardTile.vue:464
-msgid "Checklist progress - %n overdue step"
-msgid_plural "Checklist progress - %n overdue steps"
+#: src/components/BoardListView.vue:1071
+#: src/components/CardPreview.vue:239
+#: src/components/CardTile.vue:480
+msgid "Checklist progress {done} of {total}, %n overdue step"
+msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -4398,10 +4402,6 @@ msgid "Pinned"
 msgstr "Fixados"
 
 #: templates/admin-backup.php
-msgid "Point the folder at a separate account, or keep the backups inside Kanso, if disk use has to stay bounded."
-msgstr ""
-
-#: templates/admin-backup.php
 msgid "Point this at a separate account nobody signs in to, and they land in its feed instead of yours."
 msgstr ""
 
@@ -5297,10 +5297,13 @@ msgstr "Tachado"
 msgid "Sub-card"
 msgstr "Subcartão"
 
-#: src/components/BoardListView.vue
 #: src/components/CardTile.vue
 msgid "Sub-card progress"
 msgstr "Progresso dos subcartões"
+
+#: src/components/BoardListView.vue
+msgid "Sub-card progress {done} of {total}"
+msgstr ""
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue

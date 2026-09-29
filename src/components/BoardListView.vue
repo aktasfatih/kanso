@@ -236,11 +236,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							     came from the checklist - on sub-card progress it would be
 							     labelling the wrong thing. The label says "overdue" and carries
 							     the count, exactly as the kanban tile's badge does: the tint
-							     alone would be a colour-only cue. -->
+							     alone would be a colour-only cue.
+							     role="img", exactly as on the tile: ARIA prohibits an
+							     author-provided name on a bare span, and inside this row
+							     BUTTON an aria-label that IS honoured gets used in place of
+							     the visible 0/2 when the button names itself from its
+							     content - so the counts would have gone missing from the
+							     name it announces. As one named graphic the label carries
+							     them itself. -->
 							<span
 								v-if="rows[vRow.index].progressBadge"
 								class="board-list-row__count"
 								:class="{ 'board-list-row__count--overdue': rows[vRow.index].progressBadge.overdue }"
+								role="img"
 								:aria-label="rows[vRow.index].progressBadge.label"
 								:title="rows[vRow.index].progressBadge.label">
 								<CheckboxMarkedOutlineIcon :size="14" />
@@ -1045,21 +1053,26 @@ function cardProgress(card) {
 // checklist-derived one may tint - over sub-card progress the tint would be
 // naming a checklist step that isn't there.
 //
-// The label carries the count, so the signal is never colour-only. n(), not t()
-// with a placeholder: pl/ru and friends need the plural forms, and these are
-// byte-for-byte the strings the tile and the preview announce.
+// The label carries the count, so the signal is never colour-only. It also
+// carries the done/total pair, because the badge is a `role="img"` and so
+// announces this string INSTEAD of its own 0/2 text. n(), not t() with a
+// placeholder, for the overdue count: pl/ru and friends need the plural forms,
+// and these are byte-for-byte the strings the tile and the preview announce.
 function progressBadge(card) {
 	const progress = cardProgress(card)
 	if (progress === null) return null
 
 	const fromChecklist = progress.source === 'checklist'
 	const overdue = fromChecklist && !isDone(card) && Number(card.checklist?.overdue ?? 0) > 0
+	const counts = { done: progress.done, total: progress.total }
 
 	let label
 	if (overdue) {
-		label = n('kanso', 'Checklist progress - %n overdue step', 'Checklist progress - %n overdue steps', Number(card.checklist.overdue))
+		label = n('kanso', 'Checklist progress {done} of {total}, %n overdue step', 'Checklist progress {done} of {total}, %n overdue steps', Number(card.checklist.overdue), counts)
 	} else {
-		label = fromChecklist ? t('kanso', 'Checklist progress') : t('kanso', 'Sub-card progress')
+		label = fromChecklist
+			? t('kanso', 'Checklist progress {done} of {total}', counts)
+			: t('kanso', 'Sub-card progress {done} of {total}', counts)
 	}
 
 	return { done: progress.done, total: progress.total, overdue, label }

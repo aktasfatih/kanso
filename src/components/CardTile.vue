@@ -164,7 +164,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				     and the board still shows checklists (#5894). Tinted red when a
 				     step is open and past due (#10696): the same badge carries the
 				     signal, so the tile grows nothing. The label says "overdue" too -
-				     the tint alone would be a colour-only cue. -->
+				     the tint alone would be a colour-only cue.
+				     role="img", not a bare span: ARIA prohibits an author-provided
+				     name on the generic role, so an aria-label here was free to be
+				     dropped - and where it was honoured, it REPLACED the visible
+				     0/2 in the enclosing button's name-from-content. As an img the
+				     badge is one named graphic whose children are presentational,
+				     so checklistLabel carries the counts as well as the qualifier. -->
 				<span
 					v-if="cardFeatures.checklist && card.checklist && card.checklist.total > 0"
 					class="card-tile__checklist"
@@ -172,6 +178,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						'card-tile__checklist--complete': card.checklist.done === card.checklist.total,
 						'card-tile__checklist--overdue': hasOverdueSteps,
 					}"
+					role="img"
 					:aria-label="checklistLabel"
 					:title="checklistLabel">
 					<CheckboxMarkedOutlineIcon :size="12" />
@@ -458,11 +465,21 @@ function formatDue(iso) {
 // not late work.
 const hasOverdueSteps = computed(() => !isDone.value && Number(props.card.checklist?.overdue ?? 0) > 0)
 
-// n(), not t() with a placeholder: pl/ru and friends need the plural forms, and
-// this mirrors the board tile's own `%n overdue` chip.
-const checklistLabel = computed(() => (hasOverdueSteps.value
-	? n('kanso', 'Checklist progress - %n overdue step', 'Checklist progress - %n overdue steps', Number(props.card.checklist.overdue))
-	: t('kanso', 'Checklist progress')))
+// The badge's whole accessible name, counts included. It is what a `role="img"`
+// badge announces INSTEAD of its own text, so the numbers have to travel in the
+// string: a label that said only "overdue" would replace the visible 0/2 rather
+// than qualify it, and the counts would be lost to a screen reader.
+//
+// n(), not t() with a placeholder for the overdue count: pl/ru and friends need
+// the plural forms. The done/total pair stays a plain substitution - it is not
+// what the plural agrees with.
+const checklistLabel = computed(() => {
+	const done = Number(props.card.checklist?.done ?? 0)
+	const total = Number(props.card.checklist?.total ?? 0)
+	return hasOverdueSteps.value
+		? n('kanso', 'Checklist progress {done} of {total}, %n overdue step', 'Checklist progress {done} of {total}, %n overdue steps', Number(props.card.checklist.overdue), { done, total })
+		: t('kanso', 'Checklist progress {done} of {total}', { done, total })
+})
 
 // Priority label for the indicator badge
 const priorityLabel = computed(() => {

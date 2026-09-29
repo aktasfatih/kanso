@@ -128,11 +128,18 @@ $hideIf = static function (bool $hidden): void {
 
 		   Said ONCE, naming both stores, unlike the destination hints above: this
 		   control is SHARED, it is on screen in either mode, and the reader needs
-		   to know which of the two meanings their number carries. */ ?>
+		   to know which of the two meanings their number carries.
+
+		   The last line names what a separate account actually buys, which is NOT
+		   what this hint first claimed: the account the folder lives in decides
+		   whose quota the pruned copies keep spending, and nothing more - they go
+		   on accumulating there either way. Only two things really reclaim the
+		   bytes, so only those two are offered as the answer to "bounded": empty
+		   that trashbin, or use the app-data store, which hard-deletes on prune. */ ?>
 	<p class="settings-hint" id="kanso-backup-retention-hint">
 		<?php p($l->t('This caps how many copies exist, not how much disk they take.')); ?>
 		<?php p($l->t('In a Files folder a pruned backup moves to that account\'s trashbin and keeps using its quota until that empties; inside Kanso it is freed at once.')); ?>
-		<?php p($l->t('Point the folder at a separate account, or keep the backups inside Kanso, if disk use has to stay bounded.')); ?>
+		<?php p($l->t('A separate account only changes whose quota they spend; to bound disk use, empty that trashbin or keep the backups inside Kanso.')); ?>
 	</p>
 
 	<p>

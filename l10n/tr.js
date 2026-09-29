@@ -245,7 +245,6 @@ OC.L10N.register(
     "Checklist complete" : "Kontrol listesi tamamlandı",
     "Checklist done" : "Kontrol listesi tamam",
     "Checklist incomplete" : "Kontrol listesi tamamlanmadı",
-    "Checklist progress" : "Kontrol listesi ilerlemesi",
     "Choose a board…" : "Bir pano seç…",
     "Choose a column…" : "Bir sütun seç…",
     "Choose a CSV file" : "Bir CSV dosyası seç",

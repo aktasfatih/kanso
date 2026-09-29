@@ -510,10 +510,18 @@ test.describe('Kanso admin backup settings', () => {
 		expect(text).toMatch(/inside kanso|app data/)
 		expect(text).toMatch(/freed|at once|immediately|straight away/)
 
-		// 3. And the lever, which is the one the panel already recommends a few
-		// fields up for the same reason — an admin is not left holding the problem
-		// with nothing to do about it.
-		expect(text).toMatch(/separate account|service account|dedicated account/)
+		// 3. And the lever — the part that has to be TRUE, not merely present.
+		// Pointing the folder at a separate account changes whose quota the pruned
+		// copies keep spending; it does not stop them accumulating, so an admin who
+		// followed it for "bounded storage" would still fill a disk. The hint has to
+		// name the account for what it is (quota isolation) and offer, for storage,
+		// one of the two things that actually reclaim the bytes: emptying that
+		// trashbin, or the app-data store, which hard-deletes on prune.
+		expect(text).toMatch(/separate account only (?:changes|isolates|shifts) whose quota/)
+		expect(text).toMatch(/empt(?:y|ies|ying) that trashbin/)
+		expect(text).toMatch(/inside kanso|app data/)
+		// …and never the other way round: the account is not sold as a disk bound.
+		expect(text).not.toMatch(/separate account[^.;]*\b(?:bound|bounded|capped|limits?)\b/)
 
 		// It sits UNDER the field it qualifies, and it stays there in both modes:
 		// unlike the destination hints this one names both stores in a single

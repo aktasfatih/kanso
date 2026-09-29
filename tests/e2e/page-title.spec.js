@@ -150,6 +150,48 @@ test.describe('Browser tab title (#125)', () => {
 		expect(seen.filter((title) => title.startsWith(BOARD_TITLE + ' - '))).toEqual([])
 	})
 
+	// The other side of that cache fallback. It exists so an in-app board switch
+	// never blinks the bare app name — but a cached row is only a good guess while
+	// the board is still LOADING. Once the server answers 403/404 the row is stale
+	// by definition, and the tab used to go on flying the board's name over a view
+	// saying access was lost. Not a disclosure — the name was already on this
+	// user's screen, and the nav still lists the same stale row — but the tab and
+	// the view must not contradict each other.
+	//
+	// The revocation is staged by answering THIS board's GET the way a revoked
+	// share does, rather than by wiring up a second user: the fix turns on the
+	// answered status alone, and a real two-account share would test Nextcloud's
+	// ACL rather than the title. The route is pinned to the board endpoint exactly
+	// — `**/api/boards/<id>` does not match `/changes` under it — so nothing else
+	// on the page is disturbed.
+	test('a board whose access was revoked drops its name from the tab', async ({ page }) => {
+		await ncLogin(page)
+
+		// The premise: the boards list is warm and carries this board's title, which
+		// is what the tab would otherwise fall back to. Without this step the test
+		// would pass on an empty cache for the wrong reason.
+		await page.goto(`${BASE}/index.php/apps/kanso#/`)
+		await page.waitForSelector('.board-list-view', { timeout: 15_000 })
+		await expect(page.getByText(BOARD_TITLE).first()).toBeVisible({ timeout: 15_000 })
+		const baseTitle = (await page.title()).trim()
+		expect(baseTitle).not.toContain(BOARD_TITLE)
+
+		await page.route(`**/apps/kanso/api/boards/${state.boardId}`, (route) =>
+			route.fulfill({
+				status: 403,
+				contentType: 'application/json',
+				body: JSON.stringify({ error: 'Forbidden' }),
+			}))
+
+		await page.goto(boardUrl(state.boardId))
+
+		// The view says access was lost…
+		await expect(page.getByText('This board no longer exists or you no longer have access.'))
+			.toBeVisible({ timeout: 15_000 })
+		// …and the tab agrees, rather than keeping the name out of the list cache.
+		await expect(page).toHaveTitle(baseTitle, { timeout: 15_000 })
+	})
+
 	test('a full-page card link is titled with the card, and board analytics names its board', async ({ page }) => {
 		await ncLogin(page)
 

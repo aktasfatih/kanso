@@ -974,9 +974,23 @@ const { data: boardData, isLoading, isError, error: boardError, refetch: boardRe
 // `['boards']` either, so there the tab keeps Nextcloud's server-rendered title
 // until the board query answers: unchanged behaviour, and the honest thing to
 // show while nothing client-side knows the board's name yet.
+//
+// The cache fallback is for a board that is still LOADING. Once the server has
+// answered 403/404 the cached row is stale by definition — the board is gone, or
+// this user's access to it is — and the tab would go on flying its name over a
+// view that says access was lost. Read through apiAnswerStatus for the same
+// reason the error copy below does: a 404 Kanso never sent is a server failing to
+// answer, and that board is still loading. (Not a disclosure — the name was
+// already on this user's screen, and the nav sidebar still lists the same stale
+// row; this is the tab agreeing with the view.) Guarded here rather than by
+// evicting the board from `['boards']` in useBoard's access latch: that cache is
+// shared with the nav, and dropping a row from it to fix one component's title is
+// the wider change, with its own product question about the sidebar.
 usePageTitle(() => {
 	const loaded = boardData.value?.board?.title
 	if (loaded) return loaded
+	const status = apiAnswerStatus(boardError.value)
+	if (status === 403 || status === 404) return ''
 	const boards = queryClient.getQueryData(['boards'])
 	if (!Array.isArray(boards)) return ''
 	const listed = boards.find((b) => Number(b.id) === Number(boardId.value))

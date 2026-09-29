@@ -245,7 +245,6 @@ OC.L10N.register(
     "Checklist complete" : "Checklist concluído",
     "Checklist done" : "Checklists concluídos",
     "Checklist incomplete" : "Checklist incompleto",
-    "Checklist progress" : "Progresso do checklist",
     "Choose a board…" : "Escolha um quadro…",
     "Choose a column…" : "Escolha uma coluna…",
     "Choose a CSV file" : "Escolha um arquivo CSV",

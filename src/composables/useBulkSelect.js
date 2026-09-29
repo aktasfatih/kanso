@@ -115,6 +115,23 @@ export function useBulkSelect(boardId, queryClient) {
 		lastSelectedId.value = null
 	}
 
+	/**
+	 * Drop a list of card ids OUT of the selection, leaving the rest of it alone.
+	 *
+	 * @param {number[]} ids - card ids to un-select
+	 */
+	function deselectMany(ids) {
+		if (!ids || ids.length === 0) return
+		const s = new Set(selected.value)
+		for (const id of ids) {
+			s.delete(Number(id))
+		}
+		selected.value = s
+		if (lastSelectedId.value != null && !s.has(lastSelectedId.value)) {
+			lastSelectedId.value = null
+		}
+	}
+
 	/** Enter multi-select mode. */
 	function enterMode() {
 		selectionMode.value = true
@@ -179,6 +196,15 @@ export function useBulkSelect(boardId, queryClient) {
 	/**
 	 * Apply a bulk action to the current selection, then clear it.
 	 *
+	 * On a PARTIAL failure — a later chunk rejects after earlier ones committed —
+	 * the selection is not cleared, because the cards in the failed chunk still
+	 * need the action. But the cards in `err.partial.ok` DID change server-side,
+	 * so they are dropped from it: leaving them selected makes the bar over-count,
+	 * and a second click would resend ids that are already archived/restored.
+	 * The invariant belongs here rather than in each caller — `apply` is what owns
+	 * the selection, and every caller (BoardView.runBulkAction,
+	 * ArchivedView.handleRestoreSelected) inherits the same guarantee.
+	 *
 	 * @param {string} action - one of: move, add_label, remove_label, assign_user, set_due_date, set_status, archive, unarchive, delete
 	 * @param {object} params - action-specific params
 	 * @throws on server error
@@ -190,6 +216,9 @@ export function useBulkSelect(boardId, queryClient) {
 			lastResult.value = result
 			clear()
 			return result
+		} catch (err) {
+			deselectMany(err?.partial?.ok)
+			throw err
 		} finally {
 			applying.value = false
 		}
@@ -205,6 +234,7 @@ export function useBulkSelect(boardId, queryClient) {
 		selectRange,
 		addMany,
 		clear,
+		deselectMany,
 		enterMode,
 		exitMode,
 		applying,
