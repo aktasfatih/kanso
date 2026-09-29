@@ -3,6 +3,7 @@
 
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
+import { isInlineAttachmentSrc, publicInlineSrcRule } from './inlineAttachmentSrc.js'
 
 const md = new MarkdownIt({
 	html: false,
@@ -121,6 +122,15 @@ md.renderer.rules.kanso_cardref = (tokens, idx, options, env) => {
 	return `<a class="kanso-cardref" data-kanso-card-id="${cardId}" title="${md.utils.escapeHtml(ref)}">${title}</a>`
 }
 
+// On a PUBLIC SHARE, re-point every inline card-attachment src at the share's own
+// token-gated route (#152), and ONLY on a src markdown actually parsed as an
+// image or a link - never one quoted inside a code fence, a code span, alt text
+// or prose (#10608). The rule body and the whole rationale live in
+// ./inlineAttachmentSrc.js, which has no DOM dependency and is therefore unit
+// tested directly. It reads the share token from `env` per render, so every
+// authenticated surface sharing this singleton keeps the authenticated path.
+md.core.ruler.push('kanso_public_inline_src', publicInlineSrcRule)
+
 const ALLOWED_TAGS = [
 	'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
 	'p', 'strong', 'em',
@@ -134,52 +144,6 @@ const ALLOWED_TAGS = [
 	'img', // ONLY same-origin inline card-attachment images (see IMG hook below)
 ]
 
-// A pasted image is embedded as `![alt](<inline-endpoint-url>)`. We permit <img>
-// but LOCK its `src` to the app's own inline-attachment endpoint — a SAME-ORIGIN,
-// path-only URL of the exact shape produced by cardAttachmentInlineUrl():
-//   [/<anything>]/apps/kanso/api/cards/<digits>/attachments/<digits>/inline
-// …or its token-gated public-share twin (see the second pattern below).
-// This deliberately allows NO external host (SSRF / tracking-pixel / exfil
-// surface), NO data: URI, NO svg, NO scheme at all. The `.../inline` server
-// endpoint itself only ever serves raster png/jpeg/gif/webp bytes; anything else
-// 404s there. The regex is anchored end-to-end and the whole src must be a
-// server-relative path (leading single "/", never "//" which is a
-// protocol-relative external URL, never a scheme).
-const INLINE_ATTACHMENT_SRC_RE =
-	/^\/(?:[^/\\][^\\]*\/)*apps\/kanso\/api\/cards\/\d+\/attachments\/\d+\/inline$/
-
-// The PUBLIC-SHARE twin of the path above (#152). A public-share visitor has no
-// session, so the authenticated endpoint 401s and the picture renders as a
-// broken box; the server re-points the srcs in the anonymous payload at the
-// token-gated route instead (PublicShareService::rewriteInlineImages), and this
-// is the shape it produces:
-//   [/<anything>]/apps/kanso/api/public/<token>/cards/<digits>/attachments/<digits>/inline
-// Same properties as its twin and no looser: anchored end-to-end, same-origin
-// path only, no scheme, no host, no query, no fragment. The token segment is
-// pinned to the generator's own charset — ISecureRandom::CHAR_ALPHANUMERIC, 64
-// chars (PublicShareService::TOKEN_LENGTH) — so this alternative cannot be used
-// to smuggle path segments, traversal or an extension past the check.
-const PUBLIC_INLINE_ATTACHMENT_SRC_RE =
-	/^\/(?:[^/\\][^\\]*\/)*apps\/kanso\/api\/public\/[A-Za-z0-9]{64}\/cards\/\d+\/attachments\/\d+\/inline$/
-
-/**
- * True iff `src` is a safe same-origin inline card-attachment path — either the
- * authenticated one or its public-share twin. Rejects absolute/external URLs,
- * protocol-relative `//host`, data:/javascript: URIs, backslashes, query
- * strings, and fragments — only the two exact app paths pass.
- *
- * @param {string} src the raw img src attribute value
- * @returns {boolean}
- */
-function isInlineAttachmentSrc(src) {
-	if (typeof src !== 'string') return false
-	const s = src.trim()
-	// Must be a server-relative path, not "//host" (protocol-relative) and not a
-	// scheme (http:, data:, javascript:). A single leading slash is required.
-	if (!s.startsWith('/') || s.startsWith('//')) return false
-	return INLINE_ATTACHMENT_SRC_RE.test(s) || PUBLIC_INLINE_ATTACHMENT_SRC_RE.test(s)
-}
-
 // `class` is allowed through here so it can survive to the afterSanitizeAttributes
 // hook, which then strips it from everything except the mention chip and card-ref
 // anchor (below). `data-kanso-card-id` carries the numeric target of an internal
@@ -189,6 +153,14 @@ const ALLOWED_ATTR = ['href', 'title', 'rel', 'target', 'class', 'data-kanso-car
 const FORBID_TAGS = ['style', 'script']
 
 const FORBID_ATTR = ['style', 'onerror', 'onclick', 'onload', 'onmouseover']
+
+// The <img> src allow-list lives in ./inlineAttachmentSrc.js, next to the
+// public-share re-pointing that has to agree with it: isInlineAttachmentSrc()
+// below is the same pattern publicInlineSrcRule() rewrites INTO, so the hook is a
+// real second gate on the value the rule produced. They are in their own module
+// so they can be unit-tested without a DOM - this file installs a DOMPurify hook
+// at import time and therefore only loads in a browser, and those patterns are
+// the part that has to be provable.
 
 // Registered once at module load on the shared DOMPurify singleton. This is
 // currently the only DOMPurify consumer; if a second one is added, scope this
@@ -300,12 +272,21 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
  *   (e.g. "KAN-123"). A hit renders the reference as a title link; a miss (or an
  *   omitted map) renders the raw reference text. The caller builds this from the
  *   already-cached board cards + prefix so rendering needs no extra request.
+ * @param {string} [options.publicToken]
+ *   The 64-char share token, on a PUBLIC-SHARE page ONLY (src/views/PublicBoard.vue).
+ *   With it, an inline card-attachment src/href is re-pointed at the share's own
+ *   token-gated route so the picture loads for a visitor with no session (#152).
+ *   Omitted everywhere else, so every authenticated surface keeps rendering the
+ *   authenticated path. Only a src markdown parses as an image (or a link) is
+ *   touched — never one quoted in a code fence, a code span, alt text or prose
+ *   (#10608).
  * @returns {string}    Safe HTML string
  */
 export function renderMarkdown(src, options = {}) {
 	if (!src) return ''
-	// `env` is markdown-it's per-render bag; the cardref renderer reads env.refs.
-	const raw = md.render(src, { refs: options.refs })
+	// `env` is markdown-it's per-render bag; the cardref renderer reads env.refs
+	// and the public-src core rule reads env.publicToken.
+	const raw = md.render(src, { refs: options.refs, publicToken: options.publicToken })
 	return DOMPurify.sanitize(raw, {
 		ALLOWED_TAGS,
 		ALLOWED_ATTR,
