@@ -42,7 +42,11 @@ class ProviderTest extends TestCase {
 			}
 		};
 		$this->l10nFactory->method('get')->willReturn($l);
-		$this->urlGenerator->method('imagePath')->willReturn('/img/app.svg');
+		// Reflect the requested asset back, so a test can assert WHICH icon the
+		// provider asked for (see the theme-adaptive icon test below).
+		$this->urlGenerator->method('imagePath')->willReturnCallback(
+			static fn (string $app, string $file): string => '/custom_apps/' . $app . '/img/' . $file
+		);
 		$this->urlGenerator->method('getAbsoluteURL')->willReturnArgument(0);
 	}
 
@@ -124,6 +128,30 @@ class ProviderTest extends TestCase {
 		$e->expects(self::once())->method('setParsedSubject')->with('Alice A. shared Roadmap with you')->willReturnSelf();
 		$e->expects(self::once())->method('setRichSubject')
 			->with('{actor} shared {object} with you', self::anything())->willReturnSelf();
+
+		$this->provider->parse('en', $e);
+	}
+
+	/**
+	 * The stream must get the DARK asset (card 10666). Activity renders the icon
+	 * as an <img> under `.activity-icon.monochrome { filter:
+	 * var(--background-invert-if-dark) }`, so a white source is invisible in BOTH
+	 * themes - white on the white stream background in light, inverted to black
+	 * on the near-black one in dark. `img/app.svg` is deliberately white (app menu
+	 * / PWA) and must never be the answer here.
+	 */
+	public function testParseUsesTheDarkIconSoItAdaptsToTheTheme(): void {
+		$this->stubActor('Alice A.');
+		$e = $this->createMock(IEvent::class);
+		$e->method('getApp')->willReturn('kanso');
+		$e->method('getSubject')->willReturn(Provider::SUBJECT_CARD_CREATED);
+		$e->method('getSubjectParameters')->willReturn(['actor' => 'alice', 'name' => 'Card']);
+		$e->method('getObjectId')->willReturn('9');
+		$e->method('setParsedSubject')->willReturnSelf();
+		$e->method('setRichSubject')->willReturnSelf();
+
+		$e->expects(self::once())->method('setIcon')
+			->with('/custom_apps/kanso/img/app-dark.svg')->willReturnSelf();
 
 		$this->provider->parse('en', $e);
 	}

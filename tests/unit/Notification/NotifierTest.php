@@ -65,7 +65,11 @@ class NotifierTest extends TestCase {
 		$l = $this->createMock(IL10N::class);
 		$l->method('t')->willReturnCallback(static fn (string $text): string => $text);
 		$this->l10nFactory->method('get')->willReturn($l);
-		$this->urlGenerator->method('imagePath')->willReturn('/img/app.svg');
+		// Reflect the requested asset back, so a test can assert WHICH icon the
+		// notifier asked for (see the theme-adaptive icon tests below).
+		$this->urlGenerator->method('imagePath')->willReturnCallback(
+			static fn (string $app, string $file): string => '/custom_apps/' . $app . '/img/' . $file
+		);
 		$this->urlGenerator->method('getAbsoluteURL')->willReturnArgument(0);
 		// Card links use the fragment-free server route (#3744): the deep-link
 		// route with the card id, never a `#/…` hash under the index page.
@@ -269,6 +273,74 @@ class NotifierTest extends TestCase {
 		$n->expects(self::never())->method('setRichSubject');
 		$this->expectException(UnknownNotificationException::class);
 		$notifier->prepare($n, 'en');
+	}
+
+	/**
+	 * Every prepare() branch must hand the bell the DARK asset (card 10666).
+	 * The notification centre renders the icon as an <img> under
+	 * `.notification-icon { filter: var(--background-invert-if-dark) }`, so a
+	 * white source is invisible in BOTH themes - white on the white notification
+	 * background in light, inverted to black on the near-black one in dark.
+	 * `img/app.svg` is deliberately white (app menu / PWA) and must never be the
+	 * answer here; `img/app-dark.svg` carries no fill and adapts.
+	 *
+	 * All three setIcon() sites are covered because they are three separate
+	 * branches - due/reminder, actor-driven, and backup - and a partial revert
+	 * would otherwise slip through.
+	 */
+	public function testPrepareUsesTheDarkIconOnTheActorBranch(): void {
+		$n = $this->createMock(INotification::class);
+		$n->method('getApp')->willReturn('kanso');
+		$n->method('getSubject')->willReturn('card_assigned');
+		$n->method('getSubjectParameters')->willReturn(['actor' => 'alice']);
+		$n->method('getObjectId')->willReturn('9');
+		$n->method('setLink')->willReturnSelf();
+		$n->method('setParsedSubject')->willReturnSelf();
+		$n->method('setRichSubject')->willReturnSelf();
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$actor = $this->createMock(IUser::class);
+		$actor->method('getDisplayName')->willReturn('Alice A.');
+		$this->userManager->method('get')->willReturn($actor);
+
+		$n->expects(self::once())->method('setIcon')
+			->with('/custom_apps/kanso/img/app-dark.svg')->willReturnSelf();
+
+		$this->notifier->prepare($n, 'en');
+	}
+
+	public function testPrepareUsesTheDarkIconOnTheDueBranch(): void {
+		$n = $this->createMock(INotification::class);
+		$n->method('getApp')->willReturn('kanso');
+		$n->method('getSubject')->willReturn('card_due');
+		$n->method('getSubjectParameters')->willReturn([]);
+		$n->method('getObjectId')->willReturn('9');
+		$n->method('setLink')->willReturnSelf();
+		$n->method('setParsedSubject')->willReturnSelf();
+		$n->method('setRichSubject')->willReturnSelf();
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+
+		$n->expects(self::once())->method('setIcon')
+			->with('/custom_apps/kanso/img/app-dark.svg')->willReturnSelf();
+
+		$this->notifier->prepare($n, 'en');
+	}
+
+	public function testPrepareUsesTheDarkIconOnTheBackupBranch(): void {
+		$n = $this->createMock(INotification::class);
+		$n->method('getApp')->willReturn('kanso');
+		$n->method('getSubject')->willReturn('backup_ok');
+		$n->method('getSubjectParameters')->willReturn(['message' => 'Backed up 7 board(s)']);
+		$n->method('getObjectId')->willReturn('run');
+		$n->method('setLink')->willReturnSelf();
+		$n->method('setParsedSubject')->willReturnSelf();
+		$n->method('setRichSubject')->willReturnSelf();
+		$n->method('setParsedMessage')->willReturnSelf();
+		$n->method('setRichMessage')->willReturnSelf();
+
+		$n->expects(self::once())->method('setIcon')
+			->with('/custom_apps/kanso/img/app-dark.svg')->willReturnSelf();
+
+		$this->notifier->prepare($n, 'en');
 	}
 
 	public function testPrepareChecksVisibilityForTheNotificationsRecipient(): void {

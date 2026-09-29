@@ -84,8 +84,15 @@ class Provider implements IProvider {
 			default => throw new UnknownActivityException(),
 		};
 
+		// The activity stream renders this icon as an <img> under
+		// `.activity-icon.monochrome { filter: var(--background-invert-if-dark) }`
+		// - `no` on light themes, `invert(1)` on dark ones. So the asset has to be
+		// DARK, exactly like the admin section icon (see AdminSection::getIcon,
+		// issue #162): `img/app.svg` is the deliberately WHITE app-menu/PWA icon
+		// and rendered invisible here in BOTH themes (white on white in light,
+		// inverted to black on near-black in dark).
 		$event
-			->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', 'app.svg')))
+			->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', 'app-dark.svg')))
 			->setParsedSubject($plain)
 			->setRichSubject(
 				$rich,
