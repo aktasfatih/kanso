@@ -44,10 +44,13 @@ use OCA\Kanso\Service\Forge\ForgeEvent;
  *    (#10491) reads them: it spells the action `label_updated` / `label_cleared`
  *    and ships no top-level `label` object, only the issue's full (post-change)
  *    label set. There is therefore no delta to mirror, and `changedLabel` is
- *    deliberately left null here - a label change on a Forgejo issue is the
- *    accepted no-op every unrecognized action already is. Mirroring a full label
- *    SET is different work (diffing against the card's current labels) on an
- *    unauthenticated path, and is out of scope until someone asks for it.
+ *    deliberately left null here - a label change on a LINKED Forgejo issue is
+ *    the accepted no-op every unrecognized action already is. Mirroring a full
+ *    label SET is different work (diffing against the card's current labels) on
+ *    an unauthenticated path, and is out of scope until someone asks for it.
+ *    That full set IS enough for issue INTAKE, though, which only asks whether
+ *    the issue currently carries one named label - so `label_updated` is this
+ *    forge's intake retrigger (#10566, see {@see intakeRetriggerActions()}).
  */
 class ForgejoWebhookService extends AbstractForgeWebhookService {
 	/** A raw hex HMAC-SHA256 digest is exactly this many lowercase hex chars. */
@@ -61,6 +64,27 @@ class ForgejoWebhookService extends AbstractForgeWebhookService {
 	#[\Override]
 	protected function provider(): string {
 		return CardLink::PROVIDER_FORGEJO;
+	}
+
+	/**
+	 * Forgejo spells ANY issue label change `label_updated` - both an add and a
+	 * removal, verified against a live Gitea 1.22 delivery - and ships the issue's
+	 * full post-change label set with it. That set is all the intake filter needs,
+	 * so `label_updated` is the retrigger (#10566) even though it is not a
+	 * per-label delta and therefore still useless to the label MIRROR above.
+	 *
+	 * `label_cleared` is excluded: it can only leave an issue with fewer labels
+	 * than it had, so it can never bring one INTO the filter.
+	 *
+	 * Keyed on Forgejo's own spelling rather than GitHub's `labeled`, which no
+	 * Forgejo delivery ever carries - a shared hardcoded action would have made
+	 * this half of the fix dead code.
+	 *
+	 * @return string[]
+	 */
+	#[\Override]
+	protected function intakeRetriggerActions(): array {
+		return ['label_updated'];
 	}
 
 	// ---- config columns ----------------------------------------------------

@@ -80,6 +80,20 @@ use OCP\Security\ISecureRandom;
  * carrying that label. Creation goes through CardService::create as the board
  * owner, so the sort key, change row and realtime all fire.
  *
+ * Intake retrigger (#10566): a LABEL-FILTERED board also re-offers an unlinked,
+ * still-OPEN issue to intake when a later delivery says its labels changed,
+ * because the normal triage order is to open an issue first and label it once you
+ * have read it - and `opened` used to be intake's only entry, so such an issue
+ * was filtered out once and never looked at again. The retrigger reads the issue's
+ * CURRENT label set, which both forges ship in full on such a delivery, so it
+ * needs no delta and no diff; the ACTION SPELLING, however, is per-forge
+ * ({@see self::intakeRetriggerActions()}), and it is deliberately narrower than
+ * the filter it honours ({@see self::mayIntake()}). It re-enters the unchanged
+ * {@see self::intakeIssue()}, so the same filter and the same
+ * `existsByBoardAndUrls()` dedup decide it - a re-labelled or redelivered issue
+ * never yields a second card, and an issue that never carries the intake label
+ * is still never carded.
+ *
  * Egress / visibility rule (#3760): the 200 response body is this service's
  * ONLY outbound payload, and it goes to an EXTERNAL system (the forge's delivery
  * log, readable by repo admins who need not be board members). It therefore
@@ -113,6 +127,12 @@ abstract class AbstractForgeWebhookService {
 	 * write-side cap so the two cannot drift.
 	 */
 	protected const MAX_LABEL_NAME_LENGTH = LabelService::MAX_TITLE_LENGTH;
+
+	/**
+	 * Intake's original trigger (#3752). Every forge spells this one the same, so
+	 * it lives here rather than in each provider's retrigger set.
+	 */
+	protected const INTAKE_ACTION_OPENED = 'opened';
 
 	/**
 	 * Why a delivery did not move (or create) anything. A silent `handled: false`
@@ -183,6 +203,27 @@ abstract class AbstractForgeWebhookService {
 
 	/** The CardLink provider tag links created by this service carry. */
 	abstract protected function provider(): string;
+
+	/**
+	 * The actions - BESIDES `opened` - after which an issue nobody has linked yet
+	 * is offered to intake again (#10566).
+	 *
+	 * Per-forge because the spelling is, and that is the whole point: GitHub says
+	 * `labeled`, Forgejo says `label_updated`, so a single hardcoded `'labeled'`
+	 * test would silently never fire on a Forgejo instance.
+	 *
+	 * Prefer to leave a removal out where the forge spells it separately (GitHub's
+	 * `unlabeled`): taking a label off can only move an issue further from passing
+	 * the filter, so re-running intake there is never anything but noise. It is a
+	 * preference, not a rule a forge can always honour - Forgejo uses ONE action for
+	 * adds and removals alike, so its entry necessarily covers both. That costs
+	 * nothing but a redundant filter test: intake reads the issue's post-change
+	 * label set, so a removal that leaves the intake label in place would have
+	 * carded the issue on the add anyway, and the dedup absorbs it.
+	 *
+	 * @return string[]
+	 */
+	abstract protected function intakeRetriggerActions(): array;
 
 	abstract protected function readSecret(Board $board): ?string;
 
@@ -476,7 +517,10 @@ abstract class AbstractForgeWebhookService {
 	 *
 	 * An `opened` issue nobody has linked yet is the intake case (#3752): when
 	 * the board configured an intake stack (and the issue passes the optional
-	 * label filter), a link-only card is auto-created for it.
+	 * label filter), a link-only card is auto-created for it. On a LABEL-FILTERED
+	 * board a later label change re-offers such an issue to the very same check
+	 * ({@see self::mayIntake()}), so one that was opened before it was labelled
+	 * still lands (#10566).
 	 *
 	 * A `labeled`/`unlabeled` delivery mirrors that one label onto every matched
 	 * card (#10491) - resolved ONCE per delivery, not once per card, so a busy
@@ -487,7 +531,7 @@ abstract class AbstractForgeWebhookService {
 	protected function handleIssueEvent(Board $board, ForgeEvent $event): array {
 		$links = $this->cardLinkMapper->findByBoardAndUrls($board->getId(), $event->urlCandidates);
 		if ($links === []) {
-			if ($event->action === 'opened') {
+			if ($this->mayIntake($board, $event)) {
 				return $this->intakeIssue($board, $event);
 			}
 			return $this->noop(self::REASON_NO_LINK_MATCH);
@@ -554,6 +598,59 @@ abstract class AbstractForgeWebhookService {
 	}
 
 	/**
+	 * Whether this delivery may enter intake for an issue nobody has linked yet.
+	 *
+	 * `opened` always may - that is intake's original trigger (#3752). One of this
+	 * forge's retrigger actions may only when the board narrows intake to a LABEL
+	 * (#10566), and that condition is the fix, not a shortcut:
+	 *
+	 *  - WITH a filter, a label change is the one event that can newly satisfy it.
+	 *    People open an issue and label it once they have read it, so a filtered
+	 *    board used to drop every such issue on `opened` and never look again.
+	 *  - WITHOUT one, intake already takes EVERY opened issue, so a label change
+	 *    can satisfy nothing that was not already decided. Re-running intake there
+	 *    would instead make "somebody touched its labels" a second, unasked-for
+	 *    intake trigger for every issue the repository ever filed - long-closed
+	 *    ones included - on a path that is unauthenticated and acts as the board
+	 *    owner. So the retrigger is exactly as wide as the filter it exists to
+	 *    honour, and a filterless board behaves precisely as it did before.
+	 *
+	 * A retrigger additionally requires the issue to still be OPEN. `opened` carried
+	 * that implicitly and intake exists to bring WORK onto the board, so without the
+	 * check one triage sweep that labels a batch of long-closed issues would card
+	 * every one of them - and nothing would ever move them off the intake stack,
+	 * because {@see self::applyIssueAutoMove()} reacts to `closed`/`reopened` and
+	 * both are already past. A state this service does not recognize counts as not
+	 * open, which costs a MISSING card rather than a wrong one - the same direction
+	 * every other drift in this class is allowed to fail in.
+	 *
+	 * The label set itself is NOT re-read here: whether the issue passes is
+	 * {@see self::intakeIssue()}'s decision, unchanged, so there is exactly one
+	 * filter test on either path.
+	 */
+	protected function mayIntake(Board $board, ForgeEvent $event): bool {
+		if ($event->action === self::INTAKE_ACTION_OPENED) {
+			return true;
+		}
+		if (!in_array($event->action, $this->intakeRetriggerActions(), true)) {
+			return false;
+		}
+		if ($event->state !== CardLink::STATE_OPEN) {
+			return false;
+		}
+		return $this->intakeLabelFilter($board) !== '';
+	}
+
+	/**
+	 * The board's intake label filter, trimmed - '' meaning "take in every issue".
+	 * Shared by the retrigger gate and the filter test itself so the two cannot
+	 * drift into disagreeing about what "filtered" means.
+	 */
+	protected function intakeLabelFilter(Board $board): string {
+		return trim($this->readIntakeLabel($board) ?? '');
+	}
+
+	/**
 	 * Issue intake (#3752): auto-creates a LINK-ONLY card for a just-opened
 	 * issue in the board's configured intake stack. Opt-in and defensive - any
 	 * failed precondition degrades to the accepted no-op the webhook always
@@ -564,6 +661,13 @@ abstract class AbstractForgeWebhookService {
 	 *  - a stale stack (deleted / moved off this board) → off until re-configured;
 	 *  - the issue already linked ANYWHERE on the board - alive, archived or
 	 *    trashed card - → dedup, a redelivery never creates a duplicate.
+	 *
+	 * The dedup is held by the LINK ROW, so PURGING an intake card releases it. That
+	 * used to be terminal in practice (the issue's one `opened` delivery was long
+	 * gone), but the retrigger (#10566) means a later label change on a filtered
+	 * board will card such an issue again. Accepted: purge-and-relabel is a
+	 * deliberate sequence, and the alternative is a tombstone table for links whose
+	 * card no longer exists.
 	 *
 	 * The dedup is check-then-act (no unique index spans a link URL and the
 	 * card's board), so two CONCURRENT deliveries of the same opened event
@@ -578,7 +682,7 @@ abstract class AbstractForgeWebhookService {
 		if ($stackId === null || $stackId <= 0) {
 			return $this->noop(self::REASON_INTAKE_OFF);
 		}
-		$labelFilter = trim($this->readIntakeLabel($board) ?? '');
+		$labelFilter = $this->intakeLabelFilter($board);
 		if ($labelFilter !== '' && !$event->hasLabel($labelFilter)) {
 			return $this->noop(self::REASON_INTAKE_FILTERED);
 		}
@@ -629,7 +733,10 @@ abstract class AbstractForgeWebhookService {
 
 		return [
 			'handled' => true,
-			'action' => 'opened',
+			// The delivery's OWN action, not a hardcoded `opened`: intake now has a
+			// second entry (#10566), and the forge's delivery log is the only place
+			// an admin can see which one carded the issue.
+			'action' => $event->action,
 			'cardId' => $card->getId(),
 			'moved' => false,
 			'created' => true,

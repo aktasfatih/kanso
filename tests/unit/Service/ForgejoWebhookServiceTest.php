@@ -647,6 +647,209 @@ class ForgejoWebhookServiceTest extends TestCase {
 		self::assertSame(ForgejoWebhookService::REASON_INTAKE_STALE_STACK, $result['reason']);
 	}
 
+	// ---- intake retrigger on a later label (#10566) ------------------------
+
+	/**
+	 * A Forgejo/Gitea `issues` LABEL delivery, shaped from one captured off a live
+	 * Gitea 1.22 instance rather than from GitHub's payload (#10580 exists because
+	 * GitHub-shaped Forgejo fixtures once passed green against dead code). What the
+	 * real delivery does and does not carry:
+	 *
+	 *  - `action` is `label_updated` for an add AND for a removal - never GitHub's
+	 *    `labeled`/`unlabeled`;
+	 *  - there is NO top-level `label` object, so no per-label delta exists;
+	 *  - `issue.labels` carries the issue's FULL post-change label set, each entry
+	 *    an object with Forgejo's own `exclusive`/`is_archived` fields beside
+	 *    `name` - and that set is exactly what the intake filter reads;
+	 *  - the payload repeats the issue number at the TOP level and ships a
+	 *    `commit_id`, neither of which GitHub sends.
+	 *
+	 * @param string[] $labelNames the issue's labels AFTER the change
+	 */
+	private function labelUpdatedBody(
+		string $url,
+		array $labelNames,
+		string $action = 'label_updated',
+		string $state = 'open',
+	): string {
+		$labels = [];
+		foreach ($labelNames as $i => $name) {
+			$labels[] = [
+				'id' => $i + 1,
+				'name' => $name,
+				'exclusive' => false,
+				'is_archived' => false,
+				'color' => 'ee0701',
+				'description' => '',
+				'url' => 'https://git.example.org/api/v1/repos/octo/app/labels/' . ($i + 1),
+			];
+		}
+		return json_encode([
+			'action' => $action,
+			'number' => 12,
+			'commit_id' => '',
+			'issue' => [
+				'id' => 7,
+				'number' => 12,
+				'html_url' => $url,
+				'title' => 'A bug',
+				'body' => 'boom',
+				'state' => $state,
+				'labels' => $labels,
+				'assignee' => null,
+				'assignees' => null,
+				'milestone' => null,
+				'comments' => 0,
+				'is_locked' => false,
+				'pull_request' => null,
+				'user' => ['login' => 'octo', 'id' => 1],
+			],
+			'repository' => [
+				'id' => 1,
+				'full_name' => 'octo/app',
+				'html_url' => 'https://git.example.org/octo/app',
+			],
+			'sender' => ['login' => 'octo', 'id' => 1],
+		]);
+	}
+
+	/**
+	 * The Forgejo half of the fix. `label_updated` carries no delta, which is why
+	 * the label MIRROR skips it - but it does carry the issue's current label set,
+	 * which is all intake's filter needs.
+	 */
+	public function testIssueLabelUpdatedAfterOpeningIsTakenIn(): void {
+		$board = $this->board();
+		$board->setForgejoIntakeStackId(7);
+		$board->setForgejoIntakeLabel('backlog');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturn(false);
+		$this->cardService->expects(self::once())->method('create')
+			->with(7, 'A bug', 'alice')->willReturn($this->card(42, 1));
+		$this->cardLinkMapper->expects(self::once())->method('insert')
+			->willReturnCallback(function (CardLink $l): CardLink {
+				self::assertSame(CardLink::PROVIDER_FORGEJO, $l->getProvider());
+				self::assertSame(CardLink::KIND_ISSUE, $l->getKind());
+				return $l;
+			});
+
+		$body = $this->labelUpdatedBody(self::BASE . '/issues/12', ['backlog', 'enhancement']);
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($result['created']);
+		self::assertSame(42, $result['cardId']);
+		self::assertSame('label_updated', $result['action']);
+	}
+
+	/**
+	 * The test that would have caught the failure mode #10580 was filed for: a
+	 * retrigger keyed on GitHub's `labeled` can NEVER fire on Forgejo, so the
+	 * action set is per-forge. This asserts the dead-code direction directly - a
+	 * GitHub-spelled action, with the intake label present, still cards nothing.
+	 */
+	public function testGithubLabelActionSpellingNeverRetriggersForgejoIntake(): void {
+		$board = $this->board();
+		$board->setForgejoIntakeStackId(7);
+		$board->setForgejoIntakeLabel('backlog');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->cardService->expects(self::never())->method('create');
+
+		$body = $this->labelUpdatedBody(self::BASE . '/issues/12', ['backlog'], 'labeled');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertFalse($result['handled']);
+		self::assertSame(ForgejoWebhookService::REASON_NO_LINK_MATCH, $result['reason']);
+	}
+
+	/**
+	 * Forgejo spells a REMOVAL `label_updated` too - verified against a live
+	 * delivery - so the retrigger does reach intake for one. The filter then
+	 * rejects it off the post-change set, which is the guarantee that matters: an
+	 * issue that does not carry the intake label is never carded.
+	 */
+	public function testLabelUpdatedThatLeavesNoIntakeLabelIsStillNotTakenIn(): void {
+		$board = $this->board();
+		$board->setForgejoIntakeStackId(7);
+		$board->setForgejoIntakeLabel('backlog');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->cardService->expects(self::never())->method('create');
+
+		$body = $this->labelUpdatedBody(self::BASE . '/issues/12', []);
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertFalse($result['handled']);
+		self::assertSame(ForgejoWebhookService::REASON_INTAKE_FILTERED, $result['reason']);
+	}
+
+	/** The reused dedup holds on the new path here too: two deliveries, one card. */
+	public function testDoubleLabelUpdatedDeliveryForOneIssueCreatesExactlyOneCard(): void {
+		$board = $this->board();
+		$board->setForgejoIntakeStackId(7);
+		$board->setForgejoIntakeLabel('backlog');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+
+		$linked = false;
+		$this->cardLinkMapper->method('existsByBoardAndUrls')
+			->willReturnCallback(function () use (&$linked): bool {
+				return $linked;
+			});
+		$this->cardService->expects(self::once())->method('create')->willReturn($this->card(42, 1));
+		$this->cardLinkMapper->expects(self::once())->method('insert')
+			->willReturnCallback(function (CardLink $l) use (&$linked): CardLink {
+				$linked = true;
+				return $l;
+			});
+
+		$body = $this->labelUpdatedBody(self::BASE . '/issues/12', ['backlog']);
+		$first = $this->service->handleWebhook(1, $this->sign($body), $body);
+		$second = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($first['created']);
+		self::assertFalse($second['handled']);
+		self::assertSame(ForgejoWebhookService::REASON_INTAKE_DUPLICATE, $second['reason']);
+	}
+
+	/**
+	 * Intake brings WORK onto the board: a label change on a long-closed issue must
+	 * not card it, on either forge.
+	 */
+	public function testLabelUpdatedOnAClosedIssueNeverTakesItIn(): void {
+		$board = $this->board();
+		$board->setForgejoIntakeStackId(7);
+		$board->setForgejoIntakeLabel('backlog');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->cardService->expects(self::never())->method('create');
+
+		$body = $this->labelUpdatedBody(self::BASE . '/issues/12', ['backlog'], 'label_updated', 'closed');
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertFalse($result['handled']);
+		self::assertSame(ForgejoWebhookService::REASON_NO_LINK_MATCH, $result['reason']);
+	}
+
+	/** A board taking in ALL issues is untouched by the retrigger. */
+	public function testLabelUpdatedOnAFilterlessIntakeBoardCreatesNothing(): void {
+		$board = $this->board();
+		$board->setForgejoIntakeStackId(7);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->cardService->expects(self::never())->method('create');
+		$this->cardLinkMapper->expects(self::never())->method('insert');
+
+		$body = $this->labelUpdatedBody(self::BASE . '/issues/12', ['backlog']);
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertFalse($result['handled']);
+		self::assertSame(ForgejoWebhookService::REASON_NO_LINK_MATCH, $result['reason']);
+	}
+
 	public function testIntakeFallsBackToNumberedTitleWhenTitleIsBlank(): void {
 		$board = $this->board();
 		$board->setForgejoIntakeStackId(7);

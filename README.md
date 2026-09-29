@@ -109,9 +109,11 @@ your work, on your own Nextcloud, laid out plainly.
   label of the same name to every card linked to it, and unlabelling takes it
   back off — a name your board doesn't already define is simply ignored, never
   created. Opt-in **issue intake**: pick a column in the
-  board's webhook settings and every newly opened issue (optionally filtered to
-  one label) becomes a linked card there — title plus issue link only, no body
-  copy. No credentials, no OAuth. A board can run both webhooks at once; Gitea
+  board's webhook settings and every newly opened issue becomes a linked card
+  there — title plus issue link only, no body copy. Narrow it to one label and
+  an issue is taken in whenever it *gains* that label, not only if it carried it
+  the moment it was filed, so labelling during triage still lands it on the
+  board. No credentials, no OAuth. A board can run both webhooks at once; Gitea
   webhooks work with the Forgejo endpoint. For self-hosted forges Kanso is
   **receive-only** — it never calls your instance, so link badges come from the
   deliveries themselves.
