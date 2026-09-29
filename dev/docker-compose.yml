@@ -76,19 +76,20 @@ services:
     # Nextcloud wants READ-COMMITTED isolation on MariaDB. Binary-logging /
     # row-format are production replication settings, not needed to verify
     # install + migrations, so they are omitted here.
-    command: --transaction-isolation=READ-COMMITTED
-    # Why this one service gets a heavier CPU weight than anything else here.
     #
-    # On a saturated CI runner this container used to exit 1 during its FIRST
-    # boot, and the symptom everyone read was three layers downstream of it:
+    # Everything after the isolation level exists to shrink FIRST BOOT, which is
+    # the only boot that can fail. The rest of this comment is why, and what the
+    # numbers actually are, because the obvious candidates are mostly duds.
+    #
+    # THE FAILURE. On a saturated CI runner this container exits 1 during its
+    # first boot, and the symptom everyone reads is three layers downstream:
     #
     #   Container kanso-dev-db  Skipped: optional dependency "db-mysql" failed to start
     #   getaddrinfo for db failed: No address associated with hostname
     #   Installing of nextcloud failed!
     #
-    # The DB-log dump CI now takes on failure caught the actual line, and it is
-    # the image's own entrypoint giving up. /usr/local/bin/docker-entrypoint.sh
-    # in mariadb:11, docker_temp_server_start():
+    # The real line is the image's own entrypoint giving up.
+    # /usr/local/bin/docker-entrypoint.sh in mariadb:11, docker_temp_server_start():
     #
     #   for i in {30..0}; do
     #     if docker_process_sql ... <<<'SELECT 1' &> /dev/null; then break; fi
@@ -98,38 +99,111 @@ services:
     #
     # First boot runs mariadb-install-db, then starts a TEMPORARY server to
     # create the database and user, and gives it 31 one-second probes to answer.
-    # That budget is a literal in the script: every MARIADB_*/MYSQL_* variable
-    # the entrypoint reads was enumerated and none of them extends it. So the
-    # only way to stay inside it is to make the server finish starting sooner.
-    # Under CPU contention it does not — the stall is plain scheduling
-    # starvation (the last log line is "Initializing installed plugins", and
-    # mysql.plugin is empty in a fresh datadir, so there is no plugin to blame;
-    # InnoDB init had already completed a second earlier).
+    # That budget is a literal: every MARIADB_*/MYSQL_* variable the entrypoint
+    # reads was enumerated and none extends it. The only way to stay inside it is
+    # to reach "ready" sooner.
     #
-    # cpu_shares is the lever that actually moves it, and it is reproducible:
-    # pin 40 busy containers plus this one to a single CPU, and at the default
-    # weight the wait blows the budget in 5 of 7 first boots (mean 36s), while
-    # at 10240 it is 0 of 6 (mean 10s). Weights only bite when the host is
-    # oversubscribed, so an idle dev machine sees no change, and while the
-    # Nextcloud installer is parked on depends_on the DB genuinely IS the
-    # critical path it would be stealing from.
+    # WHICH RESOURCE BINDS. The two phases are bound by DIFFERENT resources, and
+    # that is the whole reason earlier guesses missed. Measured by booting this
+    # image on a cold volume under one constraint at a time (cgroup cpu quota vs.
+    # blkio io.max on the datadir device):
     #
-    # Measured and ruled out, so nobody re-adds them as "the fix":
+    #                                 idle   50 IOPS   0.10 CPU     0.04 CPU
+    #   mariadb-install-db             4s      39s        5s           7s
+    #   temp server -> answers SELECT  1s       5s       10s      FAILS, 3 of 5
+    #
+    # So install-db is I/O-bound — and specifically bound by the NUMBER of file
+    # creations and fsyncs for the ~90 files of the `mysql` schema, not by bytes
+    # (see the innodb-log-file-size dud below) — while the phase that actually
+    # blows the budget is CPU-bound: on an idle host it burns 1.0-2.4s of CPU in
+    # 1.0-2.4s of wall time, i.e. wall == CPU, no waiting. 31s / ~1.5s means the
+    # temp server fails as soon as it is handed less than ~5% of one core.
+    #
+    # The failing run (run 36606682765, `install (NC 35 - mariadb)`) shows both
+    # scarcities at once: install-db took 40s — exactly the 50-IOPS column — and
+    # then the temp server missed 31 probes. Its sibling steps agree: the image
+    # pre-pull took 422s against 97s on a healthy leg (4.3x, I/O), while
+    # `npm run build`, pure CPU, took 56s against 34s (1.6x). The node was
+    # I/O-saturated and CPU-contended.
+    #
+    # WHAT THESE OPTIONS BUY, and what they do NOT. They are all mariadbd
+    # options, and all of them are safe here for one reason: this database is
+    # THROWAWAY. It is created empty on every boot and exists only to prove that
+    # Kanso's migrations apply on MariaDB. There is no data to lose, so the
+    # buffers are cut to what a migration test needs and durability is turned off
+    # outright. Numbers, at 50 IOPS — the column that matches the failing run,
+    # 5 cold boots per arm and the two arms do not overlap:
+    #
+    #                    total first boot   install-db   temp server
+    #   default              55.5-57.2s      39-40s        4-6s
+    #   with these            46.1-47.7s      36-37s        1-2s
+    #
+    # Off the I/O constraint the picture is much weaker. The temp-server phase's
+    # own CPU cost, measured 6 times per arm on an idle host, is a median 1285ms
+    # by default and 800ms with these options — but the spread is 410-2200ms and
+    # 320-1420ms, so what this really buys is a shorter TAIL, not a reliably
+    # shorter phase. And at the cliff itself (a 0.04-core quota, which reproduces
+    # the CI failure exactly: same silent stall, same entrypoint error) a
+    # work-reduced arm did NOT pass more often than the control — 2 of 5 either
+    # way, over 10 cold boots. That arm was a superset of this one, including the
+    # two options listed as dropped below; the point stands regardless, because
+    # nothing here is anywhere near a 20x saving.
+    #
+    # So this is a real but partial mitigation, and it is honest about that: the
+    # runner stretched a ~1.3s phase past 31s, i.e. by more than 20x, and no
+    # option here removes 20x of work. dev/setup.sh therefore carries the second
+    # layer, which is what actually makes the leg deterministic: it detects
+    # exactly this first-boot failure, REMOVES THE DATABASE VOLUME, and boots
+    # once more. See the comment there for why the wipe is mandatory.
+    #
+    # MEASURED AND RULED OUT, so nobody re-adds them as "the fix":
+    #   * cpu_shares: 10240 — was here until this commit, and could never have
+    #     worked. cpu.weight is RELATIVE, and only among siblings under the same
+    #     cgroup parent. CI runs this stack inside a dind daemon in an ARC
+    #     runner pod; in that daemon this container's only siblings are an idle
+    #     redis and the nextcloud container, which compose has not started yet
+    #     (it is parked on the depends_on below). There is nobody to take CPU
+    #     from. The contention is at the Kubernetes NODE level, above the pod's
+    #     cgroup, where a child's weight has no reach. It "passed" a local
+    #     harness that pinned 40 busy CONTAINERS next to this one — in-daemon
+    #     siblings, where weights do bite — which is precisely the wrong model,
+    #     and it then failed in CI on the commit that added it.
+    #   * --innodb-log-file-size. The most plausible-looking option here and a
+    #     complete dud. ib_logfile0 is 96MiB of the 143MB install-db writes, and
+    #     it really is fully allocated on disk — but by posix_fallocate, so it
+    #     costs extents, not writes. At 32M the whole boot's datadir drops
+    #     162MB -> 98MB and at 8M to 74MB, and install-db still takes 40s at 50
+    #     IOPS in every case. Omitted on purpose: it saves disk, not time.
+    #   * --key-buffer-size=8M and --innodb-temp-data-file-path=ibtmp1:1M. Both
+    #     look like the same kind of saving and neither survived replication:
+    #     over 6 runs each their medians land inside the control's spread, and
+    #     adding the ibtmp1 shrink to the set above made the median WORSE
+    #     (1515ms vs 800ms) while growing the datadir, because the 12MiB file it
+    #     avoids writing once gets autoextended later instead. Dropped.
     #   * --innodb-use-native-aio=0. The io_uring EPERM in the log is Docker's
     #     seccomp profile, not a broken host, and MariaDB falls back to libaio
-    #     successfully. Forcing the aio path off did not help — 1 of 3 boots
-    #     failed at a starvation level where the control passed 3 of 3.
-    #   * A bigger healthcheck start_period. It cannot help: the container exits
-    #     on its own, so there is no unhealthy container left for a longer grace
+    #     successfully. Forcing the aio path off did not help.
+    #   * MARIADB_INITDB_SKIP_TZINFO=1. Cannot help: docker_setup_db() loads the
+    #     timezone tables AFTER the wait that fails.
+    #   * A bigger healthcheck start_period. Cannot help: the container exits on
+    #     its own, so there is no unhealthy container left for a longer grace
     #     period to wait on. The 30s below is still right for the second boot,
     #     which is why it stays.
-    #   * restart: on-failure. Actively harmful. The entrypoint treats a datadir
-    #     as initialised the moment $DATADIR/mysql exists — which mariadb-
-    #     install-db creates BEFORE the wait that fails — so a restart skips
-    #     setup entirely. Verified: the container then comes back up *running*
-    #     with no `nextcloud` database, no `nextcloud` user, and an unset root
-    #     password.
-    cpu_shares: 10240
+    #   * restart: on-failure. Actively harmful, and it must stay forbidden. The
+    #     entrypoint treats a datadir as initialised the moment $DATADIR/mysql
+    #     exists — which mariadb-install-db creates BEFORE the wait that fails —
+    #     so a plain restart skips setup entirely. Verified: the container comes
+    #     back up *running* with no `nextcloud` database, no `nextcloud` user and
+    #     an unset root password. That is the hazard setup.sh's retry handles by
+    #     deleting the volume first.
+    command: >-
+      --transaction-isolation=READ-COMMITTED
+      --innodb-buffer-pool-size=32M
+      --innodb-buffer-pool-size-max=32M
+      --aria-pagecache-buffer-size=8M
+      --skip-innodb-doublewrite
+      --innodb-flush-log-at-trx-commit=0
+      --innodb-flush-method=nosync
     environment:
       MARIADB_DATABASE: nextcloud
       MARIADB_USER: nextcloud

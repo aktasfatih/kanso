@@ -649,7 +649,10 @@ jobs:
       # init exits (a known mariadb flake, see dev/docker-compose.yml) the app
       # container only ever reports that host `db` did not resolve, so without
       # this the actual crash reason is unrecoverable and the run is written off
-      # as flake. `|| true` is load-bearing on the sqlite rows of this matrix —
+      # as flake. dev/setup.sh now wipes the datadir and retries that first boot
+      # ONCE, so reaching this step on a mariadb row means it failed twice — the
+      # dump is what tells the two apart. `|| true` is load-bearing on the
+      # sqlite rows of this matrix —
       # they have no db service at all, and a missing container must not fail
       # the dump and mask the real failure.
       - name: Dump Nextcloud logs on failure

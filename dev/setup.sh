@@ -101,9 +101,75 @@ else
 fi
 
 echo "Booting Nextcloud ${NC_VERSION} on ${KANSO_DB}..."
+
+# Is this a pristine boot — no stack state on disk at all? Answered BEFORE the
+# boot, because it is the guard on the retry further down: with neither volume
+# present there is provably nothing to lose, so wiping and re-initialising is
+# free. Matched by compose's own labels rather than by the "<project>_<volume>"
+# name, and the project is read the same way compose reads it — the `name:` key
+# in docker-compose.yml, which COMPOSE_PROJECT_NAME overrides — so a renamed
+# project does not silently make every boot look pristine.
+compose_volume_exists() {
+	[ -n "$(docker volume ls -q \
+		--filter label=com.docker.compose.project="${COMPOSE_PROJECT_NAME:-kanso-dev}" \
+		--filter label=com.docker.compose.volume="$1")" ]
+}
+PRISTINE=yes
+if compose_volume_exists db_mysql; then PRISTINE=no; fi
+if compose_volume_exists nextcloud_html; then PRISTINE=no; fi
+
 # --profile selects which db service (if any) starts; the sqlite profile has no
 # db service so only redis + nextcloud come up.
 docker compose --profile "$COMPOSE_PROFILE" up -d
+
+# ONE failure mode gets a second chance here, and only under one set of
+# conditions.
+#
+# mariadb:11's entrypoint gives its first-boot temporary server 31 one-second
+# probes and then exits the container. On a saturated CI runner it misses them.
+# The measurements — which resource actually binds, and why the mariadbd options
+# in docker-compose.yml shorten the window but cannot close it — are in that
+# file's db-mysql comment.
+#
+# DETECTED FROM THE DB CONTAINER, NOT FROM AN EXIT CODE, and that distinction is
+# load-bearing: `up -d` above exits 0 on this failure. The nextcloud service's
+# depends_on carries `required: false` (so the sqlite profile, which has no db
+# service at all, still works), and compose treats a failed OPTIONAL dependency
+# as merely "Skipped" — it reports success and starts Nextcloud anyway, which
+# then dies on `getaddrinfo for db failed`. An `if ! docker compose up -d` guard
+# here looks right and never fires; this was written that way first and the
+# verification run caught it.
+#
+# THE RETRY MUST DELETE THE DATABASE VOLUME. mariadb-install-db creates
+# $DATADIR/mysql *before* the wait that fails, and the entrypoint decides
+# DATABASE_ALREADY_EXISTS purely from that directory existing — so booting the
+# same volume again skips setup entirely. Verified by doing exactly that: the
+# second container came up *running* with root reachable on an EMPTY password,
+# no `nextcloud` database in SHOW DATABASES, and the `nextcloud` user unable to
+# connect. That is a far more confusing failure than the one being retried, and
+# it is also why `restart: on-failure` is forbidden on the service.
+#
+# Guarded three ways so this can never eat state that matters:
+#   * only the mysql profile, only with the db container actually exited, and
+#     only when its log shows BOTH halves of this exact failure — that it was
+#     initialising a datadir from scratch, and that the entrypoint then gave up
+#     on its temporary server;
+#   * only when BOTH volumes were absent before this boot, i.e. there is
+#     nothing to lose. Always true in CI, and true of a first local run; a
+#     stack that already has a database is never wiped for you;
+#   * only once. If the second boot fails too, nothing here catches it and the
+#     install wait below reports it exactly as it always did.
+if [ "$COMPOSE_PROFILE" = mysql ] && [ "$PRISTINE" = yes ] &&
+	[ "$(docker inspect -f '{{.State.Status}}' kanso-dev-db 2>/dev/null || echo missing)" = exited ] &&
+	docker logs kanso-dev-db 2>&1 | grep -q 'Initializing database files' &&
+	docker logs kanso-dev-db 2>&1 | grep -q 'Unable to start server'; then
+	echo "mariadb's entrypoint gave up on its own first-boot temporary server" >&2
+	echo "(31 one-second probes; see dev/docker-compose.yml). Nothing is" >&2
+	echo "installed yet, so: destroying the half-initialised datadir and" >&2
+	echo "booting once more." >&2
+	docker compose --profile "$COMPOSE_PROFILE" down -v
+	docker compose --profile "$COMPOSE_PROFILE" up -d
+fi
 
 # The reset every message below points at. NOT a bare `down -v`: compose only
 # removes the volumes of services whose profile is active, so `down -v` without
