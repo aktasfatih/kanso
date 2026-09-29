@@ -3260,6 +3260,10 @@ msgstr "Импорт…"
 msgid "In a Files folder"
 msgstr ""
 
+#: templates/admin-backup.php
+msgid "In a Files folder a pruned backup moves to that account's trashbin and keeps using its quota until that empties; inside Kanso it is freed at once."
+msgstr ""
+
 #: src/components/BoardListView.vue
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTimelineView.vue
@@ -4428,6 +4432,10 @@ msgid "Pinned"
 msgstr "Закрепленные"
 
 #: templates/admin-backup.php
+msgid "Point the folder at a separate account, or keep the backups inside Kanso, if disk use has to stay bounded."
+msgstr ""
+
+#: templates/admin-backup.php
 msgid "Point this at a separate account nobody signs in to, and they land in its feed instead of yours."
 msgstr ""
 
@@ -5394,6 +5402,10 @@ msgstr "Текст"
 msgid "That board could not be imported, so nothing was created. You can safely try again."
 msgstr ""
 
+#: templates/admin-backup.php
+msgid "That builds a new board owned by whoever imports it, so you have to share it again."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "That card is not on this board any more."
 msgstr "Этой карточки больше нет на этой доске."
@@ -5469,6 +5481,10 @@ msgstr "Эта доска больше не существует или у ва�
 #: src/views/BoardView.vue
 msgid "This board no longer exists."
 msgstr "Эта доска больше не существует."
+
+#: templates/admin-backup.php
+msgid "This caps how many copies exist, not how much disk they take."
+msgstr ""
 
 #: templates/card-notfound.php
 msgid "This card does not exist or you do not have access to it."
@@ -5587,6 +5603,10 @@ msgstr "название,описание,срок выполнения,метк
 #: src/views/BoardList.vue
 msgid "To do"
 msgstr "К выполнению"
+
+#: templates/admin-backup.php
+msgid "To put a board back, download its backup and import it from the Import menu on the boards list."
+msgstr ""
 
 #: src/views/MyCardsView.vue
 msgid "Today"
