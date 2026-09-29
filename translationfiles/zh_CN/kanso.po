@@ -1265,11 +1265,13 @@ msgstr "清单完成度"
 msgid "Checklist incomplete"
 msgstr "清单未完成"
 
+#: src/components/BoardListView.vue
 #: src/components/CardPreview.vue
 #: src/components/CardTile.vue
 msgid "Checklist progress"
 msgstr "清单进度"
 
+#: src/components/BoardListView.vue:1060
 #: src/components/CardPreview.vue:227
 #: src/components/CardTile.vue:464
 msgid "Checklist progress - %n overdue step"
@@ -5250,6 +5252,7 @@ msgstr "删除线"
 msgid "Sub-card"
 msgstr "子卡片"
 
+#: src/components/BoardListView.vue
 #: src/components/CardTile.vue
 msgid "Sub-card progress"
 msgstr "子卡片进度"

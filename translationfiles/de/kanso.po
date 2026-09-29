@@ -1291,11 +1291,13 @@ msgstr "Checkliste erledigt"
 msgid "Checklist incomplete"
 msgstr "Checkliste unvollständig"
 
+#: src/components/BoardListView.vue
 #: src/components/CardPreview.vue
 #: src/components/CardTile.vue
 msgid "Checklist progress"
 msgstr "Checklistenfortschritt"
 
+#: src/components/BoardListView.vue:1060
 #: src/components/CardPreview.vue:227
 #: src/components/CardTile.vue:464
 msgid "Checklist progress - %n overdue step"
@@ -5287,6 +5289,7 @@ msgstr "Durchgestrichen"
 msgid "Sub-card"
 msgstr "Unterkarte"
 
+#: src/components/BoardListView.vue
 #: src/components/CardTile.vue
 msgid "Sub-card progress"
 msgstr "Fortschritt der Unterkarten"

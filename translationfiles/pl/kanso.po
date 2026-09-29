@@ -1317,11 +1317,13 @@ msgstr "Ukończone punkty list kontrolnych"
 msgid "Checklist incomplete"
 msgstr "Lista kontrolna nieukończona"
 
+#: src/components/BoardListView.vue
 #: src/components/CardPreview.vue
 #: src/components/CardTile.vue
 msgid "Checklist progress"
 msgstr "Postęp listy kontrolnej"
 
+#: src/components/BoardListView.vue:1060
 #: src/components/CardPreview.vue:227
 #: src/components/CardTile.vue:464
 msgid "Checklist progress - %n overdue step"
@@ -5324,6 +5326,7 @@ msgstr "Przekreślenie"
 msgid "Sub-card"
 msgstr "Podkarta"
 
+#: src/components/BoardListView.vue
 #: src/components/CardTile.vue
 msgid "Sub-card progress"
 msgstr "Postęp podkart"

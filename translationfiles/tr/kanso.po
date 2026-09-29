@@ -1291,11 +1291,13 @@ msgstr "Kontrol listesi tamam"
 msgid "Checklist incomplete"
 msgstr "Kontrol listesi tamamlanmadı"
 
+#: src/components/BoardListView.vue
 #: src/components/CardPreview.vue
 #: src/components/CardTile.vue
 msgid "Checklist progress"
 msgstr "Kontrol listesi ilerlemesi"
 
+#: src/components/BoardListView.vue:1060
 #: src/components/CardPreview.vue:227
 #: src/components/CardTile.vue:464
 msgid "Checklist progress - %n overdue step"
@@ -5287,6 +5289,7 @@ msgstr "Üstü çizili"
 msgid "Sub-card"
 msgstr "Alt kart"
 
+#: src/components/BoardListView.vue
 #: src/components/CardTile.vue
 msgid "Sub-card progress"
 msgstr "Alt kart ilerlemesi"

@@ -1317,11 +1317,13 @@ msgstr "Выполнено пунктов чек-листа"
 msgid "Checklist incomplete"
 msgstr "Чек-лист не выполнен"
 
+#: src/components/BoardListView.vue
 #: src/components/CardPreview.vue
 #: src/components/CardTile.vue
 msgid "Checklist progress"
 msgstr "Прогресс чек-листа"
 
+#: src/components/BoardListView.vue:1060
 #: src/components/CardPreview.vue:227
 #: src/components/CardTile.vue:464
 msgid "Checklist progress - %n overdue step"
@@ -5324,6 +5326,7 @@ msgstr "Зачеркнутый"
 msgid "Sub-card"
 msgstr "Подкарточка"
 
+#: src/components/BoardListView.vue
 #: src/components/CardTile.vue
 msgid "Sub-card progress"
 msgstr "Прогресс подкарточек"

@@ -1291,11 +1291,13 @@ msgstr "Listas de tareas terminadas"
 msgid "Checklist incomplete"
 msgstr "Lista de tareas incompleta"
 
+#: src/components/BoardListView.vue
 #: src/components/CardPreview.vue
 #: src/components/CardTile.vue
 msgid "Checklist progress"
 msgstr "Progreso de la lista de tareas"
 
+#: src/components/BoardListView.vue:1060
 #: src/components/CardPreview.vue:227
 #: src/components/CardTile.vue:464
 msgid "Checklist progress - %n overdue step"
@@ -5287,6 +5289,7 @@ msgstr "Tachado"
 msgid "Sub-card"
 msgstr "Subtarjeta"
 
+#: src/components/BoardListView.vue
 #: src/components/CardTile.vue
 msgid "Sub-card progress"
 msgstr "Progreso de las subtarjetas"
