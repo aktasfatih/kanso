@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLink;
 use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
@@ -848,6 +849,100 @@ class ForgejoWebhookServiceTest extends TestCase {
 
 		self::assertFalse($result['handled']);
 		self::assertSame(ForgejoWebhookService::REASON_NO_LINK_MATCH, $result['reason']);
+	}
+
+	// ---- intake labels (#10570) --------------------------------------------
+
+	private function label(int $id, string $title, int $boardId = 1): Label {
+		$l = new Label();
+		$l->setId($id);
+		$l->setBoardId($boardId);
+		$l->setTitle($title);
+		return $l;
+	}
+
+	/**
+	 * The Forgejo half of #10570, off a Gitea-shaped payload (label objects with
+	 * `exclusive`/`is_archived`, no top-level `label`) rather than a GitHub-shaped
+	 * one - the mistake #10580 exists for. Intake reads `issue.labels`, which both
+	 * forges populate, so this path genuinely is shared.
+	 *
+	 * Also the one-query proof: one `findByBoard` for three delivered names.
+	 */
+	public function testIntakeAppliesTheIssuesExistingLabelsToTheNewCard(): void {
+		$board = $this->board();
+		$board->setForgejoIntakeStackId(7);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturn(false);
+		$this->cardService->method('create')->willReturn($this->card(42, 1));
+		$this->labelMapper->expects(self::once())->method('findByBoard')->with(1)
+			->willReturn([$this->label(8, 'Backlog'), $this->label(5, 'bug')]);
+
+		$assigned = [];
+		$this->labelService->method('assign')
+			->willReturnCallback(function (int $cardId, int $labelId, string $uid) use (&$assigned): void {
+				$assigned[] = [$cardId, $labelId, $uid];
+			});
+		$this->labelService->expects(self::never())->method('create');
+		$this->labelService->expects(self::never())->method('unassign');
+
+		// `wontfix` has no counterpart on this board - silently ignored.
+		$body = $this->labelUpdatedBody(
+			self::BASE . '/issues/12',
+			['backlog', 'BUG', 'wontfix'],
+			'opened',
+		);
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($result['created']);
+		self::assertSame([[42, 8, 'alice'], [42, 5, 'alice']], $assigned);
+	}
+
+	/**
+	 * The owner's hard rule, asserted on this forge too: an unmatched delivered
+	 * label is ignored, and no board label is ever minted for it - label creation
+	 * is MANAGE-gated and this endpoint is unauthenticated.
+	 */
+	public function testIntakeLabelTheBoardDoesNotDefineIsIgnoredAndNeverCreated(): void {
+		$board = $this->board();
+		$board->setForgejoIntakeStackId(7);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturn(false);
+		$this->cardService->method('create')->willReturn($this->card(42, 1));
+		$this->labelMapper->method('findByBoard')->willReturn([$this->label(8, 'Backlog')]);
+
+		$this->labelService->expects(self::never())->method('create');
+		$this->labelService->expects(self::never())->method('assign');
+
+		$body = $this->labelUpdatedBody(self::BASE . '/issues/12', ['kind/bug', 'priority/high'], 'opened');
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['created']);
+	}
+
+	/**
+	 * Forgejo's retrigger (#10566) is where a filtered board's issues actually
+	 * arrive, so the labels must ride along there too - including the board's own
+	 * intake label, applied like any other.
+	 */
+	public function testLabelUpdatedIntakeAppliesTheLabelsIncludingTheIntakeOne(): void {
+		$board = $this->board();
+		$board->setForgejoIntakeStackId(7);
+		$board->setForgejoIntakeLabel('backlog');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturn(false);
+		$this->cardService->method('create')->willReturn($this->card(42, 1));
+		$this->labelMapper->method('findByBoard')->willReturn([$this->label(8, 'Backlog')]);
+
+		$this->labelService->expects(self::once())->method('assign')->with(42, 8, 'alice');
+		$this->labelService->expects(self::never())->method('create');
+
+		$body = $this->labelUpdatedBody(self::BASE . '/issues/12', ['backlog']);
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['created']);
 	}
 
 	public function testIntakeFallsBackToNumberedTitleWhenTitleIsBlank(): void {

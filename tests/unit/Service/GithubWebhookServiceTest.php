@@ -926,7 +926,9 @@ class GithubWebhookServiceTest extends TestCase {
 				self::assertSame(CardLink::KIND_ISSUE, $l->getKind());
 				return $l;
 			});
-		// Nothing is linked yet, so there is no card for the label MIRROR to touch.
+		// Nothing is linked yet, so there is no card for the label MIRROR (#10491)
+		// to touch - and this board defines no labels, so intake has none to
+		// mirror either (#10570 covers the case where it does).
 		$this->labelService->expects(self::never())->method('assign');
 
 		$body = $this->labelBody('labeled', 'backlog', [['name' => 'backlog']]);
@@ -1061,6 +1063,177 @@ class GithubWebhookServiceTest extends TestCase {
 
 		self::assertFalse($result['handled']);
 		self::assertSame(GithubWebhookService::REASON_NO_LINK_MATCH, $result['reason']);
+	}
+
+	// ---- intake labels (#10570) --------------------------------------------
+
+	/**
+	 * The defect this fixes: the labels an issue already carries arrive on the very
+	 * payload that cards it, and used to be read as the intake GATE and then thrown
+	 * away - so an issue filed as `bug` + `accepted` became a bare card someone
+	 * re-labelled by hand.
+	 *
+	 * Also the one-query proof: the board's labels are resolved ONCE per delivery,
+	 * however many names the issue carries.
+	 */
+	public function testIntakeAppliesTheIssuesExistingLabelsToTheNewCard(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturn(false);
+		$this->cardService->method('create')->willReturn($this->card(42, 1));
+		$this->labelMapper->expects(self::once())->method('findByBoard')->with(1)
+			->willReturn([$this->label(3, 'Wontfix'), $this->label(5, 'Bug'), $this->label(8, 'Accepted')]);
+
+		$assigned = [];
+		$this->labelService->method('assign')
+			->willReturnCallback(function (int $cardId, int $labelId, string $uid) use (&$assigned): void {
+				$assigned[] = [$cardId, $labelId, $uid];
+			});
+		$this->labelService->expects(self::never())->method('unassign');
+		$this->labelService->expects(self::never())->method('create');
+
+		$body = $this->issueBody('opened', labels: [
+			['name' => 'bug'],              // matches `Bug` - case-insensitively
+			['name' => 'good first issue'], // no board label of that name - ignored
+			['name' => 'ACCEPTED'],         // matches `Accepted` - the other direction
+		]);
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+
+		self::assertTrue($result['created']);
+		// Assigned as the BOARD OWNER through LabelService, so the EDIT gate, the
+		// visibility guard and the kanso_changes row all fire as for a human.
+		self::assertSame([[42, 5, 'alice'], [42, 8, 'alice']], $assigned);
+	}
+
+	/**
+	 * The security-relevant assertion, identical to the mirror's (#10491): a label
+	 * name is attacker-controlled free text and this endpoint is unauthenticated and
+	 * acts as the board owner, so a name the board does not define is a silent
+	 * no-op - NEVER a board label minted on the way in (that is MANAGE-gated).
+	 */
+	public function testIntakeLabelWithNoBoardCounterpartIsIgnoredAndNeverCreatesABoardLabel(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturn(false);
+		$this->cardService->method('create')->willReturn($this->card(42, 1));
+		$this->labelMapper->method('findByBoard')->with(1)->willReturn([$this->label(5, 'Bug')]);
+
+		$this->labelService->expects(self::never())->method('create');
+		$this->labelService->expects(self::never())->method('assign');
+
+		$body = $this->issueBody('opened', labels: [['name' => 'good first issue'], ['name' => 'wontfix']]);
+		// The card is still created - an unmatched label is ignored, not a failure.
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['created']);
+	}
+
+	/**
+	 * The board's OWN intake label is applied like any other - deliberately, and
+	 * stated here so it is not re-litigated as an oversight. It is a label of this
+	 * board that the issue genuinely carries; suppressing it would leave the card
+	 * disagreeing with the issue.
+	 *
+	 * On the retrigger path (#10566) too, which is where a filtered board's issues
+	 * actually arrive.
+	 */
+	public function testIntakeAppliesTheBoardsOwnIntakeLabelLikeAnyOther(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard(7, 'backlog'));
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturn(false);
+		$this->cardService->method('create')->willReturn($this->card(42, 1));
+		$this->labelMapper->method('findByBoard')->with(1)->willReturn([$this->label(8, 'Backlog')]);
+
+		$this->labelService->expects(self::once())->method('assign')->with(42, 8, 'alice');
+		$this->labelService->expects(self::never())->method('create');
+
+		$body = $this->labelBody('labeled', 'backlog', [['name' => 'backlog']]);
+		$result = $this->service->handleWebhook(1, $this->sign($body), $body);
+		self::assertTrue($result['created']);
+	}
+
+	/**
+	 * Every assignment writes a `kanso_changes` row, and this endpoint is
+	 * unauthenticated - so a 30-label issue must not burst 30 rows onto a
+	 * brand-new card. Capped at MAX_INTAKE_LABELS delivered names READ, which
+	 * bounds the loop as well as its writes.
+	 */
+	public function testIntakeMirrorsAtMostTheLabelCap(): void {
+		$issueLabels = [];
+		$boardLabels = [];
+		for ($i = 1; $i <= 30; $i++) {
+			$issueLabels[] = ['name' => 'label-' . $i];
+			// Every single one DOES match a board label, so nothing but the cap can
+			// be what holds the count down.
+			$boardLabels[] = $this->label(100 + $i, 'label-' . $i);
+		}
+
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturn(false);
+		$this->cardService->method('create')->willReturn($this->card(42, 1));
+		$this->labelMapper->expects(self::once())->method('findByBoard')->willReturn($boardLabels);
+		$this->labelService->expects(self::exactly(10))->method('assign');
+
+		$body = $this->issueBody('opened', labels: $issueLabels);
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['created']);
+	}
+
+	/** An issue carrying no labels never reads the board's labels at all. */
+	public function testIntakeWithoutIssueLabelsNeverReadsTheBoardsLabels(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturn(false);
+		$this->cardService->method('create')->willReturn($this->card(42, 1));
+		$this->labelMapper->expects(self::never())->method('findByBoard');
+		$this->labelService->expects(self::never())->method('assign');
+
+		$body = $this->issueBody('opened');
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['created']);
+	}
+
+	/** A failed label READ leaves an unlabelled card, never a 5xx. */
+	public function testIntakeLabelReadFailureStillCardsTheIssue(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturn(false);
+		$this->cardService->method('create')->willReturn($this->card(42, 1));
+		$this->labelMapper->method('findByBoard')->willThrowException(new \RuntimeException('db down'));
+		$this->labelService->expects(self::never())->method('assign');
+
+		$body = $this->issueBody('opened', labels: [['name' => 'bug']]);
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['created']);
+	}
+
+	/**
+	 * One failing assignment (a label deleted between the read and the assign, say)
+	 * neither escapes nor abandons the labels after it.
+	 */
+	public function testIntakeLabelAssignmentFailureNeitherEscapesNorStopsTheRest(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->intakeBoard());
+		$this->cardLinkMapper->method('findByBoardAndUrls')->willReturn([]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, Stack::ROLE_TODO));
+		$this->cardLinkMapper->method('existsByBoardAndUrls')->willReturn(false);
+		$this->cardService->method('create')->willReturn($this->card(42, 1));
+		$this->labelMapper->method('findByBoard')
+			->willReturn([$this->label(5, 'Bug'), $this->label(8, 'Accepted')]);
+
+		$attempted = [];
+		$this->labelService->method('assign')
+			->willReturnCallback(function (int $cardId, int $labelId) use (&$attempted): void {
+				$attempted[] = $labelId;
+				if ($labelId === 5) {
+					throw new NotPermittedException('label vanished');
+				}
+			});
+
+		$body = $this->issueBody('opened', labels: [['name' => 'Bug'], ['name' => 'Accepted']]);
+		self::assertTrue($this->service->handleWebhook(1, $this->sign($body), $body)['created']);
+		self::assertSame([5, 8], $attempted);
 	}
 
 	// ---- intake config (MANAGE) -------------------------------------------

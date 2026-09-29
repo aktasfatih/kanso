@@ -428,6 +428,46 @@ test.describe('GitHub webhook issue intake', () => {
 		expect((await cardsIn(inboxStackId)).length).toBe(before)
 	})
 
+	// #10570: the issue's labels arrive on the very payload that cards it, and used
+	// to be read as the intake GATE and then discarded - so an issue filed as
+	// `bug` + `backlog` became a bare card someone re-labelled by hand. An e2e
+	// rather than only a unit test: PHPUnit mocks LabelService, so only a real
+	// delivery proves the assignments and their kanso_changes rows reach Postgres.
+	test('an opened issue is carded WITH the board labels it already carries', async () => {
+		await api('PUT', `/boards/${boardId}/webhook/intake`, { stackId: inboxStackId, label: '' })
+		const bugLabelId = (await api('POST', '/labels', { boardId, title: 'Bug', color: 'ff0000' })).body.id
+		const backlogLabelId = (await api('POST', '/labels', { boardId, title: 'Backlog', color: '00ff00' })).body.id
+		const labelsBefore = (await api('GET', `/boards/${boardId}`)).body.labels.length
+
+		const raw = openedBody(++issueSeq, {
+			title: 'Arrives labelled',
+			// Matched by title, case-insensitively, in BOTH directions - plus one
+			// name this board does not define.
+			labels: [{ name: 'bug' }, { name: 'good first issue' }, { name: 'BACKLOG' }],
+		})
+		const res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.created).toBe(true)
+
+		const card = (await api('GET', `/cards/${res.body.cardId}`)).body
+		expect([...(card.labelIds ?? [])].sort()).toEqual([bugLabelId, backlogLabelId].sort())
+
+		// `good first issue` matches nothing here: silently ignored, and NEVER minted
+		// as a board label - creation is MANAGE-gated and this endpoint is
+		// unauthenticated and acts as the board owner.
+		expect((await api('GET', `/boards/${boardId}`)).body.labels).toHaveLength(labelsBefore)
+
+		// Each assignment went through LabelService as the board owner, so each wrote
+		// its kanso_changes row - VERB_LABELED (6), carrying the label title.
+		const activity = (await api('GET', `/cards/${res.body.cardId}/activity`)).body
+		expect(
+			activity
+				.filter((a) => a.verb === 6)
+				.map((a) => a.detail?.to)
+				.sort(),
+		).toEqual(['Backlog', 'Bug'])
+	})
+
 	test('the intake endpoint rejects a stack of another board', async () => {
 		const otherBoardId = (await api('POST', '/boards', { title: 'Intake E2E other' })).body.id
 		const foreignStackId = (await api('POST', '/stacks', { boardId: otherBoardId, title: 'Elsewhere' })).body.id

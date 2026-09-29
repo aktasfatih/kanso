@@ -80,6 +80,22 @@ use OCP\Security\ISecureRandom;
  * carrying that label. Creation goes through CardService::create as the board
  * owner, so the sort key, change row and realtime all fire.
  *
+ * Intake labels (#10570): the issue's CURRENT labels ride along on the payload
+ * that carded it, so the new card gets the board's labels of those names instead
+ * of arriving bare for someone to re-apply by hand. Matching is the identical
+ * rule the mirror uses - by TITLE, case-insensitively, silently ignoring a name
+ * this board does not define, NEVER minting a board label - and the board's own
+ * labels are read ONCE per delivery ({@see self::boardLabelsByTitle()}) rather
+ * than once per delivered name. The count is capped
+ * ({@see self::MAX_INTAKE_LABELS}) because every assignment writes a
+ * `kanso_changes` row and this endpoint is unauthenticated. The board's INTAKE
+ * label is applied like any other - deliberately, not by omission: it is the one
+ * label the board itself asked to be told about, and special-casing it would
+ * make the card disagree with the issue it mirrors. The response says nothing
+ * about which labels landed: `created: true` already covers the diagnostic need,
+ * and naming them would answer "does this board define <name>?" once per
+ * delivered label, which the egress rule below does not permit.
+ *
  * Intake retrigger (#10566): a LABEL-FILTERED board also re-offers an unlinked,
  * still-OPEN issue to intake when a later delivery says its labels changed,
  * because the normal triage order is to open an issue first and label it once you
@@ -127,6 +143,21 @@ abstract class AbstractForgeWebhookService {
 	 * write-side cap so the two cannot drift.
 	 */
 	protected const MAX_LABEL_NAME_LENGTH = LabelService::MAX_TITLE_LENGTH;
+
+	/**
+	 * How many of an intake issue's delivered labels are read at all (#10570) -
+	 * the same style of bound as {@see self::MAX_TITLE_REFS}, applied to the same
+	 * kind of attacker-controlled list.
+	 *
+	 * The cap is on names READ, not on names that matched, so it bounds the loop
+	 * itself and not merely its writes: the list is free text from an
+	 * unauthenticated delivery, and every match costs a `LabelService::assign`
+	 * and therefore a `kanso_changes` row on a brand-new card. An issue carrying
+	 * more labels than this has its tail ignored, which costs MISSING labels
+	 * rather than wrong ones - the direction every other drift in this class is
+	 * allowed to fail in, and a human can still add them.
+	 */
+	protected const MAX_INTAKE_LABELS = 10;
 
 	/**
 	 * Intake's original trigger (#3752). Every forge spells this one the same, so
@@ -669,6 +700,11 @@ abstract class AbstractForgeWebhookService {
 	 * deliberate sequence, and the alternative is a tombstone table for links whose
 	 * card no longer exists.
 	 *
+	 * The card is then given the board's labels matching the ones the issue
+	 * already carries (#10570, {@see self::applyIntakeLabels()}) - the issue is
+	 * the source of truth for its own labels, and the payload that carded it
+	 * already said what they are.
+	 *
 	 * The dedup is check-then-act (no unique index spans a link URL and the
 	 * card's board), so two CONCURRENT deliveries of the same opened event
 	 * could in principle both pass it. Accepted residual race: a forge delivers
@@ -731,6 +767,11 @@ abstract class AbstractForgeWebhookService {
 			// Non-critical - the card exists; the link can be added manually.
 		}
 
+		// The issue's own labels, mirrored onto the card it just became (#10570).
+		// Last, and best-effort: the card and its link are the delivery's primary
+		// outcome and must not depend on this.
+		$this->applyIntakeLabels($board, $card->getId(), $event);
+
 		return [
 			'handled' => true,
 			// The delivery's OWN action, not a hardcoded `opened`: intake now has a
@@ -743,11 +784,103 @@ abstract class AbstractForgeWebhookService {
 		];
 	}
 
-	// ---- label mirroring (#10491) ------------------------------------------
+	// ---- label mirroring (#10491, #10570) ----------------------------------
 
 	/** Whether the delivery's action is a single-label add or remove. */
 	protected function isLabelAction(string $action): bool {
 		return $action === 'labeled' || $action === 'unlabeled';
+	}
+
+	/**
+	 * Gives the freshly carded issue the board's labels of the names the issue
+	 * already carries (#10570). Mirrors, never defines: every matching rule the
+	 * label mirror settled applies unchanged here, including the one that matters
+	 * most - a delivered name this board does not define is silently ignored, and
+	 * no board label is ever created for it (see {@see self::findBoardLabel()} for
+	 * why that is a security property and not a convenience).
+	 *
+	 * The board's INTAKE label is applied like any other, deliberately: it is a
+	 * label of this board that the issue genuinely carries, and suppressing it
+	 * would leave the card disagreeing with the issue for no stated benefit.
+	 *
+	 * The board's labels are resolved ONCE per delivery, so a heavily labelled
+	 * issue costs one label read rather than one per name - the same resolve-once
+	 * shape {@see self::handleIssueEvent()} uses for the mirror. At most
+	 * {@see self::MAX_INTAKE_LABELS} delivered names are read at all.
+	 *
+	 * Best-effort throughout, like every other mutation on this path: a failed
+	 * label read leaves an unlabelled card, and a failed single assignment (a
+	 * label deleted mid-delivery, say) skips just that label. A webhook must
+	 * never 5xx - the forge disables a hook that does.
+	 */
+	protected function applyIntakeLabels(Board $board, int $cardId, ForgeEvent $event): void {
+		if ($event->labels === []) {
+			return;
+		}
+		try {
+			$boardLabels = $this->boardLabelsByTitle($board->getId());
+			if ($boardLabels === []) {
+				return;
+			}
+			$seen = [];
+			foreach (array_slice($event->labels, 0, self::MAX_INTAKE_LABELS) as $name) {
+				$key = $this->labelKey($name);
+				// A name the board cannot possibly define (empty, overlong) or one
+				// the delivery lists twice - the assign is idempotent anyway, this
+				// just keeps it from being issued twice.
+				if ($key === null || isset($seen[$key])) {
+					continue;
+				}
+				$seen[$key] = true;
+				$label = $boardLabels[$key] ?? null;
+				if ($label === null) {
+					continue;
+				}
+				$this->applyLabelChange($cardId, $label->getId(), 'labeled', $board->getOwner());
+			}
+		} catch (\Throwable) {
+			// Non-critical - the card and its link already exist.
+		}
+	}
+
+	/**
+	 * This board's labels indexed by the comparison key their titles fold to -
+	 * ONE `findByBoard` read, so resolving many delivered names costs one query
+	 * (#10570).
+	 *
+	 * @return array<string, Label> keyed by {@see self::labelKey()}
+	 */
+	protected function boardLabelsByTitle(int $boardId): array {
+		$byTitle = [];
+		foreach ($this->labelMapper->findByBoard($boardId) as $label) {
+			$key = $this->labelKey($label->getTitle());
+			if ($key === null) {
+				continue;
+			}
+			// First definition wins, matching findBoardLabel's first-hit scan: two
+			// board labels can differ only in case, and a stable pick beats one
+			// that depends on row order.
+			$byTitle[$key] ??= $label;
+		}
+		return $byTitle;
+	}
+
+	/**
+	 * A label name folded into the single key both label paths compare by:
+	 * trimmed, then lowercased - null when it can match nothing at all.
+	 *
+	 * The name is attacker-controlled free text, so it is length-capped BEFORE
+	 * any case-folding: a stored board-label title can never exceed the cap, so
+	 * anything longer cannot match and must not cost a fold of a megabyte of text
+	 * once per board label. Shared by the mirror and by intake so the two cannot
+	 * drift into matching differently.
+	 */
+	protected function labelKey(?string $name): ?string {
+		$name = trim($name ?? '');
+		if ($name === '' || mb_strlen($name) > self::MAX_LABEL_NAME_LENGTH) {
+			return null;
+		}
+		return mb_strtolower($name);
 	}
 
 	/**
@@ -763,16 +896,16 @@ abstract class AbstractForgeWebhookService {
 	 * board labels - so an unknown name simply matches nothing.
 	 *
 	 * The name is attacker-controlled free text, so it is length-capped BEFORE
-	 * any case-folding and used for nothing but this comparison.
+	 * any case-folding ({@see self::labelKey()}) and used for nothing but this
+	 * comparison - an unusable name never reaches the board-label read at all.
 	 */
 	protected function findBoardLabel(int $boardId, ?string $name): ?Label {
-		$name = trim($name ?? '');
-		if ($name === '' || mb_strlen($name) > self::MAX_LABEL_NAME_LENGTH) {
+		$needle = $this->labelKey($name);
+		if ($needle === null) {
 			return null;
 		}
-		$needle = mb_strtolower($name);
 		foreach ($this->labelMapper->findByBoard($boardId) as $label) {
-			if (mb_strtolower(trim($label->getTitle())) === $needle) {
+			if ($this->labelKey($label->getTitle()) === $needle) {
 				return $label;
 			}
 		}

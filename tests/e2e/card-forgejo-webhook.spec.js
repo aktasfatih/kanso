@@ -371,6 +371,31 @@ test.describe('Forgejo webhook issue intake', () => {
 		expect((await cardsIn(inboxStackId)).length).toBe(before)
 	})
 
+	// #10570 on this forge. Worth its own e2e rather than trusting the shared base:
+	// the label SET is the one thing Forgejo spells differently enough to matter -
+	// label objects carrying `exclusive`/`is_archived`, and no top-level `label` at
+	// all - so this proves the names survive THIS normalizer into real assignments.
+	test('a label_updated intake cards the issue WITH the board labels it carries', async () => {
+		await api('PUT', `/boards/${boardId}/forgejo/intake`, { stackId: inboxStackId, label: 'bug' })
+		const bugLabelId = (await api('POST', '/labels', { boardId, title: 'Bug', color: 'ff0000' })).body.id
+		const labelsBefore = (await api('GET', `/boards/${boardId}`)).body.labels.length
+
+		// `enhancement` has no board counterpart; `bug` is also the intake FILTER
+		// label, which is applied like any other - deliberately, not by omission.
+		const raw = labelUpdatedBody(++issueSeq, ['bug', 'enhancement'])
+		const res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.created).toBe(true)
+
+		expect((await api('GET', `/cards/${res.body.cardId}`)).body.labelIds).toEqual([bugLabelId])
+		// Nothing minted for the unmatched name.
+		expect((await api('GET', `/boards/${boardId}`)).body.labels).toHaveLength(labelsBefore)
+
+		// Through LabelService as the board owner, so the kanso_changes row fired.
+		const activity = (await api('GET', `/cards/${res.body.cardId}/activity`)).body
+		expect(activity.find((a) => a.verb === 6)?.detail?.to).toBe('Bug')
+	})
+
 	test('the intake endpoint rejects a stack of another board', async () => {
 		const otherBoardId = (await api('POST', '/boards', { title: 'Forgejo Intake other' })).body.id
 		const foreignStackId = (await api('POST', '/stacks', { boardId: otherBoardId, title: 'Elsewhere' })).body.id
