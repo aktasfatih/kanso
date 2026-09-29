@@ -760,13 +760,25 @@ class CardMapper extends QBMapper {
 	 * Visibility (#3743): cross-board scope over the viewer's per-board roles,
 	 * applied in SQL - a hidden card can never match, not even by title.
 	 *
+	 * ARCHIVED cards are excluded unless $includeArchived (#10762). This search
+	 * was the lone listing here that did not filter `archived`, and with
+	 * {@see \OCA\Kanso\Cron\ArchiveDoneCards} growing that population unattended
+	 * a board's search results drifted into being mostly shelved work. The
+	 * baseline now matches the archived-BOARD rule search already applies
+	 * ({@see \OCA\Kanso\Service\SearchService::search()}, #10126); the flag only
+	 * ever WIDENS it, so the archive stays reachable as the historical record it
+	 * is. Still NOT matched to the other listings here in one respect: they also
+	 * carry `is_template = false`, and this query does not, so template cards do
+	 * still turn up in search - a separate gap, deliberately left alone here.
+	 *
 	 * @param int[] $boardIds
 	 * @param array<int, string> $rolesByBoard the viewer's role per board id
 	 *                                         ({@see \OCA\Kanso\Access\BoardAccess::rolesFor()})
+	 * @param bool $includeArchived opt in to archived cards as well (default: live cards only)
 	 * @return Card[] with a truncated description - search results only, never a payload
 	 * @throws Exception
 	 */
-	public function searchInBoards(array $boardIds, string $likePattern, int $limit, string $uid, array $rolesByBoard): array {
+	public function searchInBoards(array $boardIds, string $likePattern, int $limit, string $uid, array $rolesByBoard, bool $includeArchived = false): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select(self::SUMMARY_COLUMNS)
 			// SUBSTR(description, 1, N) AS description - IFunctionBuilder emits it
@@ -792,6 +804,9 @@ class CardMapper extends QBMapper {
 			))
 			->orderBy('id', 'DESC')
 			->setMaxResults($limit);
+		if (!$includeArchived) {
+			$qb->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)));
+		}
 		$this->visibilityScope->apply($qb, '', $uid, null, $rolesByBoard);
 
 		return $this->findEntities($qb);

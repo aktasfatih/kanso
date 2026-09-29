@@ -34,13 +34,19 @@ class SearchController extends Controller {
 		parent::__construct($appName, $request);
 	}
 
+	/**
+	 * `includeArchived` is the only dimension beyond the term (#10762): archived
+	 * cards are out of search by default, exactly as archived boards are, and
+	 * this widens it back for the caller that is looking through the history.
+	 * Deliberately one boolean - not the seed of a filter grammar.
+	 */
 	#[NoAdminRequired]
-	public function index(string $q = '', ?int $boardId = null, int $limit = 25, int $offset = 0): JSONResponse {
-		return $this->respond(function () use ($q, $boardId, $limit, $offset): JSONResponse {
+	public function index(string $q = '', ?int $boardId = null, int $limit = 25, int $offset = 0, bool $includeArchived = false): JSONResponse {
+		return $this->respond(function () use ($q, $boardId, $limit, $offset, $includeArchived): JSONResponse {
 			$limit = max(1, min($limit, self::MAX_LIMIT));
 			$offset = max(0, $offset);
 			return new JSONResponse(
-				$this->searchService->search($q, $this->currentUserId(), $boardId, $limit, $offset)
+				$this->searchService->search($q, $this->currentUserId(), $boardId, $limit, $offset, $includeArchived)
 			);
 		});
 	}

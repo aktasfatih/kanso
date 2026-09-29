@@ -3237,6 +3237,7 @@ msgstr "Devam ediyor"
 msgid "Inbox"
 msgstr "Gelen kutusu"
 
+#: src/components/SearchBox.vue
 #: src/composables/useBoardFilters.js
 msgid "Include archived"
 msgstr "Arşivlenenleri içer"

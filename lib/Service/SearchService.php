@@ -20,7 +20,9 @@ use OCP\IDBConnection;
  * that stays a measurement-gated bet). Results are ALWAYS constrained to the
  * boards the user can READ (derived from BoardService, never the client) so a
  * hit can never leak a card from an inaccessible board. There is deliberately
- * no query language: a single plain term, implicit substring match.
+ * no query language: a single plain term, implicit substring match. The one
+ * dimension beyond the term is a single boolean, `$includeArchived` - a chip on
+ * the search box, not the first token of a filter grammar.
  *
  * Ranking (highest first): a card whose TITLE matches, then a card matching only
  * on DESCRIPTION, then a COMMENT body match. Each source is capped before the
@@ -52,16 +54,23 @@ class SearchService {
 
 	/**
 	 * @param int|null $boardId scope to one board (must be readable), or null for all readable boards
+	 * @param bool $includeArchived widen the search to archived cards as well; excluded by default
 	 * @return array{query: string, total: int, results: list<array<string, mixed>>}
 	 */
-	public function search(string $query, string $uid, ?int $boardId, int $limit, int $offset): array {
+	public function search(string $query, string $uid, ?int $boardId, int $limit, int $offset, bool $includeArchived = false): array {
 		$term = trim($query);
 		if ($term === '' || mb_strlen($term) < 2) {
 			return ['query' => $term, 'total' => 0, 'results' => []];
 		}
 
 		// Active boards only (#10126): an archived board is shelved, so its
-		// cards and comments are out of search entirely.
+		// cards and comments are out of search entirely. An archived CARD is
+		// shelved the same way (#10762) - that one is filtered per-row in both
+		// mappers, and $includeArchived is the opt-in that widens it back.
+		// Unlike the board rule, the card rule has to be escapable: auto-archive
+		// ({@see \OCA\Kanso\Cron\ArchiveDoneCards}) sweeps finished work off the
+		// board continuously, so the archive IS the project's history and
+		// "when did we decide that" has to stay answerable.
 		$boards = $this->boardService->findAllActive($uid);
 		$boardIds = $this->readableBoardIds($boards, $boardId);
 		if ($boardIds === []) {
@@ -80,10 +89,10 @@ class SearchService {
 		// small multiple of SNIPPET_LENGTH ({@see CardMapper::searchInBoards()}),
 		// so neither the fetch nor snippet()'s regex below scales with how long
 		// an individual description happens to be.
-		foreach ($this->cardMapper->searchInBoards($boardIds, $pattern, self::SOURCE_CAP, $uid, $rolesByBoard) as $card) {
+		foreach ($this->cardMapper->searchInBoards($boardIds, $pattern, self::SOURCE_CAP, $uid, $rolesByBoard, $includeArchived) as $card) {
 			$results[] = $this->cardResult($card, $lowerTerm);
 		}
-		foreach ($this->commentMapper->searchInBoards($boardIds, $pattern, self::SOURCE_CAP, $uid, $rolesByBoard) as $row) {
+		foreach ($this->commentMapper->searchInBoards($boardIds, $pattern, self::SOURCE_CAP, $uid, $rolesByBoard, $includeArchived) as $row) {
 			$results[] = [
 				'type' => 'comment',
 				'cardId' => $row['cardId'],

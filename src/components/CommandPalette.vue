@@ -158,6 +158,12 @@ const allBoards = computed(() => boardsData.value ?? [])
 // useSearch requires a boardId; passing null/undefined disables the board scope
 // so the server returns cross-board results. The API already supports omitting
 // boardId to search across all accessible boards.
+// Archived cards stay OUT of the palette (#10762): this is a jump-to-live-work
+// surface, and the palette carries no chip on purpose - the whole point of it is
+// that one keystroke and one list get you moving. The archive is reached
+// deliberately instead, through the board's Archived view or the search box's
+// "Include archived" (SearchBox.vue), which is where looking through history
+// belongs.
 const CROSS_BOARD_ID = null
 const crossBoardId = ref(CROSS_BOARD_ID)
 const { results: cardResults, isFetching: isFetchingCards, debouncedTerm } = useSearch(query, crossBoardId)

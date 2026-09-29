@@ -498,15 +498,21 @@ class KansoClient:
         board_id: Optional[int] = None,
         limit: int = 25,
         offset: int = 0,
+        include_archived: bool = False,
     ) -> SearchResults:
         # `boardId` is a FILTER, not the authorization boundary: SearchService
         # derives the searchable board set from the authenticated user's
         # readable boards and only ever narrows it to boardId, so an
         # unreadable board id yields no results rather than a leak. Sent only
         # when set, so an absent filter means "every readable board".
+        # `includeArchived` likewise only ever WIDENS: archived cards are out of
+        # search by default server-side, and this asks for them back. Sent only
+        # when set, so the default request stays byte-identical to before.
         params: Dict[str, Any] = {"q": q, "limit": limit, "offset": offset}
         if board_id is not None:
             params["boardId"] = board_id
+        if include_archived:
+            params["includeArchived"] = "true"
         data = await self._request("GET", "/search", params=params)
         return SearchResults.model_validate(data or {})
 

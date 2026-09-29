@@ -3205,6 +3205,7 @@ msgstr "进行中"
 msgid "Inbox"
 msgstr "收件箱"
 
+#: src/components/SearchBox.vue
 #: src/composables/useBoardFilters.js
 msgid "Include archived"
 msgstr "包含已归档"

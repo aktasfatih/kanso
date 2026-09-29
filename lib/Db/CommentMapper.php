@@ -213,13 +213,23 @@ class CommentMapper extends QBMapper {
 	 * be shown and deep-linked without a second query. $boardIds must be
 	 * non-empty.
 	 *
+	 * Comments on ARCHIVED cards are excluded unless $includeArchived (#10762) -
+	 * a comment hit is a card hit by another route, so it has to answer the
+	 * archived question the same way {@see \OCA\Kanso\Db\CardMapper::searchInBoards()}
+	 * does, or shelved work would walk back in through its discussion.
+	 *
 	 * @param int[] $boardIds
 	 * @param array<int, string> $rolesByBoard the viewer's role per board id
+	 * @param bool $includeArchived opt in to comments on archived cards too (default: live cards only)
 	 * @return array<int, array{id: int, cardId: int, boardId: int, stackId: int, cardTitle: string, body: string}>
 	 * @throws Exception
 	 */
-	public function searchInBoards(array $boardIds, string $likePattern, int $limit, string $uid, array $rolesByBoard): array {
+	public function searchInBoards(array $boardIds, string $likePattern, int $limit, string $uid, array $rolesByBoard, bool $includeArchived = false): array {
 		$qb = $this->db->getQueryBuilder();
+		// `c.archived` is deliberately NOT selected: it is filtered in SQL below,
+		// never read back. Every raw-row read in this app avoids boolean columns
+		// because pdo_pgsql hands them over as 't'/'f' strings while MySQL/SQLite
+		// give 1/0, and (bool)'f' is true.
 		$qb->select('cm.id', 'cm.card_id', 'cm.body', 'c.board_id', 'c.stack_id', 'c.title')
 			->from($this->getTableName(), 'cm')
 			->innerJoin('cm', 'kanso_cards', 'c', $qb->expr()->eq('cm.card_id', 'c.id'))
@@ -229,6 +239,9 @@ class CommentMapper extends QBMapper {
 			->andWhere($qb->expr()->iLike('cm.body', $qb->createNamedParameter($likePattern)))
 			->orderBy('cm.id', 'DESC')
 			->setMaxResults($limit);
+		if (!$includeArchived) {
+			$qb->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)));
+		}
 		$this->visibilityScope->apply($qb, 'c', $uid, null, $rolesByBoard);
 
 		$result = $qb->executeQuery();

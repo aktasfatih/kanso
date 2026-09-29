@@ -3237,6 +3237,7 @@ msgstr "In corso"
 msgid "Inbox"
 msgstr "Posta in arrivo"
 
+#: src/components/SearchBox.vue
 #: src/composables/useBoardFilters.js
 msgid "Include archived"
 msgstr "Includi archiviate"

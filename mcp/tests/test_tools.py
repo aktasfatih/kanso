@@ -413,12 +413,31 @@ ALL_CARDS = [
 ]
 
 
+# Cards on the readable board that are ARCHIVED. Held apart from ALL_CARDS
+# because the server's baseline drops them (#10762): `_acl_search` only folds
+# them in when the request asks for them, so a tool that forgets to forward
+# `include_archived` can never see them.
+ARCHIVED_CARDS = [
+    {
+        "type": "card",
+        "cardId": 102,
+        "boardId": READABLE_BOARD,
+        "title": "Invoice format decision",
+        "snippet": "we settled on the invoice layout here",
+        "rank": 3,
+    },
+]
+
+
 def _acl_search(request: httpx.Request) -> httpx.Response:
     term = request.url.params.get("q", "")
     board = request.url.params.get("boardId")
     limit = int(request.url.params.get("limit", "25"))
+    include_archived = request.url.params.get("includeArchived") in ("true", "1")
 
     hits = [c for c in ALL_CARDS if c["boardId"] == READABLE_BOARD]
+    if include_archived:
+        hits = hits + [c for c in ARCHIVED_CARDS if c["boardId"] == READABLE_BOARD]
     if term:
         hits = [
             c
@@ -484,6 +503,64 @@ async def test_search_cards_searches_every_readable_board_by_default():
     assert len(respx.calls) == 1
     assert respx.calls.last.request.url.path.endswith("/search")
     assert found["total"] == 2
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_cards_leaves_archived_cards_out_by_default():
+    # #10762: automations archive finished cards unattended, so search that did
+    # not exclude them drifted into answering mostly with shelved work. The
+    # filter is NOT sent at all when it is off, so the default request is
+    # byte-identical to what shipped before the flag existed.
+    _mock_search()
+    tools, client = _tools()
+    async with client:
+        found = await tools["kanso_search_cards"]("invoice")
+
+    assert "includeArchived" not in respx.calls.last.request.url.params
+    assert [h["cardId"] for h in found["results"]] == [100, 101]
+    assert found["total"] == 2
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_cards_reaches_the_archive_when_asked():
+    # …and the archive stays reachable, which is the point: it is where "when did
+    # we decide that" is answered.
+    _mock_search()
+    tools, client = _tools()
+    async with client:
+        found = await tools["kanso_search_cards"]("invoice", include_archived=True)
+
+    assert respx.calls.last.request.url.params.get("includeArchived") == "true"
+    # The archived card is ADDED to the live hits, never substituted for them.
+    assert [h["cardId"] for h in found["results"]] == [100, 101, 102]
+    assert found["total"] == 3
+
+
+@pytest.mark.asyncio
+async def test_search_cards_schema_exposes_optional_include_archived():
+    # Mirrors test_get_board_schema_exposes_optional_include_archived: the stub
+    # registry never builds the JSON schema MCP clients actually see, so this one
+    # registers on a real FastMCP instance. The flag must be optional and default
+    # to false, so an agent that knows nothing about it keeps getting the
+    # live-cards-only answer.
+    from mcp.server.fastmcp import FastMCP
+
+    client = KansoClient(
+        KansoConfig(host="http://nc.test", username="admin", password="pw")
+    )
+    server = FastMCP("kanso-test")
+    register_tools(server, client)
+    async with client:
+        tool = next(
+            t for t in await server.list_tools() if t.name == "kanso_search_cards"
+        )
+
+    schema = tool.inputSchema
+    assert schema["properties"]["include_archived"]["default"] is False
+    assert "query" in schema["required"]
+    assert "include_archived" not in schema.get("required", [])
 
 
 @respx.mock

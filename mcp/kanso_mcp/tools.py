@@ -935,7 +935,10 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         annotations={"readOnlyHint": True},
     )
     async def kanso_search_cards(
-        query: str, board_id: Optional[int] = None, limit: int = 25
+        query: str,
+        board_id: Optional[int] = None,
+        limit: int = 25,
+        include_archived: bool = False,
     ) -> dict:
         """Find cards by text across every board you can read — the fast way to
         locate a card when you know roughly what it says but not where it is.
@@ -959,13 +962,24 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         `board_id` is only a narrowing FILTER on that set, never a way to reach
         past it.
 
+        ARCHIVED cards are out of these results by default, as are the cards of
+        an archived BOARD. Automations archive finished cards unattended, so on a
+        board that has been running a while the archive outgrows the live work and
+        would answer most queries. Pass `include_archived=True` when the question
+        is about history — "when did we decide that", "have we done this before".
+
         Args:
             query: The text to look for (min. 2 characters).
             board_id: Restrict the search to one board; omit to search every
                 board you can read.
             limit: Maximum hits to return (server caps this at 50).
+            include_archived: Search archived cards too, and comments on them
+                (default false: live cards only). Cards of an archived board stay
+                out either way.
         """
-        return (await client.search(query, board_id, limit)).model_dump()
+        return (
+            await client.search(query, board_id, limit, include_archived=include_archived)
+        ).model_dump()
 
     # ----------------------------------------------------------------- my work
     @mcp.tool(

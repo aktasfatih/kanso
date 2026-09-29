@@ -41,71 +41,91 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</button>
 		</div>
 
-		<!-- Results dropdown -->
-		<ul
-			v-if="dropdownOpen"
-			id="search-box-results"
-			ref="dropdownRef"
-			class="search-box__dropdown"
-			role="listbox"
-			:aria-label="t('kanso', 'Search results')">
+		<!-- Results dropdown: the scrollable listbox plus a pinned footer, so the
+		     "Include archived" toggle stays reachable however long the list is. -->
+		<div v-if="dropdownOpen" class="search-box__dropdown">
+			<ul
+				id="search-box-results"
+				class="search-box__list"
+				role="listbox"
+				:aria-label="t('kanso', 'Search results')">
 
-			<!-- Fetching placeholder (term ≥2 chars but debounce not yet settled) -->
-			<li v-if="isFetching && results.length === 0" class="search-box__status" role="status">
-				{{ t('kanso', 'Searching…') }}
-			</li>
+				<!-- Fetching placeholder (term ≥2 chars but debounce not yet settled) -->
+				<li v-if="isFetching && results.length === 0" class="search-box__status" role="status">
+					{{ t('kanso', 'Searching…') }}
+				</li>
 
-			<!-- Empty state -->
-			<li
-				v-else-if="!isFetching && debouncedTerm.length >= 2 && results.length === 0"
-				class="search-box__status search-box__status--empty"
-				role="status">
-				{{ t('kanso', 'No matches for "{q}"', { q: debouncedTerm }) }}
-			</li>
+				<!-- Empty state -->
+				<li
+					v-else-if="!isFetching && debouncedTerm.length >= 2 && results.length === 0"
+					class="search-box__status search-box__status--empty"
+					role="status">
+					{{ t('kanso', 'No matches for "{q}"', { q: debouncedTerm }) }}
+				</li>
 
-			<!-- Result rows -->
-			<li
-				v-for="(result, idx) in results"
-				:id="`search-result-${idx}`"
-				:key="resultKey(result, idx)"
-				class="search-box__result"
-				:class="{ 'search-box__result--active': activeIndex === idx }"
-				role="option"
-				:aria-selected="activeIndex === idx"
-				@mousedown.prevent
-				@click="selectResult(result)"
-				@mousemove="activeIndex = idx">
-				<!-- Type icon -->
-				<component
-					:is="result.type === 'comment' ? CommentIcon : CardIcon"
-					class="search-box__result-type-icon"
-					:size="16"
-					:aria-label="result.type === 'comment' ? t('kanso', 'Comment') : t('kanso', 'Card')"
-					aria-hidden="true" />
-				<div class="search-box__result-body">
-					<!-- Card title (highlight the matched portion) -->
-					<!-- eslint-disable-next-line vue/no-v-html -->
-					<span class="search-box__result-title" v-html="highlightTitle(result.title)" />
-					<!-- Snippet -->
-					<span v-if="result.snippet" class="search-box__result-snippet">
-						{{ truncate(result.snippet, 80) }}
-					</span>
-					<!-- #122 — the column a hit sits in. Boards routinely hold several
-					     cards with near-identical titles whose only difference is the
-					     stage they are at, which left the list unreadable without
-					     opening each row. Absent when the column no longer resolves. -->
-					<span v-if="result.stackTitle || result.type === 'comment'" class="search-box__result-meta">
-						<span v-if="result.stackTitle" class="search-box__result-column" :title="result.stackTitle">
-							{{ result.stackTitle }}
+				<!-- Result rows -->
+				<li
+					v-for="(result, idx) in results"
+					:id="`search-result-${idx}`"
+					:key="resultKey(result, idx)"
+					class="search-box__result"
+					:class="{ 'search-box__result--active': activeIndex === idx }"
+					role="option"
+					:aria-selected="activeIndex === idx"
+					@mousedown.prevent
+					@click="selectResult(result)"
+					@mousemove="activeIndex = idx">
+					<!-- Type icon -->
+					<component
+						:is="result.type === 'comment' ? CommentIcon : CardIcon"
+						class="search-box__result-type-icon"
+						:size="16"
+						:aria-label="result.type === 'comment' ? t('kanso', 'Comment') : t('kanso', 'Card')"
+						aria-hidden="true" />
+					<div class="search-box__result-body">
+						<!-- Card title (highlight the matched portion) -->
+						<!-- eslint-disable-next-line vue/no-v-html -->
+						<span class="search-box__result-title" v-html="highlightTitle(result.title)" />
+						<!-- Snippet -->
+						<span v-if="result.snippet" class="search-box__result-snippet">
+							{{ truncate(result.snippet, 80) }}
 						</span>
-						<!-- Label for comment hits to distinguish from card hits -->
-						<span v-if="result.type === 'comment'" class="search-box__result-badge">
-							{{ t('kanso', 'comment') }}
+						<!-- #122 — the column a hit sits in. Boards routinely hold several
+						     cards with near-identical titles whose only difference is the
+						     stage they are at, which left the list unreadable without
+						     opening each row. Absent when the column no longer resolves. -->
+						<span v-if="result.stackTitle || result.type === 'comment'" class="search-box__result-meta">
+							<span v-if="result.stackTitle" class="search-box__result-column" :title="result.stackTitle">
+								{{ result.stackTitle }}
+							</span>
+							<!-- Label for comment hits to distinguish from card hits -->
+							<span v-if="result.type === 'comment'" class="search-box__result-badge">
+								{{ t('kanso', 'comment') }}
+							</span>
 						</span>
-					</span>
-				</div>
-			</li>
-		</ul>
+					</div>
+				</li>
+			</ul>
+
+			<!-- #10762 — archived cards are out of search by default: auto-archive
+			     sweeps finished work off the board unattended, so on a board that
+			     has been running a while the results were mostly shelved cards. The
+			     archive is still the project's history, so this one chip widens the
+			     search back over it. One boolean, deliberately — not the first token
+			     of a filter language. -->
+			<div class="search-box__footer">
+				<button
+					class="search-box__archived-toggle"
+					:class="{ 'search-box__archived-toggle--on': includeArchived }"
+					type="button"
+					:aria-pressed="includeArchived ? 'true' : 'false'"
+					@mousedown.prevent
+					@click="toggleArchived">
+					<ArchiveIcon :size="14" aria-hidden="true" />
+					{{ t('kanso', 'Include archived') }}
+				</button>
+			</div>
+		</div>
 	</div>
 </template>
 
@@ -117,6 +137,7 @@ import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import CardIcon from 'vue-material-design-icons/Card.vue'
 import CommentIcon from 'vue-material-design-icons/CommentOutline.vue'
+import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
 import { useSearch } from '../composables/useSearch.js'
 
 const props = defineProps({
@@ -146,11 +167,14 @@ const inputRef = ref(null)
 function focusInput() {
 	inputRef.value?.focus()
 }
-const dropdownRef = ref(null)
 
 // ── Search composable ──────────────────────────────────────────────────────────
+// #10762 — archived cards are excluded server-side unless this is on. It stays
+// on for the rest of the session once flipped (searching history is usually more
+// than one query), but is never persisted: a reload is back to live cards only.
+const includeArchived = ref(false)
 const boardIdRef = computed(() => props.boardId)
-const { results, isFetching, debouncedTerm } = useSearch(term, boardIdRef)
+const { results, isFetching, debouncedTerm } = useSearch(term, boardIdRef, includeArchived)
 
 // ── Dropdown visibility ────────────────────────────────────────────────────────
 // Open whenever the input has ≥2 chars (even while fetching) or when there are
@@ -263,6 +287,15 @@ function clearSearch() {
 	term.value = ''
 	activeIndex.value = -1
 	nextTick(() => inputRef.value?.focus())
+}
+
+// The chip only widens the query, so flipping it re-runs the same term with a
+// different query key. The keyboard highlight is dropped because the row it
+// pointed at is about to move.
+function toggleArchived() {
+	includeArchived.value = !includeArchived.value
+	activeIndex.value = -1
+	inputRef.value?.focus()
 }
 
 function handleBlur() {
@@ -386,23 +419,73 @@ defineExpose({ focus: () => inputRef.value?.focus() })
 	to { transform: rotate(360deg); }
 }
 
-/* Dropdown */
+/* Dropdown: the panel scrolls its LIST, not itself, so the footer chip stays
+   pinned at the bottom however many results came back. */
 .search-box__dropdown {
 	position: absolute;
 	top: calc(100% + 4px);
 	left: 0;
 	right: 0;
 	min-width: 320px;
-	max-height: 400px;
-	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
 	background: var(--color-main-background);
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large, 8px);
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 	z-index: 1000;
+}
+
+.search-box__list {
+	max-height: 400px;
+	overflow-y: auto;
 	list-style: none;
 	margin: 0;
 	padding: 4px 0;
+}
+
+/* Footer: the single "Include archived" chip. */
+.search-box__footer {
+	display: flex;
+	border-top: 1px solid var(--color-border);
+	padding: 4px 8px;
+}
+
+.search-box__archived-toggle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 10px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-pill, 14px);
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.75rem;
+	line-height: 1.6;
+	cursor: pointer;
+}
+
+.search-box__archived-toggle:hover {
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+}
+
+/* The chip already carries a border, so the UA outline alone reads as noise on
+   it - give keyboard focus its own ring. */
+.search-box__archived-toggle:focus-visible {
+	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline-offset: 2px;
+}
+
+.search-box__archived-toggle--on {
+	background: var(--color-primary-element, #0082c9);
+	border-color: var(--color-primary-element, #0082c9);
+	color: var(--color-primary-element-text, #fff);
+}
+
+.search-box__archived-toggle--on:hover {
+	background: var(--color-primary-element-hover, #0082c9);
+	color: var(--color-primary-element-text, #fff);
 }
 
 .search-box__status {

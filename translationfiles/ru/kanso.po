@@ -3269,6 +3269,7 @@ msgstr "В работе"
 msgid "Inbox"
 msgstr "Входящие"
 
+#: src/components/SearchBox.vue
 #: src/composables/useBoardFilters.js
 msgid "Include archived"
 msgstr "Включая архив"

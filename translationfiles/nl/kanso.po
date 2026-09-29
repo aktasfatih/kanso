@@ -3237,6 +3237,7 @@ msgstr "Bezig"
 msgid "Inbox"
 msgstr "Postvak"
 
+#: src/components/SearchBox.vue
 #: src/composables/useBoardFilters.js
 msgid "Include archived"
 msgstr "Gearchiveerde meenemen"
