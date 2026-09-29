@@ -34,7 +34,7 @@ msgstr "（空）"
 
 #: src/admin-backup.js
 msgid "(orphaned)"
-msgstr ""
+msgstr "（孤立）"
 
 #: lib/Notification/Notifier.php
 msgid "{actor} assigned you a step on {card}"
@@ -174,7 +174,7 @@ msgstr "已更新 {ok} 张卡片"
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} cards updated before the action failed"
-msgstr ""
+msgstr "操作失败前已更新 {ok} 张卡片"
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
@@ -260,12 +260,12 @@ msgstr "%1$s 与你共享了 %2$s"
 #: src/views/BoardList.vue:217
 msgid "%n attachment"
 msgid_plural "%n attachments"
-msgstr[0] ""
+msgstr[0] "%n 个附件"
 
 #: src/views/BoardList.vue:224
 msgid "%n attachment could not be copied and is missing from the new board. Keep your Deck board until you have checked it."
 msgid_plural "%n attachments could not be copied and are missing from the new board. Keep your Deck board until you have checked them."
-msgstr[0] ""
+msgstr[0] "有 %n 个附件无法复制，新看板中缺少它们。在你检查清楚之前，请先保留你的 Deck 看板。"
 
 #: src/components/BoardTileContent.vue:18
 #: src/views/BoardList.vue:214
@@ -279,22 +279,22 @@ msgstr[0] "%n 张卡片"
 #: src/components/StackColumn.vue:1053
 msgid "%n card archived"
 msgid_plural "%n cards archived"
-msgstr[0] ""
+msgstr[0] "已归档 %n 张卡片"
 
 #: src/components/CsvImportModal.vue:54
 msgid "%n card created"
 msgid_plural "%n cards created"
-msgstr[0] ""
+msgstr[0] "已创建 %n 张卡片"
 
 #: src/views/BoardList.vue:213
 msgid "%n column"
 msgid_plural "%n columns"
-msgstr[0] ""
+msgstr[0] "%n 列"
 
 #: src/views/BoardList.vue:216
 msgid "%n comment"
 msgid_plural "%n comments"
-msgstr[0] ""
+msgstr[0] "%n 条评论"
 
 #: src/components/CsvImportModal.vue:110
 msgid "%n data row detected"
@@ -309,7 +309,7 @@ msgstr[0] "%n 天前"
 #: src/components/BoardAttachmentsModal.vue:14
 msgid "%n file"
 msgid_plural "%n files"
-msgstr[0] ""
+msgstr[0] "%n 个文件"
 
 #: src/components/CardDetail.vue:4737
 msgid "%n hour ago"
@@ -319,17 +319,17 @@ msgstr[0] "%n 小时前"
 #: src/views/BoardList.vue:215
 msgid "%n label"
 msgid_plural "%n labels"
-msgstr[0] ""
+msgstr[0] "%n 个标签"
 
 #: src/components/CsvImportModal.vue:56
 msgid "%n label created"
 msgid_plural "%n labels created"
-msgstr[0] ""
+msgstr[0] "已创建 %n 个标签"
 
 #: src/components/CsvImportModal.vue:66
 msgid "%n label was not created and is missing from the imported cards: only board managers can add new labels. Ask a manager to add it, then set it on the cards."
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
-msgstr[0] ""
+msgstr[0] "有 %n 个标签未能创建，导入的卡片中缺少它们：只有看板管理者才能添加新标签。请让管理者添加，然后在卡片上设置它们。"
 
 #: src/components/CardDetail.vue:4735
 msgid "%n minute ago"
@@ -359,12 +359,12 @@ msgstr[0] "%n 个项目"
 #: src/components/CardDetail.vue:2191
 msgid "%n reply"
 msgid_plural "%n replies"
-msgstr[0] ""
+msgstr[0] "%n 条回复"
 
 #: src/components/CsvImportModal.vue:60
 msgid "%n row was skipped because it had no title."
 msgid_plural "%n rows were skipped because they had no title."
-msgstr[0] ""
+msgstr[0] "有 %n 行因为没有标题而被跳过。"
 
 #: src/components/BoardTimelineView.vue:303
 msgid "%n unscheduled card"
@@ -394,19 +394,19 @@ msgstr "每次都会创建一份新副本；本卡片保留为源卡片"
 
 #: templates/admin-backup.php
 msgid "A new one replaces the last, so a backup that keeps failing does not pile up."
-msgstr ""
+msgstr "新的通知会替换上一条，因此反复失败的备份不会堆积出一堆通知。"
 
 #: templates/admin-backup.php
 msgid "A separate account only changes whose quota they spend; to bound disk use, empty that trashbin or keep the backups inside Kanso."
-msgstr ""
+msgstr "使用单独的账号只会改变占用谁的配额；要控制磁盘占用，请清空该回收站，或把备份保存在 Kanso 内部。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Accept mail from (one address or @domain per line — leave empty to accept anyone)"
-msgstr ""
+msgstr "接受来自以下地址的邮件（每行一个地址或 @域名 — 留空则接受任何人）"
 
 #: templates/admin-backup.php
 msgid "Account that owns the folder"
-msgstr ""
+msgstr "拥有该文件夹的账号"
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/BoardList.vue
@@ -437,7 +437,7 @@ msgstr "添加描述…"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Add a Forgejo webhook sending \"pull_request\" and \"issues\" events to the URL below. A pull request opened on a kanso-<id> branch moves its card to your Review column; a merged pull request moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress. Gitea webhooks work too."
-msgstr ""
+msgstr "添加一个 Forgejo webhook，把 “pull_request” 和 “issues” 事件发送到下面的 URL。在 kanso-<id> 分支上打开的 pull request 会把它的卡片移动到你的评审列；合并后的 pull request 会把它移动到已完成。关闭卡片上关联的 issue 会把卡片移动到已完成；重新打开则把卡片移回进行中。Gitea 的 webhook 同样适用。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Add a GitHub webhook sending \"pull_request\" and \"issues\" events to the URL below, with Content type set to application/json (the form-encoded option is not supported). Name the card in the PR title (a reference like {example}) or on a kanso-<id> branch: an opened PR then moves that card to your Review column and a merged PR moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress. Issue intake below can also turn newly opened issues into linked cards."
@@ -461,7 +461,7 @@ msgstr "添加清单项…"
 
 #: src/components/CardDetail.vue
 msgid "Add assignee"
-msgstr ""
+msgstr "添加负责人"
 
 #: src/views/ProjectView.vue
 msgid "Add card"
@@ -474,7 +474,7 @@ msgstr "添加卡片…"
 
 #: src/views/BoardList.vue
 msgid "Add cards to an existing board"
-msgstr ""
+msgstr "把卡片添加到已有看板"
 
 #: src/views/BoardView.vue
 msgid "Add column"
@@ -495,7 +495,7 @@ msgstr "添加标签"
 
 #: src/components/BulkActionBar.vue
 msgid "Add label {label}"
-msgstr ""
+msgstr "添加标签 {label}"
 
 #: src/components/BulkActionBar.vue
 msgid "Add label…"
@@ -564,7 +564,7 @@ msgstr "在指定卡片之后"
 
 #: templates/admin-backup.php
 msgid "After every backup"
-msgstr ""
+msgstr "每次备份后"
 
 #: src/components/BoardSettingsModal.vue
 msgid "After N occurrences"
@@ -604,7 +604,7 @@ msgstr "任何卡片都可以从它的 ⋯ 菜单保存为模板（“标记为�
 
 #: src/components/BoardSettingsModal.vue
 msgid "Anyone who knows the address can create cards. A sender address is easy to forge, so treat the allowlist as a filter rather than proof of who sent something — turn on \"Require verified senders\" if your mail server checks DMARC."
-msgstr ""
+msgstr "任何知道该地址的人都可以创建卡片。发件人地址很容易伪造，因此请把允许列表当作一种过滤手段，而不是发件人身份的证明 — 如果你的邮件服务器会检查 DMARC，请开启“要求验证发件人”。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Anyone with the link can subscribe to this board's due dates."
@@ -634,12 +634,12 @@ msgstr "归档"
 #: src/components/StackColumn.vue:218
 msgid "Archive %n card"
 msgid_plural "Archive %n cards"
-msgstr[0] ""
+msgstr[0] "归档 %n 张卡片"
 
 #: src/components/StackColumn.vue:217
 msgid "Archive %n visible card"
 msgid_plural "Archive %n visible cards"
-msgstr[0] ""
+msgstr[0] "归档 %n 张可见卡片"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTileMenu.vue
@@ -701,7 +701,7 @@ msgstr "指派步骤"
 
 #: src/components/BulkActionBar.vue
 msgid "Assign to {user}"
-msgstr ""
+msgstr "指派给 {user}"
 
 #: src/components/CardDetail.vue
 msgid "assigned {value}"
@@ -745,15 +745,15 @@ msgstr "把“{file}”附加到卡片。卡片上会保存一份副本。"
 
 #: src/components/CardDetail.vue
 msgid "Attach a copy"
-msgstr ""
+msgstr "附加副本"
 
 #: src/components/CardDetail.vue
 msgid "attached {value}"
-msgstr ""
+msgstr "附加了 {value}"
 
 #: src/components/CardDetail.vue
 msgid "attached a file"
-msgstr ""
+msgstr "附加了一个文件"
 
 #: src/components/AddToKansoDialog.vue
 msgid "Attaching…"
@@ -766,7 +766,7 @@ msgstr "附件"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Attachments on this board"
-msgstr ""
+msgstr "此看板上的附件"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Auto-archive"
@@ -800,7 +800,7 @@ msgstr "返回项目"
 
 #: templates/admin-backup.php
 msgid "Back up boards automatically"
-msgstr ""
+msgstr "自动备份看板"
 
 #: lib/SetupCheck/InstanceConfigCheck.php
 msgid "Background jobs use a server-side mode and \"overwrite.cli.url\" is set."
@@ -818,7 +818,7 @@ msgstr "待办列表"
 
 #: templates/admin-backup.php
 msgid "Backup"
-msgstr ""
+msgstr "备份"
 
 #: src/admin-backup.js
 msgid "Backup completed"
@@ -826,7 +826,7 @@ msgstr "备份已完成"
 
 #: src/admin-backup.js
 msgid "Backup deleted"
-msgstr ""
+msgstr "备份已删除"
 
 #: src/admin-backup.js
 msgid "Backup failed"
@@ -842,7 +842,7 @@ msgstr "备份已禁用"
 
 #: templates/admin-backup.php
 msgid "Backups in the other location stay where they are; switch back to see them."
-msgstr ""
+msgstr "另一个位置中的备份会原样保留；切换回去即可看到它们。"
 
 #: templates/admin-backup.php
 msgid "Backups to keep per board"
@@ -899,7 +899,7 @@ msgstr "看板分析"
 #: src/components/BoardAttachmentsModal.vue
 #: src/views/BoardView.vue
 msgid "Board attachments"
-msgstr ""
+msgstr "看板附件"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Board background"
@@ -988,7 +988,7 @@ msgstr "由 {user}"
 
 #: src/App.vue
 msgid "By default the discussion sits beside the card. Move it below and it becomes part of the card you scroll down to."
-msgstr ""
+msgstr "默认情况下，讨论显示在卡片旁边。把它移到下方后，讨论会成为卡片的一部分，向下滚动即可看到。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Calendar feed"
@@ -1071,7 +1071,7 @@ msgstr "卡片模板"
 
 #: src/App.vue
 msgid "Card view"
-msgstr ""
+msgstr "卡片视图"
 
 #: src/components/CardDetail.vue
 msgid "Card visibility"
@@ -1140,11 +1140,11 @@ msgstr "统计的卡片数"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Cards per day from one sender"
-msgstr ""
+msgstr "每个发件人每天的卡片数"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Cards per day from this mailbox"
-msgstr ""
+msgstr "此邮箱每天的卡片数"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Cards with a due date sync to your calendar and phone (via CalDAV/DAVx5) as tasks. Turn this off to keep this board out of your own calendar. Only affects you."
@@ -1247,7 +1247,7 @@ msgstr "已请求修改"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Check this mailbox automatically"
-msgstr ""
+msgstr "自动检查此邮箱"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/BoardSettingsModal.vue
@@ -1273,14 +1273,14 @@ msgstr "清单未完成"
 #: src/components/CardPreview.vue
 #: src/components/CardTile.vue
 msgid "Checklist progress {done} of {total}"
-msgstr ""
+msgstr "清单进度 {total} 中的 {done}"
 
 #: src/components/BoardListView.vue:1071
 #: src/components/CardPreview.vue:239
 #: src/components/CardTile.vue:480
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
-msgstr[0] ""
+msgstr[0] "清单进度 {total} 中的 {done}，%n 个步骤已逾期"
 
 #: src/components/CsvImportModal.vue
 msgid "Choose a board…"
@@ -1297,11 +1297,11 @@ msgstr "选择 CSV 文件"
 
 #: src/components/CardDetail.vue
 msgid "Choose a file to attach"
-msgstr ""
+msgstr "选择要附加的文件"
 
 #: src/components/CardDetail.vue
 msgid "Choose from Files"
-msgstr ""
+msgstr "从“文件”中选择"
 
 #: src/App.vue
 msgid "Choose which sections appear in the left sidebar."
@@ -1309,7 +1309,7 @@ msgstr "选择在左侧边栏中显示哪些分区。"
 
 #: src/components/CardDetail.vue
 msgid "Choosing from Files stores a copy on the card — editing, renaming or deleting the original in Files does not change it."
-msgstr ""
+msgstr "从“文件”中选择会在卡片上保存一份副本 — 在“文件”中编辑、重命名或删除原件都不会影响它。"
 
 #: src/composables/useCardType.js
 msgid "Chore"
@@ -1317,7 +1317,7 @@ msgstr "杂务"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Clear"
-msgstr ""
+msgstr "清除"
 
 #: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
@@ -1390,11 +1390,11 @@ msgstr "已关闭"
 
 #: src/components/CardDetail.vue
 msgid "Code"
-msgstr ""
+msgstr "代码"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Code links"
-msgstr ""
+msgstr "代码链接"
 
 #: src/components/StackColumn.vue
 msgid "Collapse column"
@@ -1435,7 +1435,7 @@ msgstr "列已删除"
 
 #: src/components/StackColumn.vue
 msgid "Column description"
-msgstr ""
+msgstr "列描述"
 
 #: src/components/StackColumn.vue
 msgid "Column name"
@@ -1443,7 +1443,7 @@ msgstr "列名称"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Column new cards land in"
-msgstr ""
+msgstr "新卡片进入的列"
 
 #: src/views/BoardView.vue
 msgid "Comfortable"
@@ -1495,7 +1495,7 @@ msgstr "条件"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Connected to the mailbox successfully."
-msgstr ""
+msgstr "已成功连接到邮箱。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Contacts"
@@ -1548,7 +1548,7 @@ msgstr "无法更改卡片可见性"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not connect to the mailbox."
-msgstr ""
+msgstr "无法连接到邮箱。"
 
 #: src/components/CardDetail.vue
 msgid "Could not copy to clipboard"
@@ -1561,7 +1561,7 @@ msgstr "无法复制到剪贴板。"
 
 #: src/admin-backup.js
 msgid "Could not delete the backup"
-msgstr ""
+msgstr "无法删除该备份"
 
 #: src/composables/useBoardActions.js
 msgid "Could not delete the board."
@@ -1613,7 +1613,7 @@ msgstr "无法导入该 Trello 文件。"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Could not load more files. Try again."
-msgstr ""
+msgstr "无法加载更多文件，请重试。"
 
 #: src/components/CsvImportModal.vue
 msgid "Could not load that board’s columns."
@@ -1621,7 +1621,7 @@ msgstr "无法加载该看板的列。"
 
 #: src/admin-backup.js
 msgid "Could not load the stored backups."
-msgstr ""
+msgstr "无法加载已存储的备份。"
 
 #: src/components/CsvImportModal.vue
 msgid "Could not load your boards."
@@ -1633,7 +1633,7 @@ msgstr "无法加载你的 Deck 看板。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not remove the mailbox."
-msgstr ""
+msgstr "无法移除该邮箱。"
 
 #: src/admin-backup.js
 msgid "Could not save backup settings"
@@ -1641,7 +1641,7 @@ msgstr "无法保存备份设置"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not save the email intake settings."
-msgstr ""
+msgstr "无法保存邮件接入设置。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not save the issue-intake settings."
@@ -1653,7 +1653,7 @@ msgstr "无法保存标题"
 
 #: src/components/CardDetail.vue
 msgid "Could not search the people on this board."
-msgstr ""
+msgstr "无法搜索此看板上的人员。"
 
 #: src/views/BoardList.vue
 msgid "Could not set up the starter board."
@@ -1661,7 +1661,7 @@ msgstr "无法创建入门看板。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not update the public link expiry."
-msgstr ""
+msgstr "无法更新公开链接的有效期。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not update the public link options."
@@ -1773,7 +1773,7 @@ msgstr "自定义字段"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Custom offset — it is kept exactly as it is."
-msgstr ""
+msgstr "自定义偏移 — 会原样保留。"
 
 #: src/components/CardDetail.vue
 msgid "Custom schedule — edit it in Board settings → Automation."
@@ -1781,7 +1781,7 @@ msgstr "自定义计划 — 请在“看板设置 → 自动化”中编辑。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Custom schedule — it is kept exactly as it is. The settings below can still be changed."
-msgstr ""
+msgstr "自定义计划 — 会原样保留。下面的设置仍然可以修改。"
 
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
@@ -1794,7 +1794,7 @@ msgstr "每天"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Daily card limits (0 uses the default)"
-msgstr ""
+msgstr "每日卡片数上限（0 表示使用默认值）"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Danger zone"
@@ -1852,15 +1852,15 @@ msgstr "删除“{title}”？"
 
 #: src/admin-backup.js
 msgid "Delete {name}? Kanso keeps no second copy of it."
-msgstr ""
+msgstr "删除 {name}？Kanso 不会保留它的第二份副本。"
 
 #: src/admin-backup.js
 msgid "Delete {name}? The file goes to the backup account's trashbin — Kanso keeps no second copy of it."
-msgstr ""
+msgstr "删除 {name}？该文件会进入备份账号的回收站 — Kanso 不会保留它的第二份副本。"
 
 #: src/admin-backup.js
 msgid "Delete {name}? This file is removed for good — Kanso keeps no second copy of it."
-msgstr ""
+msgstr "删除 {name}？该文件会被永久移除 — Kanso 不会保留它的第二份副本。"
 
 #: src/components/CardDetail.vue
 msgid "Delete and stop recurrence"
@@ -1963,7 +1963,7 @@ msgstr "删除了这张卡片"
 
 #: templates/admin-backup.php
 msgid "Deleting a backup removes that file from this list; Kanso keeps no second copy of it."
-msgstr ""
+msgstr "删除备份会把该文件从此列表中移除；Kanso 不会保留它的第二份副本。"
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/BoardList.vue
@@ -2090,11 +2090,11 @@ msgstr "较上一周期下降"
 #: src/admin-backup.js
 #: src/components/BoardAttachmentsModal.vue
 msgid "Download"
-msgstr ""
+msgstr "下载"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Download {file}"
-msgstr ""
+msgstr "下载 {file}"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Download a backup of this board, attachments included."
@@ -2131,7 +2131,7 @@ msgstr "截止"
 
 #: src/components/CardDetail.vue
 msgid "Due {date}"
-msgstr ""
+msgstr "截止 {date}"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/BoardSettingsModal.vue
@@ -2189,11 +2189,11 @@ msgstr "每个 Deck 看板都会被复制成一个归你所有的新 Kanso 看�
 
 #: templates/admin-backup.php
 msgid "Each file holds one whole board, with every card and attachment on it, even private ones."
-msgstr ""
+msgstr "每个文件包含一个完整的看板，以及其上的所有卡片和附件，包括私有的内容。"
 
 #: templates/admin-backup.php
 msgid "Each run adds up to two entries per board to this account's activity."
-msgstr ""
+msgstr "每次运行最多会在该账号的动态中为每个看板添加两条记录。"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
@@ -2244,7 +2244,7 @@ msgstr "编辑器"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Email intake"
-msgstr ""
+msgstr "邮件接入"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Enable & generate secret"
@@ -2268,7 +2268,7 @@ msgstr "已启用"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Encryption"
-msgstr ""
+msgstr "加密"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Ends"
@@ -2284,7 +2284,7 @@ msgstr "请输入名称。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Enter the password again for the new server or account"
-msgstr ""
+msgstr "请为新的服务器或账号重新输入密码"
 
 #: src/components/CardPreview.vue
 msgid "Enter to open · Esc to close"
@@ -2353,11 +2353,11 @@ msgstr[0] "每 %n 年"
 
 #: templates/admin-backup.php
 msgid "Everyone in the administrators group gets the message."
-msgstr ""
+msgstr "管理员组中的所有人都会收到该消息。"
 
 #: src/components/CardDetail.vue
 msgid "Everyone shown here is already assigned to this card."
-msgstr ""
+msgstr "这里显示的所有人都已指派到此卡片。"
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
@@ -2423,7 +2423,7 @@ msgstr "指派步骤失败。"
 
 #: src/components/CardDetail.vue
 msgid "Failed to attach the file."
-msgstr ""
+msgstr "附加文件失败。"
 
 #: src/components/CardDetail.vue
 msgid "Failed to cancel reminder."
@@ -2618,7 +2618,7 @@ msgstr "加载模板失败。"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Failed to load the board's attachments."
-msgstr ""
+msgstr "加载看板附件失败。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the calendar feed config."
@@ -2626,11 +2626,11 @@ msgstr "加载日历订阅配置失败。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the email intake settings."
-msgstr ""
+msgstr "加载邮件接入设置失败。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the Forgejo webhook config."
-msgstr ""
+msgstr "加载 Forgejo webhook 配置失败。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the GitHub webhook config."
@@ -2724,7 +2724,7 @@ msgstr "重命名评审类型失败。"
 
 #: src/components/CardDetail.vue
 msgid "Failed to reopen this thread."
-msgstr ""
+msgstr "重新打开此话题失败。"
 
 #: src/components/CardDetail.vue
 msgid "Failed to reorder item."
@@ -2736,7 +2736,7 @@ msgstr "请求评审失败。"
 
 #: src/components/CardDetail.vue
 msgid "Failed to resolve this thread."
-msgstr ""
+msgstr "解决此话题失败。"
 
 #: src/views/TrashView.vue
 msgid "Failed to restore card."
@@ -2968,7 +2968,7 @@ msgstr "提交问题反馈"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Files attached to any card on this board are listed here."
-msgstr ""
+msgstr "此看板上任意卡片的附件都会列在这里。"
 
 #: src/components/BoardFilterBar.vue
 msgid "Filter"
@@ -3021,11 +3021,11 @@ msgstr "文件夹操作"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Folder and target column"
-msgstr ""
+msgstr "文件夹和目标列"
 
 #: templates/admin-backup.php
 msgid "Folder in that account"
-msgstr ""
+msgstr "该账号中的文件夹"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Forever"
@@ -3033,11 +3033,11 @@ msgstr "永不结束"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Forgejo"
-msgstr ""
+msgstr "Forgejo"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Forgejo label name"
-msgstr ""
+msgstr "Forgejo 标签名称"
 
 #: src/views/ProjectView.vue
 msgid "Formatting"
@@ -3125,7 +3125,7 @@ msgstr "隐藏的卡片"
 
 #: src/components/CardDetail.vue
 msgid "Hide"
-msgstr ""
+msgstr "隐藏"
 
 #: src/components/CardDetail.vue
 msgid "Hide changes"
@@ -3157,15 +3157,15 @@ msgstr "https://cloud.example.com/call/abc123"
 
 #: templates/admin-backup.php
 msgid "If the board was only just deleted, its backup may be the only way to get it back."
-msgstr ""
+msgstr "如果看板刚刚被删除，它的备份可能是找回它的唯一方式。"
 
 #: src/views/PublicBoard.vue
 msgid "Image"
-msgstr ""
+msgstr "图片"
 
 #: src/components/BoardSettingsModal.vue
 msgid "IMAP server"
-msgstr ""
+msgstr "IMAP 服务器"
 
 #: src/views/BoardList.vue
 msgid "Import"
@@ -3189,7 +3189,7 @@ msgstr "从 Deck 导入"
 
 #: src/views/BoardList.vue
 msgid "Imported into a new Kanso board:"
-msgstr ""
+msgstr "已导入到新的 Kanso 看板："
 
 #: src/components/CsvImportModal.vue
 #: src/views/BoardList.vue
@@ -3198,11 +3198,11 @@ msgstr "导入中…"
 
 #: templates/admin-backup.php
 msgid "In a Files folder"
-msgstr ""
+msgstr "在“文件”的文件夹中"
 
 #: templates/admin-backup.php
 msgid "In a Files folder a pruned backup moves to that account's trashbin and keeps using its quota until that empties; inside Kanso it is freed at once."
-msgstr ""
+msgstr "在“文件”的文件夹中，被清理掉的备份会进入该账号的回收站，并继续占用其配额，直到回收站被清空；保存在 Kanso 内部时则会立即释放。"
 
 #: src/components/BoardListView.vue
 #: src/components/BoardSettingsModal.vue
@@ -3232,7 +3232,7 @@ msgstr "行内代码"
 
 #: templates/admin-backup.php
 msgid "Inside Kanso (recommended)"
-msgstr ""
+msgstr "在 Kanso 内部（推荐）"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardTile.vue
@@ -3262,7 +3262,7 @@ msgstr "Issue 接入"
 
 #: templates/admin-backup.php
 msgid "It is not in anyone's Files, so there is nowhere to undo it from."
-msgstr ""
+msgstr "它不在任何人的“文件”中，因此没有地方可以撤销。"
 
 #: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
@@ -3271,12 +3271,12 @@ msgstr "斜体"
 
 #: src/components/CardDetail.vue
 msgid "Jump to the discussion"
-msgstr ""
+msgstr "跳转到讨论"
 
 #: src/components/CardDetail.vue:6701
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
-msgstr[0] ""
+msgstr[0] "跳转到讨论（%n 条评论）"
 
 #: src/components/BoardTimelineView.vue
 msgid "Jump to today"
@@ -3307,11 +3307,11 @@ msgstr "Kanso 后台任务与邮件链接"
 
 #: lib/Notification/Notifier.php
 msgid "Kanso board backup completed"
-msgstr ""
+msgstr "Kanso 看板备份已完成"
 
 #: lib/Notification/Notifier.php
 msgid "Kanso board backup failed"
-msgstr ""
+msgstr "Kanso 看板备份失败"
 
 #: templates/admin-backup.php
 msgid "Kanso board backups"
@@ -3319,11 +3319,11 @@ msgstr "Kanso 看板备份"
 
 #: templates/admin-backup.php
 msgid "Kanso cannot switch them off, and the notification setting below does not remove them."
-msgstr ""
+msgstr "Kanso 无法关闭它们，下面的通知设置也不会将其移除。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Kanso checks a dedicated mailbox every five minutes and turns each new message into a card — the subject becomes the title and the body becomes the description. Use a mailbox that exists only for this board."
-msgstr ""
+msgstr "Kanso 每五分钟检查一次专用邮箱，并把每封新邮件变成一张卡片 — 主题作为标题，正文作为描述。请使用一个仅供此看板使用的邮箱。"
 
 #: src/views/BoardList.vue
 msgid "Kanso export (.zip)"
@@ -3331,15 +3331,15 @@ msgstr "Kanso 导出文件（.zip）"
 
 #: templates/admin-backup.php
 msgid "Kanso keeps the files itself. Nothing goes into anyone's Files folder."
-msgstr ""
+msgstr "Kanso 自行保存这些文件，不会放入任何人的“文件”文件夹。"
 
 #: templates/admin-backup.php
 msgid "Kanso never clears those on its own."
-msgstr ""
+msgstr "Kanso 不会自行清理这些内容。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Kanso never contacts your instance — it only receives what the webhook sends. A link you paste stays without a status until a delivery mentions it."
-msgstr ""
+msgstr "Kanso 从不主动连接你的实例 — 它只接收 webhook 发送的内容。你粘贴的链接在某次推送提到它之前，会一直没有状态。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Kanso opens the board list by default. Turn this on to open this board instead."
@@ -3351,7 +3351,7 @@ msgstr "Kanso 设置"
 
 #: templates/admin-backup.php
 msgid "Kanso writes the files into a Files folder you can open and sync."
-msgstr ""
+msgstr "Kanso 会把文件写入一个你可以打开和同步的“文件”文件夹。"
 
 #: src/components/CardDetail.vue
 msgid "Keep my version"
@@ -3404,7 +3404,7 @@ msgstr "标签是看板专属的：只有在目标看板上同样存在（名称
 
 #: src/components/BoardSettingsModal.vue
 msgid "Last checked: {when}"
-msgstr ""
+msgstr "上次检查：{when}"
 
 #: src/views/ViewPage.vue
 msgid "Last modified"
@@ -3458,11 +3458,11 @@ msgstr "关联联系人"
 
 #: templates/public-expired.php
 msgid "Link expired"
-msgstr ""
+msgstr "链接已过期"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Link expires on"
-msgstr ""
+msgstr "链接过期时间"
 
 #: templates/public-notfound.php
 msgid "Link not available"
@@ -3479,7 +3479,7 @@ msgstr "列表"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Load more files"
-msgstr ""
+msgstr "加载更多文件"
 
 #: src/views/InboxView.vue
 msgid "Loading inbox…"
@@ -3487,7 +3487,7 @@ msgstr "正在加载收件箱…"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Loading more files…"
-msgstr ""
+msgstr "正在加载更多文件…"
 
 #: src/views/ProjectView.vue
 msgid "Loading project…"
@@ -3534,11 +3534,11 @@ msgstr "低"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Mailbox account"
-msgstr ""
+msgstr "邮箱账号"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Mailbox removed."
-msgstr ""
+msgstr "邮箱已移除。"
 
 #: src/components/CardDetail.vue
 msgid "Make this a sub-card of…"
@@ -3619,7 +3619,7 @@ msgstr "更多"
 
 #: src/components/BulkActionBar.vue
 msgid "More actions"
-msgstr ""
+msgstr "更多操作"
 
 #: src/views/BoardView.vue
 msgid "More board actions"
@@ -3643,7 +3643,7 @@ msgstr "移动卡片…"
 
 #: src/components/BulkActionBar.vue
 msgid "Move to {stack}"
-msgstr ""
+msgstr "移动到 {stack}"
 
 #: src/components/CardDetail.vue
 msgid "Move to board…"
@@ -3735,7 +3735,7 @@ msgstr "从未"
 
 #: templates/admin-backup.php
 msgid "Never"
-msgstr ""
+msgstr "从不"
 
 #: src/views/BoardList.vue
 msgid "New board name…"
@@ -3789,7 +3789,7 @@ msgstr "新建视图"
 
 #: templates/admin-backup.php
 msgid "Newest first."
-msgstr ""
+msgstr "最新的在前。"
 
 #: src/components/CsvImportModal.vue
 msgid "Next"
@@ -3809,7 +3809,7 @@ msgstr "否"
 
 #: templates/admin-backup.php
 msgid "No activity entries and no quota use, but you cannot sync the files or store them elsewhere."
-msgstr ""
+msgstr "不会产生动态记录，也不占用配额，但你无法同步这些文件或把它们存放到别处。"
 
 #: src/components/CardDetail.vue
 msgid "No activity yet."
@@ -3829,7 +3829,7 @@ msgstr "没有与“{query}”匹配的已归档卡片。"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "No attachments yet"
-msgstr ""
+msgstr "暂无附件"
 
 #: src/components/BoardSettingsModal.vue
 msgid "No auto-archive rules yet."
@@ -3841,7 +3841,7 @@ msgstr "无背景"
 
 #: templates/admin-backup.php
 msgid "No backups stored yet."
-msgstr ""
+msgstr "尚未存储任何备份。"
 
 #: src/App.vue
 msgid "No boards in this folder"
@@ -3954,7 +3954,7 @@ msgstr "无截止日期"
 
 #: src/components/BoardSettingsModal.vue
 msgid "No expiry — the link works until you disable or rotate it."
-msgstr ""
+msgstr "不过期 — 链接会一直有效，直到你禁用或更换它。"
 
 #: src/components/BoardTileMenu.vue
 msgid "No folders yet"
@@ -4060,11 +4060,11 @@ msgstr "无类型"
 
 #: src/components/CardDetail.vue
 msgid "Nobody has access to this board yet."
-msgstr ""
+msgstr "目前还没有人能访问此看板。"
 
 #: src/components/CardDetail.vue
 msgid "Nobody with access to this board matches that."
-msgstr ""
+msgstr "有权访问此看板的人中没有匹配项。"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
@@ -4110,7 +4110,7 @@ msgstr "所选看板上没有分配给你的内容。选择“所有看板”即
 
 #: templates/admin-backup.php
 msgid "Notify administrators"
-msgstr ""
+msgstr "通知管理员"
 
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
@@ -4127,7 +4127,7 @@ msgstr "关闭 — 不创建卡片"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Offset"
-msgstr ""
+msgstr "偏移"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Offset (days)"
@@ -4143,11 +4143,11 @@ msgstr "在这些日子"
 
 #: templates/admin-backup.php
 msgid "Once a day, Kanso saves a copy of every board as a zip file."
-msgstr ""
+msgstr "Kanso 每天一次把每个看板保存为一个 zip 文件的副本。"
 
 #: templates/admin-backup.php
 msgid "Only administrators can download them, and they can never be shared by a link."
-msgstr ""
+msgstr "只有管理员可以下载它们，并且它们永远无法通过链接共享。"
 
 #: src/composables/useBoardFilters.js
 msgid "Only archived"
@@ -4167,7 +4167,7 @@ msgstr "仅加载前 {count} 张分配的卡片，因此此列表中缺少你的
 
 #: templates/admin-backup.php
 msgid "Only when a backup fails"
-msgstr ""
+msgstr "仅在备份失败时"
 
 #: src/components/CommandPalette.vue
 msgid "open"
@@ -4185,7 +4185,7 @@ msgstr "以整页方式打开"
 #: src/components/CsvImportModal.vue
 #: src/views/BoardList.vue
 msgid "Open board"
-msgstr ""
+msgstr "打开看板"
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/ArchivedView.vue
@@ -4214,7 +4214,7 @@ msgstr "在新标签页中打开项目聊天"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Open the card this file is attached to"
-msgstr ""
+msgstr "打开此文件所属的卡片"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Open the recurring card"
@@ -4263,7 +4263,7 @@ msgstr "有序列表"
 
 #: templates/admin-backup.php
 msgid "Orphaned means the board a backup came from no longer exists."
-msgstr ""
+msgstr "“孤立”表示该备份所属的看板已不存在。"
 
 #: src/components/BoardTimelineView.vue
 msgid "Outside the visible range — click Fit to show"
@@ -4290,15 +4290,15 @@ msgstr "父卡片"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Password"
-msgstr ""
+msgstr "密码"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Password stored — leave blank to keep it"
-msgstr ""
+msgstr "密码已保存 — 留空则保持不变"
 
 #: src/components/CardDetail.vue
 msgid "Paste a pull request or issue URL…"
-msgstr ""
+msgstr "粘贴 pull request 或 issue 的 URL…"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Payload URL"
@@ -4310,11 +4310,11 @@ msgstr "待处理"
 
 #: src/components/BoardSettingsModal.vue
 msgid "per mailbox"
-msgstr ""
+msgstr "每个邮箱"
 
 #: src/components/BoardSettingsModal.vue
 msgid "per sender"
-msgstr ""
+msgstr "每个发件人"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Permanently remove this board and all of its cards for everyone. This cannot be undone."
@@ -4369,7 +4369,7 @@ msgstr "已置顶"
 
 #: templates/admin-backup.php
 msgid "Point this at a separate account nobody signs in to, and they land in its feed instead of yours."
-msgstr ""
+msgstr "把它指向一个无人登录的单独账号，这些记录就会出现在该账号的动态中，而不是你的动态中。"
 
 #: src/views/BoardStats.vue
 msgid "Points / week (avg)"
@@ -4377,7 +4377,7 @@ msgstr "点数/周（平均）"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Port"
-msgstr ""
+msgstr "端口"
 
 #: src/components/CardDetail.vue
 msgid "Position"
@@ -4593,11 +4593,11 @@ msgstr "从项目中移除"
 
 #: src/components/BulkActionBar.vue
 msgid "Remove label"
-msgstr ""
+msgstr "移除标签"
 
 #: src/components/BulkActionBar.vue
 msgid "Remove label {label}"
-msgstr ""
+msgstr "移除标签 {label}"
 
 #: src/components/CardDetail.vue
 msgid "Remove link"
@@ -4605,7 +4605,7 @@ msgstr "移除链接"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Remove mailbox"
-msgstr ""
+msgstr "移除邮箱"
 
 #: src/components/CardDetail.vue
 msgid "Remove relation"
@@ -4633,11 +4633,11 @@ msgstr "移除了一位负责人"
 
 #: src/components/CardDetail.vue
 msgid "removed an attachment"
-msgstr ""
+msgstr "移除了一个附件"
 
 #: src/components/CardDetail.vue
 msgid "removed the attachment {value}"
-msgstr ""
+msgstr "移除了附件 {value}"
 
 #: src/components/CardDetail.vue
 msgid "removed the label {value}"
@@ -4695,11 +4695,11 @@ msgstr "把这张卡片重命名为 {value}"
 
 #: src/components/CardDetail.vue
 msgid "Reopen"
-msgstr ""
+msgstr "重新打开"
 
 #: src/components/CardDetail.vue
 msgid "reopened a thread"
-msgstr ""
+msgstr "重新打开了一个话题"
 
 #: src/components/CardDetail.vue
 msgid "Repeat"
@@ -4738,7 +4738,7 @@ msgstr "请求评审"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Require verified senders (DMARC)"
-msgstr ""
+msgstr "要求验证发件人（DMARC）"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Reset"
@@ -4750,15 +4750,15 @@ msgstr "调整讨论面板大小"
 
 #: src/components/CardDetail.vue
 msgid "Resolve"
-msgstr ""
+msgstr "解决"
 
 #: src/components/CardDetail.vue
 msgid "Resolved"
-msgstr ""
+msgstr "已解决"
 
 #: src/components/CardDetail.vue
 msgid "resolved a thread"
-msgstr ""
+msgstr "解决了一个话题"
 
 #: src/views/TrashView.vue
 msgid "Restore"
@@ -4766,7 +4766,7 @@ msgstr "恢复"
 
 #: src/views/ArchivedView.vue
 msgid "Restore selected"
-msgstr ""
+msgstr "恢复所选卡片"
 
 #: src/components/CommandPalette.vue
 msgid "Results"
@@ -4872,7 +4872,7 @@ msgstr "已保存为模板。在任意列上用“+ 从模板创建”按钮即�
 
 #: src/components/BoardSettingsModal.vue
 msgid "Saved."
-msgstr ""
+msgstr "已保存。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Saving…"
@@ -4920,7 +4920,7 @@ msgstr "搜索联系人…"
 
 #: src/components/CardDetail.vue
 msgid "Search people…"
-msgstr ""
+msgstr "搜索人员…"
 
 #: src/components/SearchBox.vue
 msgid "Search results"
@@ -4928,7 +4928,7 @@ msgstr "搜索结果"
 
 #: src/components/CardDetail.vue
 msgid "Search the people with access to this board"
-msgstr ""
+msgstr "搜索有权访问此看板的人员"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Search users or groups"
@@ -4956,13 +4956,13 @@ msgstr "下拉选择"
 #: src/views/ArchivedView.vue:406
 msgid "Select %n card"
 msgid_plural "Select %n cards"
-msgstr[0] ""
+msgstr[0] "选择 %n 张卡片"
 
 #: src/components/StackColumn.vue:205
 #: src/views/ArchivedView.vue:405
 msgid "Select %n visible card"
 msgid_plural "Select %n visible cards"
-msgstr[0] ""
+msgstr[0] "选择 %n 张可见卡片"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Select a card…"
@@ -5039,7 +5039,7 @@ msgstr "共享"
 
 #: src/components/CardDetail.vue
 msgid "Show"
-msgstr ""
+msgstr "显示"
 
 #: src/views/BoardView.vue
 msgid "Show / hide this shortcuts overlay"
@@ -5059,7 +5059,7 @@ msgstr "显示格式工具栏"
 
 #: src/App.vue
 msgid "Show the discussion below the card"
-msgstr ""
+msgstr "在卡片下方显示讨论"
 
 #: src/components/CardDetail.vue
 msgid "Show the discussion panel"
@@ -5080,7 +5080,7 @@ msgstr "在我的日历中显示此看板"
 
 #: src/components/CardDetail.vue
 msgid "Show this resolved thread"
-msgstr ""
+msgstr "显示这个已解决的话题"
 
 #: src/components/CardDetail.vue
 msgid "Show watchers"
@@ -5092,15 +5092,15 @@ msgstr "显示你在过去 {days} 天内完成的最近 {count} 个任务。"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Showing the {shown} most recent of {total} files."
-msgstr ""
+msgstr "正在显示 {total} 个文件中最新的 {shown} 个。"
 
 #: src/components/CardDetail.vue
 msgid "Showing the first {count} matches. Keep typing to narrow them down."
-msgstr ""
+msgstr "正在显示前 {count} 条匹配结果。继续输入以缩小范围。"
 
 #: src/components/CardDetail.vue
 msgid "Showing the first {count} people with access. Search to find anyone else."
-msgstr ""
+msgstr "正在显示前 {count} 位有权访问的人员。搜索可查找其他人。"
 
 #: src/views/ViewPage.vue
 msgid "Showing the first {shown} of {total} matching cards — refine your filter to see the rest."
@@ -5120,7 +5120,7 @@ msgstr "单个日期"
 
 #: templates/admin-backup.php
 msgid "Size"
-msgstr ""
+msgstr "大小"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Skip while open"
@@ -5158,7 +5158,7 @@ msgstr "排序依据"
 
 #: src/components/BoardSettingsModal.vue
 msgid "SSL/TLS (993)"
-msgstr ""
+msgstr "SSL/TLS (993)"
 
 #: src/views/BoardStats.vue
 msgid "Stack {id}"
@@ -5219,7 +5219,7 @@ msgstr "已开始"
 
 #: src/components/CardDetail.vue
 msgid "Starts {date}"
-msgstr ""
+msgstr "开始 {date}"
 
 #: src/composables/useBoardFilters.js
 msgid "Starts later"
@@ -5227,7 +5227,7 @@ msgstr "稍后开始"
 
 #: src/components/BoardSettingsModal.vue
 msgid "STARTTLS (143)"
-msgstr ""
+msgstr "STARTTLS (143)"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
@@ -5249,7 +5249,7 @@ msgstr "取消关注这张卡片"
 
 #: templates/admin-backup.php
 msgid "Stored backups"
-msgstr ""
+msgstr "已存储的备份"
 
 #: src/components/MarkdownEditor.vue
 msgid "Strikethrough"
@@ -5266,7 +5266,7 @@ msgstr "子卡片进度"
 
 #: src/components/BoardListView.vue
 msgid "Sub-card progress {done} of {total}"
-msgstr ""
+msgstr "子卡片进度 {total} 中的 {done}"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
@@ -5321,7 +5321,7 @@ msgstr "模板已变回普通卡片。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Test connection"
-msgstr ""
+msgstr "测试连接"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Text"
@@ -5329,11 +5329,11 @@ msgstr "文本"
 
 #: src/views/BoardList.vue
 msgid "That board could not be imported, so nothing was created. You can safely try again."
-msgstr ""
+msgstr "该看板无法导入，因此未创建任何内容。你可以放心重试。"
 
 #: templates/admin-backup.php
 msgid "That builds a new board owned by whoever imports it, so you have to share it again."
-msgstr ""
+msgstr "这会创建一个由导入者所有的新看板，因此你需要重新共享它。"
 
 #: src/views/BoardView.vue
 msgid "That card is not on this board any more."
@@ -5341,15 +5341,15 @@ msgstr "该卡片已不在此看板上。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "That is not a date we can use. Pick a day, or clear the field for no expiry."
-msgstr ""
+msgstr "这不是可用的日期。请选择一天，或清空该字段表示不过期。"
 
 #: templates/admin-backup.php
 msgid "The backups then live in that account's Files."
-msgstr ""
+msgstr "备份随后会保存在该账号的“文件”中。"
 
 #: src/admin-backup.js
 msgid "The board this backup came from no longer exists."
-msgstr ""
+msgstr "此备份所属的看板已不存在。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "The chat link must be a http:// or https:// URL."
@@ -5365,11 +5365,11 @@ msgstr "此服务器上未安装 Deck 应用，因此没有可导入的内容。
 
 #: templates/admin-backup.php
 msgid "The file goes to that account's trashbin and keeps using space until that is emptied."
-msgstr ""
+msgstr "该文件会进入该账号的回收站，并继续占用空间，直到回收站被清空。"
 
 #: templates/admin-backup.php
 msgid "The files use that account's quota, and each write shows up in its activity."
-msgstr ""
+msgstr "这些文件会占用该账号的配额，每次写入都会显示在它的动态中。"
 
 #: lib/SetupCheck/GuestsWhitelistCheck.php
 msgid "The Guests app is enabled but its app whitelist is missing: %1$s. Guest accounts shared onto a Kanso board cannot open it (card deep links from emails fail with a generic denial). Add the missing app(s) in Administration settings > Guests."
@@ -5389,15 +5389,15 @@ msgstr "Guests 应用白名单已禁用 — 访客可以使用 Kanso。"
 
 #: src/views/BoardList.vue
 msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
-msgstr ""
+msgstr "导入没有正常结束，我们无法确认它是否已完成。重试前请先检查你的看板 — 再导入一次会创建一份单独的副本。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "The link stops working at the end of the selected day, in the time zone it was set from. Exactly: {when}. Leave empty for no expiry."
-msgstr ""
+msgstr "链接会在所选日期结束时失效，以设置时所在的时区为准。准确时间：{when}。留空则不过期。"
 
 #: templates/admin-backup.php
 msgid "The only way to get one back is the list at the bottom of this page."
-msgstr ""
+msgstr "要找回它，唯一的途径是本页底部的列表。"
 
 #: src/components/CardDetail.vue
 msgid "There is no other board you can move this card to."
@@ -5413,7 +5413,7 @@ msgstr "此看板已不存在。"
 
 #: templates/admin-backup.php
 msgid "This caps how many copies exist, not how much disk they take."
-msgstr ""
+msgstr "这限制的是副本数量，而不是它们占用的磁盘空间。"
 
 #: templates/card-notfound.php
 msgid "This card does not exist or you do not have access to it."
@@ -5445,7 +5445,7 @@ msgstr "此卡片是一个重复系列的源卡片。只删除这张卡片，还
 
 #: src/components/BoardSettingsModal.vue
 msgid "This link has expired. Visitors are told the link expired; pick a later date or clear the expiry to reopen it."
-msgstr ""
+msgstr "此链接已过期。访客会看到链接已过期的提示；请选择更晚的日期或清除有效期以重新开放。"
 
 #: src/views/PublicBoard.vue
 msgid "This link is invalid or has been disabled."
@@ -5453,7 +5453,7 @@ msgstr "此链接无效或已被禁用。"
 
 #: templates/public-expired.php
 msgid "This public board link has expired. Ask whoever shared the board for a new link."
-msgstr ""
+msgstr "此公开看板链接已过期。请向共享此看板的人索取新链接。"
 
 #: templates/public-notfound.php
 msgid "This public board link is invalid or has been disabled."
@@ -5535,7 +5535,7 @@ msgstr "待办"
 
 #: templates/admin-backup.php
 msgid "To put a board back, download its backup and import it from the Import menu on the boards list."
-msgstr ""
+msgstr "要恢复一个看板，请下载它的备份，并在看板列表的“导入”菜单中导入它。"
 
 #: src/views/MyCardsView.vue
 msgid "Today"
@@ -5555,7 +5555,7 @@ msgstr "切换预览"
 
 #: src/services/api.js
 msgid "Too many requests in a short time — this action is rate-limited. Wait a while, then try again."
-msgstr ""
+msgstr "短时间内请求过多 — 此操作受速率限制。请稍等片刻后重试。"
 
 #: src/components/CardDetail.vue
 msgid "Top of the column"
@@ -5819,7 +5819,7 @@ msgstr "每周"
 
 #: src/components/StackColumn.vue
 msgid "What belongs in this column?"
-msgstr ""
+msgstr "这一列放什么？"
 
 #: src/components/CardDetail.vue
 msgid "What changes are needed? (posted as a comment)"
@@ -5839,11 +5839,11 @@ msgstr "当有人请求你评审某张卡片时，它会显示在这里。"
 
 #: templates/admin-backup.php
 msgid "Where to keep the backups"
-msgstr ""
+msgstr "备份保存位置"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Which Forgejo issues to take in"
-msgstr ""
+msgstr "接入哪些 Forgejo issue"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Which issues to take in"
@@ -5889,7 +5889,7 @@ msgstr "写下回复…"
 
 #: templates/admin-backup.php
 msgid "Written"
-msgstr ""
+msgstr "写入时间"
 
 #: src/components/CardDetail.vue
 msgid "wrote"
@@ -5920,7 +5920,7 @@ msgstr "是，删除"
 
 #: templates/admin-backup.php
 msgid "You can also point that folder at another server with external storage."
-msgstr ""
+msgstr "你也可以用外部存储把该文件夹指向另一台服务器。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "you can edit"
@@ -5936,7 +5936,7 @@ msgstr "你无法复制到该看板。"
 
 #: src/components/CardDetail.vue
 msgid "You have unsaved changes on this card. If you leave now, they will be lost."
-msgstr ""
+msgstr "此卡片上有未保存的更改。如果现在离开，这些更改将会丢失。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need edit permission to configure workflows."
@@ -5948,7 +5948,7 @@ msgstr "配置自动化规则需要管理权限。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure email intake."
-msgstr ""
+msgstr "配置邮件接入需要管理权限。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure the calendar feed."
@@ -5956,7 +5956,7 @@ msgstr "配置日历订阅需要管理权限。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure the Forgejo webhook."
-msgstr ""
+msgstr "配置 Forgejo webhook 需要管理权限。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure the GitHub webhook."

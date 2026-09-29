@@ -35,7 +35,7 @@ msgstr "(boş)"
 
 #: src/admin-backup.js
 msgid "(orphaned)"
-msgstr ""
+msgstr "(sahipsiz)"
 
 #: lib/Notification/Notifier.php
 msgid "{actor} assigned you a step on {card}"
@@ -175,7 +175,7 @@ msgstr "{ok} kart güncellendi"
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} cards updated before the action failed"
-msgstr ""
+msgstr "İşlem başarısız olmadan önce {ok} kart güncellendi"
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
@@ -261,14 +261,14 @@ msgstr "%1$s, %2$s öğesini seninle paylaştı"
 #: src/views/BoardList.vue:217
 msgid "%n attachment"
 msgid_plural "%n attachments"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%n ek"
+msgstr[1] "%n ek"
 
 #: src/views/BoardList.vue:224
 msgid "%n attachment could not be copied and is missing from the new board. Keep your Deck board until you have checked it."
 msgid_plural "%n attachments could not be copied and are missing from the new board. Keep your Deck board until you have checked them."
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%n ek kopyalanamadı ve yeni panoda eksik. Kontrol edene kadar Deck panonu sakla."
+msgstr[1] "%n ek kopyalanamadı ve yeni panoda eksik. Kontrol edene kadar Deck panonu sakla."
 
 #: src/components/BoardTileContent.vue:18
 #: src/views/BoardList.vue:214
@@ -283,26 +283,26 @@ msgstr[1] "%n kart"
 #: src/components/StackColumn.vue:1053
 msgid "%n card archived"
 msgid_plural "%n cards archived"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%n kart arşivlendi"
+msgstr[1] "%n kart arşivlendi"
 
 #: src/components/CsvImportModal.vue:54
 msgid "%n card created"
 msgid_plural "%n cards created"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%n kart oluşturuldu"
+msgstr[1] "%n kart oluşturuldu"
 
 #: src/views/BoardList.vue:213
 msgid "%n column"
 msgid_plural "%n columns"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%n sütun"
+msgstr[1] "%n sütun"
 
 #: src/views/BoardList.vue:216
 msgid "%n comment"
 msgid_plural "%n comments"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%n yorum"
+msgstr[1] "%n yorum"
 
 #: src/components/CsvImportModal.vue:110
 msgid "%n data row detected"
@@ -319,8 +319,8 @@ msgstr[1] "%n gün önce"
 #: src/components/BoardAttachmentsModal.vue:14
 msgid "%n file"
 msgid_plural "%n files"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%n dosya"
+msgstr[1] "%n dosya"
 
 #: src/components/CardDetail.vue:4737
 msgid "%n hour ago"
@@ -331,20 +331,20 @@ msgstr[1] "%n saat önce"
 #: src/views/BoardList.vue:215
 msgid "%n label"
 msgid_plural "%n labels"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%n etiket"
+msgstr[1] "%n etiket"
 
 #: src/components/CsvImportModal.vue:56
 msgid "%n label created"
 msgid_plural "%n labels created"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%n etiket oluşturuldu"
+msgstr[1] "%n etiket oluşturuldu"
 
 #: src/components/CsvImportModal.vue:66
 msgid "%n label was not created and is missing from the imported cards: only board managers can add new labels. Ask a manager to add it, then set it on the cards."
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
+msgstr[1] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 
 #: src/components/CardDetail.vue:4735
 msgid "%n minute ago"
@@ -379,14 +379,14 @@ msgstr[1] "%n proje"
 #: src/components/CardDetail.vue:2191
 msgid "%n reply"
 msgid_plural "%n replies"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%n yanıt"
+msgstr[1] "%n yanıt"
 
 #: src/components/CsvImportModal.vue:60
 msgid "%n row was skipped because it had no title."
 msgid_plural "%n rows were skipped because they had no title."
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%n satır başlığı olmadığı için atlandı."
+msgstr[1] "%n satır başlığı olmadığı için atlandı."
 
 #: src/components/BoardTimelineView.vue:303
 msgid "%n unscheduled card"
@@ -418,19 +418,19 @@ msgstr "Her seferinde yeni bir kopya oluşturulur; bu kart kaynak olarak kalır"
 
 #: templates/admin-backup.php
 msgid "A new one replaces the last, so a backup that keeps failing does not pile up."
-msgstr ""
+msgstr "Yenisi bir öncekinin yerini alır, böylece sürekli başarısız olan bir yedekleme birikmez."
 
 #: templates/admin-backup.php
 msgid "A separate account only changes whose quota they spend; to bound disk use, empty that trashbin or keep the backups inside Kanso."
-msgstr ""
+msgstr "Ayrı bir hesap yalnızca kimin kotasının harcandığını değiştirir; disk kullanımını sınırlamak için o çöp kutusunu boşalt ya da yedekleri Kanso içinde tut."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Accept mail from (one address or @domain per line — leave empty to accept anyone)"
-msgstr ""
+msgstr "Şu adreslerden gelen postaları kabul et (satır başına bir adres ya da @alanadı — herkesi kabul etmek için boş bırak)"
 
 #: templates/admin-backup.php
 msgid "Account that owns the folder"
-msgstr ""
+msgstr "Klasörün sahibi olan hesap"
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/BoardList.vue
@@ -461,7 +461,7 @@ msgstr "Açıklama ekle…"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Add a Forgejo webhook sending \"pull_request\" and \"issues\" events to the URL below. A pull request opened on a kanso-<id> branch moves its card to your Review column; a merged pull request moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress. Gitea webhooks work too."
-msgstr ""
+msgstr "Aşağıdaki URL'ye \"pull_request\" ve \"issues\" olaylarını gönderen bir Forgejo webhook'u ekle. kanso-<id> adlı bir dalda açılan bir pull request, kartını İnceleme sütununa taşır; birleştirilen bir pull request ise Tamamlandı sütununa taşır. Bir karta bağlı sorunun kapatılması o kartı Tamamlandı sütununa taşır; yeniden açılması kartı Devam ediyor sütununa geri getirir. Gitea webhook'ları da çalışır."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Add a GitHub webhook sending \"pull_request\" and \"issues\" events to the URL below, with Content type set to application/json (the form-encoded option is not supported). Name the card in the PR title (a reference like {example}) or on a kanso-<id> branch: an opened PR then moves that card to your Review column and a merged PR moves it to Done. Closing an issue linked on a card moves that card to Done; reopening it moves the card back to In progress. Issue intake below can also turn newly opened issues into linked cards."
@@ -485,7 +485,7 @@ msgstr "Öğe ekle…"
 
 #: src/components/CardDetail.vue
 msgid "Add assignee"
-msgstr ""
+msgstr "Atanan ekle"
 
 #: src/views/ProjectView.vue
 msgid "Add card"
@@ -498,7 +498,7 @@ msgstr "Kart ekle…"
 
 #: src/views/BoardList.vue
 msgid "Add cards to an existing board"
-msgstr ""
+msgstr "Var olan bir panoya kart ekle"
 
 #: src/views/BoardView.vue
 msgid "Add column"
@@ -519,7 +519,7 @@ msgstr "Etiket ekle"
 
 #: src/components/BulkActionBar.vue
 msgid "Add label {label}"
-msgstr ""
+msgstr "{label} etiketini ekle"
 
 #: src/components/BulkActionBar.vue
 msgid "Add label…"
@@ -588,7 +588,7 @@ msgstr "Belirli bir karttan sonra"
 
 #: templates/admin-backup.php
 msgid "After every backup"
-msgstr ""
+msgstr "Her yedeklemeden sonra"
 
 #: src/components/BoardSettingsModal.vue
 msgid "After N occurrences"
@@ -628,7 +628,7 @@ msgstr "Her kart, ⋯ menüsünden şablon olarak kaydedilebilir (\"Şablon olar
 
 #: src/components/BoardSettingsModal.vue
 msgid "Anyone who knows the address can create cards. A sender address is easy to forge, so treat the allowlist as a filter rather than proof of who sent something — turn on \"Require verified senders\" if your mail server checks DMARC."
-msgstr ""
+msgstr "Adresi bilen herkes kart oluşturabilir. Gönderen adresi kolayca taklit edilebilir; bu yüzden izin listesini, bir şeyi kimin gönderdiğinin kanıtı değil bir filtre olarak gör — posta sunucun DMARC denetliyorsa \"Doğrulanmış gönderenler zorunlu\" seçeneğini aç."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Anyone with the link can subscribe to this board's due dates."
@@ -658,14 +658,14 @@ msgstr "Arşivle"
 #: src/components/StackColumn.vue:218
 msgid "Archive %n card"
 msgid_plural "Archive %n cards"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%n kartı arşivle"
+msgstr[1] "%n kartı arşivle"
 
 #: src/components/StackColumn.vue:217
 msgid "Archive %n visible card"
 msgid_plural "Archive %n visible cards"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "Görünen %n kartı arşivle"
+msgstr[1] "Görünen %n kartı arşivle"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTileMenu.vue
@@ -727,7 +727,7 @@ msgstr "Adım ata"
 
 #: src/components/BulkActionBar.vue
 msgid "Assign to {user}"
-msgstr ""
+msgstr "{user} kişisine ata"
 
 #: src/components/CardDetail.vue
 msgid "assigned {value}"
@@ -771,15 +771,15 @@ msgstr "“{file}” dosyasını bir karta iliştir. Kartta bir kopyası saklan�
 
 #: src/components/CardDetail.vue
 msgid "Attach a copy"
-msgstr ""
+msgstr "Bir kopya ekle"
 
 #: src/components/CardDetail.vue
 msgid "attached {value}"
-msgstr ""
+msgstr "{value} dosyasını ekledi"
 
 #: src/components/CardDetail.vue
 msgid "attached a file"
-msgstr ""
+msgstr "bir dosya ekledi"
 
 #: src/components/AddToKansoDialog.vue
 msgid "Attaching…"
@@ -792,7 +792,7 @@ msgstr "Ekler"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Attachments on this board"
-msgstr ""
+msgstr "Bu panodaki ekler"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Auto-archive"
@@ -826,7 +826,7 @@ msgstr "Projelere dön"
 
 #: templates/admin-backup.php
 msgid "Back up boards automatically"
-msgstr ""
+msgstr "Panoları otomatik yedekle"
 
 #: lib/SetupCheck/InstanceConfigCheck.php
 msgid "Background jobs use a server-side mode and \"overwrite.cli.url\" is set."
@@ -844,7 +844,7 @@ msgstr "Bekleyenler"
 
 #: templates/admin-backup.php
 msgid "Backup"
-msgstr ""
+msgstr "Yedekleme"
 
 #: src/admin-backup.js
 msgid "Backup completed"
@@ -852,7 +852,7 @@ msgstr "Yedekleme tamamlandı"
 
 #: src/admin-backup.js
 msgid "Backup deleted"
-msgstr ""
+msgstr "Yedek silindi"
 
 #: src/admin-backup.js
 msgid "Backup failed"
@@ -868,7 +868,7 @@ msgstr "Yedeklemeler devre dışı"
 
 #: templates/admin-backup.php
 msgid "Backups in the other location stay where they are; switch back to see them."
-msgstr ""
+msgstr "Diğer konumdaki yedekler olduğu yerde kalır; onları görmek için geri geç."
 
 #: templates/admin-backup.php
 msgid "Backups to keep per board"
@@ -925,7 +925,7 @@ msgstr "Pano analitiği"
 #: src/components/BoardAttachmentsModal.vue
 #: src/views/BoardView.vue
 msgid "Board attachments"
-msgstr ""
+msgstr "Pano ekleri"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Board background"
@@ -1014,7 +1014,7 @@ msgstr "{user} tarafından"
 
 #: src/App.vue
 msgid "By default the discussion sits beside the card. Move it below and it becomes part of the card you scroll down to."
-msgstr ""
+msgstr "Tartışma varsayılan olarak kartın yanında durur. Aşağı taşırsan kartın bir parçası olur ve ona kaydırarak ulaşırsın."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Calendar feed"
@@ -1097,7 +1097,7 @@ msgstr "Kart şablonları"
 
 #: src/App.vue
 msgid "Card view"
-msgstr ""
+msgstr "Kart görünümü"
 
 #: src/components/CardDetail.vue
 msgid "Card visibility"
@@ -1166,11 +1166,11 @@ msgstr "Ölçülen kartlar"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Cards per day from one sender"
-msgstr ""
+msgstr "Bir gönderenden günlük kart sayısı"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Cards per day from this mailbox"
-msgstr ""
+msgstr "Bu posta kutusundan günlük kart sayısı"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Cards with a due date sync to your calendar and phone (via CalDAV/DAVx5) as tasks. Turn this off to keep this board out of your own calendar. Only affects you."
@@ -1273,7 +1273,7 @@ msgstr "Değişiklik istendi"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Check this mailbox automatically"
-msgstr ""
+msgstr "Bu posta kutusunu otomatik denetle"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/BoardSettingsModal.vue
@@ -1299,15 +1299,15 @@ msgstr "Kontrol listesi tamamlanmadı"
 #: src/components/CardPreview.vue
 #: src/components/CardTile.vue
 msgid "Checklist progress {done} of {total}"
-msgstr ""
+msgstr "Kontrol listesi ilerlemesi: {total} adımdan {done} tanesi"
 
 #: src/components/BoardListView.vue:1071
 #: src/components/CardPreview.vue:239
 #: src/components/CardTile.vue:480
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "Kontrol listesi ilerlemesi: {total} adımdan {done} tanesi, %n adım gecikmiş"
+msgstr[1] "Kontrol listesi ilerlemesi: {total} adımdan {done} tanesi, %n adım gecikmiş"
 
 #: src/components/CsvImportModal.vue
 msgid "Choose a board…"
@@ -1324,11 +1324,11 @@ msgstr "Bir CSV dosyası seç"
 
 #: src/components/CardDetail.vue
 msgid "Choose a file to attach"
-msgstr ""
+msgstr "Eklenecek bir dosya seç"
 
 #: src/components/CardDetail.vue
 msgid "Choose from Files"
-msgstr ""
+msgstr "Dosyalar'dan seç"
 
 #: src/App.vue
 msgid "Choose which sections appear in the left sidebar."
@@ -1336,7 +1336,7 @@ msgstr "Sol kenar çubuğunda hangi bölümlerin görüneceğini seç."
 
 #: src/components/CardDetail.vue
 msgid "Choosing from Files stores a copy on the card — editing, renaming or deleting the original in Files does not change it."
-msgstr ""
+msgstr "Dosyalar'dan seçmek karta bir kopya kaydeder — özgün dosyayı Dosyalar içinde düzenlemek, yeniden adlandırmak ya da silmek bunu değiştirmez."
 
 #: src/composables/useCardType.js
 msgid "Chore"
@@ -1344,7 +1344,7 @@ msgstr "Rutin iş"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Clear"
-msgstr ""
+msgstr "Temizle"
 
 #: src/components/BulkActionBar.vue
 #: src/components/CardDetail.vue
@@ -1417,11 +1417,11 @@ msgstr "Kapatıldı"
 
 #: src/components/CardDetail.vue
 msgid "Code"
-msgstr ""
+msgstr "Kod"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Code links"
-msgstr ""
+msgstr "Kod bağlantıları"
 
 #: src/components/StackColumn.vue
 msgid "Collapse column"
@@ -1462,7 +1462,7 @@ msgstr "Sütun silindi"
 
 #: src/components/StackColumn.vue
 msgid "Column description"
-msgstr ""
+msgstr "Sütun açıklaması"
 
 #: src/components/StackColumn.vue
 msgid "Column name"
@@ -1470,7 +1470,7 @@ msgstr "Sütun adı"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Column new cards land in"
-msgstr ""
+msgstr "Yeni kartların ekleneceği sütun"
 
 #: src/views/BoardView.vue
 msgid "Comfortable"
@@ -1522,7 +1522,7 @@ msgstr "Koşul"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Connected to the mailbox successfully."
-msgstr ""
+msgstr "Posta kutusuna bağlanıldı."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Contacts"
@@ -1575,7 +1575,7 @@ msgstr "Kart görünürlüğü değiştirilemedi"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not connect to the mailbox."
-msgstr ""
+msgstr "Posta kutusuna bağlanılamadı."
 
 #: src/components/CardDetail.vue
 msgid "Could not copy to clipboard"
@@ -1588,7 +1588,7 @@ msgstr "Kopyalama panosuna kopyalanamadı."
 
 #: src/admin-backup.js
 msgid "Could not delete the backup"
-msgstr ""
+msgstr "Yedek silinemedi"
 
 #: src/composables/useBoardActions.js
 msgid "Could not delete the board."
@@ -1640,7 +1640,7 @@ msgstr "Bu Trello dosyası içe aktarılamadı."
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Could not load more files. Try again."
-msgstr ""
+msgstr "Daha fazla dosya yüklenemedi. Tekrar dene."
 
 #: src/components/CsvImportModal.vue
 msgid "Could not load that board’s columns."
@@ -1648,7 +1648,7 @@ msgstr "O panonun sütunları yüklenemedi."
 
 #: src/admin-backup.js
 msgid "Could not load the stored backups."
-msgstr ""
+msgstr "Saklanan yedekler yüklenemedi."
 
 #: src/components/CsvImportModal.vue
 msgid "Could not load your boards."
@@ -1660,7 +1660,7 @@ msgstr "Deck panoların yüklenemedi."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not remove the mailbox."
-msgstr ""
+msgstr "Posta kutusu kaldırılamadı."
 
 #: src/admin-backup.js
 msgid "Could not save backup settings"
@@ -1668,7 +1668,7 @@ msgstr "Yedekleme ayarları kaydedilemedi"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not save the email intake settings."
-msgstr ""
+msgstr "E-posta alma ayarları kaydedilemedi."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not save the issue-intake settings."
@@ -1680,7 +1680,7 @@ msgstr "Başlık kaydedilemedi"
 
 #: src/components/CardDetail.vue
 msgid "Could not search the people on this board."
-msgstr ""
+msgstr "Bu panodaki kişiler aranamadı."
 
 #: src/views/BoardList.vue
 msgid "Could not set up the starter board."
@@ -1688,7 +1688,7 @@ msgstr "Başlangıç panosu kurulamadı."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not update the public link expiry."
-msgstr ""
+msgstr "Herkese açık bağlantının geçerlilik süresi güncellenemedi."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not update the public link options."
@@ -1800,7 +1800,7 @@ msgstr "Özel alanlar"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Custom offset — it is kept exactly as it is."
-msgstr ""
+msgstr "Özel sapma — olduğu gibi korunur."
 
 #: src/components/CardDetail.vue
 msgid "Custom schedule — edit it in Board settings → Automation."
@@ -1808,7 +1808,7 @@ msgstr "Özel zamanlama — Pano ayarları → Otomasyon bölümünden düzenle.
 
 #: src/components/BoardSettingsModal.vue
 msgid "Custom schedule — it is kept exactly as it is. The settings below can still be changed."
-msgstr ""
+msgstr "Özel zamanlama — olduğu gibi korunur. Aşağıdaki ayarlar yine de değiştirilebilir."
 
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
@@ -1821,7 +1821,7 @@ msgstr "Günlük"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Daily card limits (0 uses the default)"
-msgstr ""
+msgstr "Günlük kart sınırları (0 varsayılanı kullanır)"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Danger zone"
@@ -1880,15 +1880,15 @@ msgstr "\"{title}\" silinsin mi?"
 
 #: src/admin-backup.js
 msgid "Delete {name}? Kanso keeps no second copy of it."
-msgstr ""
+msgstr "{name} silinsin mi? Kanso bunun ikinci bir kopyasını tutmaz."
 
 #: src/admin-backup.js
 msgid "Delete {name}? The file goes to the backup account's trashbin — Kanso keeps no second copy of it."
-msgstr ""
+msgstr "{name} silinsin mi? Dosya yedek hesabının çöp kutusuna gider — Kanso bunun ikinci bir kopyasını tutmaz."
 
 #: src/admin-backup.js
 msgid "Delete {name}? This file is removed for good — Kanso keeps no second copy of it."
-msgstr ""
+msgstr "{name} silinsin mi? Bu dosya kalıcı olarak kaldırılır — Kanso bunun ikinci bir kopyasını tutmaz."
 
 #: src/components/CardDetail.vue
 msgid "Delete and stop recurrence"
@@ -1991,7 +1991,7 @@ msgstr "bu kartı sildi"
 
 #: templates/admin-backup.php
 msgid "Deleting a backup removes that file from this list; Kanso keeps no second copy of it."
-msgstr ""
+msgstr "Bir yedeği silmek o dosyayı bu listeden kaldırır; Kanso bunun ikinci bir kopyasını tutmaz."
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/BoardList.vue
@@ -2118,11 +2118,11 @@ msgstr "Önceki döneme göre düşüş"
 #: src/admin-backup.js
 #: src/components/BoardAttachmentsModal.vue
 msgid "Download"
-msgstr ""
+msgstr "İndir"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Download {file}"
-msgstr ""
+msgstr "{file} dosyasını indir"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Download a backup of this board, attachments included."
@@ -2159,7 +2159,7 @@ msgstr "Bitiş"
 
 #: src/components/CardDetail.vue
 msgid "Due {date}"
-msgstr ""
+msgstr "Bitiş {date}"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/BoardSettingsModal.vue
@@ -2217,11 +2217,11 @@ msgstr "Her Deck panosu, sahibi sen olan yeni bir Kanso panosuna kopyalanır: s�
 
 #: templates/admin-backup.php
 msgid "Each file holds one whole board, with every card and attachment on it, even private ones."
-msgstr ""
+msgstr "Her dosya, üzerindeki tüm kart ve eklerle birlikte — özel olanlar dahil — eksiksiz bir panoyu içerir."
 
 #: templates/admin-backup.php
 msgid "Each run adds up to two entries per board to this account's activity."
-msgstr ""
+msgstr "Her çalıştırma, bu hesabın etkinliğine pano başına en fazla iki kayıt ekler."
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
@@ -2272,7 +2272,7 @@ msgstr "Düzenleyici"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Email intake"
-msgstr ""
+msgstr "E-posta alma"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Enable & generate secret"
@@ -2296,7 +2296,7 @@ msgstr "Etkin"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Encryption"
-msgstr ""
+msgstr "Şifreleme"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Ends"
@@ -2312,7 +2312,7 @@ msgstr "Bir ad gir."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Enter the password again for the new server or account"
-msgstr ""
+msgstr "Yeni sunucu ya da hesap için parolayı yeniden gir"
 
 #: src/components/CardPreview.vue
 msgid "Enter to open · Esc to close"
@@ -2385,11 +2385,11 @@ msgstr[1] "Her %n yılda bir"
 
 #: templates/admin-backup.php
 msgid "Everyone in the administrators group gets the message."
-msgstr ""
+msgstr "Yöneticiler grubundaki herkes iletiyi alır."
 
 #: src/components/CardDetail.vue
 msgid "Everyone shown here is already assigned to this card."
-msgstr ""
+msgstr "Burada görünen herkes bu karta zaten atanmış."
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
@@ -2455,7 +2455,7 @@ msgstr "Adım atanamadı."
 
 #: src/components/CardDetail.vue
 msgid "Failed to attach the file."
-msgstr ""
+msgstr "Dosya eklenemedi."
 
 #: src/components/CardDetail.vue
 msgid "Failed to cancel reminder."
@@ -2650,7 +2650,7 @@ msgstr "Şablonlar yüklenemedi."
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Failed to load the board's attachments."
-msgstr ""
+msgstr "Panonun ekleri yüklenemedi."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the calendar feed config."
@@ -2658,11 +2658,11 @@ msgstr "Takvim akışı yapılandırması yüklenemedi."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the email intake settings."
-msgstr ""
+msgstr "E-posta alma ayarları yüklenemedi."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the Forgejo webhook config."
-msgstr ""
+msgstr "Forgejo webhook yapılandırması yüklenemedi."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the GitHub webhook config."
@@ -2756,7 +2756,7 @@ msgstr "İnceleme türü yeniden adlandırılamadı."
 
 #: src/components/CardDetail.vue
 msgid "Failed to reopen this thread."
-msgstr ""
+msgstr "Bu konu yeniden açılamadı."
 
 #: src/components/CardDetail.vue
 msgid "Failed to reorder item."
@@ -2768,7 +2768,7 @@ msgstr "İnceleme istenemedi."
 
 #: src/components/CardDetail.vue
 msgid "Failed to resolve this thread."
-msgstr ""
+msgstr "Bu konu çözümlenemedi."
 
 #: src/views/TrashView.vue
 msgid "Failed to restore card."
@@ -3000,7 +3000,7 @@ msgstr "Sorun bildir"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Files attached to any card on this board are listed here."
-msgstr ""
+msgstr "Bu panodaki herhangi bir karta eklenen dosyalar burada listelenir."
 
 #: src/components/BoardFilterBar.vue
 msgid "Filter"
@@ -3053,11 +3053,11 @@ msgstr "Klasör işlemleri"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Folder and target column"
-msgstr ""
+msgstr "Klasör ve hedef sütun"
 
 #: templates/admin-backup.php
 msgid "Folder in that account"
-msgstr ""
+msgstr "O hesaptaki klasör"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Forever"
@@ -3065,11 +3065,11 @@ msgstr "Süresiz"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Forgejo"
-msgstr ""
+msgstr "Forgejo"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Forgejo label name"
-msgstr ""
+msgstr "Forgejo etiket adı"
 
 #: src/views/ProjectView.vue
 msgid "Formatting"
@@ -3157,7 +3157,7 @@ msgstr "Gizli kart"
 
 #: src/components/CardDetail.vue
 msgid "Hide"
-msgstr ""
+msgstr "Gizle"
 
 #: src/components/CardDetail.vue
 msgid "Hide changes"
@@ -3189,15 +3189,15 @@ msgstr "https://cloud.example.com/call/abc123"
 
 #: templates/admin-backup.php
 msgid "If the board was only just deleted, its backup may be the only way to get it back."
-msgstr ""
+msgstr "Pano henüz yeni silindiyse, onu geri getirmenin tek yolu yedeği olabilir."
 
 #: src/views/PublicBoard.vue
 msgid "Image"
-msgstr ""
+msgstr "Görsel"
 
 #: src/components/BoardSettingsModal.vue
 msgid "IMAP server"
-msgstr ""
+msgstr "IMAP sunucusu"
 
 #: src/views/BoardList.vue
 msgid "Import"
@@ -3221,7 +3221,7 @@ msgstr "Deck'ten içe aktar"
 
 #: src/views/BoardList.vue
 msgid "Imported into a new Kanso board:"
-msgstr ""
+msgstr "Yeni bir Kanso panosuna aktarıldı:"
 
 #: src/components/CsvImportModal.vue
 #: src/views/BoardList.vue
@@ -3230,11 +3230,11 @@ msgstr "İçe aktarılıyor…"
 
 #: templates/admin-backup.php
 msgid "In a Files folder"
-msgstr ""
+msgstr "Bir Dosyalar klasöründe"
 
 #: templates/admin-backup.php
 msgid "In a Files folder a pruned backup moves to that account's trashbin and keeps using its quota until that empties; inside Kanso it is freed at once."
-msgstr ""
+msgstr "Bir Dosyalar klasöründe, budanan bir yedek o hesabın çöp kutusuna taşınır ve çöp kutusu boşalana kadar kotasını kullanmayı sürdürür; Kanso içinde ise hemen serbest bırakılır."
 
 #: src/components/BoardListView.vue
 #: src/components/BoardSettingsModal.vue
@@ -3264,7 +3264,7 @@ msgstr "Satır içi kod"
 
 #: templates/admin-backup.php
 msgid "Inside Kanso (recommended)"
-msgstr ""
+msgstr "Kanso içinde (önerilir)"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardTile.vue
@@ -3294,7 +3294,7 @@ msgstr "Sorun alma"
 
 #: templates/admin-backup.php
 msgid "It is not in anyone's Files, so there is nowhere to undo it from."
-msgstr ""
+msgstr "Kimsenin Dosyalar alanında bulunmadığı için geri alınabileceği bir yer yoktur."
 
 #: src/components/MarkdownEditor.vue
 #: src/views/ProjectView.vue
@@ -3303,13 +3303,13 @@ msgstr "İtalik"
 
 #: src/components/CardDetail.vue
 msgid "Jump to the discussion"
-msgstr ""
+msgstr "Tartışmaya atla"
 
 #: src/components/CardDetail.vue:6701
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "Tartışmaya atla (%n yorum)"
+msgstr[1] "Tartışmaya atla (%n yorum)"
 
 #: src/components/BoardTimelineView.vue
 msgid "Jump to today"
@@ -3340,11 +3340,11 @@ msgstr "Kanso arka plan görevleri ve e-posta bağlantıları"
 
 #: lib/Notification/Notifier.php
 msgid "Kanso board backup completed"
-msgstr ""
+msgstr "Kanso pano yedeklemesi tamamlandı"
 
 #: lib/Notification/Notifier.php
 msgid "Kanso board backup failed"
-msgstr ""
+msgstr "Kanso pano yedeklemesi başarısız oldu"
 
 #: templates/admin-backup.php
 msgid "Kanso board backups"
@@ -3352,11 +3352,11 @@ msgstr "Kanso pano yedekleri"
 
 #: templates/admin-backup.php
 msgid "Kanso cannot switch them off, and the notification setting below does not remove them."
-msgstr ""
+msgstr "Kanso bunları kapatamaz ve aşağıdaki bildirim ayarı da bunları kaldırmaz."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Kanso checks a dedicated mailbox every five minutes and turns each new message into a card — the subject becomes the title and the body becomes the description. Use a mailbox that exists only for this board."
-msgstr ""
+msgstr "Kanso, ayrılmış bir posta kutusunu beş dakikada bir denetler ve her yeni iletiyi bir karta dönüştürür — konu başlık, gövde ise açıklama olur. Yalnızca bu pano için var olan bir posta kutusu kullan."
 
 #: src/views/BoardList.vue
 msgid "Kanso export (.zip)"
@@ -3364,15 +3364,15 @@ msgstr "Kanso dışa aktarımı (.zip)"
 
 #: templates/admin-backup.php
 msgid "Kanso keeps the files itself. Nothing goes into anyone's Files folder."
-msgstr ""
+msgstr "Dosyaları Kanso'nun kendisi saklar. Kimsenin Dosyalar klasörüne bir şey gitmez."
 
 #: templates/admin-backup.php
 msgid "Kanso never clears those on its own."
-msgstr ""
+msgstr "Kanso bunları kendiliğinden hiçbir zaman temizlemez."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Kanso never contacts your instance — it only receives what the webhook sends. A link you paste stays without a status until a delivery mentions it."
-msgstr ""
+msgstr "Kanso sunucuna hiçbir zaman bağlanmaz — yalnızca webhook'un gönderdiklerini alır. Yapıştırdığın bir bağlantı, bir iletimde adı geçene kadar durumsuz kalır."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Kanso opens the board list by default. Turn this on to open this board instead."
@@ -3384,7 +3384,7 @@ msgstr "Kanso ayarları"
 
 #: templates/admin-backup.php
 msgid "Kanso writes the files into a Files folder you can open and sync."
-msgstr ""
+msgstr "Kanso dosyaları, açıp eşitleyebileceğin bir Dosyalar klasörüne yazar."
 
 #: src/components/CardDetail.vue
 msgid "Keep my version"
@@ -3437,7 +3437,7 @@ msgstr "Etiketler panoya özeldir: yalnızca hedef panoda da bulunan (aynı ad v
 
 #: src/components/BoardSettingsModal.vue
 msgid "Last checked: {when}"
-msgstr ""
+msgstr "Son denetim: {when}"
 
 #: src/views/ViewPage.vue
 msgid "Last modified"
@@ -3491,11 +3491,11 @@ msgstr "Kişi bağla"
 
 #: templates/public-expired.php
 msgid "Link expired"
-msgstr ""
+msgstr "Bağlantının süresi doldu"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Link expires on"
-msgstr ""
+msgstr "Bağlantının geçerlilik bitişi"
 
 #: templates/public-notfound.php
 msgid "Link not available"
@@ -3512,7 +3512,7 @@ msgstr "Liste"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Load more files"
-msgstr ""
+msgstr "Daha fazla dosya yükle"
 
 #: src/views/InboxView.vue
 msgid "Loading inbox…"
@@ -3520,7 +3520,7 @@ msgstr "Gelen kutusu yükleniyor…"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Loading more files…"
-msgstr ""
+msgstr "Daha fazla dosya yükleniyor…"
 
 #: src/views/ProjectView.vue
 msgid "Loading project…"
@@ -3567,11 +3567,11 @@ msgstr "Düşük"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Mailbox account"
-msgstr ""
+msgstr "Posta kutusu hesabı"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Mailbox removed."
-msgstr ""
+msgstr "Posta kutusu kaldırıldı."
 
 #: src/components/CardDetail.vue
 msgid "Make this a sub-card of…"
@@ -3653,7 +3653,7 @@ msgstr "Daha fazla"
 
 #: src/components/BulkActionBar.vue
 msgid "More actions"
-msgstr ""
+msgstr "Diğer işlemler"
 
 #: src/views/BoardView.vue
 msgid "More board actions"
@@ -3677,7 +3677,7 @@ msgstr "Kartı taşı…"
 
 #: src/components/BulkActionBar.vue
 msgid "Move to {stack}"
-msgstr ""
+msgstr "Şu sütuna taşı: {stack}"
 
 #: src/components/CardDetail.vue
 msgid "Move to board…"
@@ -3769,7 +3769,7 @@ msgstr "hiç"
 
 #: templates/admin-backup.php
 msgid "Never"
-msgstr ""
+msgstr "Hiçbir zaman"
 
 #: src/views/BoardList.vue
 msgid "New board name…"
@@ -3823,7 +3823,7 @@ msgstr "Yeni görünüm"
 
 #: templates/admin-backup.php
 msgid "Newest first."
-msgstr ""
+msgstr "En yeni önce."
 
 #: src/components/CsvImportModal.vue
 msgid "Next"
@@ -3843,7 +3843,7 @@ msgstr "Hayır"
 
 #: templates/admin-backup.php
 msgid "No activity entries and no quota use, but you cannot sync the files or store them elsewhere."
-msgstr ""
+msgstr "Etkinlik kaydı ve kota kullanımı olmaz, ancak dosyaları eşitleyemez ya da başka bir yerde saklayamazsın."
 
 #: src/components/CardDetail.vue
 msgid "No activity yet."
@@ -3863,7 +3863,7 @@ msgstr "“{query}” ile eşleşen arşivlenmiş kart yok."
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "No attachments yet"
-msgstr ""
+msgstr "Henüz ek yok"
 
 #: src/components/BoardSettingsModal.vue
 msgid "No auto-archive rules yet."
@@ -3875,7 +3875,7 @@ msgstr "Arka plan yok"
 
 #: templates/admin-backup.php
 msgid "No backups stored yet."
-msgstr ""
+msgstr "Henüz saklanan yedek yok."
 
 #: src/App.vue
 msgid "No boards in this folder"
@@ -3988,7 +3988,7 @@ msgstr "Bitiş tarihi yok"
 
 #: src/components/BoardSettingsModal.vue
 msgid "No expiry — the link works until you disable or rotate it."
-msgstr ""
+msgstr "Süre sınırı yok — bağlantı, sen devre dışı bırakana ya da yenileyene kadar çalışır."
 
 #: src/components/BoardTileMenu.vue
 msgid "No folders yet"
@@ -4094,11 +4094,11 @@ msgstr "Tür yok"
 
 #: src/components/CardDetail.vue
 msgid "Nobody has access to this board yet."
-msgstr ""
+msgstr "Bu panoya henüz kimsenin erişimi yok."
 
 #: src/components/CardDetail.vue
 msgid "Nobody with access to this board matches that."
-msgstr ""
+msgstr "Bu panoya erişimi olan kimse bununla eşleşmiyor."
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
@@ -4144,7 +4144,7 @@ msgstr "Seçili panoda size atanmış bir şey yok. Size atanan her şeyi görme
 
 #: templates/admin-backup.php
 msgid "Notify administrators"
-msgstr ""
+msgstr "Yöneticileri bilgilendir"
 
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
@@ -4161,7 +4161,7 @@ msgstr "Kapalı — kart oluşturma"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Offset"
-msgstr ""
+msgstr "Sapma"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Offset (days)"
@@ -4177,11 +4177,11 @@ msgstr "Şu günlerde"
 
 #: templates/admin-backup.php
 msgid "Once a day, Kanso saves a copy of every board as a zip file."
-msgstr ""
+msgstr "Kanso, günde bir kez her panonun bir kopyasını zip dosyası olarak kaydeder."
 
 #: templates/admin-backup.php
 msgid "Only administrators can download them, and they can never be shared by a link."
-msgstr ""
+msgstr "Bunları yalnızca yöneticiler indirebilir ve asla bir bağlantıyla paylaşılamazlar."
 
 #: src/composables/useBoardFilters.js
 msgid "Only archived"
@@ -4201,7 +4201,7 @@ msgstr "Yalnızca ilk {count} atanmış kart yüklenir, bu nedenle bazı görevl
 
 #: templates/admin-backup.php
 msgid "Only when a backup fails"
-msgstr ""
+msgstr "Yalnızca bir yedekleme başarısız olduğunda"
 
 #: src/components/CommandPalette.vue
 msgid "open"
@@ -4219,7 +4219,7 @@ msgstr "Tam sayfa olarak aç"
 #: src/components/CsvImportModal.vue
 #: src/views/BoardList.vue
 msgid "Open board"
-msgstr ""
+msgstr "Panoyu aç"
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/ArchivedView.vue
@@ -4248,7 +4248,7 @@ msgstr "Proje sohbetini yeni sekmede aç"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Open the card this file is attached to"
-msgstr ""
+msgstr "Bu dosyanın ekli olduğu kartı aç"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Open the recurring card"
@@ -4297,7 +4297,7 @@ msgstr "Numaralı liste"
 
 #: templates/admin-backup.php
 msgid "Orphaned means the board a backup came from no longer exists."
-msgstr ""
+msgstr "Sahipsiz, bir yedeğin alındığı panonun artık var olmadığı anlamına gelir."
 
 #: src/components/BoardTimelineView.vue
 msgid "Outside the visible range — click Fit to show"
@@ -4324,15 +4324,15 @@ msgstr "Üst kart"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Password"
-msgstr ""
+msgstr "Parola"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Password stored — leave blank to keep it"
-msgstr ""
+msgstr "Parola kayıtlı — korumak için boş bırak"
 
 #: src/components/CardDetail.vue
 msgid "Paste a pull request or issue URL…"
-msgstr ""
+msgstr "Bir pull request ya da sorun URL'si yapıştır…"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Payload URL"
@@ -4344,11 +4344,11 @@ msgstr "Bekliyor"
 
 #: src/components/BoardSettingsModal.vue
 msgid "per mailbox"
-msgstr ""
+msgstr "posta kutusu başına"
 
 #: src/components/BoardSettingsModal.vue
 msgid "per sender"
-msgstr ""
+msgstr "gönderen başına"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Permanently remove this board and all of its cards for everyone. This cannot be undone."
@@ -4403,7 +4403,7 @@ msgstr "Sabitlendi"
 
 #: templates/admin-backup.php
 msgid "Point this at a separate account nobody signs in to, and they land in its feed instead of yours."
-msgstr ""
+msgstr "Bunu kimsenin oturum açmadığı ayrı bir hesaba yönlendirirsen, kayıtlar seninki yerine o hesabın akışına düşer."
 
 #: src/views/BoardStats.vue
 msgid "Points / week (avg)"
@@ -4411,7 +4411,7 @@ msgstr "Puan / hafta (ort.)"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Port"
-msgstr ""
+msgstr "Port"
 
 #: src/components/CardDetail.vue
 msgid "Position"
@@ -4627,11 +4627,11 @@ msgstr "Projeden çıkar"
 
 #: src/components/BulkActionBar.vue
 msgid "Remove label"
-msgstr ""
+msgstr "Etiketi kaldır"
 
 #: src/components/BulkActionBar.vue
 msgid "Remove label {label}"
-msgstr ""
+msgstr "{label} etiketini kaldır"
 
 #: src/components/CardDetail.vue
 msgid "Remove link"
@@ -4639,7 +4639,7 @@ msgstr "Bağlantıyı kaldır"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Remove mailbox"
-msgstr ""
+msgstr "Posta kutusunu kaldır"
 
 #: src/components/CardDetail.vue
 msgid "Remove relation"
@@ -4667,11 +4667,11 @@ msgstr "bir atananı kaldırdı"
 
 #: src/components/CardDetail.vue
 msgid "removed an attachment"
-msgstr ""
+msgstr "bir eki kaldırdı"
 
 #: src/components/CardDetail.vue
 msgid "removed the attachment {value}"
-msgstr ""
+msgstr "{value} ekini kaldırdı"
 
 #: src/components/CardDetail.vue
 msgid "removed the label {value}"
@@ -4729,11 +4729,11 @@ msgstr "bu kartın adını {value} yaptı"
 
 #: src/components/CardDetail.vue
 msgid "Reopen"
-msgstr ""
+msgstr "Yeniden aç"
 
 #: src/components/CardDetail.vue
 msgid "reopened a thread"
-msgstr ""
+msgstr "bir konuyu yeniden açtı"
 
 #: src/components/CardDetail.vue
 msgid "Repeat"
@@ -4772,7 +4772,7 @@ msgstr "inceleme istedi:"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Require verified senders (DMARC)"
-msgstr ""
+msgstr "Doğrulanmış gönderenler zorunlu (DMARC)"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Reset"
@@ -4784,15 +4784,15 @@ msgstr "Tartışma panelini yeniden boyutlandır"
 
 #: src/components/CardDetail.vue
 msgid "Resolve"
-msgstr ""
+msgstr "Çözümle"
 
 #: src/components/CardDetail.vue
 msgid "Resolved"
-msgstr ""
+msgstr "Çözümlendi"
 
 #: src/components/CardDetail.vue
 msgid "resolved a thread"
-msgstr ""
+msgstr "bir konuyu çözümledi"
 
 #: src/views/TrashView.vue
 msgid "Restore"
@@ -4800,7 +4800,7 @@ msgstr "Geri yükle"
 
 #: src/views/ArchivedView.vue
 msgid "Restore selected"
-msgstr ""
+msgstr "Seçilenleri geri yükle"
 
 #: src/components/CommandPalette.vue
 msgid "Results"
@@ -4906,7 +4906,7 @@ msgstr "Şablon olarak kaydedildi. Herhangi bir sütundaki \"+ Şablondan\" dü�
 
 #: src/components/BoardSettingsModal.vue
 msgid "Saved."
-msgstr ""
+msgstr "Kaydedildi."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Saving…"
@@ -4954,7 +4954,7 @@ msgstr "Kişilerde ara…"
 
 #: src/components/CardDetail.vue
 msgid "Search people…"
-msgstr ""
+msgstr "Kişi ara…"
 
 #: src/components/SearchBox.vue
 msgid "Search results"
@@ -4962,7 +4962,7 @@ msgstr "Arama sonuçları"
 
 #: src/components/CardDetail.vue
 msgid "Search the people with access to this board"
-msgstr ""
+msgstr "Bu panoya erişimi olan kişiler arasında ara"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Search users or groups"
@@ -4990,15 +4990,15 @@ msgstr "Seçim"
 #: src/views/ArchivedView.vue:406
 msgid "Select %n card"
 msgid_plural "Select %n cards"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%n kartı seç"
+msgstr[1] "%n kartı seç"
 
 #: src/components/StackColumn.vue:205
 #: src/views/ArchivedView.vue:405
 msgid "Select %n visible card"
 msgid_plural "Select %n visible cards"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "Görünen %n kartı seç"
+msgstr[1] "Görünen %n kartı seç"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Select a card…"
@@ -5075,7 +5075,7 @@ msgstr "Paylaşım"
 
 #: src/components/CardDetail.vue
 msgid "Show"
-msgstr ""
+msgstr "Göster"
 
 #: src/views/BoardView.vue
 msgid "Show / hide this shortcuts overlay"
@@ -5095,7 +5095,7 @@ msgstr "Biçimlendirme araç çubuğunu göster"
 
 #: src/App.vue
 msgid "Show the discussion below the card"
-msgstr ""
+msgstr "Tartışmayı kartın altında göster"
 
 #: src/components/CardDetail.vue
 msgid "Show the discussion panel"
@@ -5117,7 +5117,7 @@ msgstr "Bu panoyu takvimimde göster"
 
 #: src/components/CardDetail.vue
 msgid "Show this resolved thread"
-msgstr ""
+msgstr "Çözümlenen bu konuyu göster"
 
 #: src/components/CardDetail.vue
 msgid "Show watchers"
@@ -5129,15 +5129,15 @@ msgstr "Son {days} günde tamamlanan en son {count} görev gösteriliyor."
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Showing the {shown} most recent of {total} files."
-msgstr ""
+msgstr "{total} dosyadan en son {shown} tanesi gösteriliyor."
 
 #: src/components/CardDetail.vue
 msgid "Showing the first {count} matches. Keep typing to narrow them down."
-msgstr ""
+msgstr "İlk {count} eşleşme gösteriliyor. Daraltmak için yazmayı sürdür."
 
 #: src/components/CardDetail.vue
 msgid "Showing the first {count} people with access. Search to find anyone else."
-msgstr ""
+msgstr "Erişimi olan ilk {count} kişi gösteriliyor. Diğerlerini bulmak için ara."
 
 #: src/views/ViewPage.vue
 msgid "Showing the first {shown} of {total} matching cards — refine your filter to see the rest."
@@ -5157,7 +5157,7 @@ msgstr "Tek tarih"
 
 #: templates/admin-backup.php
 msgid "Size"
-msgstr ""
+msgstr "Boyut"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Skip while open"
@@ -5195,7 +5195,7 @@ msgstr "Sıralama ölçütü"
 
 #: src/components/BoardSettingsModal.vue
 msgid "SSL/TLS (993)"
-msgstr ""
+msgstr "SSL/TLS (993)"
 
 #: src/views/BoardStats.vue
 msgid "Stack {id}"
@@ -5256,7 +5256,7 @@ msgstr "Başladı"
 
 #: src/components/CardDetail.vue
 msgid "Starts {date}"
-msgstr ""
+msgstr "Başlangıç {date}"
 
 #: src/composables/useBoardFilters.js
 msgid "Starts later"
@@ -5264,7 +5264,7 @@ msgstr "Sonra başlıyor"
 
 #: src/components/BoardSettingsModal.vue
 msgid "STARTTLS (143)"
-msgstr ""
+msgstr "STARTTLS (143)"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
@@ -5286,7 +5286,7 @@ msgstr "Bu kartı izlemeyi bırak"
 
 #: templates/admin-backup.php
 msgid "Stored backups"
-msgstr ""
+msgstr "Saklanan yedekler"
 
 #: src/components/MarkdownEditor.vue
 msgid "Strikethrough"
@@ -5303,7 +5303,7 @@ msgstr "Alt kart ilerlemesi"
 
 #: src/components/BoardListView.vue
 msgid "Sub-card progress {done} of {total}"
-msgstr ""
+msgstr "Alt kart ilerlemesi: {total} karttan {done} tanesi"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
@@ -5358,7 +5358,7 @@ msgstr "Şablon yeniden normal karta dönüştürüldü."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Test connection"
-msgstr ""
+msgstr "Bağlantıyı sına"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Text"
@@ -5366,11 +5366,11 @@ msgstr "Metin"
 
 #: src/views/BoardList.vue
 msgid "That board could not be imported, so nothing was created. You can safely try again."
-msgstr ""
+msgstr "Bu pano içe aktarılamadı, bu yüzden hiçbir şey oluşturulmadı. Güvenle tekrar deneyebilirsin."
 
 #: templates/admin-backup.php
 msgid "That builds a new board owned by whoever imports it, so you have to share it again."
-msgstr ""
+msgstr "Bu, içe aktaran kişinin sahibi olduğu yeni bir pano oluşturur; bu yüzden panoyu yeniden paylaşman gerekir."
 
 #: src/views/BoardView.vue
 msgid "That card is not on this board any more."
@@ -5378,15 +5378,15 @@ msgstr "Bu kart artık bu panoda değil."
 
 #: src/components/BoardSettingsModal.vue
 msgid "That is not a date we can use. Pick a day, or clear the field for no expiry."
-msgstr ""
+msgstr "Bu, kullanabileceğimiz bir tarih değil. Bir gün seç ya da süre sınırı olmaması için alanı temizle."
 
 #: templates/admin-backup.php
 msgid "The backups then live in that account's Files."
-msgstr ""
+msgstr "Yedekler bundan sonra o hesabın Dosyalar alanında durur."
 
 #: src/admin-backup.js
 msgid "The board this backup came from no longer exists."
-msgstr ""
+msgstr "Bu yedeğin alındığı pano artık yok."
 
 #: src/components/BoardSettingsModal.vue
 msgid "The chat link must be a http:// or https:// URL."
@@ -5402,11 +5402,11 @@ msgstr "Bu sunucuda Deck uygulaması kurulu değil, içe aktarılacak bir şey y
 
 #: templates/admin-backup.php
 msgid "The file goes to that account's trashbin and keeps using space until that is emptied."
-msgstr ""
+msgstr "Dosya o hesabın çöp kutusuna gider ve çöp kutusu boşaltılana kadar yer kullanmayı sürdürür."
 
 #: templates/admin-backup.php
 msgid "The files use that account's quota, and each write shows up in its activity."
-msgstr ""
+msgstr "Dosyalar o hesabın kotasını kullanır ve her yazma işlemi hesabın etkinliğinde görünür."
 
 #: lib/SetupCheck/GuestsWhitelistCheck.php
 msgid "The Guests app is enabled but its app whitelist is missing: %1$s. Guest accounts shared onto a Kanso board cannot open it (card deep links from emails fail with a generic denial). Add the missing app(s) in Administration settings > Guests."
@@ -5426,15 +5426,15 @@ msgstr "Guests uygulaması beyaz listesi devre dışı — konuklar Kanso'yu kul
 
 #: src/views/BoardList.vue
 msgid "The import did not finish cleanly and we could not confirm whether it completed. Check your boards before trying again — importing a second time creates a separate copy."
-msgstr ""
+msgstr "İçe aktarma temiz bitmedi ve tamamlanıp tamamlanmadığını doğrulayamadık. Tekrar denemeden önce panolarını denetle — ikinci kez içe aktarmak ayrı bir kopya oluşturur."
 
 #: src/components/BoardSettingsModal.vue
 msgid "The link stops working at the end of the selected day, in the time zone it was set from. Exactly: {when}. Leave empty for no expiry."
-msgstr ""
+msgstr "Bağlantı, seçilen günün sonunda, ayarlandığı saat diliminde çalışmayı durdurur. Tam olarak: {when}. Süre sınırı olmaması için boş bırak."
 
 #: templates/admin-backup.php
 msgid "The only way to get one back is the list at the bottom of this page."
-msgstr ""
+msgstr "Birini geri getirmenin tek yolu bu sayfanın altındaki listedir."
 
 #: src/components/CardDetail.vue
 msgid "There is no other board you can move this card to."
@@ -5450,7 +5450,7 @@ msgstr "Bu pano artık yok."
 
 #: templates/admin-backup.php
 msgid "This caps how many copies exist, not how much disk they take."
-msgstr ""
+msgstr "Bu, kaç kopya bulunacağını sınırlar; ne kadar disk kullandıklarını değil."
 
 #: templates/card-notfound.php
 msgid "This card does not exist or you do not have access to it."
@@ -5482,7 +5482,7 @@ msgstr "Bu kart yinelenen bir seriyi besliyor. Yalnızca bu kart mı silinsin, y
 
 #: src/components/BoardSettingsModal.vue
 msgid "This link has expired. Visitors are told the link expired; pick a later date or clear the expiry to reopen it."
-msgstr ""
+msgstr "Bu bağlantının süresi dolmuş. Ziyaretçilere bağlantının süresinin dolduğu bildirilir; yeniden açmak için ileri bir tarih seç ya da süre sınırını temizle."
 
 #: src/views/PublicBoard.vue
 msgid "This link is invalid or has been disabled."
@@ -5490,7 +5490,7 @@ msgstr "Bu bağlantı geçersiz ya da devre dışı bırakılmış."
 
 #: templates/public-expired.php
 msgid "This public board link has expired. Ask whoever shared the board for a new link."
-msgstr ""
+msgstr "Bu herkese açık pano bağlantısının süresi dolmuş. Panoyu paylaşan kişiden yeni bir bağlantı iste."
 
 #: templates/public-notfound.php
 msgid "This public board link is invalid or has been disabled."
@@ -5572,7 +5572,7 @@ msgstr "Yapılacak"
 
 #: templates/admin-backup.php
 msgid "To put a board back, download its backup and import it from the Import menu on the boards list."
-msgstr ""
+msgstr "Bir panoyu geri koymak için yedeğini indir ve panolar listesindeki İçe aktar menüsünden içe aktar."
 
 #: src/views/MyCardsView.vue
 msgid "Today"
@@ -5592,7 +5592,7 @@ msgstr "Önizlemeyi aç / kapat"
 
 #: src/services/api.js
 msgid "Too many requests in a short time — this action is rate-limited. Wait a while, then try again."
-msgstr ""
+msgstr "Kısa sürede çok fazla istek — bu işlem hız sınırlamasına tabi. Biraz bekle, sonra tekrar dene."
 
 #: src/components/CardDetail.vue
 msgid "Top of the column"
@@ -5857,7 +5857,7 @@ msgstr "Haftalık"
 
 #: src/components/StackColumn.vue
 msgid "What belongs in this column?"
-msgstr ""
+msgstr "Bu sütuna ne girer?"
 
 #: src/components/CardDetail.vue
 msgid "What changes are needed? (posted as a comment)"
@@ -5877,11 +5877,11 @@ msgstr "Biri bir kartta incelemeni istediğinde burada görünür."
 
 #: templates/admin-backup.php
 msgid "Where to keep the backups"
-msgstr ""
+msgstr "Yedeklerin nerede saklanacağı"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Which Forgejo issues to take in"
-msgstr ""
+msgstr "Hangi Forgejo sorunları alınsın"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Which issues to take in"
@@ -5927,7 +5927,7 @@ msgstr "Bir yanıt yaz…"
 
 #: templates/admin-backup.php
 msgid "Written"
-msgstr ""
+msgstr "Yazıldı"
 
 #: src/components/CardDetail.vue
 msgid "wrote"
@@ -5959,7 +5959,7 @@ msgstr "Evet, sil"
 
 #: templates/admin-backup.php
 msgid "You can also point that folder at another server with external storage."
-msgstr ""
+msgstr "Bu klasörü dış depolama ile başka bir sunucuya da yönlendirebilirsin."
 
 #: src/components/BoardSettingsModal.vue
 msgid "you can edit"
@@ -5975,7 +5975,7 @@ msgstr "O panoya kopyalayamazsın."
 
 #: src/components/CardDetail.vue
 msgid "You have unsaved changes on this card. If you leave now, they will be lost."
-msgstr ""
+msgstr "Bu kartta kaydedilmemiş değişikliklerin var. Şimdi ayrılırsan kaybolurlar."
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need edit permission to configure workflows."
@@ -5987,7 +5987,7 @@ msgstr "Otomasyon kurallarını yapılandırmak için yönetme iznine ihtiyacın
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure email intake."
-msgstr ""
+msgstr "E-posta almayı yapılandırmak için yönetme iznine ihtiyacın var."
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure the calendar feed."
@@ -5995,7 +5995,7 @@ msgstr "Takvim akışını yapılandırmak için yönetme iznine ihtiyacın var.
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure the Forgejo webhook."
-msgstr ""
+msgstr "Forgejo webhook'unu yapılandırmak için yönetme iznine ihtiyacın var."
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure the GitHub webhook."
