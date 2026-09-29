@@ -10,7 +10,7 @@ import { test, expect, ncLogin, authFor, makeApi, adminAuth, toast, ADMIN, TESTE
 // A backup written into a user's Files folder adds up to two Files-activity
 // entries per board per run (one created, plus one deleted once retention has
 // something to prune) to the stream of whoever owns the folder. Nextcloud's own Files hooks write those; no
-// app API in NC 32-34 suppresses them for an individual write, and measurement
+// app API in NC 32-35 suppresses them for an individual write, and measurement
 // confirmed it: OCP\Activity\IManager::setCurrentUserId() does not reach them at
 // all (the Activity app reads OCA\Activity\CurrentUser, i.e. the user SESSION),
 // and forcing the session user is order-dependent inside a cron process and

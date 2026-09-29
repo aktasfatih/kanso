@@ -37,7 +37,8 @@ $OCC app:list --enabled 2>/dev/null | grep -q 'kanso' \
 	|| fail "kanso is not in 'occ app:list' (enabled apps)"
 
 # 2. Every migration must be recorded as applied. NC has no per-app
-#    'migrations:status' occ command across 32–34, so verify directly: the
+#    'migrations:status' occ command across 32–35 (35 has migrations:preview
+#    only, and it is not per-app), so verify directly: the
 #    oc_migrations table must hold one row per migration file. This proves the
 #    migrator ran end-to-end (not just that app:enable returned 0).
 # cwd is dev/ (the script cd'd here), so migrations are one level up.

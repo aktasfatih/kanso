@@ -2,8 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Throwaway development Nextcloud with this app mounted from the checkout.
-# Defaults mirror the newest supported target (nextcloud:34-apache / PHP 8.3 +
-# postgres 16). The app supports NC 32–34; CI e2e boots this same stack.
+# Defaults to nextcloud:34-apache / PHP 8.3 + postgres 16 — deliberately one
+# below the supported ceiling, because the e2e suite is pinned to NC 34 and
+# boots this same stack. The app supports NC 32–35; pass NC_VERSION to boot
+# another (the install matrix boots all four).
 #
 #   cd dev && ./setup.sh          # start + enable the app
 #   http://localhost:8891         # login: admin / admin

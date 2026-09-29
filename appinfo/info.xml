@@ -476,10 +476,13 @@ Kanso 是一款为速度而生的 Nextcloud 看板应用。看板、列和卡片
 		     SELECT ... FOR UPDATE on any version.
 
 		     Neither gap is visible to psalm or PHPUnit: composer maps OCP\ to
-		     vendor/nextcloud/ocp pinned to the NEWEST server. dev/smoke.sh
-		     executes both paths on every DB in the install matrix, so a future
-		     API gap fails CI instead of shipping. -->
-		<nextcloud min-version="32" max-version="34"/>
+		     vendor/nextcloud/ocp, which is pinned to ^34 — inside this range but
+		     no longer at its ceiling, so neither tool sees an API this range's
+		     OLDEST server lacks NOR one its NEWEST server has removed.
+		     dev/smoke.sh executes both paths on every DB in the install matrix,
+		     and the matrix covers every version named here, so a future API gap
+		     at either end fails CI instead of shipping. -->
+		<nextcloud min-version="32" max-version="35"/>
 	</dependencies>
 	<!-- Element order below is fixed by the App Store schema's xs:sequence
 	     (background-jobs before commands, etc.). scripts/validate-info-xml.mjs

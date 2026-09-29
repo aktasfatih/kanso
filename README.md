@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/aktasfatih/kanso/actions/workflows/ci.yml/badge.svg)](https://github.com/aktasfatih/kanso/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-![Nextcloud 32–34](https://img.shields.io/badge/Nextcloud-32–34-0082c9)
+![Nextcloud 32–35](https://img.shields.io/badge/Nextcloud-32–35-0082c9)
 
 Instant drag & drop, payloads sized for large boards, realtime sync: a
 from-scratch kanban board that stays out of your way.
@@ -163,9 +163,10 @@ your work, on your own Nextcloud, laid out plainly.
 
 ## Installation
 
-Kanso targets **Nextcloud 32–34** and **PHP 8.2–8.5**, within whatever range
+Kanso targets **Nextcloud 32–35** and **PHP 8.2–8.5**, within whatever range
 your Nextcloud version itself supports — Nextcloud 32 tops out at PHP 8.4, so
-PHP 8.5 needs Nextcloud 33 or newer. It's on the
+PHP 8.5 needs Nextcloud 33 or newer, and Nextcloud 35 requires PHP 8.3, so
+PHP 8.2 means Nextcloud 34 or older. It's on the
 **[Nextcloud App Store](https://apps.nextcloud.com/apps/kanso)**, so the quickest
 install is the one-click route: in Nextcloud open **Apps**, find **Kanso** under
 *Organization* (or *Office & text*), and click **Download and enable**. From the
@@ -315,7 +316,7 @@ records a *file created* entry for every backup written and a *file deleted*
 entry for every one that ages out of retention, so a run over N boards adds up
 to 2N entries to the activity stream of whichever account owns the target folder.
 Those entries come from Nextcloud's own Files hooks rather than from Kanso, and
-no app API in Nextcloud 32–34 suppresses them for an individual write. Kanso
+no app API in Nextcloud 32–35 suppresses them for an individual write. Kanso
 does not pretend otherwise: it will not silently stop logging your backups, and
 the run notification setting above is about Kanso's own message — setting it to
 *Never* leaves those Files entries exactly where they were.
