@@ -10,7 +10,6 @@ namespace OCA\Kanso\Controller;
 use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
-use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardContactMapper;
 use OCA\Kanso\Db\CardFieldValue;
@@ -57,7 +56,6 @@ class CardController extends Controller {
 		private AssigneeService $assigneeService,
 		private ContactService $contactService,
 		private CardLabelMapper $cardLabelMapper,
-		private CardAssigneeMapper $cardAssigneeMapper,
 		private CardContactMapper $cardContactMapper,
 		private ReviewService $reviewService,
 		private ReminderService $reminderService,
@@ -135,6 +133,15 @@ class CardController extends Controller {
 		$board = $this->boardMapper->find($card->getBoardId());
 		$viewer = $this->boardAccess->contextFor($board, $uid);
 
+		// The card's assignees WITH their display names (#10736). Resolved here
+		// rather than left to the client, which only had the board participants
+		// list to name them from - and that list is capped, so anyone past the cap
+		// rendered as a bare uid after every reload. Bounded by this card's own
+		// assignees, so it cannot grow with board membership. `assigneeIds` is
+		// derived from the same rows below, so the ids and the names can never
+		// disagree about who is on the card.
+		$assignees = $this->assigneeService->listForCard($id, $uid);
+
 		$checklistItems = $this->checklistItemMapper->findByCard($id);
 		$checklistDone = count(array_filter(
 			$checklistItems,
@@ -163,7 +170,8 @@ class CardController extends Controller {
 
 		return $card->jsonSerialize()
 			+ ['labelIds' => $this->cardLabelMapper->findLabelIdsByCard($id)]
-			+ ['assigneeIds' => $this->cardAssigneeMapper->findUserIdsByCard($id)]
+			+ ['assigneeIds' => array_map(static fn (array $a): string => $a['uid'], $assignees)]
+			+ ['assignees' => $assignees]
 			+ ['contacts' => $this->cardContactMapper->findContactsByCard($id)]
 			+ ['reviews' => $this->reviewService->serializeReviewsForCard($id)]
 			// The viewer's OWN pending personal reminders on this card (#3816) -

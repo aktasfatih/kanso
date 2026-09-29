@@ -3141,15 +3141,39 @@ const cardAssigneeIds = computed(() =>
 	Array.isArray(cardData.value?.assigneeIds) ? cardData.value.assigneeIds : [],
 )
 
-// uid → participant, for resolving display names. The cached page is the base;
-// anyone the picker's search turned up is folded in on top (#10704), so a person
-// the cap sheds still shows their NAME on the pill the moment you assign them,
-// instead of the bare uid the cached page alone can resolve them to.
+// This card's own assignees, named by the server (#10736). The single-card read
+// resolves them from the user directory, so this layer is the only one that knows
+// a past-cap assignee's name on a FRESH load - the two layers below it are either
+// capped or session-local.
+const cardAssignees = computed(() =>
+	Array.isArray(cardData.value?.assignees) ? cardData.value.assignees : [],
+)
+
+// uid → participant, for resolving display names. Three layers, authoritative
+// last:
+//   1. the cached participants page - the board's picker data source, capped at
+//      ParticipantService::RESULT_LIMIT;
+//   2. anyone the picker's search turned up in THIS modal (#10704), which keeps a
+//      just-assigned past-cap person named while the optimistic patch is in
+//      flight and the detail payload has not come back yet;
+//   3. the card's own assignees from the detail payload (#10736), which is the
+//      layer that survives a reload - before it existed, a past-cap assignee
+//      rendered as a bare uid on every load.
+//
+// SCOPE, stated deliberately: layer 3 names ASSIGNEES only. participantName() is
+// also how this modal renders WATCHERS, REVIEWERS and CHECKLIST-STEP assignees,
+// and those uid sets are NOT covered here - past the cap they still fall back to
+// a bare uid. Swimlane titles (BoardView) are equally out: they read the
+// board-level participants list, which this change deliberately leaves capped.
+// Each of those surfaces would need its own bounded, server-side resolution the
+// way the card detail just got one; none is a card-scoped lookup this component
+// can make, so widening layer 3 to cover them was not attempted here.
 const participantMap = computed(() => {
 	const map = new Map(participantList.value.map((p) => [p.uid, p]))
 	for (const [uid, p] of discoveredParticipants.value) {
 		if (!map.has(uid)) map.set(uid, p)
 	}
+	for (const p of cardAssignees.value) map.set(p.uid, p)
 	return map
 })
 

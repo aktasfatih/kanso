@@ -237,9 +237,23 @@ const dueDateClass = computed(() => {
 	return ''
 })
 
+// This card's assignees, named by the server (#10736). Same source as the
+// description above - the detail fetch this component already makes - so it costs
+// no extra request. The `participants` prop is the board's picker list and is
+// capped, which is why it can only be the FALLBACK here: it cannot name anyone
+// past the cap, and this component never had the card modal's
+// discovered-participants overlay to paper over that, so a past-cap assignee
+// showed as a bare uid in the preview on every single open.
+const assigneeNameByUid = computed(() => new Map(
+	(Array.isArray(cardDetail.value?.assignees) ? cardDetail.value.assignees : [])
+		.map((p) => [p.uid, p.displayName]),
+))
+
 function participantName(uid) {
-	const p = props.participants.find((x) => x.uid === uid)
-	return p?.displayName || uid
+	// The capped board list still covers the first paint, before the detail lands.
+	return assigneeNameByUid.value.get(uid)
+		|| props.participants.find((x) => x.uid === uid)?.displayName
+		|| uid
 }
 
 // ── Positioning: anchor near the originating tile, clamped to the viewport ────

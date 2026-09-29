@@ -129,6 +129,45 @@ class AssigneeService {
 	}
 
 	/**
+	 * The card's own assignees, each paired with their display name (#10736).
+	 *
+	 * This is a READ, and deliberately NOT served from the board participants
+	 * list: that list is capped at {@see ParticipantService::RESULT_LIMIT}, and
+	 * the frontend used it as its uid->name map, so an assignee the cap shed
+	 * rendered as a bare uid on every load. The cap exists to stop a board shared
+	 * with a several-thousand-member group ballooning the assignee picker, and it
+	 * stays exactly as it is - this lookup is bounded by the CARD's assignees
+	 * (usually one or two, never board membership), which is why it can afford to
+	 * ignore the cap entirely.
+	 *
+	 * Unresolvable uids fall back to the uid, matching
+	 * {@see ParticipantService::getParticipants()} - assignment rows can outlive
+	 * their accounts, and a row that vanished from the payload would read as "not
+	 * assigned".
+	 *
+	 * Gated in its own right rather than trusting the caller: display names are
+	 * directory data, so READ on the board plus card visibility are asserted here
+	 * the same way the mutating methods above assert EDIT.
+	 *
+	 * @return list<array{uid: string, displayName: string}> in assignment order
+	 * @throws DoesNotExistException if the card or its board does not exist or is deleted, or the card is not visible to the actor
+	 * @throws NotPermittedException if the actor may not read the board
+	 */
+	public function listForCard(int $cardId, string $actorUid): array {
+		$card = $this->loadCard($cardId);
+		$board = $this->loadBoard($card->getBoardId());
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+
+		// array_values so the result is a genuine list - the mapper's return is not
+		// typed as one, and the payload serializes this as a JSON array.
+		return array_values(array_map(
+			fn (string $uid): array => ['uid' => $uid, 'displayName' => $this->displayName($uid)],
+			$this->cardAssigneeMapper->findUserIdsByCard($cardId)
+		));
+	}
+
+	/**
 	 * The participant's display name, falling back to the uid when the account is
 	 * unknown - same resolution the board participant list uses.
 	 */

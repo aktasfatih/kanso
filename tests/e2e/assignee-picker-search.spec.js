@@ -191,6 +191,26 @@ test.describe('Assigning someone the participants cap leaves out (#10704)', () =
 			async () => (await api.get(`/cards/${state.cardId}`)).assigneeIds,
 			{ timeout: 15_000 },
 		).toEqual([state.uids[POOL - 1]])
+
+		// …and the NAME survives a full reload (#10736), which is the half that was
+		// broken: everything above lives in one page session, where the search
+		// results are still in hand. A fresh load has only what the server sends,
+		// and the participants page it sends is capped - so before the single-card
+		// read started naming the card's own assignees, this pill came back as a
+		// bare uid and looked like an overnight regression.
+		// The open card lives in the route, so the reload comes back with the modal
+		// already open - reopening it by clicking the tile would only be swallowed by
+		// the modal's own overlay.
+		await page.reload()
+		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
+		await expect(
+			page.locator('.card-modal__attrbar .card-modal__assignee-pill', { hasText: target }),
+		).toBeVisible({ timeout: 15_000 })
+		// Asserted from the other side too: the uid must not be what is rendered.
+		// Without it, a pill that merely EXISTS would pass this test with the bug in.
+		await expect(
+			page.locator('.card-modal__attrbar .card-modal__assignee-pill', { hasText: state.uids[POOL - 1] }),
+		).toHaveCount(0)
 	})
 
 	test('a search that matches nobody says so instead of looking like an empty board', async ({ page }) => {
