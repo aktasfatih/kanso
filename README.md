@@ -8,6 +8,8 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 ![Nextcloud 32–35](https://img.shields.io/badge/Nextcloud-32–35-0082c9)
 
+**[Website](https://aktasfatih.com/kanso/)** · **[App Store](https://apps.nextcloud.com/apps/kanso)** · **[Sponsor](https://github.com/sponsors/aktasfatih)**
+
 Instant drag & drop, payloads sized for large boards, realtime sync: a
 from-scratch kanban board that stays out of your way.
 
@@ -473,9 +475,9 @@ What sponsorship buys is **priority**. Feature requests go into a queue, and the
 queue is longer than the week — sponsoring moves yours up it. Whatever gets built
 still ships to everyone in the next release.
 
-- **[GitHub Sponsors](https://github.com/sponsors/aktasfatih)** — monthly or
-  one-off. If a specific issue is what you care about, say so and it gets
-  scheduled next.
+- **[GitHub Sponsors](https://github.com/sponsors/aktasfatih)** — monthly tiers
+  for individuals, teams and organizations, or one-off. If a specific issue is
+  what you care about, fund it and it gets scheduled next.
 - **[Rate the app](https://apps.nextcloud.com/apps/kanso)** — costs nothing, and
   it does more for Kanso's reach than a small donation does.
 - **[Commercial licensing](#commercial-licensing)** — for organizations that
@@ -484,6 +486,9 @@ still ships to everyone in the next release.
 ### Sponsors
 
 Thank you to [@dbmtrde](https://github.com/dbmtrde) for sponsoring Kanso.
+
+*Your logo here* — [Team and Organization sponsors](https://github.com/sponsors/aktasfatih)
+get their logo in this README and on the [Kanso website](https://aktasfatih.com/kanso/#support).
 
 ## License
 

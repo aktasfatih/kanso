@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 name: Website
 
-# Publishes website/ to GitHub Pages (https://aktasfatih.github.io/kanso/).
+# Publishes website/ to GitHub Pages (https://aktasfatih.com/kanso/).
 #
 # The site is a single hand-written static page — there is no build step, so
 # this workflow only uploads the directory as-is.
