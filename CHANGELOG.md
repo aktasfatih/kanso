@@ -11,6 +11,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.37.0](https://github.com/aktasfatih/kanso/compare/v0.36.0...v0.37.0) (2026-10-01)
+
+
+### Bug Fixes
+
+* **a11y:** name the progress badges, and four other review fixes on [#174](https://github.com/aktasfatih/kanso/issues/174) ([c303111](https://github.com/aktasfatih/kanso/commit/c303111ce4269de9e313cc94969fcce58f7e5bb4))
+* **backup:** name the restore route and what retention does not reclaim ([24c93f6](https://github.com/aktasfatih/kanso/commit/24c93f66c3bf91e1d83d76444e33eac7d976d5b8)), closes [#10477](https://github.com/aktasfatih/kanso/issues/10477) [#10477](https://github.com/aktasfatih/kanso/issues/10477) [#10674](https://github.com/aktasfatih/kanso/issues/10674)
+* **board:** name the incoming board in the tab while it loads ([7d24c3a](https://github.com/aktasfatih/kanso/commit/7d24c3aa9ccd6e5a8a4f64ba883ead2780c52146))
+* **cards:** show an assignee's name after a reload, even past the participants cap ([2ad99f2](https://github.com/aktasfatih/kanso/commit/2ad99f25d736ad4470ff97864b6588f475ddc20c))
+* **deps:** bump the npm-production group with 4 updates ([d1aa8b1](https://github.com/aktasfatih/kanso/commit/d1aa8b1d4a34bb03214264838adb8058c73a76b7))
+* **dev:** resolve the compose project name before guarding the down -v ([989ddb1](https://github.com/aktasfatih/kanso/commit/989ddb1e08b9336920086b763a73c90b100fd1a0))
+* **icons:** stop handing Nextcloud the white app icon where it themes it for us ([c6f0160](https://github.com/aktasfatih/kanso/commit/c6f016064de1a60c5a2354787ec58efe83488f3a)), closes [#162](https://github.com/aktasfatih/kanso/issues/162) [#ffffff](https://github.com/aktasfatih/kanso/issues/ffffff) [#222](https://github.com/aktasfatih/kanso/issues/222) [#162](https://github.com/aktasfatih/kanso/issues/162)
+* **public-share:** keep the share token out of quoted URLs on a public board ([a29613e](https://github.com/aktasfatih/kanso/commit/a29613e4e254d7d558124063edd70346ea6ed005)), closes [#10608](https://github.com/aktasfatih/kanso/issues/10608)
+* **search:** leave archived cards out of search unless you ask for them ([93ea0d9](https://github.com/aktasfatih/kanso/commit/93ea0d9095af7dd70a3114edffff2652e5a9479f))
+* **webhooks:** take in an issue that gains the intake label after it was opened ([93e53c7](https://github.com/aktasfatih/kanso/commit/93e53c7f9899dba3652f68c72c970c0038cd09de)), closes [#10566](https://github.com/aktasfatih/kanso/issues/10566)
+
+
+### Features
+
+* **archive:** restore several archived cards in one action ([86a7f29](https://github.com/aktasfatih/kanso/commit/86a7f29c5fd4d7b13cad2c75cc4dfa4a04c6e5fe))
+* **compat:** support Nextcloud 35 ([c2557a7](https://github.com/aktasfatih/kanso/commit/c2557a7c2a248c27287286a5c09ab828448bfe55))
+* **l10n:** finish the interface translation in all ten shipped languages ([d084f56](https://github.com/aktasfatih/kanso/commit/d084f567deee1be6f15eddd3e43d6ccfc6ef238f))
+* **list-view:** show a late checklist step on the list row ([fc93d98](https://github.com/aktasfatih/kanso/commit/fc93d984edaf797842ed47c74489788b368bd4ff)), closes [#10696](https://github.com/aktasfatih/kanso/issues/10696) [#10708](https://github.com/aktasfatih/kanso/issues/10708)
+* **webhooks:** card an issue with the labels it already has ([0139e0d](https://github.com/aktasfatih/kanso/commit/0139e0d3535a11b8e52735d990ebcbf323109c46)), closes [#10491](https://github.com/aktasfatih/kanso/issues/10491)
+
 # [0.36.0](https://github.com/aktasfatih/kanso/compare/v0.35.0...v0.36.0) (2026-09-24)
 
 
