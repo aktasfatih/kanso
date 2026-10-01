@@ -183,11 +183,25 @@ test.describe('Browser tab title (#125)', () => {
 				body: JSON.stringify({ error: 'Forbidden' }),
 			}))
 
+		// Mark the document, so the assertion below can prove the cache that makes
+		// this test non-vacuous is still there. `boardUrl()` differs from the list
+		// URL above only in the hash, so this `goto` is a SAME-DOCUMENT navigation
+		// and the ['boards'] query the list warmed survives it — the same property
+		// the #10445 test relies on to keep a MutationObserver attached across a
+		// board switch. If that ever stopped holding, the page would reload with an
+		// empty cache, there would be no cached title left to misuse, and this test
+		// would go green without exercising the guard at all. So assert it rather
+		// than reason about it.
+		await page.evaluate(() => { window.__sameDocument = true })
+
 		await page.goto(boardUrl(state.boardId))
 
 		// The view says access was lost…
 		await expect(page.getByText('This board no longer exists or you no longer have access.'))
 			.toBeVisible({ timeout: 15_000 })
+		// …the warm ['boards'] cache really did survive into this view, so the title
+		// below is suppressed rather than merely absent…
+		expect(await page.evaluate(() => window.__sameDocument)).toBe(true)
 		// …and the tab agrees, rather than keeping the name out of the list cache.
 		await expect(page).toHaveTitle(baseTitle, { timeout: 15_000 })
 	})
