@@ -102,16 +102,56 @@ fi
 
 echo "Booting Nextcloud ${NC_VERSION} on ${KANSO_DB}..."
 
+# --- which compose project are we about to inspect? ---------------------------
+# Asked of COMPOSE ITSELF, not reconstructed here, because the pristine check
+# below is the only precondition on a `down -v` and a guard that inspects the
+# wrong project is a guard that always passes.
+#
+# Measured precedence on compose v5.1.1, highest first:
+#   1. `docker compose -p <name>`
+#   2. COMPOSE_PROJECT_NAME in the shell environment
+#   3. COMPOSE_PROJECT_NAME in dev/.env   (compose's own env file — this is the
+#      documented way to rename a project, and it beats the compose file)
+#   4. the top-level `name:` key in docker-compose.yml  (`kanso-dev`)
+#   5. the basename of this directory
+# A `${COMPOSE_PROJECT_NAME:-kanso-dev}` expansion only ever sees 2 and 4. So a
+# dev/.env carrying COMPOSE_PROJECT_NAME renames the project for every compose
+# call in this script while the guard keeps inspecting `kanso-dev`: it finds no
+# volumes, calls a stack that has a populated webroot and database "pristine",
+# and the mariadb retry below is then free to `down -v` a real dev instance.
+# (Verified: with such a .env, `docker compose config` prints the .env name and
+# the old expansion still printed kanso-dev.)
+#
+# ABORT rather than guess if compose won't tell us. `config` parses exactly what
+# `up` is about to parse, so a failure here is a compose file / env problem the
+# next line would hit anyway — and a `down -v` behind an unverifiable
+# precondition must never run.
+COMPOSE_PROJECT="$(docker compose --profile "$COMPOSE_PROFILE" config 2>/dev/null \
+	| sed -n '/^name:/{s/^name:[[:space:]]*//;p;q;}' | tr -d '"'\'' \r')"
+case "$COMPOSE_PROJECT" in
+	'' | *[!a-z0-9_-]*)
+		echo >&2
+		echo "Could not resolve the compose project name for this stack." >&2
+		echo "  * \`docker compose --profile $COMPOSE_PROFILE config\` must render a" >&2
+		echo "    top-level \`name:\`; run it here to see why it does not." >&2
+		echo "  * An invalid COMPOSE_PROJECT_NAME (uppercase, dots) makes compose" >&2
+		echo "    refuse the whole file — it is rejected, not normalised." >&2
+		echo "  * Nothing further can run: the pristine-volume check below guards a" >&2
+		echo "    \`docker compose down -v\`, and it can only be trusted against the" >&2
+		echo "    project compose itself resolves." >&2
+		exit 1
+		;;
+esac
+
 # Is this a pristine boot — no stack state on disk at all? Answered BEFORE the
 # boot, because it is the guard on the retry further down: with neither volume
 # present there is provably nothing to lose, so wiping and re-initialising is
 # free. Matched by compose's own labels rather than by the "<project>_<volume>"
-# name, and the project is read the same way compose reads it — the `name:` key
-# in docker-compose.yml, which COMPOSE_PROJECT_NAME overrides — so a renamed
-# project does not silently make every boot look pristine.
+# name, against the project resolved above — so a renamed project does not
+# silently make every boot look pristine.
 compose_volume_exists() {
 	[ -n "$(docker volume ls -q \
-		--filter label=com.docker.compose.project="${COMPOSE_PROJECT_NAME:-kanso-dev}" \
+		--filter label=com.docker.compose.project="$COMPOSE_PROJECT" \
 		--filter label=com.docker.compose.volume="$1")" ]
 }
 PRISTINE=yes
