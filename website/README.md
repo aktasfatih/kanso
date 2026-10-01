@@ -8,6 +8,8 @@
 The project's public landing page. **One page**, deliberately:
 `index.html` is hand-written, self-contained static HTML with inline CSS — no
 build step, no framework, no bundler, no CDN, no JavaScript, no analytics.
+(The one `<script>` tag is `application/ld+json` structured data for search
+engines — it is never executed.)
 
 This is *not* a documentation site. `docs/` stays a repo-only tree, so nothing
 here adds a "keep the published docs fresh" obligation to the release bar. The
@@ -17,6 +19,7 @@ page's job is to look credible and route visitors to the
 ```
 website/
 ├── index.html        # the whole site
+├── sitemap.xml       # one-URL sitemap, submitted to Search Console
 ├── screenshots/      # copies of docs/kanso-*.png
 └── README.md         # this file
 ```
@@ -34,6 +37,9 @@ Things to keep true if you edit it:
   instead.
 - **Every claim must be sourced** from `README.md`, `appinfo/info.xml` or the
   live App Store listing. Don't write marketing copy the app can't back up.
+- **The sponsor tiers mirror GitHub Sponsors.** The prices and perks in
+  `#support` are copied from <https://github.com/sponsors/aktasfatih>. When a
+  tier is retired or added there, update the page in the same change.
 - **No competitor names.** Functional references ("import from Deck") are fine;
   comparisons are not.
 - **Don't copy the App Store long description** — link to it, or it goes stale
@@ -70,9 +76,16 @@ has to do this by hand:
    (not "Deploy from a branch").
 3. Merge this directory to `main` — or go to **Actions → Website → Run
    workflow** to deploy without a new commit.
-4. The site appears at **<https://aktasfatih.github.io/kanso/>**. The first
+4. The site appears at **<https://aktasfatih.com/kanso/>**. The first
    deploy can take a couple of minutes.
 
-No custom domain is configured, and none is needed. If one is ever wanted, it
-can be pointed at the same Pages deployment later (Settings → Pages → Custom
-domain, plus a DNS record) without changing anything in this directory.
+The custom domain comes from the account-level `aktasfatih.github.io` Pages
+site, so `aktasfatih.github.io/kanso/` redirects to it; nothing in this
+directory configures it. `index.html` declares that URL as canonical, and
+`appinfo/info.xml` `<website>` (shown on the App Store listing) points at it.
+
+### Search
+
+`sitemap.xml` lists the page. Add `aktasfatih.com` as a property in Google
+Search Console (DNS verification), then submit
+`https://aktasfatih.com/kanso/sitemap.xml`.
