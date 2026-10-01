@@ -10,7 +10,7 @@ import { test, expect, ncLogin, authFor, makeApi, adminAuth, toast, ADMIN, TESTE
 // A backup written into a user's Files folder adds up to two Files-activity
 // entries per board per run (one created, plus one deleted once retention has
 // something to prune) to the stream of whoever owns the folder. Nextcloud's own Files hooks write those; no
-// app API in NC 32-34 suppresses them for an individual write, and measurement
+// app API in NC 32-35 suppresses them for an individual write, and measurement
 // confirmed it: OCP\Activity\IManager::setCurrentUserId() does not reach them at
 // all (the Activity app reads OCA\Activity\CurrentUser, i.e. the user SESSION),
 // and forcing the session user is order-dependent inside a cron process and
@@ -145,6 +145,12 @@ test.describe('Kanso admin backup settings', () => {
 	// README; this cap is what keeps it from creeping back here.
 	const HINT_MAX_CHARS = 360
 	const ALL_HINTS = [
+		// The scope of an archive and the route back out of one (#10477), and what
+		// retention does NOT reclaim (#10674). Both sit beside the control they
+		// qualify rather than in the Stored-backups block at the bottom, and both
+		// answer to the same cap as everything else on this page.
+		'#kanso-backup-enabled-hint',
+		'#kanso-backup-retention-hint',
 		'#kanso-backup-destination-hint-appdata',
 		'#kanso-backup-destination-hint-files',
 		'#kanso-backup-account-hint',
@@ -342,6 +348,14 @@ test.describe('Kanso admin backup settings', () => {
 			'#kanso-backup-retention',
 			'#kanso-backup-notify',
 			'#kanso-backup-stored',
+			// Facts about the archive itself, not about where it is kept: what one
+			// holds and how a board comes back (#10477), and that retention bounds
+			// copies rather than disk (#10674). The second one deliberately names
+			// BOTH stores in one sentence instead of following the picker, because
+			// the field it sits under is on screen in either mode — so making
+			// either of these destination-conditional would hide half the truth.
+			'#kanso-backup-enabled-hint',
+			'#kanso-backup-retention-hint',
 		]
 
 		// App data: every Files-only control is gone — not merely disabled. A
@@ -403,6 +417,126 @@ test.describe('Kanso admin backup settings', () => {
 		// before admin-backup.js has run.
 		const inlineHidden = await page.locator('#kanso-backup-files-config').getAttribute('style')
 		expect(inlineHidden).toContain('none')
+	})
+
+	// ── What enabling it turns on, and the way back out (#10477) ──────────────
+	//
+	// The panel already admitted the archives are system-scoped — but only in the
+	// Stored-backups block at the BOTTOM, which is read after the checkbox rather
+	// than before it. And it said a backup "may be the only way to get a board
+	// back" while never naming the route, even though one exists:
+	// ImportService::importArchive() takes exactly the zip BackupService writes,
+	// through the ordinary board Import. What it does not do is restore in place —
+	// it rebuilds through BoardService::create(..., $actorUid), so the IMPORTER
+	// owns the new board, and the export carries no membership at all, so every
+	// share is gone. An admin who restores a colleague's board therefore ends up
+	// owning it. A restore path that omits that is worse than no restore path,
+	// because the omission is only discovered afterwards.
+	test('the enable checkbox says what an archive holds and how a board comes back', async ({ page }) => {
+		await gotoPanel(page)
+
+		const hint = page.locator('#kanso-backup-enabled-hint')
+		await expect(hint).toBeVisible()
+		const text = (await hint.innerText()).replace(/\s+/g, ' ').toLowerCase()
+
+		// 1. The scope, beside the control it is a consequence of.
+		expect(text).toContain('whole board')
+		expect(text).toContain('private')
+
+		// And genuinely ABOVE the rest of the panel rather than merely somewhere on
+		// it: "read before enabling" is the entire point of moving it, so the
+		// position is the assertion, not the presence.
+		const hintBox = await hint.boundingBox()
+		const pickerBox = await page.locator('#kanso-backup-destination').boundingBox()
+		expect(hintBox.y, 'the scope must be readable before the rest of the panel')
+			.toBeLessThan(pickerBox.y)
+
+		// 2. The restore route is NAMED. "The only way to get one back is the list
+		// at the bottom of this page" told an admin where the file is, never what
+		// to do with it.
+		expect(text).toContain('download')
+		expect(text).toContain('import')
+
+		// 3. ...and what that route costs, which is the half that is otherwise
+		// discovered only after the restore: a NEW board, owned by the importer,
+		// with no shares on it.
+		expect(text).toContain('new board')
+		expect(text).toMatch(/owned by/)
+		expect(text).toMatch(/share it again|share them again|re-?share/)
+
+		// Both facts are about the archive, not about where it is kept, so neither
+		// may quietly become destination-conditional copy.
+		for (const mode of ['appdata', 'files']) {
+			await page.selectOption('#kanso-backup-destination', mode)
+			await expect(hint, `the scope and the restore route must survive ${mode}`).toBeVisible()
+			const shown = (await hint.innerText()).toLowerCase()
+			expect(shown, `the restore route must still be named under ${mode}`).toContain('import')
+		}
+	})
+
+	// ── What retention does not reclaim (#10674) ──────────────────────────────
+	//
+	// Measured on a live instance rather than reasoned about: two runs at retention
+	// 1 against a Files folder left all five pruned zips in the backup account's
+	// trashbin as real bytes on disk (`oc_files_trash` grew by exactly five), while
+	// the same two runs against app data freed them immediately. prune() has ONE
+	// code path for both (BackupService::prune()); the difference is underneath it
+	// — FilesBackupTarget::delete() ends in $node->delete(), an ordinary
+	// Files-layer delete that trashes, and AppDataBackupTarget::delete() goes
+	// through ISimpleFile::delete(), which does not.
+	//
+	// Nextcloud exposes no supported way to delete without trashing — OCP ships no
+	// files-trashbin API at all — so the setting genuinely means two things, and
+	// the honest move is to say so rather than to reach into another app's
+	// internals to hard-delete a backup behind its owner's back. It is said beside
+	// the number because the number is what an admin sets to bound disk.
+	test('the retention field says it bounds copies rather than disk, and that the stores differ', async ({ page }) => {
+		await gotoPanel(page)
+
+		const hint = page.locator('#kanso-backup-retention-hint')
+		await expect(hint).toBeVisible()
+		const text = (await hint.innerText()).replace(/\s+/g, ' ').toLowerCase()
+
+		// 1. What the number bounds — and, the part that was silence before, what
+		// it does not.
+		expect(text).toContain('how many copies')
+		expect(text).toMatch(/not how much disk|not how much space|does not free/)
+
+		// 2. Both stores named, with the trashbin on the Files side: that word is
+		// the whole of the difference, and quota is why it matters.
+		expect(text).toContain('trashbin')
+		expect(text).toContain('quota')
+		expect(text).toMatch(/files folder/)
+		expect(text).toMatch(/inside kanso|app data/)
+		expect(text).toMatch(/freed|at once|immediately|straight away/)
+
+		// 3. And the lever — the part that has to be TRUE, not merely present.
+		// Pointing the folder at a separate account changes whose quota the pruned
+		// copies keep spending; it does not stop them accumulating, so an admin who
+		// followed it for "bounded storage" would still fill a disk. The hint has to
+		// name the account for what it is (quota isolation) and offer, for storage,
+		// one of the two things that actually reclaim the bytes: emptying that
+		// trashbin, or the app-data store, which hard-deletes on prune.
+		expect(text).toMatch(/separate account only (?:changes|isolates|shifts) whose quota/)
+		expect(text).toMatch(/empt(?:y|ies|ying) that trashbin/)
+		expect(text).toMatch(/inside kanso|app data/)
+		// …and never the other way round: the account is not sold as a disk bound.
+		expect(text).not.toMatch(/separate account[^.;]*\b(?:bound|bounded|capped|limits?)\b/)
+
+		// It sits UNDER the field it qualifies, and it stays there in both modes:
+		// unlike the destination hints this one names both stores in a single
+		// sentence, because the control it explains is shared.
+		const hintBox = await hint.boundingBox()
+		const fieldBox = await page.locator('#kanso-backup-retention').boundingBox()
+		expect(hintBox.y, 'the caveat belongs under the field it qualifies')
+			.toBeGreaterThan(fieldBox.y)
+		for (const mode of ['appdata', 'files']) {
+			await page.selectOption('#kanso-backup-destination', mode)
+			await expect(hint, `the retention caveat must stay put under ${mode}`).toBeVisible()
+			const shown = (await hint.innerText()).toLowerCase()
+			expect(shown, `both stores must be named under ${mode}`).toContain('trashbin')
+			expect(shown, `both stores must be named under ${mode}`).toMatch(/inside kanso|app data/)
+		}
 	})
 
 	test('the hints stay short enough to read', async ({ page }) => {

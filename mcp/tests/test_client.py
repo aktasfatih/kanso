@@ -836,6 +836,9 @@ async def test_search_forwards_the_query_and_parses_hits():
     assert req.url.params.get("offset") == "0"
     # No board scope requested => the filter is not sent at all.
     assert "boardId" not in req.url.params
+    # Nor is the archived widener (#10762), so the default request is
+    # byte-identical to what shipped before the flag existed.
+    assert "includeArchived" not in req.url.params
     assert found.query == "invoice"
     assert found.total == 2
     assert [h.cardId for h in found.results] == [100, 101]
@@ -859,6 +862,23 @@ async def test_search_sends_board_id_as_the_boardId_param():
     async with _client() as c:
         await c.search("invoice", board_id=7)
     assert route.calls.last.request.url.params.get("boardId") == "7"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_sends_include_archived_as_the_literal_true_the_controller_casts():
+    # SearchController::index types it `bool $includeArchived`, and the app
+    # framework casts the STRING off the query line — 'true'/'1' are true,
+    # 'false'/'0' are false. Sending a Python bool would serialise as 'True',
+    # which is neither, so the literal matters (#10762).
+    route = respx.get(f"{BASE}/search").mock(
+        return_value=httpx.Response(
+            200, json={"query": "invoice", "total": 0, "results": []}
+        )
+    )
+    async with _client() as c:
+        await c.search("invoice", include_archived=True)
+    assert route.calls.last.request.url.params.get("includeArchived") == "true"
 
 
 @respx.mock

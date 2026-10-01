@@ -37,6 +37,19 @@ class GithubWebhookService extends AbstractForgeWebhookService {
 		return CardLink::PROVIDER_GITHUB;
 	}
 
+	/**
+	 * GitHub spells an issue label change `labeled` / `unlabeled`, and the
+	 * delivery's `issue.labels` already reflects the change - so `labeled` carries
+	 * everything a re-run of the label filter needs (#10566). `unlabeled` is
+	 * excluded: removing a label cannot bring an issue INTO the filter.
+	 *
+	 * @return string[]
+	 */
+	#[\Override]
+	protected function intakeRetriggerActions(): array {
+		return ['labeled'];
+	}
+
 	// ---- config columns ----------------------------------------------------
 
 	#[\Override]

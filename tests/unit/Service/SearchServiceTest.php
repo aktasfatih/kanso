@@ -246,6 +246,63 @@ class SearchServiceTest extends TestCase {
 		self::assertSame(0, $result['total']);
 	}
 
+	/**
+	 * #10762: an archived CARD is shelved exactly as an archived BOARD is
+	 * (#10126 above), so it is out of search unless the caller opts in. Both
+	 * sources are asked the same question - a comment hit is a card hit by
+	 * another route, so letting comments through would walk shelved work back in
+	 * via its discussion.
+	 *
+	 * The mocks answer the `$includeArchived` argument the way the real SQL does,
+	 * so these two tests assert on what comes BACK rather than on an argument
+	 * going in: drop the pass-through in SearchService and the shelved card is
+	 * still absent with the flag ON, which reddens the opt-in test.
+	 */
+	public function testArchivedCardsAreOutOfSearchByDefault(): void {
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
+		$this->stubArchiveAwareSources();
+
+		$result = $this->service->search('widget', 'alice', null, 25, 0);
+
+		// The live card and the comment on it - and nothing off the archive.
+		self::assertSame([20, 30], array_column($result['results'], 'cardId'));
+		self::assertSame(2, $result['total']);
+	}
+
+	public function testIncludeArchivedWidensSearchBackOverTheArchive(): void {
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
+		$this->stubArchiveAwareSources();
+
+		$result = $this->service->search('widget', 'alice', null, 25, 0, true);
+
+		// Both cards (title matches, rank 3, source order kept) then both
+		// comments - the archive is reachable again, not replacing the live hits.
+		self::assertSame([21, 20, 31, 30], array_column($result['results'], 'cardId'));
+		self::assertSame(4, $result['total']);
+	}
+
+	/**
+	 * Both mappers stubbed to honour their `$includeArchived` argument the way
+	 * the SQL predicate does: card 21 and the comment on card 31 are archived,
+	 * card 20 and the comment on card 30 are live.
+	 */
+	private function stubArchiveAwareSources(): void {
+		$live = $this->card(20, 1, 'Widget master');
+		$shelved = $this->card(21, 1, 'Widget master, shipped last quarter');
+		$shelved->setArchived(true);
+		$liveComment = ['id' => 5, 'cardId' => 30, 'boardId' => 1, 'stackId' => 3, 'cardTitle' => 'Live card', 'body' => 'a widget mention'];
+		$shelvedComment = ['id' => 6, 'cardId' => 31, 'boardId' => 1, 'stackId' => 3, 'cardTitle' => 'Shelved card', 'body' => 'an older widget mention'];
+
+		$this->cardMapper->method('searchInBoards')->willReturnCallback(
+			static fn (array $boardIds, string $pattern, int $limit, string $uid, array $roles, bool $includeArchived = false): array
+				=> $includeArchived ? [$shelved, $live] : [$live],
+		);
+		$this->commentMapper->method('searchInBoards')->willReturnCallback(
+			static fn (array $boardIds, string $pattern, int $limit, string $uid, array $roles, bool $includeArchived = false): array
+				=> $includeArchived ? [$shelvedComment, $liveComment] : [$liveComment],
+		);
+	}
+
 	public function testBoardScopeRejectsUnreadableBoard(): void {
 		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
 		// Requesting board 99 (not readable) must yield no results and never query.

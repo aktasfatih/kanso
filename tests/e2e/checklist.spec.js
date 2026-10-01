@@ -328,6 +328,20 @@ test.describe('Checklist steps', () => {
 		await page.reload()
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 		await expect(stepsTile.locator('.card-tile__checklist--overdue')).toBeVisible({ timeout: 15_000 })
+		// The COMPUTED accessible name, not the aria-label attribute: the badge used
+		// to be a bare span, whose generic role may not take an author-provided name
+		// at all, so an attribute assertion could pass over a badge that announced
+		// nothing but "0/2". The name must carry BOTH the counts and the qualifier —
+		// a label that replaced the visible numbers instead of adding to them would
+		// have lost the progress it is a badge for.
+		await expect(stepsTile.locator('.card-tile__checklist'))
+			.toHaveAccessibleName(/^Checklist progress \d+ of \d+, 1 overdue step$/, { timeout: 15_000 })
+		// Resolved BY ROLE as well: the badge has to be a named graphic for that
+		// name to be one ARIA allows it to carry at all (a bare span gets the
+		// generic role, which prohibits an author-provided name), and Playwright's
+		// own name computation does not apply that prohibition.
+		await expect(stepsTile.getByRole('img', { name: /^Checklist progress \d+ of \d+, 1 overdue step$/ }))
+			.toHaveCount(1, { timeout: 15_000 })
 
 		// …and the hover preview agrees with the tile it floats over (#10708). It is
 		// a SECOND consumer of the same summary field and used to draw a neutral,
@@ -339,6 +353,13 @@ test.describe('Checklist steps', () => {
 		const preview = page.locator('.card-preview')
 		await expect(preview).toBeVisible({ timeout: 15_000 })
 		await expect(preview.locator('.card-preview__checklist--overdue')).toBeVisible({ timeout: 15_000 })
+		// Its own computed name, asserted separately from the tile's: this badge has
+		// no enclosing button to fall back on — the panel names itself from its own
+		// aria-label — so a name dropped here is silence, not a degraded reading.
+		await expect(preview.locator('.card-preview__checklist'))
+			.toHaveAccessibleName(/^Checklist progress \d+ of \d+, 1 overdue step$/, { timeout: 15_000 })
+		await expect(preview.getByRole('img', { name: /^Checklist progress \d+ of \d+, 1 overdue step$/ }))
+			.toHaveCount(1, { timeout: 15_000 })
 		await page.keyboard.press('Escape')
 		await expect(preview).not.toBeVisible({ timeout: 15_000 })
 
@@ -360,6 +381,9 @@ test.describe('Checklist steps', () => {
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 		await expect(stepsTile.locator('.card-tile__checklist')).toBeVisible({ timeout: 15_000 })
 		await expect(stepsTile.locator('.card-tile__checklist--overdue')).toHaveCount(0, { timeout: 15_000 })
+		// …and the name drops the qualifier with the tint, while keeping the counts.
+		await expect(stepsTile.locator('.card-tile__checklist'))
+			.toHaveAccessibleName(/^Checklist progress \d+ of \d+$/, { timeout: 15_000 })
 
 		// The preview drops it with the tile - still the same one state, not two.
 		await stepsTile.hover()
@@ -368,6 +392,8 @@ test.describe('Checklist steps', () => {
 		await expect(preview).toBeVisible({ timeout: 15_000 })
 		await expect(preview.locator('.card-preview__checklist')).toBeVisible({ timeout: 15_000 })
 		await expect(preview.locator('.card-preview__checklist--overdue')).toHaveCount(0, { timeout: 15_000 })
+		await expect(preview.locator('.card-preview__checklist'))
+			.toHaveAccessibleName(/^Checklist progress \d+ of \d+$/, { timeout: 15_000 })
 		await page.keyboard.press('Escape')
 		await expect(preview).not.toBeVisible({ timeout: 15_000 })
 
@@ -611,5 +637,188 @@ test.describe('Checklist steps', () => {
 		if (placeholderCalls.length > 0) {
 			throw new Error(`request(s) sent against the optimistic placeholder id: ${placeholderCalls.join(', ')}`)
 		}
+	})
+})
+
+// List view is the third per-card consumer of the summary's overdue-step count
+// (#10733), and the one the previous two patches could not be copied onto: the
+// row renders ONE merged counter — checklist progress, falling back to sub-card
+// progress — so it had no source label and no tint at all.
+//
+// A SEPARATE describe on purpose. The tile (#10696) and hover-preview (#10708)
+// assertions both live inside the single "assign a step…" test above, and an
+// assertion appended there would ride along on that test's fixture and prove
+// nothing about the row. Everything here is seeded over the API before the page
+// is ever opened, so the tint can only come from the server's board summary —
+// there is no optimistic cache patch in the picture at all.
+test.describe('Checklist steps - list view counter (#10733)', () => {
+	const stamp = Math.floor(Date.now() / 1000)
+	const state = { boardId: 0, boardUrl: '', lateId: 0, onTrackId: 0, doneId: 0, noChecklistBoardId: 0, noChecklistUrl: '', hiddenId: 0 }
+
+	// A step due in the far past is overdue for good; one due in 2099 never is.
+	const PAST = '2020-01-01T09:00:00+00:00'
+	const FUTURE = '2099-01-01T09:00:00+00:00'
+
+	// Board rows render in whichever view mode the user last chose - BoardView
+	// persists it in localStorage under this key. Seeding it opens the board
+	// straight in List view, which keeps the test off the display-mode popover
+	// (and survives the reload) without any test-only hook in the app.
+	async function openList(page, boardId, url) {
+		await page.addInitScript(([key]) => {
+			try { localStorage.setItem(key, 'list') } catch (e) { /* private mode */ }
+		}, [`kanso.viewMode.${boardId}`])
+		await ncLogin(page)
+		await page.goto(url)
+		await page.waitForSelector('.board-list-row', { timeout: 15_000 })
+	}
+
+	// The row's single progress counter. The fixture cards carry no comments, so
+	// the shared `__count` class resolves to exactly one element - asserted, so a
+	// second badge appearing here can never silently absorb the assertions below.
+	// The count also assumes every fixture row is inside the virtual window: at
+	// three or four rows against an overscan of 10 that holds, but a describe
+	// grown past that would need the row scrolled into view first.
+	async function counterOf(page, rowText) {
+		const counter = page.locator('.board-list-row', { hasText: rowText }).locator('.board-list-row__count')
+		await expect(counter).toHaveCount(1, { timeout: 15_000 })
+		return counter
+	}
+
+	test.beforeAll(async () => {
+		const board = await api.post('/boards', { title: 'Checklist List Overdue ' + stamp })
+		state.boardId = board.id
+		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To do' })
+
+		// 1. Two open steps, one of them past due → checklist counter 0/2, tinted.
+		const late = await api.post('/cards', { stackId: stack.id, title: 'Late step row' })
+		state.lateId = late.id
+		const lateStep = await api.post(`/cards/${late.id}/checklist`, { title: 'Send contract' })
+		await api.put(`/checklist/${lateStep.id}/due`, { due: PAST })
+		await api.post(`/cards/${late.id}/checklist`, { title: 'Countersign' })
+
+		// 2. The control: a checklist whose only step is due years from now.
+		const onTrack = await api.post('/cards', { stackId: stack.id, title: 'On track step row' })
+		state.onTrackId = onTrack.id
+		const soon = await api.post(`/cards/${onTrack.id}/checklist`, { title: 'Renew licence' })
+		await api.put(`/checklist/${soon.id}/due`, { due: FUTURE })
+
+		// 3. The same late step on a card that is DONE. The server counts open
+		//    past-due steps regardless of the card's own state, so the summary
+		//    still reports overdue ≥ 1 here (asserted below) - suppressing the
+		//    tint is the client's job, exactly as on the tile. The title shares no
+		//    substring with the row above it: Playwright's `hasText` is a
+		//    case-insensitive SUBSTRING match, so "Done late step row" would have
+		//    made every `Late step row` locator resolve to two rows.
+		const doneCard = await api.post('/cards', { stackId: stack.id, title: 'Finished card row' })
+		state.doneId = doneCard.id
+		const doneStep = await api.post(`/cards/${doneCard.id}/checklist`, { title: 'File receipt' })
+		await api.put(`/checklist/${doneStep.id}/due`, { due: PAST })
+		await api.patch(`/cards/${doneCard.id}`, { done: true })
+
+		// A SECOND board with the checklist section switched off (#5894). There the
+		// merged counter falls through to sub-card progress while the summary still
+		// carries the overdue count - the only shape in which the row can be asked
+		// to tint something that is not checklist progress.
+		const other = await api.post('/boards', { title: 'Checklist List Hidden ' + stamp })
+		state.noChecklistBoardId = other.id
+		state.noChecklistUrl = `${BASE}/index.php/apps/kanso#/board/${other.id}`
+		await api.patch(`/boards/${other.id}`, { cardFeatures: { checklist: false } })
+		const otherStack = await api.post('/stacks', { boardId: other.id, title: 'To do' })
+		const hidden = await api.post('/cards', { stackId: otherStack.id, title: 'Steps hidden row' })
+		state.hiddenId = hidden.id
+		const hiddenStep = await api.post(`/cards/${hidden.id}/checklist`, { title: 'Send contract' })
+		await api.put(`/checklist/${hiddenStep.id}/due`, { due: PAST })
+		// Two sub-cards, one done → child progress reads 1/2, a different number
+		// from the hidden checklist's 0/1, so the counter's SOURCE is legible from
+		// its text alone.
+		for (const title of ['Hidden sub one', 'Hidden sub two']) {
+			const child = await api.post('/cards', { stackId: otherStack.id, title })
+			await api.put(`/cards/${child.id}/parent`, { parentCardId: hidden.id })
+		}
+		const children = (await api.get(`/boards/${other.id}`)).cards.filter((c) => c.parentCardId === hidden.id)
+		await api.patch(`/cards/${children[0].id}`, { done: true })
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
+		if (state.noChecklistBoardId) await api.delete(`/boards/${state.noChecklistBoardId}`).catch(() => {})
+	})
+
+	test('the list row tints its checklist counter for an overdue step and names the count', async ({ page }) => {
+		// Preconditions straight from the server summary the row reads: without
+		// overdue ≥ 1 on the late AND the done card, the assertions below could
+		// pass on a row that simply has nothing to tint.
+		const summary = (await api.get(`/boards/${state.boardId}`)).cards
+		const byId = (id) => summary.find((c) => c.id === id)
+		expect(byId(state.lateId).checklist).toEqual({ total: 2, done: 0, overdue: 1 })
+		expect(byId(state.onTrackId).checklist).toEqual({ total: 1, done: 0, overdue: 0 })
+		expect(byId(state.doneId).checklist).toEqual({ total: 1, done: 0, overdue: 1 })
+		expect(Number(byId(state.doneId).doneAt)).toBeGreaterThan(0)
+
+		await openList(page, state.boardId, state.boardUrl)
+
+		// The late row tints, and says why: the tint alone would be a colour-only
+		// cue, so the count travels in the accessible name the tile already uses.
+		//
+		// The COMPUTED name, not the aria-label attribute. The counter sits inside
+		// the row BUTTON, and the two are not the same assertion: on a bare span the
+		// generic role forbids an author-provided name outright, and where the label
+		// IS honoured the button uses it in place of the visible 0/2 when it names
+		// itself from its content — so an attribute assertion passed while the name
+		// a screen reader actually announced was either "0/2" with no qualifier or a
+		// qualifier with no counts. The name has to carry both.
+		const lateCounter = await counterOf(page, 'Late step row')
+		await expect(lateCounter).toHaveText(/0\/2/)
+		await expect(lateCounter).toHaveClass(/board-list-row__count--overdue/)
+		await expect(lateCounter).toHaveAccessibleName('Checklist progress 0 of 2, 1 overdue step')
+		await expect(lateCounter).toHaveAttribute('title', /1 overdue step/)
+		// The badge is exposed as ONE NAMED GRAPHIC, which is what makes that name
+		// legal to begin with: ARIA prohibits an author-provided name on the generic
+		// role a bare span gets, and a name the author was not allowed to give is a
+		// name a browser is free to drop. Resolved BY ROLE, because the name
+		// assertion above cannot see this - Playwright's own name computation does
+		// not apply the prohibition, so it reports a name that a screen reader may
+		// never announce.
+		const lateRow = page.locator('.board-list-row', { hasText: 'Late step row' })
+		await expect(lateRow.getByRole('img', { name: 'Checklist progress 0 of 2, 1 overdue step' }))
+			.toHaveCount(1)
+		// And the row button announces it as part of its own name, so the count is
+		// not stranded on a node nobody reaches.
+		await expect(lateRow).toHaveAccessibleName(/Checklist progress 0 of 2, 1 overdue step/)
+
+		// The on-track row keeps the neutral counter - the tint is conditional on
+		// the overdue count, not on there being a checklist.
+		const onTrackCounter = await counterOf(page, 'On track step row')
+		await expect(onTrackCounter).toHaveText(/0\/1/)
+		await expect(onTrackCounter).not.toHaveClass(/board-list-row__count--overdue/)
+		await expect(onTrackCounter).toHaveAccessibleName('Checklist progress 0 of 1')
+
+		// A DONE card does not nag, even though its step is still open and past due
+		// (asserted above) - same suppression the tile and the preview apply.
+		const doneCounter = await counterOf(page, 'Finished card row')
+		await expect(doneCounter).toHaveText(/0\/1/)
+		await expect(doneCounter).not.toHaveClass(/board-list-row__count--overdue/)
+		await expect(doneCounter).toHaveAccessibleName('Checklist progress 0 of 1')
+	})
+
+	test('a sub-card counter is never tinted by an overdue checklist step', async ({ page }) => {
+		// The row is showing SUB-CARD progress while the card underneath still has
+		// an overdue step - so a tint here would be labelling the wrong feature.
+		const summary = (await api.get(`/boards/${state.noChecklistBoardId}`)).cards
+		const hidden = summary.find((c) => c.id === state.hiddenId)
+		expect(hidden.checklist).toEqual({ total: 1, done: 0, overdue: 1 })
+		expect(hidden.childProgress).toEqual({ total: 2, done: 1 })
+
+		await openList(page, state.noChecklistBoardId, state.noChecklistUrl)
+
+		const counter = await counterOf(page, 'Steps hidden row')
+		// 1/2 is the sub-card count; the hidden checklist reads 0/1, so the text
+		// alone proves which source the counter came from.
+		await expect(counter).toHaveText(/1\/2/)
+		await expect(counter).not.toHaveClass(/board-list-row__count--overdue/)
+		await expect(counter).toHaveAccessibleName('Sub-card progress 1 of 2')
+		await expect(page.locator('.board-list-row', { hasText: 'Steps hidden row' })
+			.getByRole('img', { name: 'Sub-card progress 1 of 2' })).toHaveCount(1)
 	})
 })

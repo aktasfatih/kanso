@@ -952,9 +952,50 @@ const { data: boardData, isLoading, isError, error: boardError, refetch: boardRe
 
 // Put the board's name in the browser tab (#125), so a bookmarked or pinned
 // board reads as "Personal - Kanso - Nextcloud" instead of the bare app name.
-// Empty until the query resolves (and forever if it 403s), which the composable
-// treats as "no title of my own" rather than writing `undefined`.
-usePageTitle(() => boardData.value?.board?.title ?? '')
+// Empty until SOMETHING knows this board's name (and forever if it 403s), which
+// the composable treats as "no title of my own" rather than writing `undefined`.
+//
+// The boards-LIST cache is the second source, and it is what keeps a board→board
+// switch from flashing the bare app name (#10445). BoardView is REUSED across
+// board switches with a reactive query key (see useBoard.js), so the switch lands
+// on a cold `['board', id]` entry and `boardData` is undefined for one round trip
+// — long enough for the tab to blink back to `Kanso - Nextcloud`. But `['boards']`
+// is already warm on any in-app switch: App.vue mounts it for the whole app to
+// render the board nav. So the INCOMING board's own name is there for the asking
+// — neither a flash nor the previous board's stale name.
+//
+// Read out of the cache here rather than giving `useBoard` `placeholderData`: that
+// would change what every other consumer of the board query sees mid-switch (they
+// would render another board's stacks for a frame) to fix one component's title.
+//
+// `getQueryData` is not reactive, but it does not need to be — the getter re-runs
+// whenever `boardData` or `boardId` changes, which is exactly the switch and the
+// resolve. And a deep link / hard reload straight onto a board has no warm
+// `['boards']` either, so there the tab keeps Nextcloud's server-rendered title
+// until the board query answers: unchanged behaviour, and the honest thing to
+// show while nothing client-side knows the board's name yet.
+//
+// The cache fallback is for a board that is still LOADING. Once the server has
+// answered 403/404 the cached row is stale by definition — the board is gone, or
+// this user's access to it is — and the tab would go on flying its name over a
+// view that says access was lost. Read through apiAnswerStatus for the same
+// reason the error copy below does: a 404 Kanso never sent is a server failing to
+// answer, and that board is still loading. (Not a disclosure — the name was
+// already on this user's screen, and the nav sidebar still lists the same stale
+// row; this is the tab agreeing with the view.) Guarded here rather than by
+// evicting the board from `['boards']` in useBoard's access latch: that cache is
+// shared with the nav, and dropping a row from it to fix one component's title is
+// the wider change, with its own product question about the sidebar.
+usePageTitle(() => {
+	const loaded = boardData.value?.board?.title
+	if (loaded) return loaded
+	const status = apiAnswerStatus(boardError.value)
+	if (status === 403 || status === 404) return ''
+	const boards = queryClient.getQueryData(['boards'])
+	if (!Array.isArray(boards)) return ''
+	const listed = boards.find((b) => Number(b.id) === Number(boardId.value))
+	return listed?.title ?? ''
+})
 
 // Status-aware board error copy (#3662). A dead deep-link/notification to a
 // deleted board 404s; a revoked share 403s. Both should read as an explanatory
@@ -2499,7 +2540,9 @@ function warnOnSkipped(summary) {
  *
  * On a partial failure it still RETURNS the cards that landed rather than
  * throwing them away: the undo is the whole reason this action ships without a
- * confirm dialog, and the Archived page only restores one card at a time.
+ * confirm dialog. (The Archived page can restore a whole selection since #10440,
+ * but that is a trip through another view — the undo is still the cheap way
+ * back.)
  *
  * DESIGN DECISION (#10438) — scoped to what the actor can see, on purpose, and
  * the hidden remainder is NOT reported. `cardsForStack` derives from

@@ -284,8 +284,16 @@ export default {
 		// The open card's description rendered as sanitized markdown HTML. No refs
 		// map is passed: the public payload carries no card cross-reference data, so
 		// PREFIX-123 references render as plain text (never a broken link).
+		//
+		// `publicToken` is what re-points an embedded card-attachment image at this
+		// share's own token-gated route (#152) — a visitor has no session, so the
+		// authenticated path the image is stored as would 401. The renderer does it
+		// on the parsed image src alone, which is why a fence quoting that URL now
+		// shows what the author typed instead of the share token (#10608).
 		renderedDescription() {
-			return this.selectedCard ? renderMarkdown(this.selectedCard.description) : ''
+			return this.selectedCard
+				? renderMarkdown(this.selectedCard.description, { publicToken: this.token })
+				: ''
 		},
 		// Whether the open card has any presentational meta worth a meta row.
 		hasMeta() {
@@ -395,9 +403,11 @@ export default {
 			return (first + last).toUpperCase()
 		},
 		// Comment body rendered as sanitized markdown (same pipeline as the
-		// description; no refs map, so PREFIX-123 stays plain text).
+		// description; no refs map, so PREFIX-123 stays plain text). Same share
+		// token, for the same reason: `.public-comment__body img` is a real rendered
+		// surface, so a comment picture needs the token-gated route too.
 		renderComment(body) {
-			return renderMarkdown(body || '')
+			return renderMarkdown(body || '', { publicToken: this.token })
 		},
 	},
 }

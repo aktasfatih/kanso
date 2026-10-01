@@ -13,7 +13,6 @@ use OCA\Kanso\Controller\CardController;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
-use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardAttachmentMapper;
 use OCA\Kanso\Db\CardContactMapper;
 use OCA\Kanso\Db\CardFieldValueMapper;
@@ -51,7 +50,6 @@ class CardControllerTest extends TestCase {
 	private AssigneeService&MockObject $assigneeService;
 	private ContactService&MockObject $contactService;
 	private CardLabelMapper&MockObject $cardLabelMapper;
-	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private CardContactMapper&MockObject $cardContactMapper;
 	private ReviewService&MockObject $reviewService;
 	private ReminderService&MockObject $reminderService;
@@ -79,7 +77,6 @@ class CardControllerTest extends TestCase {
 		$this->assigneeService = $this->createMock(AssigneeService::class);
 		$this->contactService = $this->createMock(ContactService::class);
 		$this->cardLabelMapper = $this->createMock(CardLabelMapper::class);
-		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 		$this->cardContactMapper = $this->createMock(CardContactMapper::class);
 		$this->cardContactMapper->method('findContactsByCard')->willReturn([]);
 		$this->reviewService = $this->createMock(ReviewService::class);
@@ -145,7 +142,6 @@ class CardControllerTest extends TestCase {
 			$this->assigneeService,
 			$this->contactService,
 			$this->cardLabelMapper,
-			$this->cardAssigneeMapper,
 			$this->cardContactMapper,
 			$this->reviewService,
 			$this->reminderService,
@@ -207,7 +203,12 @@ class CardControllerTest extends TestCase {
 		$card->setDescription('Full detail');
 		$this->cardService->method('find')->with(9, 'alice')->willReturn($card);
 		$this->cardLabelMapper->method('findLabelIdsByCard')->with(9)->willReturn([3, 7]);
-		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn(['bob', 'carol']);
+		// The detail payload names the card's own assignees server-side (#10736);
+		// `assigneeIds` is derived from the same rows, so both come from this one stub.
+		$this->assigneeService->method('listForCard')->with(9, 'alice')->willReturn([
+			['uid' => 'bob', 'displayName' => 'Bob B.'],
+			['uid' => 'carol', 'displayName' => 'Carol C.'],
+		]);
 
 		$response = $this->controller->show(9);
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
@@ -217,6 +218,13 @@ class CardControllerTest extends TestCase {
 		self::assertSame('Full detail', $data['description']);
 		self::assertSame([3, 7], $data['labelIds']);
 		self::assertSame(['bob', 'carol'], $data['assigneeIds']);
+		// …and the display names that go with them (#10736), so the pill can name a
+		// past-cap assignee from the card's own payload instead of falling back to
+		// the bare uid the capped participants list leaves it with.
+		self::assertSame([
+			['uid' => 'bob', 'displayName' => 'Bob B.'],
+			['uid' => 'carol', 'displayName' => 'Carol C.'],
+		], $data['assignees']);
 	}
 
 	public function testShowReturnsTheViewersOwnProjectIds(): void {

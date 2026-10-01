@@ -617,8 +617,15 @@ export const unsubscribeBoard = (boardId) =>
 	axios.delete(url(`/api/boards/${boardId}/subscription`)).then((r) => r.data)
 
 // Search
-export const search = ({ q, boardId, limit = 25, offset = 0 }) =>
-	axios.get(url('/api/search'), { params: { q, boardId, limit, offset } }).then((r) => r.data)
+// `includeArchived` is sent as the literal 'true'/'false' the PHP dispatcher
+// casts back to a bool, and only ever WIDENS the result set: archived cards are
+// out of search by default (#10762), the same way archived boards are.
+export const search = ({ q, boardId, limit = 25, offset = 0, includeArchived = false }) =>
+	axios
+		.get(url('/api/search'), {
+			params: { q, boardId, limit, offset, includeArchived: includeArchived ? 'true' : 'false' },
+		})
+		.then((r) => r.data)
 
 // Reviews
 export const getMyReviews = () =>

@@ -198,6 +198,36 @@ test.describe('Forgejo webhook issue intake', () => {
 			issue: { html_url: `${FORGE}/issues/${n}`, state: 'open', title, labels },
 		})
 
+	// A Forgejo/Gitea `issues` LABEL delivery (#10566), shaped from one captured off
+	// a live Gitea 1.22 instance - NOT from GitHub. The differences are the point:
+	// the action is `label_updated` (for an add AND for a removal), there is no
+	// top-level `label` object at all, and `issue.labels` carries the issue's full
+	// post-change set with Forgejo's own `exclusive`/`is_archived` fields.
+	const labelUpdatedBody = (n, labelNames, action = 'label_updated', state = 'open') =>
+		JSON.stringify({
+			action,
+			number: n,
+			commit_id: '',
+			issue: {
+				id: n,
+				number: n,
+				html_url: `${FORGE}/issues/${n}`,
+				state,
+				title: 'Labelled during triage',
+				body: '',
+				labels: labelNames.map((name, i) => ({
+					id: i + 1,
+					name,
+					exclusive: false,
+					is_archived: false,
+					color: 'ee0701',
+					description: '',
+				})),
+			},
+			repository: { id: 1, full_name: 'octo/app' },
+			sender: { login: 'octo', id: 1 },
+		})
+
 	const cardsIn = async (stackId) => {
 		const cards = (await api('GET', `/boards/${boardId}`)).body.cards ?? []
 		return cards.filter((c) => c.stackId === stackId)
@@ -266,6 +296,104 @@ test.describe('Forgejo webhook issue intake', () => {
 		res = await postWebhook(boardId, raw, sign(raw, secret))
 		expect(res.body.created).toBe(true)
 		expect((await cardsIn(inboxStackId)).length).toBe(before + 1)
+	})
+
+	// #10566 on the forge whose spelling differs. A retrigger keyed on GitHub's
+	// `labeled` could never fire here, so this is the half that has to be proven
+	// against the real endpoint rather than assumed from the shared base.
+	test('an issue label_updated after it was opened is taken in, exactly once', async () => {
+		await api('PUT', `/boards/${boardId}/forgejo/intake`, { stackId: inboxStackId, label: 'bug' })
+
+		const n = ++issueSeq
+		const before = (await cardsIn(inboxStackId)).length
+
+		// Opened bare: filtered out, as before.
+		const openedRaw = openedBody(n, { title: 'Labelled during triage' })
+		let res = await postWebhook(boardId, openedRaw, sign(openedRaw, secret))
+		expect(res.body.reason).toBe('intake_filtered')
+		expect((await cardsIn(inboxStackId)).length).toBe(before)
+
+		// Labelled later, in Forgejo's own spelling: taken in.
+		const labelRaw = labelUpdatedBody(n, ['bug', 'enhancement'])
+		res = await postWebhook(boardId, labelRaw, sign(labelRaw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.created).toBe(true)
+		expect(res.body.action).toBe('label_updated')
+
+		const cards = await cardsIn(inboxStackId)
+		expect(cards.length).toBe(before + 1)
+		const links = (await api('GET', `/cards/${res.body.cardId}/links`)).body
+		expect(links).toHaveLength(1)
+		expect(links[0].provider).toBe('forgejo')
+
+		// Redelivered: no second card. (The issue is linked now, so this takes the
+		// ordinary linked-issue path - `label_updated` maps to no move, hence
+		// unknown_action - which is itself the guarantee that matters here.)
+		res = await postWebhook(boardId, labelRaw, sign(labelRaw, secret))
+		expect(res.status).toBe(200)
+		expect((await cardsIn(inboxStackId)).length).toBe(before + 1)
+	})
+
+	// The dead-code direction: GitHub's action spelling must do nothing here, or a
+	// shared hardcoded `labeled` would look green while the Forgejo half never ran.
+	test("GitHub's labeled spelling never takes an issue in on Forgejo", async () => {
+		await api('PUT', `/boards/${boardId}/forgejo/intake`, { stackId: inboxStackId, label: 'bug' })
+		const before = (await cardsIn(inboxStackId)).length
+
+		const raw = labelUpdatedBody(++issueSeq, ['bug'], 'labeled')
+		const res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.handled).toBe(false)
+		expect(res.body.reason).toBe('no_link_match')
+		expect((await cardsIn(inboxStackId)).length).toBe(before)
+	})
+
+	test('a label_updated on a closed issue never takes it in', async () => {
+		await api('PUT', `/boards/${boardId}/forgejo/intake`, { stackId: inboxStackId, label: 'bug' })
+		const before = (await cardsIn(inboxStackId)).length
+
+		const raw = labelUpdatedBody(++issueSeq, ['bug'], 'label_updated', 'closed')
+		const res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.handled).toBe(false)
+		expect(res.body.reason).toBe('no_link_match')
+		expect((await cardsIn(inboxStackId)).length).toBe(before)
+	})
+
+	test('a label_updated that leaves no intake label is still not taken in', async () => {
+		await api('PUT', `/boards/${boardId}/forgejo/intake`, { stackId: inboxStackId, label: 'bug' })
+		const before = (await cardsIn(inboxStackId)).length
+
+		const raw = labelUpdatedBody(++issueSeq, [])
+		const res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.reason).toBe('intake_filtered')
+		expect((await cardsIn(inboxStackId)).length).toBe(before)
+	})
+
+	// #10570 on this forge. Worth its own e2e rather than trusting the shared base:
+	// the label SET is the one thing Forgejo spells differently enough to matter -
+	// label objects carrying `exclusive`/`is_archived`, and no top-level `label` at
+	// all - so this proves the names survive THIS normalizer into real assignments.
+	test('a label_updated intake cards the issue WITH the board labels it carries', async () => {
+		await api('PUT', `/boards/${boardId}/forgejo/intake`, { stackId: inboxStackId, label: 'bug' })
+		const bugLabelId = (await api('POST', '/labels', { boardId, title: 'Bug', color: 'ff0000' })).body.id
+		const labelsBefore = (await api('GET', `/boards/${boardId}`)).body.labels.length
+
+		// `enhancement` has no board counterpart; `bug` is also the intake FILTER
+		// label, which is applied like any other - deliberately, not by omission.
+		const raw = labelUpdatedBody(++issueSeq, ['bug', 'enhancement'])
+		const res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.created).toBe(true)
+
+		expect((await api('GET', `/cards/${res.body.cardId}`)).body.labelIds).toEqual([bugLabelId])
+		// Nothing minted for the unmatched name.
+		expect((await api('GET', `/boards/${boardId}`)).body.labels).toHaveLength(labelsBefore)
+
+		// Through LabelService as the board owner, so the kanso_changes row fired.
+		const activity = (await api('GET', `/cards/${res.body.cardId}/activity`)).body
+		expect(activity.find((a) => a.verb === 6)?.detail?.to).toBe('Bug')
 	})
 
 	test('the intake endpoint rejects a stack of another board', async () => {

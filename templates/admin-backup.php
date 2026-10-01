@@ -43,6 +43,27 @@ $hideIf = static function (bool $hidden): void {
 			} ?> />
 		<label for="kanso-backup-enabled"><?php p($l->t('Back up boards automatically')); ?></label>
 	</p>
+	<?php /* What this checkbox switches on, said BEFORE it is ticked rather than
+		   only down in Stored backups (#10477). A run is built at SYSTEM scope, so
+		   an archive holds boards the admin is not a member of and cards marked
+		   private - enabling that has to be an informed choice, not something
+		   discovered further down the same page.
+
+		   And the way back OUT, because the panel used to say a backup "may be the
+		   only way to get a board back" without ever naming how. The ordinary
+		   board Import takes exactly the zip a backup writes: Import > "Kanso
+		   export (.zip)" on the boards list reaches
+		   ImportService::importArchive(). What it does NOT do is restore in place -
+		   importArchive() rebuilds through BoardService::create(..., $actorUid), so
+		   the IMPORTER owns the new board, and the export carries no membership at
+		   all, so every share is gone. An admin restoring somebody else's board
+		   therefore ends up owning it. Saying so is the difference between a
+		   restore path and a surprise. */ ?>
+	<p class="settings-hint" id="kanso-backup-enabled-hint">
+		<?php p($l->t('Each file holds one whole board, with every card and attachment on it, even private ones.')); ?>
+		<?php p($l->t('To put a board back, download its backup and import it from the Import menu on the boards list.')); ?>
+		<?php p($l->t('That builds a new board owned by whoever imports it, so you have to share it again.')); ?>
+	</p>
 
 	<p>
 		<label for="kanso-backup-destination"><?php p($l->t('Where to keep the backups')); ?></label><br />
@@ -94,6 +115,31 @@ $hideIf = static function (bool $hidden): void {
 		<label for="kanso-backup-retention"><?php p($l->t('Backups to keep per board')); ?></label><br />
 		<input type="number" id="kanso-backup-retention" min="1" max="365"
 			value="<?php p((string)$config['retention']); ?>" style="width: 100px;" />
+	</p>
+	<?php /* What the number does NOT do (#10674). prune() runs one code path for
+		   both destinations (BackupService::prune()); the difference is underneath
+		   it - FilesBackupTarget::delete() ends in $node->delete(), an ordinary
+		   Files-layer delete that TRASHES, while AppDataBackupTarget::delete() goes
+		   through ISimpleFile::delete(), which does not. Measured on a live stack:
+		   two runs at retention 1 left all five pruned zips in the backup account's
+		   trashbin as real bytes, and the app-data destination freed them at once.
+		   Nextcloud exposes no supported way to delete without trashing (OCP ships
+		   no files-trashbin API), so this is a statement, not a fix pending.
+
+		   Said ONCE, naming both stores, unlike the destination hints above: this
+		   control is SHARED, it is on screen in either mode, and the reader needs
+		   to know which of the two meanings their number carries.
+
+		   The last line names what a separate account actually buys, which is NOT
+		   what this hint first claimed: the account the folder lives in decides
+		   whose quota the pruned copies keep spending, and nothing more - they go
+		   on accumulating there either way. Only two things really reclaim the
+		   bytes, so only those two are offered as the answer to "bounded": empty
+		   that trashbin, or use the app-data store, which hard-deletes on prune. */ ?>
+	<p class="settings-hint" id="kanso-backup-retention-hint">
+		<?php p($l->t('This caps how many copies exist, not how much disk they take.')); ?>
+		<?php p($l->t('In a Files folder a pruned backup moves to that account\'s trashbin and keeps using its quota until that empties; inside Kanso it is freed at once.')); ?>
+		<?php p($l->t('A separate account only changes whose quota they spend; to bound disk use, empty that trashbin or keep the backups inside Kanso.')); ?>
 	</p>
 
 	<p>

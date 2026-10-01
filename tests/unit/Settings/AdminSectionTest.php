@@ -58,9 +58,11 @@ class AdminSectionTest extends TestCase {
 	}
 
 	public function testAppMenuIconStaysWhite(): void {
-		// The counterpart guard: img/app.svg is the app-menu / notification icon
-		// and Nextcloud renders it white there (core apps ship `fill="#fff"`
-		// too). Fixing #162 by darkening this file would just move the bug.
+		// The counterpart guard: img/app.svg is the app-menu / PWA icon and
+		// Nextcloud renders it white there (core apps ship `fill="#fff"` too).
+		// Fixing #162 by darkening this file would just move the bug. (The bell,
+		// the activity stream and the Files action all moved to app-dark.svg in
+		// card 10666 — this file is now the app menu's alone.)
 		$svg = (string)file_get_contents(dirname(__DIR__, 3) . '/img/app.svg');
 
 		$this->assertMatchesRegularExpression(

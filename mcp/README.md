@@ -220,7 +220,10 @@ starts.
   AND/OR, no `field:value`. Each hit is a locator (`type`, `cardId`, `boardId`,
   `title`, `snippet`, `rank`); feed `cardId` to `kanso_get_card` for the full
   card. The server ACL-filters the results to your readable boards, and
-  `board_id` only narrows that set.
+  `board_id` only narrows that set. Archived cards are left out unless you pass
+  `include_archived=True` — automations archive finished cards unattended, so on
+  a long-running board the archive would otherwise answer most queries; ask for
+  it when the question is about history.
 
 **My work**
 

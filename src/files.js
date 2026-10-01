@@ -12,7 +12,14 @@ import { translate as t } from '@nextcloud/l10n'
 import { registerFileAction, FileType, Permission } from '@nextcloud/files'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import AddToKansoDialog from './components/AddToKansoDialog.vue'
-import kansoSvg from '../img/app.svg?raw'
+// The DARK variant on purpose. `iconSvgInline` is injected into NcIconSvgWrapper,
+// whose only colouring is a CSS `fill: currentColor` on the <svg> element - which
+// loses to a `fill` PRESENTATION ATTRIBUTE on the shapes inside. `img/app.svg` is
+// the deliberately white app-menu/PWA icon and hardcodes `fill="#fff"` on every
+// rect, so it stayed white in the (default) light theme: invisible in the Files
+// action menu. `img/app-dark.svg` sets no fill at all, so it inherits
+// currentColor and follows the theme in both directions.
+import kansoSvg from '../img/app-dark.svg?raw'
 
 // One shared query client for every picker instance (the search results cache
 // survives reopening the dialog).

@@ -122,20 +122,42 @@ class PublicShareService {
 	 * description or a comment body: whatever webroot/index.php prefix the
 	 * instance uses, then the app's own `api/cards/<id>/attachments/<id>/inline`.
 	 *
-	 * Mirrors the sanitiser's INLINE_ATTACHMENT_SRC_RE in src/services/markdown.js,
-	 * which is the only shape a rendered `<img>` src is ever allowed to have. Used
-	 * by {@see self::rewriteInlineImages()}; nothing else in the text is touched.
+	 * The twin of INLINE_ATTACHMENT_SRC_RE in src/services/inlineAttachmentSrc.js,
+	 * which is both the only shape a rendered `<img>` src is ever allowed to have
+	 * and the only shape the renderer re-points at a share. The prefix charsets are
+	 * deliberately kept so that the JS one is a SUBSET of this one (it additionally
+	 * forbids `?` and `#`, because it is the side that splices the token in). That
+	 * direction is the one that matters: this pattern must never refuse a src the
+	 * renderer rewrites, or the page would draw an image whose bytes then 404.
 	 *
-	 * THE LOOKBEHIND IS LOAD-BEARING, and it is the whole reason this constant has
-	 * a comment. The JS twin is anchored `^…$` because it validates one complete
-	 * attribute value; this one runs over free text and so cannot be, which means
-	 * without a left boundary it also matches INSIDE an absolute URL - the path
-	 * part of `https://evil.example/apps/kanso/api/cards/1/attachments/2/inline`
-	 * matches just as well as a same-origin path. The rewrite would then splice the
-	 * board's share TOKEN into an attacker-controlled external link, and any EDIT
-	 * member (who cannot otherwise read the token - {@see self::getConfig()} is
-	 * MANAGE-only) could type that into a description and collect the token from
-	 * their own server the first time any anonymous visitor clicked it.
+	 * ONE caller only, and it is an authorisation gate: {@see self::embedsAttachment()},
+	 * the "the visitor can already read it" half of {@see self::getPublicInlineAttachment()}.
+	 * It used to have a second caller - a payload-wide substitution that spliced the
+	 * share token into every match - and that is gone (#10608): a regex over free
+	 * text cannot tell an image from a code fence quoting one, so it printed the
+	 * live token as visible text. The re-pointing now happens at render time on the
+	 * ONE src markdown actually parses as an image (src/services/markdown.js), where
+	 * the value being matched is a complete attribute and the pattern can be
+	 * anchored end-to-end. NOTHING is substituted into free text here any more.
+	 *
+	 * THE LOOKBEHIND IS STILL LOAD-BEARING, for a smaller reason than before, and it
+	 * is the whole reason this constant has a comment. The JS twin is anchored `^…$`
+	 * because it validates one complete attribute value; this one runs over free
+	 * text and so cannot be, which means without a left boundary it also matches
+	 * INSIDE an absolute URL - the path part of
+	 * `https://evil.example/apps/kanso/api/cards/1/attachments/2/inline` matches
+	 * just as well as a same-origin path. The gate would then read a pasted EXTERNAL
+	 * URL as "this card embeds attachment 2" and authorise an anonymous fetch of an
+	 * attachment the author never published inline.
+	 *
+	 * Be precise about how strong that is: whoever can write the text is an EDIT
+	 * member of that board, and an EDIT member can authorise the very same
+	 * attachment today by embedding it for real. So the boundary denies nothing to
+	 * someone who wants it - it stops an ACCIDENT (an author pasting a third-party
+	 * URL that happens to carry this app's path shape) turning into publication. It
+	 * is least-surprise, not a trust boundary. The token-exfiltration attack the
+	 * lookbehind was originally written against (78ffe50) no longer has a rewrite to
+	 * attack; that class is now structurally impossible rather than regex-defended.
 	 *
 	 * `(?<![\w:/@.-])` forbids the character classes that can precede a path only
 	 * inside a larger URL: a scheme colon, the second slash of `//host`, and the
@@ -470,14 +492,16 @@ class PublicShareService {
 				// as a literal `@uid` inside the description text, so the raw column
 				// would hand an anonymous reader a real login uid. It goes out with
 				// those mentions redacted; the stored row is untouched.
-				// …and the inline-image srcs it embeds are re-pointed at the public
-				// route (#152), because the authenticated one they are stored as needs
-				// a session this reader does not have. Payload-only, like the redaction
-				// above: the stored row keeps the authenticated path.
-				'description' => $this->rewriteInlineImages(
-					$this->redactMentions($card->getDescription(), $board, $displayNames, $members),
-					$token
-				),
+				// The inline-image srcs it embeds still need re-pointing at the public
+				// route (#152) - the authenticated path they are stored as needs a
+				// session this reader does not have - but that no longer happens HERE.
+				// It happens at render time, in src/services/markdown.js, on the ONE
+				// src markdown actually parsed as an image. A substitution applied to
+				// the whole string cannot tell an image from a code fence quoting one
+				// (#10608), and the thing being substituted in is the board's share
+				// token, so it printed a live 380-bit secret as visible text. The text
+				// goes out exactly as stored, mentions aside.
+				'description' => $this->redactMentions($card->getDescription(), $board, $displayNames, $members),
 				'labels' => $labels,
 				'duedate' => $card->getDuedate()?->format(\DateTimeInterface::ATOM),
 				// Presentational, non-person card attributes (#3951): a cover colour
@@ -519,7 +543,7 @@ class PublicShareService {
 			];
 
 			if ($commentsEnabled) {
-				$cardPayload['comments'] = $this->serializeComments($commentsByCard[$cardId] ?? [], $board, $token, $displayNames, $members);
+				$cardPayload['comments'] = $this->serializeComments($commentsByCard[$cardId] ?? [], $board, $displayNames, $members);
 			}
 
 			$cards[] = $cardPayload;
@@ -582,14 +606,15 @@ class PublicShareService {
 	 * An inline image embedded in the body is re-pointed at the public route the
 	 * same way a description's is (#152) - `.public-comment__body img` is a real
 	 * rendered surface, so a comment picture was as broken as a description one.
+	 * As with the description, that re-pointing is the RENDERER's job now and not
+	 * this method's (#10608); the body goes out as stored, mentions aside.
 	 *
 	 * @param Comment[] $comments
-	 * @param string $token the share token this payload is being built for
 	 * @param array<string, ?string> $displayNames uid => display name (null = no such account) cache, reused across cards
 	 * @param array<string, bool> $members uid => holds READ on this board, cache reused across cards
 	 * @return list<array{id: int, parentCommentId: ?int, author: string, body: ?string, createdAt: int, editedAt: int}>
 	 */
-	private function serializeComments(array $comments, Board $board, string $token, array &$displayNames, array &$members): array {
+	private function serializeComments(array $comments, Board $board, array &$displayNames, array &$members): array {
 		$out = [];
 		foreach ($comments as $comment) {
 			$uid = (string)$comment->getAuthor();
@@ -602,10 +627,7 @@ class PublicShareService {
 				'id' => (int)$comment->getId(),
 				'parentCommentId' => $comment->getParentCommentId(),
 				'author' => $author,
-				'body' => $this->rewriteInlineImages(
-					$this->redactMentions($comment->getBody(), $board, $displayNames, $members),
-					$token
-				),
+				'body' => $this->redactMentions($comment->getBody(), $board, $displayNames, $members),
 				'createdAt' => $comment->getCreatedAt() ?? 0,
 				'editedAt' => $comment->getEditedAt() ?? 0,
 			];
@@ -989,59 +1011,6 @@ class PublicShareService {
 	}
 
 	/**
-	 * Re-points every embedded inline-image src in a piece of public free text at
-	 * the share's OWN attachment route (#152).
-	 *
-	 * An image pasted into a description is stored as
-	 * `![alt](/…/apps/kanso/api/cards/N/attachments/M/inline)` - the AUTHENTICATED
-	 * endpoint, which resolves the reader from the session. A public-share visitor
-	 * has no session, so that request answered 401 and the picture rendered as a
-	 * broken-image box on a board that had been deliberately shared. The text goes
-	 * out pointing at `…/apps/kanso/api/public/<token>/cards/N/attachments/M/inline`
-	 * instead, which {@see self::getPublicInlineAttachment()} serves.
-	 *
-	 * This is a payload-only rewrite, exactly like {@see self::redactMentions()}:
-	 * the stored row is untouched and an authenticated reader still gets the
-	 * authenticated path.
-	 *
-	 * It grants NOTHING on its own. The card id in the text is attacker-choosable
-	 * (any EDIT member can type one), so rewriting it is not a decision about
-	 * access - the route it points at re-resolves the token and refuses any card
-	 * that is not part of THIS share. A rewritten link to another board's card is
-	 * simply a 404.
-	 *
-	 * @param ?string $text the already-redacted public text, or null
-	 * @param string $token the share token this payload is being built for
-	 */
-	private function rewriteInlineImages(?string $text, string $token): ?string {
-		if ($text === null || $text === '') {
-			return $text;
-		}
-		// Cheap reject: the overwhelming majority of descriptions carry no image
-		// at all, and this keeps the regex off them entirely.
-		if (!str_contains($text, 'apps/kanso/api/cards/')) {
-			return $text;
-		}
-		// preg_replace_callback, not preg_replace: a `$` or `\` sequence can never
-		// be interpreted out of the replacement string. (The token is 64 chars of
-		// ISecureRandom::CHAR_ALPHANUMERIC, so it carries neither - but the
-		// callback makes that a property of the code rather than of the generator.)
-		$out = preg_replace_callback(
-			self::INLINE_SRC_RE,
-			static fn (array $m): string => $m['prefix']
-				. '/public/' . $token
-				. '/cards/' . $m['card']
-				. '/attachments/' . $m['attachment']
-				. '/inline',
-			$text
-		);
-		// A preg failure (backtrack limit on a pathological body) returns null.
-		// Serve the text unrewritten rather than dropping a description entirely:
-		// a broken image is the bug being fixed, a blank card would be worse.
-		return $out ?? $text;
-	}
-
-	/**
 	 * The bytes of ONE inline image embedded in a SHARED board's card (#152), for
 	 * an anonymous visitor holding that board's share token.
 	 *
@@ -1116,10 +1085,8 @@ class PublicShareService {
 	 * as an inline image - the "the visitor can already read it" half of the gate
 	 * in {@see self::getPublicInlineAttachment()}.
 	 *
-	 * Matched with {@see self::INLINE_SRC_RE}, the same pattern the payload rewrite
-	 * uses, so a src that gets rewritten into a public URL is exactly a src this
-	 * will honour, and one that does not (an absolute URL to another host, say) is
-	 * exactly one it will not. The card id in the text must ALSO be this card's -
+	 * Matched with {@see self::INLINE_SRC_RE} over the whole text. The card id in the
+	 * text must ALSO be this card's -
 	 * the UI can only ever embed the open card's own attachment
 	 * (src/components/MarkdownEditor.vue binds `inlineUrl` to the current card), so
 	 * a reference naming a different card is hand-written markdown and does not
@@ -1148,7 +1115,32 @@ class PublicShareService {
 
 	/**
 	 * True iff `$text` carries an inline-image src for exactly this card and
-	 * attachment. Same pattern, same boundary rules as the payload rewrite.
+	 * attachment.
+	 *
+	 * A DELIBERATE, DOCUMENTED DIVERGENCE lives here (#10608). The renderer that
+	 * re-points these srcs is markdown-structure-aware - it only touches a src that
+	 * markdown actually parses as an image, so a URL quoted inside a code fence is
+	 * displayed, never rewritten. This gate is NOT: it is a regex over the whole
+	 * text, so an attachment referenced ONLY inside a fence still authorises an
+	 * anonymous fetch of its bytes.
+	 *
+	 * That divergence was chosen, not inherited by accident:
+	 *  - It is the status quo, and strictly not a NEW hole. The same text authorised
+	 *    the same fetch before the renderer moved.
+	 *  - It fails in the SAFE direction. This gate is wider than the renderer on both
+	 *    axes it differs on - markdown structure here, and the prefix charset
+	 *    ({@see self::INLINE_SRC_RE}) - which means an image a visitor cannot see is
+	 *    still fetchable by a visitor who guesses its id. The gate being NARROWER
+	 *    would instead mean an image the page renders 404s, i.e. the #152 bug back
+	 *    again on any card whose author also quoted the URL.
+	 *  - Whoever writes the fence is an EDIT member of the board, who can publish the
+	 *    same attachment deliberately anyway. Nothing crosses a trust boundary.
+	 *  - Teaching this gate about fences needs a markdown parser, and the app ships
+	 *    ZERO runtime PHP dependencies on purpose (composer.json), so there is none
+	 *    to reach for. A hand-rolled fence scanner here would be exactly the
+	 *    "cleverer regex" that produced #10608's sibling bug in the first place.
+	 * The behaviour is pinned by a test, so the next person finds a decision rather
+	 * than a surprise ('testInlineAttachmentStillServesAnImageOnlyQuotedInACodeFence').
 	 */
 	private function embedsAttachment(?string $text, int $cardId, int $attachmentId): bool {
 		if ($text === null || $text === '') {

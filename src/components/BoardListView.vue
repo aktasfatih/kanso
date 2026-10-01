@@ -231,12 +231,28 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ priorityLabel(rows[vRow.index].card.priority) }}
 							</span>
 
-							<!-- Progress (checklist, else child cards) -->
+							<!-- Progress (checklist, else child cards). One merged counter, so
+							     the overdue-step tint (#10733) is drawn ONLY when the numbers
+							     came from the checklist - on sub-card progress it would be
+							     labelling the wrong thing. The label says "overdue" and carries
+							     the count, exactly as the kanban tile's badge does: the tint
+							     alone would be a colour-only cue.
+							     role="img", exactly as on the tile: ARIA prohibits an
+							     author-provided name on a bare span, and inside this row
+							     BUTTON an aria-label that IS honoured gets used in place of
+							     the visible 0/2 when the button names itself from its
+							     content - so the counts would have gone missing from the
+							     name it announces. As one named graphic the label carries
+							     them itself. -->
 							<span
-								v-if="cardProgress(rows[vRow.index].card)"
-								class="board-list-row__count">
+								v-if="rows[vRow.index].progressBadge"
+								class="board-list-row__count"
+								:class="{ 'board-list-row__count--overdue': rows[vRow.index].progressBadge.overdue }"
+								role="img"
+								:aria-label="rows[vRow.index].progressBadge.label"
+								:title="rows[vRow.index].progressBadge.label">
 								<CheckboxMarkedOutlineIcon :size="14" />
-								{{ cardProgress(rows[vRow.index].card).done }}/{{ cardProgress(rows[vRow.index].card).total }}
+								{{ rows[vRow.index].progressBadge.done }}/{{ rows[vRow.index].progressBadge.total }}
 							</span>
 
 							<!-- Due date -->
@@ -366,7 +382,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <script setup>
 import { ref, computed, inject, nextTick, reactive, watch, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
-import { translate as t } from '@nextcloud/l10n'
+import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import AssigneeAvatars from './AssigneeAvatars.vue'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -955,12 +971,12 @@ const rows = computed(() => {
 		for (const card of topLevel) {
 			const children = childrenByParent.get(card.id) ?? []
 			const hasChildren = children.length > 0
-			out.push({ type: 'card', id: `c${card.id}`, card, hasChildren, isChild: false })
+			out.push({ type: 'card', id: `c${card.id}`, card, hasChildren, isChild: false, progressBadge: progressBadge(card) })
 
 			// Emit children only when the parent is expanded (absent from collapsed = expanded).
 			if (hasChildren && isCardExpanded(card.id)) {
 				for (const child of children) {
-					out.push({ type: 'card', id: `c${child.id}`, card: child, hasChildren: false, isChild: true })
+					out.push({ type: 'card', id: `c${child.id}`, card: child, hasChildren: false, isChild: true, progressBadge: progressBadge(child) })
 				}
 			}
 		}
@@ -1005,13 +1021,61 @@ function cardHumanId(card) {
 }
 
 // Per-card progress: prefer the checklist, fall back to child-card progress.
+// The SOURCE travels with the counts (#10733). The row renders the two features
+// through one merged counter, so anything that qualifies the numbers — the
+// overdue-step tint, the accessible label — has to know which feature produced
+// them; a tint drawn over sub-card progress would name a checklist step that
+// isn't there.
 function cardProgress(card) {
 	// A board that switched checklists off (#5894) shows no checklist progress —
 	// but sub-card progress is a different feature and still counts, so this falls
 	// through to it rather than dropping the badge.
-	if (cardFeatures.value.checklist && card.checklist && card.checklist.total > 0) return card.checklist
-	if (card.childProgress && card.childProgress.total > 0) return card.childProgress
+	if (cardFeatures.value.checklist && card.checklist && card.checklist.total > 0) {
+		return { done: card.checklist.done, total: card.checklist.total, source: 'checklist' }
+	}
+	if (card.childProgress && card.childProgress.total > 0) {
+		return { done: card.childProgress.done, total: card.childProgress.total, source: 'child' }
+	}
 	return null
+}
+
+// Everything the row's single progress counter renders, derived ONCE per card
+// as `rows` is built - never from the template. The list is virtualized and
+// re-renders its whole visible window on each scroll frame, so a helper called
+// from a binding would run on every one of them; the group header's own
+// progress and hints are precomputed here for exactly that reason.
+//
+// `overdue` is the overdue checklist steps signal (#10733). The count comes
+// from the board summary and is read exactly as the tile and the hover preview
+// read it (CardTile/CardPreview.hasOverdueSteps) - same field, same done-card
+// suppression, because finished work is not late work. The one extra condition
+// is the row's own: the counter merges two features, so only a
+// checklist-derived one may tint - over sub-card progress the tint would be
+// naming a checklist step that isn't there.
+//
+// The label carries the count, so the signal is never colour-only. It also
+// carries the done/total pair, because the badge is a `role="img"` and so
+// announces this string INSTEAD of its own 0/2 text. n(), not t() with a
+// placeholder, for the overdue count: pl/ru and friends need the plural forms,
+// and these are byte-for-byte the strings the tile and the preview announce.
+function progressBadge(card) {
+	const progress = cardProgress(card)
+	if (progress === null) return null
+
+	const fromChecklist = progress.source === 'checklist'
+	const overdue = fromChecklist && !isDone(card) && Number(card.checklist?.overdue ?? 0) > 0
+	const counts = { done: progress.done, total: progress.total }
+
+	let label
+	if (overdue) {
+		label = n('kanso', 'Checklist progress {done} of {total}, %n overdue step', 'Checklist progress {done} of {total}, %n overdue steps', Number(card.checklist.overdue), counts)
+	} else {
+		label = fromChecklist
+			? t('kanso', 'Checklist progress {done} of {total}', counts)
+			: t('kanso', 'Sub-card progress {done} of {total}', counts)
+	}
+
+	return { done: progress.done, total: progress.total, overdue, label }
 }
 
 function isDone(card) {
@@ -1736,6 +1800,14 @@ defineExpose({ focusAddColumn })
 }
 
 .board-list-row__due--overdue {
+	color: var(--kanso-error-legible);
+	font-weight: 600;
+}
+
+/* At least one checklist step is open and past due (#10733) — the same error
+ * accent the row's own due date above uses, and the error twin of the kanban
+ * tile's `--overdue` badge. Only ever on a checklist-derived counter. */
+.board-list-row__count--overdue {
 	color: var(--kanso-error-legible);
 	font-weight: 600;
 }

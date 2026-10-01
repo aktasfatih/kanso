@@ -1184,12 +1184,6 @@ test.describe('Public board tiles excerpt the description as plain text', () => 
 	let token = ''
 	let imageMarkdown = ''
 	let imageCardId = 0
-	// The same image markdown AS AN ANONYMOUS VISITOR RECEIVES IT (#152). The
-	// public payload re-points every inline src at the token-gated route
-	// (PublicShareService::rewriteInlineImages), so the source string that
-	// actually reaches the tile is this one, not `imageMarkdown`. Anything
-	// asserting on the raw source a public visitor sees must use this.
-	let publicImageMarkdown = ''
 
 	test.beforeAll(async () => {
 		boardId = (await api('POST', '/boards', { title: 'Public Excerpt E2E' })).body.id
@@ -1239,7 +1233,6 @@ test.describe('Public board tiles excerpt the description as plain text', () => 
 
 		token = (await api('POST', `/boards/${boardId}/public-share`)).body.token
 		expect(token).toBeTruthy()
-		publicImageMarkdown = `![image.png](/apps/kanso/api/public/${token}/cards/${imageCardId}/attachments/42/inline)`
 	})
 
 	test.afterAll(async () => {
@@ -1250,12 +1243,14 @@ test.describe('Public board tiles excerpt the description as plain text', () => 
 		// The payload still ships the raw markdown (deliberately out of scope here):
 		// the stripping is a rendering contract, so pin that the source really does
 		// reach the browser, or the tile assertion could pass vacuously on a server
-		// that had already stripped it. The src is the token-gated one (#152) —
-		// still unstripped image SYNTAX, which is all this guard is about.
+		// that had already stripped it. The src is the stored, AUTHENTICATED one:
+		// re-pointing it at the share route is the renderer's job (#10608), so the
+		// share token appears nowhere in the payload text.
 		const payload = await fetchPublic(token)
 		expect(payload.status).toBe(200)
 		const raw = payload.body.cards.find((c) => c.title === IMAGE_TITLE).description
-		expect(raw).toContain(publicImageMarkdown)
+		expect(raw).toContain(imageMarkdown)
+		expect(raw).not.toContain(token)
 
 		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
 		await expect(page.locator('.public-board__title')).toHaveText('Public Excerpt E2E')
@@ -1301,10 +1296,13 @@ test.describe('Public board tiles excerpt the description as plain text', () => 
 		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
 		const tile = page.locator('.public-card').filter({ hasText: FENCE_TITLE })
 		await expect(tile).toBeVisible()
-		// The fence is the card's text, so it excerpts as code… (the src inside it
-		// is the token-gated rewrite, #152 — rewriteInlineImages runs over the
-		// whole description string, fenced code included.)
-		await expect(tile.locator('.public-card__desc')).toHaveText(publicImageMarkdown)
+		// The fence is the card's text, so it excerpts as code — and it excerpts
+		// EXACTLY WHAT THE AUTHOR TYPED (#10608). It used to come out with the
+		// board's 64-char share token substituted into it, because the re-pointing
+		// was a regex over the whole description string and a regex cannot tell a
+		// fence from an image. A code fence shows what was typed or it is broken.
+		await expect(tile.locator('.public-card__desc')).toHaveText(imageMarkdown)
+		await expect(tile.locator('.public-card__desc')).not.toContainText(token)
 		// …and there is no image anywhere in this card. A `![` regex would have
 		// counted one.
 		await expect(tile.locator('.public-card__image')).toHaveCount(0)
@@ -1377,6 +1375,8 @@ test.describe('Public board serves the images embedded in a shared card', () => 
 	let sharedBoardId = 0
 	let otherBoardId = 0
 	let sharedCardId = 0
+	let sharedAttachmentId = 0
+	let storedSrc = ''
 	let otherCardId = 0
 	let otherAttachmentId = 0
 	let unembeddedAttachmentId = 0
@@ -1391,9 +1391,17 @@ test.describe('Public board serves the images embedded in a shared card', () => 
 		const stackId = (await api('POST', '/stacks', { boardId: sharedBoardId, title: 'To do' })).body.id
 		sharedCardId = (await api('POST', '/cards', { stackId, title: 'Card with a picture' })).body.id
 		const attachment = await uploadPng(sharedCardId, 'shared.png')
+		sharedAttachmentId = attachment.id
 		const src = `/apps/kanso/api/cards/${sharedCardId}/attachments/${attachment.id}/inline`
+		storedSrc = src
+		// One description carrying the same URL in three places: a REAL image, a
+		// fenced quote of it, and an inline-code quote of it. The first must be
+		// re-pointed at the share route and decode; the other two must render exactly
+		// as typed (#10608).
 		expect((await api('PATCH', `/cards/${sharedCardId}`, {
-			description: `Before\n\n![shot](${src})\n\nAfter`,
+			description: `Before\n\n![shot](${src})\n\nAfter\n\n`
+				+ '```\n' + `![shot](${src})` + '\n```\n\n'
+				+ `and inline \`${src}\` too`,
 		})).status).toBe(200)
 		expect((await api('POST', `/cards/${sharedCardId}/comments`, {
 			body: `and again ![shot](${src})`,
@@ -1430,16 +1438,26 @@ test.describe('Public board serves the images embedded in a shared card', () => 
 		if (otherBoardId) await api('DELETE', `/boards/${otherBoardId}`)
 	})
 
-	test('the anonymous payload re-points the image at the share token, not the authenticated route', async () => {
+	/** The share URL the RENDERER is expected to build for the shared card's attachment. */
+	function publicInlineUrl(attachmentId) {
+		return `/apps/kanso/api/public/${shareToken}/cards/${sharedCardId}/attachments/${attachmentId}/inline`
+	}
+
+	// The payload used to carry the re-pointed src. It does not any more (#10608):
+	// re-pointing is the renderer's job, because only the renderer can tell a real
+	// image from a code fence quoting one. So the anonymous payload is a place the
+	// share token never appears — which also retires the original worry that a
+	// screenshot of a board's CONTENT could carry a working access credential.
+	test('the anonymous payload ships the stored src and the share token appears in it nowhere', async () => {
 		const { status, body } = await fetchPublic(shareToken)
 		expect(status).toBe(200)
 		const card = body.cards.find((c) => c.id === sharedCardId)
-		const publicSrc = `/apps/kanso/api/public/${shareToken}/cards/${sharedCardId}/attachments/`
-		expect(card.description).toContain(publicSrc)
-		expect(card.comments[0].body).toContain(publicSrc)
-		// The session-only path must be gone: leaving it would ship the bug.
-		expect(card.description).not.toContain(`/api/cards/${sharedCardId}/attachments/`)
-		expect(card.comments[0].body).not.toContain(`/api/cards/${sharedCardId}/attachments/`)
+		expect(card.description).toContain(storedSrc)
+		expect(card.comments[0].body).toContain(storedSrc)
+		// Not in these two fields, and not anywhere else in the payload either.
+		expect(card.description).not.toContain(shareToken)
+		expect(card.comments[0].body).not.toContain(shareToken)
+		expect(JSON.stringify(body)).not.toContain(shareToken)
 	})
 
 	test('an anonymous visitor DECODES the description and comment images, not a broken box', async ({ page }) => {
@@ -1475,9 +1493,7 @@ test.describe('Public board serves the images embedded in a shared card', () => 
 	})
 
 	test('the image bytes come back with an inline, nosniff, image/png response', async () => {
-		const card = (await fetchPublic(shareToken)).body.cards.find((c) => c.id === sharedCardId)
-		const path = card.description.match(/\/apps\/kanso\/api\/public\/\S+?\/inline/)[0]
-		const r = await fetch(`${BASE}/index.php${path}`)
+		const r = await fetch(`${BASE}/index.php${publicInlineUrl(sharedAttachmentId)}`)
 		expect(r.status).toBe(200)
 		expect(r.headers.get('content-type')).toBe('image/png')
 		expect(r.headers.get('content-disposition')).toBe('inline')
@@ -1503,8 +1519,7 @@ test.describe('Public board serves the images embedded in a shared card', () => 
 	// attachment id, say) would 404 for a reason that has nothing to do with the
 	// token and prove nothing.
 	test('a made-up token reaches nothing, even for the exact URL that works', async () => {
-		const card = (await fetchPublic(shareToken)).body.cards.find((c) => c.id === sharedCardId)
-		const working = card.description.match(/\/apps\/kanso\/api\/public\/\S+?\/inline/)[0]
+		const working = publicInlineUrl(sharedAttachmentId)
 		expect((await fetch(`${BASE}/index.php${working}`)).status).toBe(200)
 
 		const bogus = working.replace(shareToken, 'z'.repeat(64))
@@ -1538,8 +1553,37 @@ test.describe('Public board serves the images embedded in a shared card', () => 
 
 		// …while the embedded one on that very same card still serves, so the
 		// refusal above is about the attachment, not about the card.
-		const card = (await fetchPublic(shareToken)).body.cards.find((c) => c.id === sharedCardId)
-		const embedded = card.description.match(/\/apps\/kanso\/api\/public\/\S+?\/inline/)[0]
-		expect((await fetch(`${BASE}/index.php${embedded}`)).status).toBe(200)
+		expect((await fetch(`${BASE}/index.php${publicInlineUrl(sharedAttachmentId)}`)).status).toBe(200)
+	})
+
+	// THE #10608 regression, on the rendered public page. The same URL sits in this
+	// card's description three times: as a real image, inside a fenced block, and
+	// inside inline code. Only the first is a src; the other two are text the author
+	// typed, and they used to come back with the board's 64-char share token
+	// substituted into them because the re-pointing was a regex over the whole
+	// description string.
+	test('a URL quoted in a code fence or code span renders as written, token-free', async ({ page }) => {
+		expect((await page.context().storageState()).cookies).toHaveLength(0)
+
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${shareToken}`)
+		await page.locator('.public-card').filter({ hasText: 'Card with a picture' }).click()
+		await expect(page.locator('.public-detail')).toBeVisible()
+
+		const desc = page.locator('.public-detail__desc')
+		// The fence and the code span, in document order.
+		await expect(desc.locator('pre code')).toContainText(`![shot](${storedSrc})`)
+		await expect(desc.locator(':not(pre) > code')).toHaveText(storedSrc)
+		// Nowhere in the rendered description does the token appear as TEXT…
+		expect(await desc.innerText()).not.toContain(shareToken)
+
+		// …while the real image in that same description IS re-pointed at the share
+		// route and really decodes, so this cannot pass by the renderer simply having
+		// stopped re-pointing anything.
+		const img = desc.locator('img')
+		await expect(img).toHaveAttribute('src', publicInlineUrl(sharedAttachmentId))
+		await expect.poll(
+			async () => img.evaluate((el) => el.naturalWidth),
+			{ message: 'the real inline image never decoded' },
+		).toBe(PNG_W)
 	})
 })

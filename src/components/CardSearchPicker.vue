@@ -80,6 +80,10 @@ const searchInputRef = ref(null)
 
 const searchTermRef = computed(() => searchTerm.value)
 // boardId null = global, ACL-filtered search across every readable board.
+// Archived cards are excluded (#10762, the useSearch default): this picker
+// attaches something to a card, and attaching live work to a shelved card is not
+// a thing anyone means to do - the same reason every other card listing drops
+// them.
 const { results: searchResults, isFetching, debouncedTerm } = useSearch(searchTermRef, ref(null))
 
 // Search returns mixed card + comment rows shaped {type, cardId, boardId, title,

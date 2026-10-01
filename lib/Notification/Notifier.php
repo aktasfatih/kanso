@@ -28,6 +28,19 @@ use OCP\Notification\UnknownNotificationException;
  * linked, rich message at display time.
  */
 class Notifier implements INotifier {
+	/**
+	 * The notification centre renders this icon as an <img> under
+	 * `.notification-icon { filter: var(--background-invert-if-dark) }` - `no` on
+	 * light themes, `invert(1)` on dark ones. So the asset has to be DARK, exactly
+	 * like the admin section icon (see AdminSection::getIcon, issue #162), and
+	 * like `INotification::setIcon()` itself documents ("should be colored black
+	 * or not have a color"). `img/app.svg` is the deliberately WHITE app-menu/PWA
+	 * icon and rendered invisible in the bell in BOTH themes: white on the white
+	 * notification background in light, inverted to black on the near-black one
+	 * in dark.
+	 */
+	private const ICON = 'app-dark.svg';
+
 	public function __construct(
 		private IFactory $l10nFactory,
 		private IURLGenerator $urlGenerator,
@@ -134,7 +147,7 @@ class Notifier implements INotifier {
 				: null;
 
 			$notification
-				->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', 'app.svg')))
+				->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', self::ICON)))
 				->setLink($this->cardLink($cardId, $commentId))
 				->setParsedSubject($plain)
 				->setRichSubject(
@@ -161,7 +174,7 @@ class Notifier implements INotifier {
 		};
 
 		$notification
-			->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', 'app.svg')))
+			->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', self::ICON)))
 			->setLink($this->cardLink($cardId))
 			->setParsedSubject($plain)
 			->setRichSubject(
@@ -192,7 +205,7 @@ class Notifier implements INotifier {
 			: $l->t('Kanso board backup completed');
 
 		$notification
-			->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', 'app.svg')))
+			->setIcon($this->urlGenerator->getAbsoluteURL($this->urlGenerator->imagePath('kanso', self::ICON)))
 			->setLink($this->urlGenerator->linkToRouteAbsolute('settings.AdminSettings.index', ['section' => 'kanso']))
 			->setParsedSubject($plain)
 			->setRichSubject($plain);

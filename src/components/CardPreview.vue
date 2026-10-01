@@ -65,7 +65,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			     the same summary field and under the same conditions as the tile
 			     underneath, so the peek can never contradict what it is peeking at.
 			     The label carries "overdue" too - the tint alone would be a
-			     colour-only cue. -->
+			     colour-only cue. role="img" for the same reason as the tile's
+			     badge: a generic span may not take an author-provided name at
+			     all, and here there is no enclosing button to fall back on - this
+			     panel names itself from its own aria-label, so a label dropped
+			     off the badge is simply silence. -->
 			<span
 				v-if="cardFeatures.checklist && card.checklist && card.checklist.total > 0"
 				class="card-preview__checklist"
@@ -73,6 +77,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					'card-preview__checklist--complete': card.checklist.done === card.checklist.total,
 					'card-preview__checklist--overdue': hasOverdueSteps,
 				}"
+				role="img"
 				:aria-label="checklistLabel"
 				:title="checklistLabel">
 				<CheckboxMarkedOutlineIcon :size="12" />
@@ -221,11 +226,19 @@ const isDone = computed(() => Number(props.card.doneAt) > 0)
 // preview and the tile it floats over can never disagree about one card.
 const hasOverdueSteps = computed(() => !isDone.value && Number(props.card.checklist?.overdue ?? 0) > 0)
 
-// n(), not t() with a placeholder: pl/ru and friends need the plural forms, and
-// this is the same string the tile's badge announces.
-const checklistLabel = computed(() => (hasOverdueSteps.value
-	? n('kanso', 'Checklist progress - %n overdue step', 'Checklist progress - %n overdue steps', Number(props.card.checklist.overdue))
-	: t('kanso', 'Checklist progress')))
+// Byte-for-byte the string the tile's badge announces (CardTile.checklistLabel),
+// counts included: the badge is a `role="img"`, so this label is announced
+// INSTEAD of its own 0/2 text and has to carry the numbers itself.
+//
+// n(), not t() with a placeholder for the overdue count: pl/ru and friends need
+// the plural forms.
+const checklistLabel = computed(() => {
+	const done = Number(props.card.checklist?.done ?? 0)
+	const total = Number(props.card.checklist?.total ?? 0)
+	return hasOverdueSteps.value
+		? n('kanso', 'Checklist progress {done} of {total}, %n overdue step', 'Checklist progress {done} of {total}, %n overdue steps', Number(props.card.checklist.overdue), { done, total })
+		: t('kanso', 'Checklist progress {done} of {total}', { done, total })
+})
 
 const dueDateClass = computed(() => {
 	if (!props.card.duedate) return ''
@@ -237,9 +250,23 @@ const dueDateClass = computed(() => {
 	return ''
 })
 
+// This card's assignees, named by the server (#10736). Same source as the
+// description above - the detail fetch this component already makes - so it costs
+// no extra request. The `participants` prop is the board's picker list and is
+// capped, which is why it can only be the FALLBACK here: it cannot name anyone
+// past the cap, and this component never had the card modal's
+// discovered-participants overlay to paper over that, so a past-cap assignee
+// showed as a bare uid in the preview on every single open.
+const assigneeNameByUid = computed(() => new Map(
+	(Array.isArray(cardDetail.value?.assignees) ? cardDetail.value.assignees : [])
+		.map((p) => [p.uid, p.displayName]),
+))
+
 function participantName(uid) {
-	const p = props.participants.find((x) => x.uid === uid)
-	return p?.displayName || uid
+	// The capped board list still covers the first paint, before the detail lands.
+	return assigneeNameByUid.value.get(uid)
+		|| props.participants.find((x) => x.uid === uid)?.displayName
+		|| uid
 }
 
 // ── Positioning: anchor near the originating tile, clamped to the viewport ────

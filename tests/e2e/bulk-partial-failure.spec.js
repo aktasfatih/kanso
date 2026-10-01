@@ -18,6 +18,11 @@
 //     page only restores one card at a time — so a partial failure that lost
 //     the landed ids would strand them.
 //
+// The same summary is what `apply()` drops OUT of the selection: the ids in
+// `err.partial.ok` have had the action, so leaving them ticked makes the bar
+// over-count and a retry resends them. The selection is not cleared — the failed
+// chunk still needs the action — it shrinks to exactly what is left to retry.
+//
 // Neither is reachable from the UI without fault injection (the server does not
 // fail a valid chunk), hence page.route: chunk 1 goes through to the real
 // backend and commits for real, chunk 2 is answered with a 500. The assertions
@@ -151,8 +156,18 @@ test.describe('A bulk action that fails mid-sequence keeps what already landed (
 		await expect.poll(() => archivedCount(state.boardId), { timeout: 30_000 }).toBe(FIRST_CHUNK)
 
 		// The selection survives a failed apply (apply() only clear()s on success),
-		// so the user can retry without re-selecting 101 cards.
-		await expect(page.locator('.bulk-action-bar')).toContainText(`${CARD_COUNT} selected`)
+		// so the user can retry without re-selecting 101 cards — but it survives
+		// MINUS what landed. The 100 cards chunk 1 committed are archived now, so
+		// keeping them ticked would make this bar over-count by 100 and a retry
+		// would resend ids that have already had the action. What is left to retry
+		// is the single card of the chunk that failed.
+		//
+		// `\b1 selected` rather than the plain substring: "1 selected" IS a
+		// substring of "101 selected", so an unanchored assertion would pass on
+		// exactly the bug this pins.
+		await expect(page.locator('.bulk-action-bar'))
+			.toContainText(/\b1 selected/, { timeout: 10_000 })
+		await expect(page.locator('.bulk-action-bar')).not.toContainText(`${CARD_COUNT} selected`)
 	})
 
 	test('the archive-all undo carries exactly the ids that were archived', async ({ page }) => {

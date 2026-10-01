@@ -446,7 +446,7 @@ jobs:
         run: npm run lint:e2e-timeouts
 
   # Cross-version × cross-DB install/migration matrix. This is what actually
-  # VALIDATES the info.xml claim of NC 32–34: for each (version, db) combo it
+  # VALIDATES the info.xml claim of NC 32–35: for each (version, db) combo it
   # builds the frontend, boots a throwaway Nextcloud on that DB, enables Kanso
   # (running every migration via the app-enable + `occ upgrade`), then asserts
   # the schema was really created AND that app code actually runs against that
@@ -461,25 +461,46 @@ jobs:
   #   - sqlite: no service container, cheap, and it's the backend that surfaced
   #     the default-index-name migration bug.
   #   - postgres: the production/dev default.
-  #   - mysql (mariadb): used to run on NC 34 alone (the newest target), to
-  #     catch MySQL-dialect issues without a combo blow-up — a deliberate cost
-  #     trade that named its own revisiting condition ("widen mysql across
-  #     versions if a dialect issue ever surfaces"). Two user reports then
-  #     landed in exactly the cells that had never run: GH #158 on NC 32 +
-  #     MySQL, GH #155 on NC 33 + MySQL. Neither is diagnosed and this matrix is
-  #     NOT a fix for either — the owner could not reproduce #158 on three
-  #     separate MariaDB builds, so the odds it reddens here are low. What it
-  #     buys is that info.xml's NC 32–34 claim is validated on every DB we tell
-  #     users to run, instead of on two of three: a MySQL-only migration or
-  #     dialect bug on NC 32/33 now fails here rather than shipping green.
+  #   - mariadb: Nextcloud's MySQL-compatible target, and the engine the dev
+  #     stack actually boots (dev/docker-compose.yml, `image: mariadb:11`). This
+  #     cell was called `mysql` until 2026-09-28, which overclaimed — MySQL the
+  #     product has never run in this matrix. It is named for the engine it
+  #     boots now. The compose PROFILE is still `mysql` (that is its name in
+  #     dev/docker-compose.yml, and dev/setup.sh accepts either spelling of
+  #     KANSO_DB), so the `mariadb` cell is mapped back to `profile=mysql`
+  #     below. The leg used to run on NC 34 alone and was widened to every
+  #     version; what that buys is that info.xml's NC 32–35 claim is validated
+  #     on every DB family we tell users to run, instead of on two of three.
+  #
+  #     MySQL PROPER (8.x) IS NOT COVERED, deliberately. The widening was
+  #     motivated by two user reports that had landed in cells which had never
+  #     run — GH #158 on NC 32, GH #155 on NC 33, both reporters on MySQL 8.4.
+  #     Both are now diagnosed, and NEITHER was a database-dialect bug:
+  #       * #158 was a PHP 8.1 ParseError on `final readonly class`
+  #         (lib/Access/ViewerContext.php), fixed declaratively by the
+  #         `<php min-version="8.2"/>` floor in appinfo/info.xml and shipped in
+  #         0.34.1. The owner had already failed to reproduce it on MySQL 8.4,
+  #         MariaDB 11 and MariaDB 10.6 — the engine was never the variable.
+  #       * #155 was Nextcloud not routing to the app at all ("404s for
+  #         everything", every endpoint including my-boards and reviews). It
+  #         closed invalid/question with no further reply.
+  #     So there is currently ZERO evidence of a MySQL-vs-MariaDB dialect
+  #     failure in this app, and a real `mysql:8.x` service would add legs to
+  #     insure against a risk nothing has ever demonstrated.
+  #
+  #     Revisit condition, unchanged in substance: add a real `mysql:8.x`
+  #     service the first time a dialect failure actually shows up on MySQL and
+  #     not on MariaDB — a trace, not a suspicion.
   #
   # Measured cost (15 successful ci.yml runs, 2026-09-14..22): each leg is ~8min
-  # median, the mysql leg ~10min, and the runner pool ran all 7 legs
-  # concurrently in 12 of those 15 runs, so the matrix span stayed ~15min
-  # against a 30min cap. The two added legs are expected to ride along in
-  # parallel; even if the pool serialises them the span lands ~25min, still well
-  # inside the cap and nowhere near the ~36min e2e that sets the PR feedback
-  # loop.
+  # median, the mariadb leg ~10min, and the runner pool ran all 7 legs of the
+  # then-current matrix concurrently in 12 of those 15 runs, so the matrix span
+  # stayed ~15min. With NC 35 in the list the cross-product is 12 legs.
+  # `timeout-minutes` below is PER LEG, not for the matrix, so leg count cannot
+  # exhaust it — each leg still runs one boot well inside 30min, and only the
+  # wall-clock SPAN grows when the pool has to queue them. Even fully
+  # serialised that span stays under the ~36min e2e that actually sets the PR
+  # feedback loop, so this stays off the critical path.
   install-matrix:
     runs-on: kanso-runners
     timeout-minutes: 30
@@ -489,12 +510,17 @@ jobs:
       # or a dialect bug hides the version it also affects.
       matrix:
         # Written as a plain cross-product rather than a base matrix plus an
-        # `include:` row — with mysql in the list the matrix states the
+        # `include:` row — with every DB in the list the matrix states the
         # invariant directly (every supported NC version × every supported DB)
         # and there is no second place to edit when a version or a DB is added
         # or dropped.
-        nc-version: ['32', '33', '34']
-        db: ['sqlite', 'postgres', 'mysql']
+        #
+        # `mariadb`, not `mysql`: these values name the ENGINE each leg boots
+        # (see the DB coverage rationale above). dev/setup.sh accepts it as a
+        # KANSO_DB spelling and maps it to the compose profile, which is still
+        # called `mysql`; the pre-pull step below does the same mapping.
+        nc-version: ['32', '33', '34', '35']
+        db: ['sqlite', 'postgres', 'mariadb']
     name: install (NC ${{ matrix.nc-version }} · ${{ matrix.db }})
     env:
       NC_VERSION: ${{ matrix.nc-version }}
@@ -619,9 +645,20 @@ jobs:
       - name: Smoke — schema present
         run: ./dev/smoke.sh
 
+      # The database container is dumped too, and first: when its first-boot
+      # init exits (a known mariadb flake, see dev/docker-compose.yml) the app
+      # container only ever reports that host `db` did not resolve, so without
+      # this the actual crash reason is unrecoverable and the run is written off
+      # as flake. dev/setup.sh now wipes the datadir and retries that first boot
+      # ONCE, so reaching this step on a mariadb row means it failed twice — the
+      # dump is what tells the two apart. `|| true` is load-bearing on the
+      # sqlite rows of this matrix —
+      # they have no db service at all, and a missing container must not fail
+      # the dump and mask the real failure.
       - name: Dump Nextcloud logs on failure
         if: ${{ failure() }}
         run: |
+          docker logs kanso-dev-db --tail 200 || true
           docker logs kanso-dev --tail 200 || true
           docker exec kanso-dev tail -n 120 /var/www/html/data/nextcloud.log || true
 
@@ -643,7 +680,7 @@ jobs:
   #
   # ONE Nextcloud version and ONE database on purpose (34 + postgres, the
   # production/dev default). This class of bug is caught by one leg; spreading it
-  # over install-matrix's nine combos would multiply CI cost for nothing. Widen
+  # over install-matrix's twelve combos would multiply CI cost for nothing. Widen
   # only if a defect ever slips through this leg.
   #
   # Proven non-vacuous before merge: a temporary migration adding a NOT NULL
@@ -728,6 +765,7 @@ jobs:
       - name: Dump Nextcloud logs on failure
         if: ${{ failure() }}
         run: |
+          docker logs kanso-dev-db --tail 200 || true
           docker logs kanso-dev --tail 200 || true
           docker exec kanso-dev tail -n 120 /var/www/html/data/nextcloud.log || true
 
@@ -875,10 +913,13 @@ jobs:
           if-no-files-found: ignore
 
       # Surface container logs when the stack or a spec fails so failures are
-      # diagnosable without re-running locally.
+      # diagnosable without re-running locally. The db container comes first
+      # because when it is the thing that died, the app container can only
+      # report that host `db` did not resolve.
       - name: Dump Nextcloud logs on failure
         if: ${{ failure() }}
         run: |
+          docker logs kanso-dev-db --tail 200 || true
           docker logs kanso-dev --tail 200 || true
           docker exec kanso-dev tail -n 100 /var/www/html/data/nextcloud.log || true
 

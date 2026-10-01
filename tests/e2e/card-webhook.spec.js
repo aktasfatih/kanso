@@ -210,6 +210,21 @@ test.describe('GitHub webhook issue intake', () => {
 			},
 		})
 
+	// A GitHub `issues`/`labeled` delivery (#10566), in GitHub's own shape: the
+	// changed label rides at the TOP level and `issue.labels` already reflects the
+	// change - which is what lets intake re-run its filter off the current set.
+	const labeledBody = (issueNumber, labelName, { title = 'New bug report', action = 'labeled', state = 'open' } = {}) =>
+		JSON.stringify({
+			action,
+			label: { name: labelName, color: 'd73a4a' },
+			issue: {
+				html_url: `https://github.com/octo/app/issues/${issueNumber}`,
+				state,
+				title,
+				labels: [{ name: labelName }],
+			},
+		})
+
 	// Card summaries of one stack from the board payload (includes archived
 	// card summaries - they carry `archived: true`).
 	const cardsIn = async (stackId) => {
@@ -301,6 +316,156 @@ test.describe('GitHub webhook issue intake', () => {
 		res = await postWebhook(boardId, raw, sign(raw, secret))
 		expect(res.body.created).toBe(true)
 		expect((await cardsIn(inboxStackId)).length).toBe(before + 1)
+	})
+
+	// #10566: `opened` used to be intake's only entry, so an issue labelled during
+	// triage - the normal order - was filtered out once and never looked at again.
+	// Worth an e2e rather than only a unit test: the dedup that has to hold on the
+	// new path is a real `card_links` lookup, which the PHPUnit suite can only mock.
+	test('an issue labelled after it was opened is taken in, exactly once', async () => {
+		await api('PUT', `/boards/${boardId}/webhook/intake`, { stackId: inboxStackId, label: 'bug' })
+
+		const issueNumber = ++issueSeq
+		const before = (await cardsIn(inboxStackId)).length
+
+		// Opened without the intake label: filtered out, exactly as before.
+		const openedRaw = openedBody(issueNumber, { title: 'Labelled during triage' })
+		let res = await postWebhook(boardId, openedRaw, sign(openedRaw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.handled).toBe(false)
+		expect(res.body.reason).toBe('intake_filtered')
+		expect((await cardsIn(inboxStackId)).length).toBe(before)
+
+		// Labelled a beat later: the same filter now passes, so it lands.
+		const labeledRaw = labeledBody(issueNumber, 'bug', { title: 'Labelled during triage' })
+		res = await postWebhook(boardId, labeledRaw, sign(labeledRaw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.created).toBe(true)
+		// The delivery log names the action that carded it, not a hardcoded `opened`.
+		expect(res.body.action).toBe('labeled')
+
+		const cards = await cardsIn(inboxStackId)
+		expect(cards.length).toBe(before + 1)
+		expect(cards.some((c) => c.title === 'Labelled during triage')).toBe(true)
+		const links = (await api('GET', `/cards/${res.body.cardId}/links`)).body
+		expect(links).toHaveLength(1)
+		expect(links[0].url).toBe(`https://github.com/octo/app/issues/${issueNumber}`)
+
+		// A second, identical label delivery: the issue is LINKED now, so it takes
+		// the ordinary linked-issue path and never reaches intake at all - no second
+		// card either way, which is what this is about.
+		const cardId = res.body.cardId
+		res = await postWebhook(boardId, labeledRaw, sign(labeledRaw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.created).toBeUndefined()
+		expect((await cardsIn(inboxStackId)).length).toBe(before + 1)
+
+		// And with the card ARCHIVED, so the alive-link lookup misses it, the
+		// retrigger DOES reach intake - where the reused `existsByBoardAndUrls()`
+		// dedup stops it. That is the real-table guarantee PHPUnit can only mock.
+		await api('PATCH', `/cards/${cardId}`, { archived: true })
+		res = await postWebhook(boardId, labeledRaw, sign(labeledRaw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.handled).toBe(false)
+		expect(res.body.reason).toBe('intake_duplicate')
+		expect((await cardsIn(inboxStackId)).length).toBe(before + 1)
+	})
+
+	test('an issue labelled with something else is still never taken in', async () => {
+		await api('PUT', `/boards/${boardId}/webhook/intake`, { stackId: inboxStackId, label: 'bug' })
+		const before = (await cardsIn(inboxStackId)).length
+
+		const raw = labeledBody(++issueSeq, 'enhancement')
+		const res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.handled).toBe(false)
+		expect(res.body.reason).toBe('intake_filtered')
+		expect((await cardsIn(inboxStackId)).length).toBe(before)
+	})
+
+	// A board taking in ALL issues is untouched by the retrigger: it already cards
+	// every opened issue, so re-running intake on a label change would only make
+	// "somebody touched its labels" a second trigger for every issue ever filed.
+	test('a label delivery on a filterless intake board creates nothing', async () => {
+		await api('PUT', `/boards/${boardId}/webhook/intake`, { stackId: inboxStackId, label: '' })
+		const before = (await cardsIn(inboxStackId)).length
+
+		const raw = labeledBody(++issueSeq, 'bug')
+		const res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.handled).toBe(false)
+		expect(res.body.reason).toBe('no_link_match')
+		expect((await cardsIn(inboxStackId)).length).toBe(before)
+	})
+
+	// Intake brings WORK onto the board. Labelling a batch of long-closed issues
+	// during a triage sweep must not card every one of them - nothing would ever
+	// move them off the intake stack, since the close already happened.
+	test('labelling a closed issue never takes it in', async () => {
+		await api('PUT', `/boards/${boardId}/webhook/intake`, { stackId: inboxStackId, label: 'bug' })
+		const before = (await cardsIn(inboxStackId)).length
+
+		const raw = labeledBody(++issueSeq, 'bug', { state: 'closed' })
+		const res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.handled).toBe(false)
+		expect(res.body.reason).toBe('no_link_match')
+		expect((await cardsIn(inboxStackId)).length).toBe(before)
+	})
+
+	test('an unlabeled delivery never takes an issue in', async () => {
+		await api('PUT', `/boards/${boardId}/webhook/intake`, { stackId: inboxStackId, label: 'bug' })
+		const before = (await cardsIn(inboxStackId)).length
+
+		// `issue.labels` still carries the intake label here (a different one came
+		// off), so this proves removals are excluded from the action set rather than
+		// merely lacking the data.
+		const raw = labeledBody(++issueSeq, 'bug', { action: 'unlabeled' })
+		const res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.handled).toBe(false)
+		expect(res.body.reason).toBe('no_link_match')
+		expect((await cardsIn(inboxStackId)).length).toBe(before)
+	})
+
+	// #10570: the issue's labels arrive on the very payload that cards it, and used
+	// to be read as the intake GATE and then discarded - so an issue filed as
+	// `bug` + `backlog` became a bare card someone re-labelled by hand. An e2e
+	// rather than only a unit test: PHPUnit mocks LabelService, so only a real
+	// delivery proves the assignments and their kanso_changes rows reach Postgres.
+	test('an opened issue is carded WITH the board labels it already carries', async () => {
+		await api('PUT', `/boards/${boardId}/webhook/intake`, { stackId: inboxStackId, label: '' })
+		const bugLabelId = (await api('POST', '/labels', { boardId, title: 'Bug', color: 'ff0000' })).body.id
+		const backlogLabelId = (await api('POST', '/labels', { boardId, title: 'Backlog', color: '00ff00' })).body.id
+		const labelsBefore = (await api('GET', `/boards/${boardId}`)).body.labels.length
+
+		const raw = openedBody(++issueSeq, {
+			title: 'Arrives labelled',
+			// Matched by title, case-insensitively, in BOTH directions - plus one
+			// name this board does not define.
+			labels: [{ name: 'bug' }, { name: 'good first issue' }, { name: 'BACKLOG' }],
+		})
+		const res = await postWebhook(boardId, raw, sign(raw, secret))
+		expect(res.status).toBe(200)
+		expect(res.body.created).toBe(true)
+
+		const card = (await api('GET', `/cards/${res.body.cardId}`)).body
+		expect([...(card.labelIds ?? [])].sort()).toEqual([bugLabelId, backlogLabelId].sort())
+
+		// `good first issue` matches nothing here: silently ignored, and NEVER minted
+		// as a board label - creation is MANAGE-gated and this endpoint is
+		// unauthenticated and acts as the board owner.
+		expect((await api('GET', `/boards/${boardId}`)).body.labels).toHaveLength(labelsBefore)
+
+		// Each assignment went through LabelService as the board owner, so each wrote
+		// its kanso_changes row - VERB_LABELED (6), carrying the label title.
+		const activity = (await api('GET', `/cards/${res.body.cardId}/activity`)).body
+		expect(
+			activity
+				.filter((a) => a.verb === 6)
+				.map((a) => a.detail?.to)
+				.sort(),
+		).toEqual(['Backlog', 'Bug'])
 	})
 
 	test('the intake endpoint rejects a stack of another board', async () => {

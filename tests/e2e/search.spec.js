@@ -217,6 +217,76 @@ test.describe('Search', () => {
 		await api.delete(`/stacks/${secondStack.id}`)
 	})
 
+	// #10762 — archived cards were the ONE listing search did not filter, and
+	// ArchiveDoneCards sweeps finished work off the board unattended, so a board
+	// that had been running a while answered every query mostly with shelved
+	// cards. They are out of search by default now; the archive is still the
+	// project's history, so one chip widens the search back over it.
+	test('archived cards leave search until "Include archived" is on', async ({ page }) => {
+		// Every card this spec makes, recorded the instant the create returns. The
+		// fixture setup is INSIDE the try for the same reason the assertions are:
+		// this file's specs share one board, so a create that succeeds followed by
+		// an archive that fails would otherwise strand "Quagga" cards on it and
+		// change what the specs after this one see.
+		const created = []
+		try {
+			// Title match on an archived card…
+			const shelvedCard = await api.post('/cards', { stackId: state.stackId, title: 'Quagga retrospective' })
+			created.push(shelvedCard.id)
+			// …and a COMMENT match on an archived card whose own title does NOT carry
+			// the term, so this row can only arrive through the comment source.
+			const shelvedCommented = await api.post('/cards', { stackId: state.stackId, title: 'Okapi ledger' })
+			created.push(shelvedCommented.id)
+			await api.post(`/cards/${shelvedCommented.id}/comments`, { body: 'The quagga decision was taken here.' })
+			// A live card with the same term: without it, "no archived rows" would
+			// pass just as well on a query that returned nothing at all.
+			const liveCard = await api.post('/cards', { stackId: state.stackId, title: 'Quagga live work' })
+			created.push(liveCard.id)
+			await api.patch(`/cards/${shelvedCard.id}`, { archived: true })
+			await api.patch(`/cards/${shelvedCommented.id}`, { archived: true })
+
+			await goToBoard(page)
+			const searchInput = page.locator('.search-box__input')
+			await searchInput.fill('Quagga')
+
+			const dropdown = page.locator('.search-box__dropdown')
+			const row = (text) => dropdown.locator('.search-box__result').filter({ hasText: text })
+			await expect(dropdown).toBeVisible()
+			// The live row FIRST in every block: flipping the chip changes the query
+			// key, so tanstack drops `data` while it refetches and for that moment
+			// EVERY row is absent. Waiting for the live row is what proves the new
+			// result set has landed, which is what makes the two counts below mean
+			// "excluded" rather than "not arrived yet".
+			await expect(row('Quagga live work')).toBeVisible()
+			await expect(row('Quagga retrospective')).toHaveCount(0)
+			await expect(row('Okapi ledger')).toHaveCount(0)
+
+			// Opt in - both sources widen, and the live hit stays.
+			const archivedToggle = dropdown.locator('.search-box__archived-toggle')
+			await archivedToggle.click()
+			await expect(archivedToggle).toHaveAttribute('aria-pressed', 'true')
+			await expect(row('Quagga retrospective')).toBeVisible()
+			await expect(row('Okapi ledger')).toBeVisible()
+			await expect(row('Quagga live work')).toBeVisible()
+
+			// …and off again, on the same term.
+			await archivedToggle.click()
+			await expect(archivedToggle).toHaveAttribute('aria-pressed', 'false')
+			await expect(row('Quagga live work')).toBeVisible()
+			await expect(row('Quagga retrospective')).toHaveCount(0)
+			await expect(row('Okapi ledger')).toHaveCount(0)
+		} finally {
+			// Unconditional, and over exactly what was created: a failed assertion
+			// — or a failed create/archive halfway through the setup above — must
+			// not leave "Quagga" cards on the board this file's other specs search.
+			// Swallowed per card so one failing delete cannot skip the rest, nor
+			// replace the real failure this block is unwinding.
+			for (const id of created) {
+				await api.delete(`/cards/${id}`).catch(() => {})
+			}
+		}
+	})
+
 	test('pressing Escape closes the dropdown and clears the input', async ({ page }) => {
 		await goToBoard(page)
 

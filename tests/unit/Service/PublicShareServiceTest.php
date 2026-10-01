@@ -1256,16 +1256,27 @@ class PublicShareServiceTest extends TestCase {
 
 	/**
 	 * An image pasted into a description is stored as the AUTHENTICATED inline
-	 * path, which answers 401 to a visitor who has no session - that is the whole
-	 * bug. The anonymous payload therefore serves the token-gated path instead.
-	 * The surrounding text is byte-identical; only the src moves.
+	 * path, which answers 401 to a visitor who has no session (#152). It still has
+	 * to be re-pointed at the token-gated route - but NOT HERE, and that is the
+	 * point of this test (#10608).
+	 *
+	 * The payload used to carry the re-pointed path, produced by a regex over the
+	 * whole description string. A regex over free text has no idea where it is: a
+	 * URL quoted inside a code fence got the 64-char share token substituted into
+	 * the visible text, so a fence stopped showing what was typed and a screenshot
+	 * of the board's CONTENT carried a working access credential. The re-pointing
+	 * moved into the renderer (src/services/inlineAttachmentSrc.js), which only
+	 * touches a src markdown actually resolved as an image.
+	 *
+	 * So the description goes out EXACTLY as stored, image src included, and the
+	 * anonymous payload is a place the share token simply never appears.
 	 */
-	public function testPayloadRepointsInlineImageSrcAtTheShareToken(): void {
+	public function testPayloadLeavesTheStoredInlineImageSrcAlone(): void {
 		$board = $this->board(1, self::TOKEN);
 		$card = $this->card(10, 5, 'Has a picture');
-		$card->setDescription(
-			"Look:\n\n![shot](/apps/kanso/api/cards/10/attachments/3/inline)\n\nEnd."
-		);
+		$stored = "Look:\n\n![shot](/apps/kanso/api/cards/10/attachments/3/inline)\n\n"
+			. "```\n![quoted](/apps/kanso/api/cards/10/attachments/3/inline)\n```";
+		$card->setDescription($stored);
 		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)->willReturn($board);
 		$this->stackMapper->method('findByBoard')->willReturn([$this->stack(5, 'To do')]);
 		$this->cardMapper->method('findPublicByBoard')->willReturn([$card]);
@@ -1275,20 +1286,69 @@ class PublicShareServiceTest extends TestCase {
 		$this->checklistItemMapper->method('findByBoardPublicOnly')->willReturn([]);
 
 		$payload = $this->service->getPublicBoard(self::TOKEN);
-		self::assertSame(
-			"Look:\n\n![shot](/apps/kanso/api/public/" . self::TOKEN . "/cards/10/attachments/3/inline)\n\nEnd.",
-			$payload['cards'][0]['description']
-		);
+		self::assertSame($stored, $payload['cards'][0]['description']);
+		self::assertStringNotContainsString(self::TOKEN, $payload['cards'][0]['description']);
 	}
 
 	/**
-	 * THE rewrite's boundary. The pattern runs over free text, so without a left
-	 * boundary it also matches the PATH INSIDE an absolute URL - and the rewrite
-	 * would then splice the board's share token into an attacker-controlled
-	 * external link. Any EDIT member can type one of these into a description and
-	 * cannot otherwise read the token (getConfig is MANAGE-only), so one click by
-	 * any anonymous visitor would hand it to them. Every hostile shape must come
-	 * back BYTE-IDENTICAL.
+	 * The invariant the whole class of bug reduces to, stated over the WHOLE
+	 * payload rather than one field: nothing this route serves an anonymous visitor
+	 * contains the share token. Not the description, not a comment body, not a
+	 * title, not a label - the token lives in the URL the visitor already typed and
+	 * nowhere in the body of the page.
+	 *
+	 * Every input here is a shape that used to be rewritten: a legitimate embed, a
+	 * fenced quote, prose, and the hostile absolute URL from
+	 * {@see self::hostileImageSrcProvider()}. Reintroduce ANY substitution of the
+	 * token into free text - with or without the old negative lookbehind - and this
+	 * fails, which is what keeps it from going quietly vacuous.
+	 */
+	public function testPayloadCarriesTheShareTokenInNoFieldAtAll(): void {
+		$board = $this->board(1, self::TOKEN, null, true);
+		$card = $this->card(10, 5, 'Has a picture');
+		$card->setDescription(
+			"![shot](/apps/kanso/api/cards/10/attachments/3/inline)\n\n"
+			. "```\n/apps/kanso/api/cards/10/attachments/3/inline\n```\n\n"
+			. "the endpoint is /apps/kanso/api/cards/10/attachments/3/inline and it 401s\n\n"
+			. '[click](https://evil.example/apps/kanso/api/cards/1/attachments/2/inline)'
+		);
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)->willReturn($board);
+		$this->stackMapper->method('findByBoard')->willReturn([$this->stack(5, 'To do')]);
+		$this->cardMapper->method('findPublicByBoard')->willReturn([$card]);
+		$this->labelMapper->method('findByBoard')->willReturn([]);
+		$this->cardLabelMapper->method('findLabelIdsByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('progressByBoardPublicOnly')->willReturn([]);
+		$this->checklistItemMapper->method('findByBoardPublicOnly')->willReturn([]);
+		$this->commentMapper->method('findByBoardPublicOnly')->willReturn([
+			10 => [$this->comment(1, 10, 'alice', '![pic](/index.php/apps/kanso/api/cards/10/attachments/7/inline)')],
+		]);
+		$author = $this->createMock(IUser::class);
+		$author->method('getDisplayName')->willReturn('Alice A.');
+		$this->userManager->method('get')->willReturn($author);
+
+		$encoded = json_encode($this->service->getPublicBoard(self::TOKEN));
+		self::assertIsString($encoded);
+		self::assertStringNotContainsString(self::TOKEN, $encoded);
+	}
+
+	/**
+	 * Every hostile shape must come back BYTE-IDENTICAL, and no anonymous reader
+	 * may ever find the token in a description.
+	 *
+	 * These five used to be THE boundary case of the payload rewrite: the pattern
+	 * ran over free text, so without a left boundary it also matched the PATH
+	 * INSIDE an absolute URL, and the rewrite would splice the board's share token
+	 * into an attacker-controlled external link. Any EDIT member can type one of
+	 * these into a description and cannot otherwise read the token (getConfig is
+	 * MANAGE-only), so one click by any anonymous visitor would hand it to them.
+	 *
+	 * That rewrite is gone (#10608), so read this now as the plain statement that
+	 * the payload does not touch these strings at all - and know that the attack
+	 * class it used to guard is defended somewhere else: the renderer matches ONE
+	 * complete attribute value, anchored `^…$`, which no absolute URL can satisfy.
+	 * That property is pinned with these same five shapes AND a mutation proof in
+	 * tests/unit/inlineAttachmentSrc.test.mjs. If you are reading this because you
+	 * are about to move the re-pointing back onto the server, read that file first.
 	 *
 	 * @dataProvider hostileImageSrcProvider
 	 */
@@ -1321,8 +1381,14 @@ class PublicShareServiceTest extends TestCase {
 		];
 	}
 
-	/** The same rewrite reaches an opted-in comment body, not only the description. */
-	public function testPayloadRepointsInlineImageSrcInCommentBodies(): void {
+	/**
+	 * The comment body is left alone for the same reason the description is: the
+	 * rewrite it used to get here now happens in the renderer, which is the only
+	 * thing that knows an image from a fence quoting one (#10608). Its own rendered
+	 * surface (`.public-comment__body img`) is covered end-to-end by
+	 * tests/e2e/public-share.spec.js.
+	 */
+	public function testPayloadLeavesAnInlineImageSrcInACommentBodyAlone(): void {
 		$board = $this->board(1, self::TOKEN, null, true);
 		$card = $this->card(10, 5, 'Has a picture');
 		$card->setDescription('no image here');
@@ -1342,7 +1408,7 @@ class PublicShareServiceTest extends TestCase {
 
 		$payload = $this->service->getPublicBoard(self::TOKEN);
 		self::assertSame(
-			'![pic](/index.php/apps/kanso/api/public/' . self::TOKEN . '/cards/10/attachments/7/inline)',
+			'![pic](/index.php/apps/kanso/api/cards/10/attachments/7/inline)',
 			$payload['cards'][0]['comments'][0]['body']
 		);
 	}
@@ -1484,6 +1550,70 @@ class PublicShareServiceTest extends TestCase {
 		$this->cardMapper->method('findPublicByBoardAndId')->with(1, 10)
 			->willReturn($this->cardEmbedding(10, 5, 3));
 		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5, 'To do', true));
+		$this->attachmentService->expects(self::never())->method('inlineForAuthorizedShare');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->service->getPublicInlineAttachment(self::TOKEN, 10, 3);
+	}
+
+	/**
+	 * THE DOCUMENTED DIVERGENCE (#10608), pinned so the next reader finds a decision
+	 * rather than a surprise.
+	 *
+	 * The renderer that re-points these srcs is markdown-structure-aware: a URL
+	 * quoted inside a code fence is displayed as typed, never rewritten, so no
+	 * picture is drawn for it. This GATE is not - it is a regex over the whole text -
+	 * so the bytes stay fetchable by anyone who knows the ids. That is deliberate:
+	 *
+	 *  - it is the status quo, and not a new hole (the same text authorised the same
+	 *    fetch before the re-pointing moved off the server);
+	 *  - it fails in the SAFE direction: a gate WIDER than the renderer means an
+	 *    unrendered image is still fetchable, while a NARROWER one would 404 an image
+	 *    the page actually draws - i.e. #152 all over again;
+	 *  - whoever wrote the fence is an EDIT member who can publish the same
+	 *    attachment deliberately anyway, so nothing crosses a trust boundary;
+	 *  - and teaching this gate about fences needs a markdown parser, which an app
+	 *    with zero runtime PHP dependencies does not have.
+	 *
+	 * If that trade ever stops being acceptable, this test is the one to change -
+	 * on purpose, with the reasoning, not by accident.
+	 */
+	public function testInlineAttachmentStillServesAnImageOnlyQuotedInACodeFence(): void {
+		$board = $this->board(1, self::TOKEN);
+		$card = $this->card(10, 5, 'Only quotes the URL');
+		$card->setDescription("```\n![shot](/apps/kanso/api/cards/10/attachments/3/inline)\n```");
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)->willReturn($board);
+		$this->cardMapper->method('findPublicByBoardAndId')->with(1, 10)->willReturn($card);
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5, 'To do'));
+		$this->attachmentService->expects(self::once())->method('inlineForAuthorizedShare')
+			->with(10, 3)->willReturn([$this->pngAttachment(3, 10), 'PNGBYTES']);
+
+		[, $bytes] = $this->service->getPublicInlineAttachment(self::TOKEN, 10, 3);
+		self::assertSame('PNGBYTES', $bytes);
+	}
+
+	/**
+	 * The surviving job of INLINE_SRC_RE's negative lookbehind, now that the payload
+	 * rewrite it was written for is gone: the gate runs over free text, so without a
+	 * left boundary the path inside an ABSOLUTE URL matches too, and a third-party
+	 * link pasted into a description would authorise an anonymous fetch of an
+	 * attachment the author never embedded.
+	 *
+	 * Be honest about the strength of this: whoever pastes that URL is an EDIT
+	 * member who could authorise the same attachment with a real embed, so this is
+	 * least-surprise rather than a trust boundary. It is NOT the token-exfiltration
+	 * property the five hostileImageSrcProvider cases were originally written about -
+	 * that one lives in tests/unit/inlineAttachmentSrc.test.mjs now. Mutation-proved
+	 * by stripping `(?<![\w:/@.-])` from INLINE_SRC_RE, which makes this pass bytes
+	 * out.
+	 */
+	public function testInlineAttachmentRefusesAnAttachmentNamedOnlyByAnAbsoluteUrl(): void {
+		$board = $this->board(1, self::TOKEN);
+		$card = $this->card(10, 5, 'Pasted a third-party link');
+		$card->setDescription('see https://evil.example/apps/kanso/api/cards/10/attachments/3/inline');
+		$this->boardMapper->method('findByPublicToken')->with(self::TOKEN)->willReturn($board);
+		$this->cardMapper->method('findPublicByBoardAndId')->with(1, 10)->willReturn($card);
+		$this->stackMapper->method('find')->with(5)->willReturn($this->stack(5, 'To do'));
 		$this->attachmentService->expects(self::never())->method('inlineForAuthorizedShare');
 
 		$this->expectException(DoesNotExistException::class);

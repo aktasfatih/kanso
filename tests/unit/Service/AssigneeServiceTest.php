@@ -421,4 +421,130 @@ class AssigneeServiceTest extends TestCase {
 		$this->expectException(NotPermittedException::class);
 		$this->service->unassign(9, 'bob', 'mallory');
 	}
+
+	// ---- listForCard (#10736) ---------------------------------------------
+
+	/**
+	 * Names come from the user directory, in assignment order. Before #10736 the
+	 * frontend had only the board participants page to name an assignee from, and
+	 * that page is capped, so a past-cap assignee rendered as a bare uid.
+	 */
+	public function testListForCardNamesEveryAssigneeFromTheDirectory(): void {
+		$board = $this->board();
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn(['bob', 'carol']);
+		$this->userManager->method('get')->willReturnCallback(
+			function (string $uid): IUser {
+				$user = $this->createMock(IUser::class);
+				$user->method('getDisplayName')->willReturn(ucfirst($uid) . ' B.');
+				return $user;
+			}
+		);
+
+		self::assertSame([
+			['uid' => 'bob', 'displayName' => 'Bob B.'],
+			['uid' => 'carol', 'displayName' => 'Carol B.'],
+		], $this->service->listForCard(9, 'alice'));
+	}
+
+	/**
+	 * The acceptance criterion of #10736, encoded: the resolution is bounded by
+	 * the CARD's assignees and by nothing else. A card carrying more assignees
+	 * than {@see \OCA\Kanso\Service\ParticipantService::RESULT_LIMIT} must get all
+	 * of them named - anyone re-routing this through the capped participants page
+	 * would reintroduce exactly the bare-uid bug.
+	 */
+	public function testListForCardIsNotBoundedByTheParticipantsCap(): void {
+		$over = \OCA\Kanso\Service\ParticipantService::RESULT_LIMIT + 5;
+		$uids = [];
+		for ($i = 1; $i <= $over; $i++) {
+			$uids[] = 'pool' . $i;
+		}
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn($uids);
+		$this->userManager->method('get')->willReturnCallback(
+			function (string $uid): IUser {
+				$user = $this->createMock(IUser::class);
+				$user->method('getDisplayName')->willReturn('Pool Person ' . substr($uid, 4));
+				return $user;
+			}
+		);
+
+		$named = $this->service->listForCard(9, 'alice');
+		self::assertCount($over, $named);
+		// The LAST one - the one the cap would have shed - is named, not a bare uid.
+		self::assertSame(
+			['uid' => 'pool' . $over, 'displayName' => 'Pool Person ' . $over],
+			$named[$over - 1]
+		);
+	}
+
+	/**
+	 * An assignment row can outlive its account. It keeps its place in the list,
+	 * falling back to the uid - the same resolution ParticipantService uses. A row
+	 * that vanished instead would read as "nobody is assigned".
+	 */
+	public function testListForCardFallsBackToTheUidForAnUnknownAccount(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn(['ghost']);
+		$this->userManager->method('get')->with('ghost')->willReturn(null);
+
+		self::assertSame(
+			[['uid' => 'ghost', 'displayName' => 'ghost']],
+			$this->service->listForCard(9, 'alice')
+		);
+	}
+
+	/**
+	 * The denial case: display names are directory data, so this read is gated on
+	 * READ of the card's board in its own right rather than trusting the caller.
+	 */
+	public function testListForCardAssertsActorReadPermission(): void {
+		$board = $this->board();
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'mallory', PermissionService::PERMISSION_READ)
+			->willThrowException(new NotPermittedException());
+		$this->cardAssigneeMapper->expects(self::never())->method('findUserIdsByCard');
+		$this->userManager->expects(self::never())->method('get');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->listForCard(9, 'mallory');
+	}
+
+	/**
+	 * A card hidden from the actor (#3743) reads as absent here too - an external
+	 * member must not learn who an internal-only card is assigned to, even though
+	 * they hold READ on the board.
+	 */
+	public function testListForCardHidesACardTheActorMayNotSee(): void {
+		$board = $this->board();
+		$card = $this->card();
+		$visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$visibilityGuard->method('assertVisible')
+			->willThrowException(new DoesNotExistException('Card 9 does not exist'));
+		$service = new AssigneeService(
+			$this->cardAssigneeMapper,
+			$this->cardMapper,
+			$this->boardMapper,
+			$this->changeNotifier,
+			$this->permissionService,
+			$this->notificationService,
+			$this->subscriptionService,
+			$visibilityGuard,
+			$this->changeDetailMapper,
+			$this->userManager,
+		);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->cardAssigneeMapper->expects(self::never())->method('findUserIdsByCard');
+
+		$this->expectException(DoesNotExistException::class);
+		$service->listForCard(9, 'external');
+	}
 }
