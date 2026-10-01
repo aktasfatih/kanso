@@ -424,7 +424,7 @@ Kanso 是一款为速度而生的 Nextcloud 看板应用。看板、列和卡片
 	     register Flow operations/checks, which Kanso does not. -->
 	<category>organization</category>
 	<category>office</category>
-	<website>https://github.com/aktasfatih/kanso</website>
+	<website>https://aktasfatih.com/kanso/</website>
 	<bugs>https://github.com/aktasfatih/kanso/issues</bugs>
 	<repository type="git">https://github.com/aktasfatih/kanso.git</repository>
 	<screenshot>https://raw.githubusercontent.com/aktasfatih/kanso/main/docs/kanso-board.png</screenshot>
