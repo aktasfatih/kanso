@@ -60,6 +60,8 @@ use OCP\DB\Types;
  * @method void setChatUrl(?string $chatUrl)
  * @method string|null getDisabledCardFeatures()
  * @method void setDisabledCardFeatures(?string $disabledCardFeatures)
+ * @method string|null getDescription()
+ * @method void setDescription(?string $description)
  */
 class Board extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -130,6 +132,11 @@ class Board extends Entity implements \JsonSerializable {
 	// upgrade is a no-op. A pure presentation flag: the data behind a hidden
 	// feature is never touched and returns intact when it is re-enabled.
 	protected ?string $disabledCardFeatures = null;
+	// What this board is FOR - purpose, scope, house rules (#173). MANAGE-only
+	// to set, readable by every member. MARKDOWN source, stored raw and rendered
+	// by the client's shared sanitising renderer (src/services/markdown.js), the
+	// same way a card body is - so this column never holds HTML.
+	protected ?string $description = null;
 
 	public function __construct() {
 		$this->addType('title', Types::STRING);
@@ -154,10 +161,11 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('icalFeedToken', Types::STRING);
 		$this->addType('chatUrl', Types::STRING);
 		$this->addType('disabledCardFeatures', Types::TEXT);
+		$this->addType('description', Types::TEXT);
 	}
 
 	/**
-	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, background: ?string, archived: bool, lastModified: int, estimateScale: string, newCardsOnTop: bool, prefix: string, chatUrl: ?string, cardFeatures: array<string, bool>}
+	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, background: ?string, archived: bool, lastModified: int, estimateScale: string, newCardsOnTop: bool, prefix: string, chatUrl: ?string, description: ?string, cardFeatures: array<string, bool>}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -175,6 +183,14 @@ class Board extends Entity implements \JsonSerializable {
 			// that predate the column and haven't been backfilled yet.
 			'prefix' => $this->prefix ?? BoardPrefix::DEFAULT,
 			'chatUrl' => $this->chatUrl,
+			// What the board is for (#173), raw markdown. It rides the
+			// single-board payload every member already reads, so a client (and
+			// an assistant on the MCP) learns a board's purpose without a second
+			// request. Deliberately STRIPPED from the boards LIST
+			// ({@see \OCA\Kanso\Service\BoardService::findAllWithStats()}): that
+			// payload is one row per board and must not grow by a description
+			// each.
+			'description' => $this->description,
 			// Built-in card sections, emitted as a NORMALISED enabled-map
 			// ({contacts: true, attachments: false, ...}) so the client never
 			// parses the raw storage and a NULL column reads as all-enabled.

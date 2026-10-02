@@ -30,6 +30,10 @@
         "{card} is now a sub-card of {parent}": "{card} ist jetzt eine Unterkarte von {parent}",
         "{card} moved to {stack}": "{card} wurde nach {stack} verschoben",
         "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone.": "{count} Karte(n) haben eine Schätzung, die nicht zur neuen Skala passt, und werden zurückgesetzt. Dies kann nicht rückgängig gemacht werden.",
+        "_{count} character left_::_{count} characters left_": [
+            "{count} Zeichen übrig",
+            "{count} Zeichen übrig"
+        ],
         "{count} selected": "{count} ausgewählt",
         "{first}, +{n} more": "{first}, +{n} weitere",
         "{n} blocked": "{n} blockiert",
@@ -280,6 +284,7 @@
         "Board analytics": "Board-Analysen",
         "Board attachments": "Board-Anhänge",
         "Board background": "Board-Hintergrund",
+        "Board description": "Board-Beschreibung",
         "Board name": "Board-Name",
         "Board options": "Board-Optionen",
         "Board ordering needs a refresh.": "Board-Reihenfolge muss aktualisiert werden.",
@@ -589,6 +594,7 @@
         "Each run adds up to two entries per board to this account's activity.": "Jeder Durchlauf fügt der Aktivität dieses Kontos bis zu zwei Einträge pro Board hinzu.",
         "Edit": "Bearbeiten",
         "Edit comment": "Kommentar bearbeiten",
+        "Edit description": "Beschreibung bearbeiten",
         "Edit item": "Element bearbeiten",
         "Edit options": "Optionen bearbeiten",
         "Edit options for field {name}": "Optionen für Feld {name} bearbeiten",
@@ -857,6 +863,7 @@
         "Issue intake": "Issue-Aufnahme",
         "It is not in anyone's Files, so there is nowhere to undo it from.": "Sie liegt in niemandes Dateien, daher gibt es keinen Ort, an dem sich das rückgängig machen ließe.",
         "Italic": "Kursiv",
+        "Its purpose, scope or house rules. Everyone on this board can read it from the ⓘ button beside the board name. Leave empty to remove it.": "Zweck, Umfang oder Regeln. Alle auf diesem Board können sie über die Schaltfläche ⓘ neben dem Board-Namen lesen. Leer lassen, um sie zu entfernen.",
         "Jump to the discussion": "Zur Diskussion springen",
         "_Jump to the discussion (%n comment)_::_Jump to the discussion (%n comments)_": [
             "Zur Diskussion springen (%n Kommentar)",
@@ -1480,6 +1487,8 @@
         "Weekly": "Wöchentlich",
         "What belongs in this column?": "Was gehört in diese Spalte?",
         "What changes are needed? (posted as a comment)": "Welche Änderungen sind erforderlich? (wird als Kommentar gepostet)",
+        "What is this board for? Markdown supported.": "Wofür ist dieses Board? Markdown wird unterstützt.",
+        "What this board is for": "Wofür dieses Board da ist",
         "When a card enters {role}": "Wenn eine Karte {role} betritt",
         "When a card enters role": "Wenn eine Karte eine Rolle betritt",
         "When someone requests your review on a card it will appear here.": "Wenn jemand dein Review für eine Karte anfordert, erscheint es hier.",

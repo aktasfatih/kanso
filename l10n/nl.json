@@ -30,6 +30,10 @@
         "{card} is now a sub-card of {parent}": "{card} is nu een subkaart van {parent}",
         "{card} moved to {stack}": "{card} verplaatst naar {stack}",
         "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone.": "{count} kaart(en) hebben een schatting die niet in de nieuwe schaal past; die wordt gewist. Dit kan niet ongedaan worden gemaakt.",
+        "_{count} character left_::_{count} characters left_": [
+            "{count} teken over",
+            "{count} tekens over"
+        ],
         "{count} selected": "{count} geselecteerd",
         "{first}, +{n} more": "{first}, +{n} meer",
         "{n} blocked": "{n} geblokkeerd",
@@ -280,6 +284,7 @@
         "Board analytics": "Bordstatistieken",
         "Board attachments": "Bordbijlagen",
         "Board background": "Bordachtergrond",
+        "Board description": "Bordbeschrijving",
         "Board name": "Bordnaam",
         "Board options": "Bordopties",
         "Board ordering needs a refresh.": "De volgorde van het bord moet ververst worden.",
@@ -589,6 +594,7 @@
         "Each run adds up to two entries per board to this account's activity.": "Elke uitvoering voegt tot twee vermeldingen per bord toe aan de activiteit van dit account.",
         "Edit": "Bewerken",
         "Edit comment": "Reactie bewerken",
+        "Edit description": "Beschrijving bewerken",
         "Edit item": "Item bewerken",
         "Edit options": "Opties bewerken",
         "Edit options for field {name}": "Opties van veld {name} bewerken",
@@ -857,6 +863,7 @@
         "Issue intake": "Issue-opname",
         "It is not in anyone's Files, so there is nowhere to undo it from.": "Het staat in niemands Bestanden, dus er is nergens waar je dit ongedaan kunt maken.",
         "Italic": "Cursief",
+        "Its purpose, scope or house rules. Everyone on this board can read it from the ⓘ button beside the board name. Leave empty to remove it.": "Het doel, de afbakening of de afspraken. Iedereen op dit bord kan het lezen via de knop ⓘ naast de bordnaam. Laat leeg om het te verwijderen.",
         "Jump to the discussion": "Naar de discussie springen",
         "_Jump to the discussion (%n comment)_::_Jump to the discussion (%n comments)_": [
             "Naar de discussie springen (%n reactie)",
@@ -1480,6 +1487,8 @@
         "Weekly": "Wekelijks",
         "What belongs in this column?": "Wat hoort er in deze kolom?",
         "What changes are needed? (posted as a comment)": "Welke wijzigingen zijn nodig? (wordt als reactie geplaatst)",
+        "What is this board for? Markdown supported.": "Waarvoor is dit bord? Markdown wordt ondersteund.",
+        "What this board is for": "Waarvoor dit bord is",
         "When a card enters {role}": "Zodra een kaart in {role} komt",
         "When a card enters role": "Zodra een kaart in een rol komt",
         "When someone requests your review on a card it will appear here.": "Zodra iemand jouw review op een kaart vraagt, verschijnt die hier.",

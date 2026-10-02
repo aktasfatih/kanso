@@ -389,8 +389,22 @@ class ImportService {
 		$estimateScale = isset($board['estimateScale']) && is_string($board['estimateScale'])
 			? $board['estimateScale'] : null;
 		$newCardsOnTop = isset($board['newCardsOnTop']) ? (bool)$board['newCardsOnTop'] : null;
-		if ($estimateScale !== null || $newCardsOnTop !== null) {
-			$this->boardService->update($boardId, null, null, null, $actorUid, $estimateScale, $newCardsOnTop);
+		// Same normalisation rule as a write (blank → null), then the cap: the
+		// board description rides the board payload, so an untrusted document
+		// does not get to make that payload arbitrarily large. A document is
+		// truncated rather than rejected - one over-long blurb must not fail a
+		// whole board's import.
+		$description = BoardService::normalizeDescription($this->nullableStr($board, 'description'));
+		if ($description !== null && mb_strlen($description) > BoardService::MAX_DESCRIPTION_LENGTH) {
+			$description = BoardService::normalizeDescription(
+				mb_substr($description, 0, BoardService::MAX_DESCRIPTION_LENGTH)
+			);
+		}
+		if ($estimateScale !== null || $newCardsOnTop !== null || $description !== null) {
+			$this->boardService->update(
+				$boardId, null, null, null, $actorUid, $estimateScale, $newCardsOnTop,
+				null, null, null, null, $description
+			);
 		}
 
 		$labelIdMap = $this->importLabels($board, $boardId);

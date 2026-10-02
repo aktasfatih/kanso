@@ -127,6 +127,7 @@ class KansoClient:
         color: Optional[str] = None,
         archived: Optional[bool] = None,
         prefix: Optional[str] = None,
+        description: Optional[str] = None,
     ) -> Board:
         data = await self._request(
             "PATCH",
@@ -136,6 +137,7 @@ class KansoClient:
                 "color": color,
                 "archived": archived,
                 "prefix": prefix,
+                "description": description,
             },
         )
         return Board.model_validate(data)

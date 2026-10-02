@@ -62,6 +62,10 @@ class Board(_Base):
     newCardsOnTop: bool = False
     prefix: Optional[str] = None
     chatUrl: Optional[str] = None
+    # What the board is for: purpose, scope, house rules. Markdown source.
+    # Single-board payload only — the boards LIST deliberately omits it, so
+    # BoardSummary above has no such field.
+    description: Optional[str] = None
 
 
 class Stack(_Base):

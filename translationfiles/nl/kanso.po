@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— geen —"
 
-#: src/components/BoardSettingsModal.vue:4576
+#: src/components/BoardSettingsModal.vue:4648
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n keer"
@@ -117,6 +117,12 @@ msgstr "{card} verplaatst naar {stack}"
 #: src/components/BoardSettingsModal.vue
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "{count} kaart(en) hebben een schatting die niet in de nieuwe schaal past; die wordt gewist. Dit kan niet ongedaan worden gemaakt."
+
+#: src/components/BoardSettingsModal.vue:130
+msgid "{count} character left"
+msgid_plural "{count} characters left"
+msgstr[0] "{count} teken over"
+msgstr[1] "{count} tekens over"
 
 #: src/components/BulkSelectionBar.vue
 msgid "{count} selected"
@@ -930,6 +936,11 @@ msgstr "Bordbijlagen"
 #: src/components/BoardSettingsModal.vue
 msgid "Board background"
 msgstr "Bordachtergrond"
+
+#: src/components/BoardDescriptionModal.vue
+#: src/components/BoardSettingsModal.vue
+msgid "Board description"
+msgstr "Bordbeschrijving"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Board name"
@@ -1831,7 +1842,7 @@ msgstr "Gevarenzone"
 msgid "Date"
 msgstr "Datum"
 
-#: src/components/BoardSettingsModal.vue:2162
+#: src/components/BoardSettingsModal.vue:2194
 #: src/components/CardDetail.vue:4928
 msgid "day"
 msgid_plural "days"
@@ -2233,6 +2244,10 @@ msgstr "Bewerken"
 msgid "Edit comment"
 msgstr "Reactie bewerken"
 
+#: src/components/BoardDescriptionModal.vue
+msgid "Edit description"
+msgstr "Beschrijving bewerken"
+
 #: src/components/CardDetail.vue
 msgid "Edit item"
 msgstr "Item bewerken"
@@ -2359,25 +2374,25 @@ msgstr "elke"
 msgid "Every"
 msgstr "Elke"
 
-#: src/components/BoardSettingsModal.vue:4556
+#: src/components/BoardSettingsModal.vue:4628
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Elke dag"
 msgstr[1] "Elke %n dagen"
 
-#: src/components/BoardSettingsModal.vue:4566
+#: src/components/BoardSettingsModal.vue:4638
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Elke maand"
 msgstr[1] "Elke %n maanden"
 
-#: src/components/BoardSettingsModal.vue:4558
+#: src/components/BoardSettingsModal.vue:4630
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Elke week"
 msgstr[1] "Elke %n weken"
 
-#: src/components/BoardSettingsModal.vue:4568
+#: src/components/BoardSettingsModal.vue:4640
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Elk jaar"
@@ -2846,6 +2861,7 @@ msgstr "Kan het contact niet bijwerken."
 msgid "Failed to update cover."
 msgstr "Kan de omslag niet bijwerken."
 
+#: src/components/BoardSettingsModal.vue
 #: src/views/ProjectView.vue
 msgid "Failed to update description."
 msgstr "Kan de beschrijving niet bijwerken."
@@ -3301,6 +3317,10 @@ msgstr "Het staat in niemands Bestanden, dus er is nergens waar je dit ongedaan 
 msgid "Italic"
 msgstr "Cursief"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Its purpose, scope or house rules. Everyone on this board can read it from the ⓘ button beside the board name. Leave empty to remove it."
+msgstr "Het doel, de afbakening of de afspraken. Iedereen op dit bord kan het lezen via de knop ⓘ naast de bordnaam. Laat leeg om het te verwijderen."
+
 #: src/components/CardDetail.vue
 msgid "Jump to the discussion"
 msgstr "Naar de discussie springen"
@@ -3632,7 +3652,7 @@ msgstr "Modus"
 msgid "Mon"
 msgstr "ma"
 
-#: src/components/BoardSettingsModal.vue:2164
+#: src/components/BoardSettingsModal.vue:2196
 #: src/components/CardDetail.vue:4930
 msgid "month"
 msgid_plural "months"
@@ -5840,7 +5860,7 @@ msgstr "Webhook actief"
 msgid "Wed"
 msgstr "wo"
 
-#: src/components/BoardSettingsModal.vue:2163
+#: src/components/BoardSettingsModal.vue:2195
 #: src/components/CardDetail.vue:4929
 msgid "week"
 msgid_plural "weeks"
@@ -5862,6 +5882,14 @@ msgstr "Wat hoort er in deze kolom?"
 #: src/components/CardDetail.vue
 msgid "What changes are needed? (posted as a comment)"
 msgstr "Welke wijzigingen zijn nodig? (wordt als reactie geplaatst)"
+
+#: src/components/BoardSettingsModal.vue
+msgid "What is this board for? Markdown supported."
+msgstr "Waarvoor is dit bord? Markdown wordt ondersteund."
+
+#: src/views/BoardView.vue
+msgid "What this board is for"
+msgstr "Waarvoor dit bord is"
 
 #: src/components/BoardSettingsModal.vue
 msgid "When a card enters {role}"
@@ -5933,7 +5961,7 @@ msgstr "Geschreven op"
 msgid "wrote"
 msgstr "schreef"
 
-#: src/components/BoardSettingsModal.vue:2165
+#: src/components/BoardSettingsModal.vue:2197
 #: src/components/CardDetail.vue:4931
 msgid "year"
 msgid_plural "years"

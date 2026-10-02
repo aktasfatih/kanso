@@ -14,7 +14,7 @@ msgstr ""
 msgid "— none —"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:4576
+#: src/components/BoardSettingsModal.vue:4648
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] ""
@@ -116,6 +116,12 @@ msgstr ""
 #: src/components/BoardSettingsModal.vue
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr ""
+
+#: src/components/BoardSettingsModal.vue:130
+msgid "{count} character left"
+msgid_plural "{count} characters left"
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/components/BulkSelectionBar.vue
 msgid "{count} selected"
@@ -928,6 +934,11 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Board background"
+msgstr ""
+
+#: src/components/BoardDescriptionModal.vue
+#: src/components/BoardSettingsModal.vue
+msgid "Board description"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -1830,7 +1841,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2162
+#: src/components/BoardSettingsModal.vue:2194
 #: src/components/CardDetail.vue:4928
 msgid "day"
 msgid_plural "days"
@@ -2232,6 +2243,10 @@ msgstr ""
 msgid "Edit comment"
 msgstr ""
 
+#: src/components/BoardDescriptionModal.vue
+msgid "Edit description"
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Edit item"
 msgstr ""
@@ -2358,25 +2373,25 @@ msgstr ""
 msgid "Every"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:4556
+#: src/components/BoardSettingsModal.vue:4628
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:4566
+#: src/components/BoardSettingsModal.vue:4638
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:4558
+#: src/components/BoardSettingsModal.vue:4630
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:4568
+#: src/components/BoardSettingsModal.vue:4640
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] ""
@@ -2845,6 +2860,7 @@ msgstr ""
 msgid "Failed to update cover."
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
 #: src/views/ProjectView.vue
 msgid "Failed to update description."
 msgstr ""
@@ -3300,6 +3316,10 @@ msgstr ""
 msgid "Italic"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "Its purpose, scope or house rules. Everyone on this board can read it from the ⓘ button beside the board name. Leave empty to remove it."
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Jump to the discussion"
 msgstr ""
@@ -3631,7 +3651,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2164
+#: src/components/BoardSettingsModal.vue:2196
 #: src/components/CardDetail.vue:4930
 msgid "month"
 msgid_plural "months"
@@ -5839,7 +5859,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2163
+#: src/components/BoardSettingsModal.vue:2195
 #: src/components/CardDetail.vue:4929
 msgid "week"
 msgid_plural "weeks"
@@ -5860,6 +5880,14 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "What changes are needed? (posted as a comment)"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "What is this board for? Markdown supported."
+msgstr ""
+
+#: src/views/BoardView.vue
+msgid "What this board is for"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -5932,7 +5960,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2165
+#: src/components/BoardSettingsModal.vue:2197
 #: src/components/CardDetail.vue:4931
 msgid "year"
 msgid_plural "years"
