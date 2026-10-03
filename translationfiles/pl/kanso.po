@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— brak —"
 
-#: src/components/BoardSettingsModal.vue:4648
+#: src/components/BoardSettingsModal.vue:4702
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n raz"
@@ -119,7 +119,7 @@ msgstr "Przeniesiono {card} do {stack}"
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "Oszacowanie na {count} kartach nie mieści się w nowej skali i zostanie wyczyszczone. Tej operacji nie można cofnąć."
 
-#: src/components/BoardSettingsModal.vue:130
+#: src/components/BoardSettingsModal.vue:145
 msgid "{count} character left"
 msgid_plural "{count} characters left"
 msgstr[0] "Pozostał {count} znak"
@@ -1870,7 +1870,7 @@ msgstr "Strefa niebezpieczna"
 msgid "Date"
 msgstr "Data"
 
-#: src/components/BoardSettingsModal.vue:2194
+#: src/components/BoardSettingsModal.vue:2209
 #: src/components/CardDetail.vue:4928
 msgid "day"
 msgid_plural "days"
@@ -2403,28 +2403,28 @@ msgstr "co"
 msgid "Every"
 msgstr "Co"
 
-#: src/components/BoardSettingsModal.vue:4628
+#: src/components/BoardSettingsModal.vue:4682
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Codziennie"
 msgstr[1] "Co %n dni"
 msgstr[2] "Co %n dni"
 
-#: src/components/BoardSettingsModal.vue:4638
+#: src/components/BoardSettingsModal.vue:4692
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Co miesiąc"
 msgstr[1] "Co %n miesiące"
 msgstr[2] "Co %n miesięcy"
 
-#: src/components/BoardSettingsModal.vue:4630
+#: src/components/BoardSettingsModal.vue:4684
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Co tydzień"
 msgstr[1] "Co %n tygodnie"
 msgstr[2] "Co %n tygodni"
 
-#: src/components/BoardSettingsModal.vue:4640
+#: src/components/BoardSettingsModal.vue:4694
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Co rok"
@@ -3661,6 +3661,10 @@ msgstr "Oznacz jako szablon"
 msgid "Mark done"
 msgstr "Oznacz jako ukończone"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Maximize"
+msgstr "Maksymalizuj"
+
 #: src/composables/usePriority.js
 msgid "Med"
 msgstr "Śr."
@@ -3686,7 +3690,7 @@ msgstr "Tryb"
 msgid "Mon"
 msgstr "Pn"
 
-#: src/components/BoardSettingsModal.vue:2196
+#: src/components/BoardSettingsModal.vue:2211
 #: src/components/CardDetail.vue:4930
 msgid "month"
 msgid_plural "months"
@@ -4853,6 +4857,10 @@ msgstr "rozwiązał wątek"
 msgid "Restore"
 msgstr "Przywróć"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Restore panel size"
+msgstr "Przywróć rozmiar panelu"
+
 #: src/views/ArchivedView.vue
 msgid "Restore selected"
 msgstr "Przywróć zaznaczone"
@@ -5898,7 +5906,7 @@ msgstr "Webhook aktywny"
 msgid "Wed"
 msgstr "Śr"
 
-#: src/components/BoardSettingsModal.vue:2195
+#: src/components/BoardSettingsModal.vue:2210
 #: src/components/CardDetail.vue:4929
 msgid "week"
 msgid_plural "weeks"
@@ -6000,7 +6008,7 @@ msgstr "Zapisano"
 msgid "wrote"
 msgstr "napisał"
 
-#: src/components/BoardSettingsModal.vue:2197
+#: src/components/BoardSettingsModal.vue:2212
 #: src/components/CardDetail.vue:4931
 msgid "year"
 msgid_plural "years"

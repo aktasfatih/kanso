@@ -6,6 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 	<Teleport to="#content-vue">
 		<aside
 			class="bs-modal"
+			:class="{ 'bs-modal--maximized': maximized }"
 			role="dialog"
 			aria-modal="true"
 			:aria-label="t('kanso', 'Board settings')">
@@ -16,6 +17,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<span class="bs-modal__title">{{ t('kanso', 'Board settings') }}</span>
 					<span v-if="boardSubtitle" class="bs-modal__subtitle">{{ boardSubtitle }}</span>
 				</div>
+				<!-- Maximize (#180): some panes (email intake, webhooks) put several
+				     fields on one row, and a docked panel is too narrow to read them.
+				     Maximizing widens the whole panel to a centred window; the choice
+				     is remembered so it does not have to be re-made every visit. -->
+				<button
+					class="bs-modal__maximize"
+					:aria-pressed="maximized ? 'true' : 'false'"
+					:aria-label="maximized ? t('kanso', 'Restore panel size') : t('kanso', 'Maximize')"
+					:title="maximized ? t('kanso', 'Restore panel size') : t('kanso', 'Maximize')"
+					data-test="board-settings-maximize"
+					@click="toggleMaximized">
+					<ArrowCollapseIcon v-if="maximized" :size="18" />
+					<ArrowExpandIcon v-else :size="18" />
+				</button>
 				<button
 					class="bs-modal__close"
 					:aria-label="t('kanso', 'Close')"
@@ -2535,6 +2550,8 @@ import ArchiveArrowDownIcon from 'vue-material-design-icons/ArchiveArrowDown.vue
 import DownloadIcon from 'vue-material-design-icons/Download.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
+import ArrowExpandIcon from 'vue-material-design-icons/ArrowExpand.vue'
+import ArrowCollapseIcon from 'vue-material-design-icons/ArrowCollapse.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
@@ -3341,6 +3358,23 @@ const boardSubtitle = computed(() => {
 			: t('kanso', 'view only')
 	return title ? `${title} · ${role}` : role
 })
+
+// ── Maximized panel (#180) ───────────────────────────────────────────────────
+// The docked panel is narrow, and the panes with multi-field rows (email intake,
+// the forge webhooks) are unreadable in it. Maximizing turns the panel into a
+// centred window that uses most of the viewport. Remembered per browser, not per
+// board — it is a reading preference, not board state.
+const MAXIMIZED_KEY = 'kanso.boardSettingsMaximized'
+const maximized = ref(false)
+try {
+	maximized.value = localStorage.getItem(MAXIMIZED_KEY) === '1'
+} catch (e) { /* localStorage unavailable - default to the docked panel */ }
+function toggleMaximized() {
+	maximized.value = !maximized.value
+	try {
+		localStorage.setItem(MAXIMIZED_KEY, maximized.value ? '1' : '0')
+	} catch (e) { /* localStorage unavailable - the choice lasts this visit only */ }
+}
 
 // ── Automation collapsible groups ─────────────────────────────────────────────
 // Column automations (card rules) start expanded; the GitHub integration expands
@@ -6288,14 +6322,22 @@ async function doDeleteAutoRule(rule) {
 
 .github-webhook__row {
 	display: flex;
+	/* Wrap rather than squeeze (#180): these rows carry two or three controls
+	   (host + port + encryption, mailbox + target column), and on a narrow pane
+	   an unwrapped row shrank each field until only a character or two of its
+	   value was visible. Wrapping trades a taller row for a readable one. */
+	flex-wrap: wrap;
 	gap: 8px;
 	align-items: center;
 	margin-bottom: 8px;
 }
 
 .github-webhook__input {
-	flex: 1;
-	min-width: 0;
+	/* A readable floor (#180): the basis is what decides whether the row wraps,
+	   and the min-width keeps a field from being shrunk below a legible width
+	   once it has a line. */
+	flex: 1 1 16ch;
+	min-width: 12ch;
 	font-family: var(--font-face-monospace, monospace);
 }
 
@@ -6365,7 +6407,17 @@ async function doDeleteAutoRule(rule) {
 	top: var(--kanso-board-toolbar-height, 0px);
 	right: 0;
 	bottom: 0;
-	width: 500px;
+	/* Wide enough that the panes putting several fields on one row (email
+	   intake, the forge webhooks) are readable without maximizing (#180) —
+	   previously a flat 500px, which left ~330px of pane next to the 164px rail
+	   and cut an IMAP host field down to a couple of characters.
+	   Still a DOCKED panel, so the three terms matter: at most 760px (past that
+	   a settings form just has long lines), at most 60% of the content area (the
+	   board stays visible and usable beside it on a 1280px screen, which is what
+	   makes this a drawer and not a page), and never under the old 500px on a
+	   wide screen. `max-width: 100%` below collapses all of it to the full width
+	   on a phone. */
+	width: min(760px, max(500px, 60%));
 	max-width: 100%;
 	z-index: 1800;
 	display: flex;
@@ -6374,6 +6426,20 @@ async function doDeleteAutoRule(rule) {
 	border-left: 1px solid var(--color-border);
 	box-shadow: var(--shadow-dropdown, 0 0 12px rgba(0, 0, 0, 0.12));
 	box-sizing: border-box;
+}
+
+/* Maximized (#180): the same panel, grown into a centred window with a margin
+   all round so it still reads as a layer over the board rather than a new page.
+   It keeps docking below the toolbar, so the gear that opened it stays
+   clickable and a second gear click still closes it. */
+.bs-modal--maximized {
+	left: 0;
+	width: auto;
+	max-width: 1400px;
+	margin: 0 auto;
+	border-left: 1px solid var(--color-border);
+	border-right: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large) var(--border-radius-large) 0 0;
 }
 
 .bs-modal__header {
@@ -6407,6 +6473,26 @@ async function doDeleteAutoRule(rule) {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.bs-modal__maximize {
+	margin-left: auto;
+	width: 36px;
+	height: 36px;
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--color-main-text);
+	cursor: pointer;
+}
+
+.bs-modal__maximize:hover,
+.bs-modal__maximize:focus-visible {
+	background: var(--color-background-hover);
 }
 
 .bs-modal__close {

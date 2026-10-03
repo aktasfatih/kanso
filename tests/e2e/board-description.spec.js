@@ -305,3 +305,47 @@ test.describe('Board description (#173)', () => {
 		expect('description' in row).toBe(false)
 	})
 })
+
+// #180 — the board-settings panel can be maximized, because its multi-field
+// rows (email intake, the forge webhooks) are unreadable in a narrow panel.
+test.describe('Board settings panel size (#180)', () => {
+	const state = { boardId: 0 }
+
+	test.beforeAll(async () => {
+		const board = await api.post('/boards', { title: 'Board-Settings-Size E2E' })
+		state.boardId = board.id
+		await api.post('/stacks', { boardId: board.id, title: 'To Do' })
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
+	})
+
+	test('maximizing widens the panel and the choice is remembered', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+
+		await openGeneralSettings(page)
+		const panel = page.locator('.bs-modal')
+		const docked = (await panel.boundingBox()).width
+
+		await page.locator('[data-test="board-settings-maximize"]').click()
+		await expect
+			.poll(async () => (await panel.boundingBox()).width)
+			.toBeGreaterThan(docked)
+
+		// Remembered: re-opening the panel (even after a reload) keeps the
+		// maximized size, so the choice is made once rather than every visit.
+		await page.reload()
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await openGeneralSettings(page)
+		expect((await panel.boundingBox()).width).toBeGreaterThan(docked)
+
+		// And it can be restored.
+		await page.locator('[data-test="board-settings-maximize"]').click()
+		await expect
+			.poll(async () => (await panel.boundingBox()).width)
+			.toBeLessThanOrEqual(docked)
+	})
+})
