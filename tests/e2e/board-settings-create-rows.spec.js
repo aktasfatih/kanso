@@ -4,9 +4,12 @@
 /**
  * Board settings — the "Add …" create rows must fit the drawer.
  *
- * The board settings panel is a fixed 500px right-side drawer: a 164px section
+ * The board settings panel is a right-side drawer sized to the content area
+ * (#180: at most 760px, at most 60% of it, never under 500px): a 164px section
  * rail plus a pane area, and each pane carries 20px of padding, leaving a
- * content column of roughly 296px. Every "Add <thing>" form at the bottom of a
+ * content column from roughly 296px up. The assertions below are RELATIVE to
+ * the pane for that reason — they hold at any of those widths, and the narrow
+ * end is still the one that matters. Every "Add <thing>" form at the bottom of a
  * pane is a flex row (`.label-settings__create-row`) whose text input is
  * `flex: 1`. An <input> has an intrinsic minimum width (the UA `size` box,
  * ~200px), and `flex: 1` alone does NOT let a flex item shrink below that —
@@ -24,6 +27,15 @@ import { test, expect, api, ncLogin, BASE } from './helpers.js'
 const BOARD_TITLE = 'Create Row Layout E2E Board'
 
 test.describe('Board settings create rows fit the drawer', () => {
+	// A NARROW window on purpose. These assertions are about the drawer's narrow
+	// end, and since #180 the drawer is sized to the content area (at most 760px,
+	// at most 60% of it, never under 500px) — so on a 1280px window the pane is
+	// ~550px wide and the `contentWidth < 400` anti-vacuity guard below would
+	// (correctly) refuse to call that the narrow case. Pinning the viewport puts
+	// the drawer back at its 500px floor, which is what a phone, a split window
+	// and the maximize-off default all share.
+	test.use({ viewport: { width: 900, height: 900 } })
+
 	const state = { boardId: 0, boardUrl: '' }
 
 	test.beforeAll(async () => {

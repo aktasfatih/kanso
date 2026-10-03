@@ -103,6 +103,9 @@ class ExportServiceTest extends TestCase {
 		$b->setArchived(false);
 		$b->setEstimateScale('tshirt');
 		$b->setNewCardsOnTop(true);
+		$b->setDescription('## Scope
+
+Support escalations only.');
 		return $b;
 	}
 
@@ -245,6 +248,9 @@ class ExportServiceTest extends TestCase {
 		self::assertSame('0082c9', $board['color']);
 		self::assertSame('tshirt', $board['estimateScale']);
 		self::assertTrue($board['newCardsOnTop']);
+		// The board description (#173) rides the document, so export → import and
+		// board duplicate both carry what the board is for.
+		self::assertSame("## Scope\n\nSupport escalations only.", $board['description']);
 
 		self::assertCount(1, $board['stacks']);
 		self::assertSame(

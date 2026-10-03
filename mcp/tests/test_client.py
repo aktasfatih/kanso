@@ -95,8 +95,37 @@ async def test_update_board_drops_none():
         await c.update_board(3, title="Renamed")
     import json as _json
 
-    # None fields (color/archived/prefix) must NOT be sent.
+    # None fields (color/archived/prefix/description) must NOT be sent.
     assert _json.loads(route.calls.last.request.content) == {"title": "Renamed"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_board_sends_and_parses_description():
+    # A board description (#173) is what tells an agent what the BOARD is for,
+    # so it has to survive both directions: sent on a write, parsed on the way
+    # back (and therefore off the board record in kanso_get_board).
+    route = respx.patch(f"{BASE}/boards/3").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": 3,
+                "title": "Board",
+                "description": "Support escalations only. One card per customer.",
+            },
+        )
+    )
+    async with _client() as c:
+        board = await c.update_board(
+            3, description="Support escalations only. One card per customer."
+        )
+    import json as _json
+
+    # Only the field the caller set is sent.
+    assert _json.loads(route.calls.last.request.content) == {
+        "description": "Support escalations only. One card per customer."
+    }
+    assert board.description == "Support escalations only. One card per customer."
 
 
 @respx.mock

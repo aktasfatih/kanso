@@ -45,6 +45,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `kanso_get_board` returns the board's own `description` — what the board is
+  for, its scope, its house rules — and `kanso_update_board` takes a
+  `description` argument to write it (markdown, up to 4000 characters, `""`
+  clears it). Until now a board carried only a title, so an agent reading a
+  board had to infer its purpose from the cards on it. The boards LIST
+  (`kanso_list_boards`) deliberately omits the field: it is one row per board,
+  so the description rides the single-board payload only.
 - `kanso_get_board` no longer returns archived cards by default. The board
   endpoint ships archived and live cards in one list, so every caller used to
   get a mixed set with no way to separate them; `cards` is now the live board.

@@ -30,6 +30,14 @@ class BoardService {
 	private const MAX_TITLE_LENGTH = 100;
 	// Matches the kanso_boards.chat_url column length (#3748).
 	private const MAX_CHAT_URL_LENGTH = 4000;
+	/**
+	 * Cap on a board's free-text description (#173). A board blurb says what the
+	 * board is for and how to use it - a few paragraphs, not a document (the card
+	 * body is where long text lives, at 64k). The column stores TEXT, so this is
+	 * a product limit, not a storage one; it is also what bounds the single-board
+	 * payload, which carries the description in full.
+	 */
+	public const MAX_DESCRIPTION_LENGTH = 4000;
 
 	public function __construct(
 		private BoardMapper $boardMapper,
@@ -137,7 +145,13 @@ class BoardService {
 			$ratio = $ratios[$id] ?? ['total' => 0, 'done' => 0];
 			$total = $ratio['total'];
 			$done = $ratio['done'];
-			$out[] = $board->jsonSerialize() + [
+			$summary = $board->jsonSerialize();
+			// The list stays SUMMARY-only: a board description runs to
+			// {@see self::MAX_DESCRIPTION_LENGTH} characters and is only ever read
+			// on the board itself, so it must not ride one row per board here
+			// (#173). The single-board payload carries it in full.
+			unset($summary['description']);
+			$out[] = $summary + [
 				// The folder this board sits in for THIS user, or null (Ungrouped).
 				'groupId' => $groupIds[$id] ?? null,
 				// Whether THIS user has pinned this board (#3632).
@@ -213,11 +227,11 @@ class BoardService {
 	 *
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
-	 * @throws InvalidInputException on invalid title, color, background, estimate scale, prefix, chat URL or card-feature key
+	 * @throws InvalidInputException on invalid title, color, background, estimate scale, prefix, chat URL, card-feature key or an over-long description
 	 *
 	 * @param array<array-key, mixed>|null $cardFeatures partial enabled-map patch, e.g. `['attachments' => false]`
 	 */
-	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null, ?array $cardFeatures = null): Board {
+	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null, ?array $cardFeatures = null, ?string $description = null): Board {
 		$board = $this->loadBoard($id);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
@@ -267,6 +281,13 @@ class BoardService {
 			// XSS gate (rejects javascript:, data:, etc.) since the client
 			// renders this as an <a href>.
 			$board->setChatUrl($this->validateChatUrl($chatUrl));
+		}
+		if ($description !== null) {
+			// What the board is for (#173). Markdown source, stored raw - the
+			// client renders it through the same sanitising renderer as a card
+			// body, so there is nothing to escape here. '' (or whitespace only)
+			// clears it.
+			$board->setDescription($this->validateDescription($description));
 		}
 		// An empty patch is a no-op, not a write: it would bump lastModified and
 		// invalidate every client's board cache for nothing.
@@ -397,6 +418,35 @@ class BoardService {
 			throw new InvalidInputException('Chat link must be an http:// or https:// URL');
 		}
 		return $chatUrl;
+	}
+
+	/**
+	 * The ONE normalisation rule for a board description: trimmed, and ''
+	 * (or whitespace only) means "no description", so clearing it from a client
+	 * is a plain empty submit. Public because {@see ImportService} normalises an
+	 * imported document by the same rule - a board that arrives with "   " must
+	 * end up null there too, not as a blank strip under the board title.
+	 */
+	public static function normalizeDescription(?string $description): ?string {
+		if ($description === null) {
+			return null;
+		}
+		$description = trim($description);
+		return $description === '' ? null : $description;
+	}
+
+	/**
+	 * @return string|null null when cleared
+	 * @throws InvalidInputException if the description exceeds the cap
+	 */
+	private function validateDescription(string $description): ?string {
+		$normalized = self::normalizeDescription($description);
+		if ($normalized !== null && mb_strlen($normalized) > self::MAX_DESCRIPTION_LENGTH) {
+			throw new InvalidInputException(
+				'Description must not exceed ' . self::MAX_DESCRIPTION_LENGTH . ' characters'
+			);
+		}
+		return $normalized;
 	}
 
 	/**

@@ -22,6 +22,26 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:style="{ background: boardData.board.color }" />
 				<span class="board-view__title-text">{{ boardData.board.title }}</span>
 			</h1>
+
+			<!-- Board description (#173): what this board is for. Shown on demand in
+			     a modal rather than as a strip under the title — a board blurb is
+			     reference material, read when you join the board and rarely after,
+			     so it must not cost board height on every visit. The button sits
+			     next to the title (not in the ⋯ menu) so a board that HAS a note
+			     says so; it is rendered only when there is one, so a board without
+			     a description keeps exactly the toolbar it had. -->
+			<NcButton
+				v-if="boardDescription"
+				class="board-view__description-btn"
+				type="tertiary"
+				:aria-label="t('kanso', 'What this board is for')"
+				:title="descriptionTooltip"
+				data-test="board-description-btn"
+				@click="showDescription = true">
+				<template #icon>
+					<InformationOutlineIcon :size="20" />
+				</template>
+			</NcButton>
 			<div v-else-if="isLoading" class="board-view__title-skeleton skeleton-text" />
 
 			<!-- In-board search - scoped to the current board; only rendered once
@@ -284,7 +304,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<NcActionButton
 					class="board-view__settings-btn"
 					:aria-expanded="showSettings ? 'true' : 'false'"
-					@click="moreMenuOpen = false; showSettings = !showSettings">
+					@click="moreMenuOpen = false; settingsInitialTab = 'labels'; showSettings = !showSettings">
 					<template #icon>
 						<CogIcon :size="20" />
 					</template>
@@ -293,10 +313,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</NcActions>
 		</div>
 
+		<!-- The board's description, on demand (#173). Read-only here; MANAGE users
+		     get an Edit shortcut that hands them to board settings → General. -->
+		<BoardDescriptionModal
+			v-if="showDescription && boardData"
+			:board-title="boardData.board.title"
+			:description="boardDescription"
+			:can-manage="canManageBoard"
+			@edit="openSettingsOnDescription"
+			@close="showDescription = false" />
+
 		<!-- Board settings modal (Labels + Sharing tabs) -->
 		<BoardSettingsModal
 			v-if="showSettings && boardData"
+			ref="settingsPanelRef"
 			:board-id="props.id"
+			:initial-tab="settingsInitialTab"
 			:labels="boardLabels"
 			:review-types="boardData.reviewTypes ?? []"
 			:card-fields="boardData.cardFields ?? []"
@@ -666,6 +698,7 @@ import ChartTimelineIcon from 'vue-material-design-icons/ChartTimeline.vue'
 import ChartBarIcon from 'vue-material-design-icons/ChartBar.vue'
 import SelectMultipleIcon from 'vue-material-design-icons/SelectMultiple.vue'
 import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
+import InformationOutlineIcon from 'vue-material-design-icons/InformationOutline.vue'
 import ForumOutlineIcon from 'vue-material-design-icons/ForumOutline.vue'
 import StackColumn from '../components/StackColumn.vue'
 import BulkActionBar from '../components/BulkActionBar.vue'
@@ -693,6 +726,7 @@ import {
 import BoardSettingsModal from '../components/BoardSettingsModal.vue'
 import ManageTemplatesModal from '../components/ManageTemplatesModal.vue'
 import BoardAttachmentsModal from '../components/BoardAttachmentsModal.vue'
+import BoardDescriptionModal from '../components/BoardDescriptionModal.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import CardPreview from '../components/CardPreview.vue'
 import { useBoard } from '../composables/useBoard.js'
@@ -706,6 +740,7 @@ import { provideAnnouncer } from '../composables/useAnnouncer.js'
 import { useQueryClient } from '@tanstack/vue-query'
 import { apiAnswerStatus } from '../services/apiErrors.js'
 import { cssColor } from '../services/color.js'
+import { flattenMarkdown } from '../services/markdown.js'
 import { scaleTokens } from '../services/estimateScales.js'
 import { backgroundCss } from '../services/backgrounds.js'
 import { initial, between, after, before } from '../services/sortKey.js'
@@ -1227,6 +1262,10 @@ const showManageTemplates = ref(false)
 
 /** Whether the current user may EDIT this board (bit 2). Gates template mutations. */
 const canEditBoard = computed(() => ((boardData.value?.permissions ?? 0) & 2) !== 0)
+// MANAGE (bit 8 of the board payload's `permissions`, see PermissionService).
+// Only gates the "Edit description" shortcut in the description modal — the
+// server refuses the write regardless.
+const canManageBoard = computed(() => ((boardData.value?.permissions ?? 0) & 8) !== 0)
 
 // Published to every descendant so the write affordances that are too deep to
 // take a prop — a card tile's drag handle, a list row's, a column's reorder
@@ -1313,6 +1352,46 @@ function openShortcutsFromHint() {
 // ── Search box ref (for programmatic focus via '/' shortcut) ─────────────────
 const searchBoxRef = ref(null)
 const headerRef = ref(null)
+
+// ── Board description (#173) ─────────────────────────────────────────────────
+// Read-only here; it is set in board settings (MANAGE-only). The raw markdown is
+// handed to the modal, which is the only thing that renders it — through the
+// shared sanitising renderer, so the stored value stays raw markdown and the page
+// never receives user-supplied markup.
+const boardDescription = computed(() => boardData.value?.board?.description || '')
+const showDescription = ref(false)
+// Which board-settings section to open on. The gear opens Labels, as it always
+// has; the note's Edit shortcut hands a manager straight to the field that sets
+// the description, which lives in General.
+const settingsInitialTab = ref('labels')
+const settingsPanelRef = ref(null)
+function openSettingsOnDescription() {
+	showDescription.value = false
+	// Seeds a COLD open: the panel then mounts on General directly, with no
+	// visible hop through Labels.
+	settingsInitialTab.value = 'general'
+	if (showSettings.value) {
+		// Already open, so there is no mount to seed — and the prop may already
+		// hold 'general' from a previous trip through here, with the user having
+		// clicked another section since. Ask the live panel instead of hoping a
+		// prop change fires.
+		settingsPanelRef.value?.openTab('general')
+		return
+	}
+	showSettings.value = true
+}
+// Hover text for the ⓘ button: the first line or so of the description as PLAIN
+// text (a title attribute cannot render markdown), so the button says what it
+// opens. Flattened by the shared helper rather than a regex strip, so the hint
+// agrees with what the renderer understands.
+const DESCRIPTION_HINT_CHARS = 140
+const descriptionTooltip = computed(() => {
+	const text = flattenMarkdown(boardDescription.value).text
+	if (!text) return t('kanso', 'What this board is for')
+	return text.length > DESCRIPTION_HINT_CHARS
+		? text.slice(0, DESCRIPTION_HINT_CHARS).trimEnd() + '…'
+		: text
+})
 
 // Responsive header (#mobile). When the header is too narrow to hold the full
 // toolbar with labels, the secondary controls (view mode, sort, density) collapse
@@ -1811,6 +1890,15 @@ function handleKeydown(e) {
 	if (target.closest('input, textarea, [contenteditable]')) return
 	// Guard: card modal child route active
 	if (route.name === 'card-modal') return
+	// Guard: the board-description note is open (#173). It is a REAL modal
+	// (focus-trapped, aria-modal), so no board shortcut may reach through it —
+	// and that has to be decided HERE, above the preview branches below, not at
+	// the overlay-open guard further down: with focus on the note's Edit button
+	// Space would otherwise be swallowed by togglePreview() instead of pressing
+	// the button, and Escape would close a card preview behind the note instead
+	// of the note itself. The settings DRAWER is guarded lower down on purpose —
+	// it is non-blocking, and the board stays usable beside it.
+	if (showDescription.value) return
 	// '?' toggles the shortcuts overlay in BOTH directions, so it must be
 	// handled before the overlay-open guard below.
 	if (e.key === '?') {
@@ -2712,6 +2800,15 @@ async function handleUnarchiveCards(cardIds) {
 	width: 200px;
 	height: 20px;
 	border-radius: 4px;
+}
+
+/* ── Board description (#173) ───────────────────────────────────────────────── */
+
+/* The ⓘ beside the board title. Icon-only and tertiary so it reads as a hint
+   attached to the title rather than another toolbar action competing with
+   Display / Filter / ⋯. */
+.board-view__description-btn {
+	flex-shrink: 0;
 }
 
 /* Search box - pushed to the right edge of the title area via margin-left: auto */

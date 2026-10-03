@@ -201,6 +201,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         color: Optional[str] = None,
         archived: Optional[bool] = None,
         prefix: Optional[str] = None,
+        description: Optional[str] = None,
     ) -> dict:
         """Update a board. Only the fields you pass are changed.
 
@@ -210,10 +211,18 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             color: New colour (6-hex, no '#').
             archived: Archive (true) or unarchive (false) the board.
             prefix: New card-reference prefix (e.g. "KAN"), used for KAN-123 ids.
+            description: What the board is for — purpose, scope, house rules.
+                Markdown, up to 4000 characters, shown under the board title.
+                Pass "" to clear it.
         """
         return (
             await client.update_board(
-                board_id, title=title, color=color, archived=archived, prefix=prefix
+                board_id,
+                title=title,
+                color=color,
+                archived=archived,
+                prefix=prefix,
+                description=description,
             )
         ).model_dump()
 

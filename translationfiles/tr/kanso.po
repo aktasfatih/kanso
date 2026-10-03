@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— yok —"
 
-#: src/components/BoardSettingsModal.vue:4576
+#: src/components/BoardSettingsModal.vue:4702
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n kez"
@@ -117,6 +117,12 @@ msgstr "{card} şu sütuna taşındı: {stack}"
 #: src/components/BoardSettingsModal.vue
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "{count} kartın tahmini yeni ölçeğe uymuyor ve temizlenecek. Bu geri alınamaz."
+
+#: src/components/BoardSettingsModal.vue:145
+msgid "{count} character left"
+msgid_plural "{count} characters left"
+msgstr[0] "{count} karakter kaldı"
+msgstr[1] "{count} karakter kaldı"
 
 #: src/components/BulkSelectionBar.vue
 msgid "{count} selected"
@@ -930,6 +936,11 @@ msgstr "Pano ekleri"
 #: src/components/BoardSettingsModal.vue
 msgid "Board background"
 msgstr "Pano arka planı"
+
+#: src/components/BoardDescriptionModal.vue
+#: src/components/BoardSettingsModal.vue
+msgid "Board description"
+msgstr "Pano açıklaması"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Board name"
@@ -1831,7 +1842,7 @@ msgstr "Tehlikeli bölge"
 msgid "Date"
 msgstr "Tarih"
 
-#: src/components/BoardSettingsModal.vue:2162
+#: src/components/BoardSettingsModal.vue:2209
 #: src/components/CardDetail.vue:4928
 msgid "day"
 msgid_plural "days"
@@ -2233,6 +2244,10 @@ msgstr "Düzenle"
 msgid "Edit comment"
 msgstr "Yorumu düzenle"
 
+#: src/components/BoardDescriptionModal.vue
+msgid "Edit description"
+msgstr "Açıklamayı düzenle"
+
 #: src/components/CardDetail.vue
 msgid "Edit item"
 msgstr "Öğeyi düzenle"
@@ -2359,25 +2374,25 @@ msgstr "her"
 msgid "Every"
 msgstr "Her"
 
-#: src/components/BoardSettingsModal.vue:4556
+#: src/components/BoardSettingsModal.vue:4682
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Her gün"
 msgstr[1] "Her %n günde bir"
 
-#: src/components/BoardSettingsModal.vue:4566
+#: src/components/BoardSettingsModal.vue:4692
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Her ay"
 msgstr[1] "Her %n ayda bir"
 
-#: src/components/BoardSettingsModal.vue:4558
+#: src/components/BoardSettingsModal.vue:4684
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Her hafta"
 msgstr[1] "Her %n haftada bir"
 
-#: src/components/BoardSettingsModal.vue:4568
+#: src/components/BoardSettingsModal.vue:4694
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Her yıl"
@@ -2846,6 +2861,7 @@ msgstr "Kişi güncellenemedi."
 msgid "Failed to update cover."
 msgstr "Kapak güncellenemedi."
 
+#: src/components/BoardSettingsModal.vue
 #: src/views/ProjectView.vue
 msgid "Failed to update description."
 msgstr "Açıklama güncellenemedi."
@@ -3301,6 +3317,10 @@ msgstr "Kimsenin Dosyalar alanında bulunmadığı için geri alınabileceği bi
 msgid "Italic"
 msgstr "İtalik"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Its purpose, scope or house rules. Everyone on this board can read it from the ⓘ button beside the board name. Leave empty to remove it."
+msgstr "Amacı, kapsamı veya kuralları. Panodaki herkes pano adının yanındaki ⓘ düğmesinden okuyabilir. Kaldırmak için boş bırakın."
+
 #: src/components/CardDetail.vue
 msgid "Jump to the discussion"
 msgstr "Tartışmaya atla"
@@ -3607,6 +3627,10 @@ msgstr "Şablon olarak işaretle"
 msgid "Mark done"
 msgstr "Tamamlandı olarak işaretle"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Maximize"
+msgstr "Büyüt"
+
 #: src/composables/usePriority.js
 msgid "Med"
 msgstr "Ort"
@@ -3632,7 +3656,7 @@ msgstr "Mod"
 msgid "Mon"
 msgstr "Pzt"
 
-#: src/components/BoardSettingsModal.vue:2164
+#: src/components/BoardSettingsModal.vue:2211
 #: src/components/CardDetail.vue:4930
 msgid "month"
 msgid_plural "months"
@@ -4798,6 +4822,10 @@ msgstr "bir konuyu çözümledi"
 msgid "Restore"
 msgstr "Geri yükle"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Restore panel size"
+msgstr "Panel boyutunu geri yükle"
+
 #: src/views/ArchivedView.vue
 msgid "Restore selected"
 msgstr "Seçilenleri geri yükle"
@@ -5840,7 +5868,7 @@ msgstr "Webhook etkin"
 msgid "Wed"
 msgstr "Çar"
 
-#: src/components/BoardSettingsModal.vue:2163
+#: src/components/BoardSettingsModal.vue:2210
 #: src/components/CardDetail.vue:4929
 msgid "week"
 msgid_plural "weeks"
@@ -5862,6 +5890,14 @@ msgstr "Bu sütuna ne girer?"
 #: src/components/CardDetail.vue
 msgid "What changes are needed? (posted as a comment)"
 msgstr "Hangi değişiklikler gerekiyor? (yorum olarak yayımlanır)"
+
+#: src/components/BoardSettingsModal.vue
+msgid "What is this board for? Markdown supported."
+msgstr "Bu pano ne için? Markdown desteklenir."
+
+#: src/views/BoardView.vue
+msgid "What this board is for"
+msgstr "Bu pano ne için"
 
 #: src/components/BoardSettingsModal.vue
 msgid "When a card enters {role}"
@@ -5933,7 +5969,7 @@ msgstr "Yazıldı"
 msgid "wrote"
 msgstr "yazdı"
 
-#: src/components/BoardSettingsModal.vue:2165
+#: src/components/BoardSettingsModal.vue:2212
 #: src/components/CardDetail.vue:4931
 msgid "year"
 msgid_plural "years"
