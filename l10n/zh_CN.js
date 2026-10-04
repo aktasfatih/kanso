@@ -134,6 +134,7 @@ OC.L10N.register(
     "All boards" : "所有看板",
     "All day (no time)" : "全天（不含时间）",
     "All issues" : "全部 issue",
+    "All requested reviews must be approved before this card can be marked done. Waiting on {names}." : "所有已请求的评审通过后才能将此卡片标记为已完成。等待 {names}。",
     "Analytics" : "分析",
     "Any" : "任意",
     "Any card can be saved as a template from its ⋯ menu (\"Mark as template\"). Templates are hidden from the board and reused from a column's \"＋ From template\" menu." : "任何卡片都可以从它的 ⋯ 菜单保存为模板（“标记为模板”）。模板不会显示在看板上，可从列的“＋ 从模板创建”菜单中重复使用。",

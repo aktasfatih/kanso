@@ -134,6 +134,7 @@ OC.L10N.register(
     "All boards" : "Alle borden",
     "All day (no time)" : "Hele dag (geen tijd)",
     "All issues" : "Alle issues",
+    "All requested reviews must be approved before this card can be marked done. Waiting on {names}." : "Alle aangevraagde reviews moeten goedgekeurd zijn voordat deze kaart als klaar kan worden gemarkeerd. Wacht op {names}.",
     "Analytics" : "Statistieken",
     "Any" : "Alle",
     "Any card can be saved as a template from its ⋯ menu (\"Mark as template\"). Templates are hidden from the board and reused from a column's \"＋ From template\" menu." : "Elke kaart kun je via het ⋯-menu als sjabloon opslaan (\"Markeren als sjabloon\"). Sjablonen zijn verborgen op het bord en gebruik je opnieuw via het menu \"＋ Van sjabloon\" van een kolom.",

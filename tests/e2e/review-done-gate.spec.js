@@ -5,12 +5,15 @@
 // requested reviews are not all approved must not reach the done state by ANY
 // route, and must complete normally the moment they are.
 //
-// API-level on purpose: the point is that four different write paths converge on
-// one gate, and each path is one request. The board carries Review / Done /
-// role-less columns so the two-hop laundering route is reachable exactly as a
-// user would drag it.
+// The first describe is API-level on purpose: the point is that four different
+// write paths converge on one gate, and each path is one request. The board
+// carries Review / Done / role-less columns so the two-hop laundering route is
+// reachable exactly as a user would drag it.
+//
+// The second describe covers what the API level cannot: that the refusal is
+// actually SHOWN to the person who pressed the button (#10896).
 
-import { test, expect, api, me } from './helpers.js'
+import { test, expect, api, me, BASE, ncLogin } from './helpers.js'
 
 const ROLE_NONE = 0
 const ROLE_REVIEW = 4
@@ -126,5 +129,63 @@ test.describe('Review gate — every route into done', () => {
 		const plain = await api.post('/cards', { stackId: state.todoId, title: 'No reviews here' })
 		await api.patch(`/cards/${plain.id}`, { done: true })
 		expect(await doneAt(plain.id)).toBeGreaterThan(0)
+	})
+})
+
+// #10896 — the gate above, through the UI. The 403 was real and the card stayed
+// open, but NOTHING was shown: setStatus() wrote the error into the shared
+// `saveError`, which is only rendered inside the due-date popover and the
+// description editor, so pressing "Mark done" on a card with a pending review
+// looked like a dead button. This drives the actual click.
+test.describe('Review gate — the card view says why Done did nothing (#10896)', () => {
+	const state = { boardId: 0, cardId: 0, reviewId: 0 }
+
+	test.beforeAll(async () => {
+		const board = await api.post('/boards', { title: `Review Gate UI E2E ${Date.now()}` })
+		state.boardId = board.id
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Needs a review first' })
+		state.cardId = card.id
+		await api.put(`/cards/${card.id}/reviews/${me}`)
+		state.reviewId = (await api.get(`/cards/${card.id}`)).reviews[0].id
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
+	})
+
+	test('Mark done names the reviews as the blocker, then works once approved', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.cardId}`)
+		await page.waitForSelector('.card-modal__header', { timeout: 15_000 })
+
+		const header = page.locator('.card-modal__header')
+		const statusError = header.locator('[data-status-error]')
+
+		// Nothing is pre-disabled: the server stays the only authority on the gate,
+		// so the button is live and the refusal is what informs the user.
+		await expect(header.locator('.card-modal__done-btn')).toBeEnabled()
+		await expect(statusError).toHaveCount(0)
+
+		await header.locator('.card-modal__done-btn').click()
+
+		// The message names REVIEWS - not the server's flattened "Access denied" -
+		// and names the reviewer being waited on, resolved from the reviews already
+		// in the card payload (no extra request was made to say any of this).
+		await expect(statusError).toBeVisible()
+		await expect(statusError).toHaveText(/requested reviews must be approved/i)
+		await expect(statusError).toHaveText(new RegExp(`Waiting on .*${me}`, 'i'))
+		await expect(statusError).not.toHaveText(/access denied/i)
+		// …and the card really did not complete.
+		expect(await doneAt(state.cardId)).toBe(0)
+
+		// Approving clears the gate. Pressing Done again - on the SAME page, no
+		// reload, so the message really has to be cleared rather than simply never
+		// rendered - completes the card and takes the message with it.
+		await api.patch(`/cards/${state.cardId}/reviews/${state.reviewId}`, { state: 'approved' })
+		await header.locator('.card-modal__done-btn').click()
+
+		await expect.poll(() => doneAt(state.cardId), { timeout: 15_000 }).toBeGreaterThan(0)
+		await expect(statusError).toHaveCount(0)
 	})
 })

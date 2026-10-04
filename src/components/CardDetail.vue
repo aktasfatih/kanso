@@ -226,6 +226,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						     otherwise only rendered inside the due-date popover and the
 						     description editor, neither of which is open at this point. -->
 						<span v-if="editingTitle && saveError" class="card-modal__save-error" data-title-error>{{ saveError }}</span>
+						<!-- Why a status error needs its OWN surface (#10896): "Mark done" and
+						     the stage picker both sit in this header, and a refusal from either
+						     used to land in the shared `saveError`, which is only ever rendered
+						     inside the due-date popover and the description editor - neither of
+						     which is open when you press Done. The button simply did nothing.
+						     The review gate (CardService::assertReviewsApproved) is the refusal
+						     users actually hit, so it is also the one this names outright. -->
+						<span
+							v-if="statusError"
+							class="card-modal__save-error"
+							role="alert"
+							data-status-error>{{ statusError }}</span>
 					</div>
 
 					<div class="card-modal__header-actions">
@@ -3702,12 +3714,61 @@ const currentStatus = computed(() => {
 	return 'not_started'
 })
 
+// A status change refused by the server, rendered in the header beside the
+// controls that attempted it. Deliberately NOT the shared `saveError`: that ref
+// is only rendered inside the due-date popover and the description editor, so
+// every refusal of Done or of a stage move was invisible (#10896). Cleared on
+// each new attempt, so a success leaves nothing behind.
+const statusError = ref('')
+
+// The reviews that still stand between this card and the done state, read from
+// the payload the card view already holds - completing is gated on the CARD's
+// review state (CardService::assertReviewsApproved), not on who is looking, so
+// every unapproved review counts, mine or anybody else's.
+const reviewsBlockingDone = computed(() =>
+	cardReviews.value.filter((r) => r.state !== 'approved'),
+)
+
+/**
+ * Explain a refused attempt to complete the card.
+ *
+ * The server's own sentence does not survive the trip: ApiErrorTrait flattens
+ * every NotPermittedException to a bare "Access denied", which is true but says
+ * nothing about what to do next. So when the refusal is a 403, the target was
+ * the done state, and the card is in fact carrying unapproved reviews, we say so
+ * in the review vocabulary the rest of this view already uses. The gate stays
+ * entirely the server's call - this only translates its verdict.
+ *
+ * @param {unknown} err the rejected request
+ * @param {boolean} targetsDone whether the attempt would have completed the card
+ * @return {string} the message to show
+ */
+function statusErrorMessage(err, targetsDone) {
+	const blocking = reviewsBlockingDone.value
+	if (targetsDone && apiAnswerStatus(err) === 403 && blocking.length > 0) {
+		// participantName() falls back to the bare uid, so this list is never empty
+		// when `blocking` is not - there is no nameless-reviewer case to handle.
+		const names = [...new Set(blocking.map((r) => participantName(r.reviewer)))]
+		// escape: false - this lands in a text interpolation, which escapes for
+		// itself; letting t() escape too would print "Ann &amp; Bo" for real names.
+		// t()'s DOMPurify pass still runs over the result, so a name carrying
+		// markup is stripped rather than inserted - and Vue escapes what is left.
+		return t(
+			'kanso',
+			'All requested reviews must be approved before this card can be marked done. Waiting on {names}.',
+			{ names: { value: names.join(', '), escape: false } },
+		)
+	}
+	return err?.response?.data?.error || t('kanso', 'Failed to update status.')
+}
+
 async function setStatus(status) {
 	if (status === currentStatus.value) return
+	statusError.value = ''
 	try {
 		await updateCard.mutateAsync({ data: { status } })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update status.')
+		statusError.value = statusErrorMessage(err, status === 'done')
 	}
 }
 
@@ -3728,6 +3789,9 @@ const WORKFLOW_ROLE_LABELS = {
 	4: t('kanso', 'Review'),
 	5: t('kanso', 'Done'),
 }
+// Stack::ROLE_DONE - a move into such a column stamps the card done, so it goes
+// through the same review gate as the status control.
+const ROLE_DONE = 5
 // Every live column, in board order - the options the stage picker offers.
 const boardColumns = computed(() =>
 	(boardData.value?.stacks ?? [])
@@ -3757,14 +3821,14 @@ async function setStage(col) {
 	// Already in this column - nothing to do.
 	if (!col || Number(col.id) === Number(cardData.value?.stackId)) return
 	stageMoving.value = true
-	saveError.value = ''
+	statusError.value = ''
 	try {
 		await apiMoveCard(props.cardId, { targetStackId: col.id, afterCardId: null })
 		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
 		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
 		invalidateCrossBoardFeeds(queryClient)
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update status.')
+		statusError.value = statusErrorMessage(err, Number(col.role) === ROLE_DONE)
 	} finally {
 		stageMoving.value = false
 	}
@@ -4057,6 +4121,7 @@ watch(() => props.cardId, () => {
 	discardDrafts()
 	descriptionBaseVersion.value = null
 	saveError.value = ''
+	statusError.value = ''
 	commentError.value = ''
 })
 
