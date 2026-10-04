@@ -8,7 +8,10 @@
  * built-in set is fixed - '' (none), bug, feature, task, chore - there is no
  * custom-type editor. Mirrors usePriority's dual-cache optimistic pattern:
  *   1. Cancel in-flight board + card queries.
- *   2. Snapshot previous values for rollback.
+ *   2. Snapshot the card's PREVIOUS `type` - that one field, in both caches, not
+ *      the whole cached objects - so a failure can put it back without
+ *      disturbing anything else that changed meanwhile (#10927, the same
+ *      narrowing useLabels/useAssignees got in #10923).
  *   3. Patch the board summary cache (card.type field).
  *   4. Patch the card detail cache.
  *   5. On settled: invalidate both caches so server truth wins.
@@ -67,12 +70,31 @@ export function useCardType(boardId, cardId) {
 			await queryClient.cancelQueries({ queryKey: boardKey })
 			await queryClient.cancelQueries({ queryKey: cardKey })
 
-			const previousBoard = queryClient.getQueryData(boardKey)
-			const previousCard = queryClient.getQueryData(cardKey)
-
-			// Patch board summary cache - board card ids are numbers; the resolved
-			// cardId is the string route param, so coerce (matches usePriority).
+			// Board card ids are numbers; the resolved cardId is the string route
+			// param, so coerce (matches usePriority). Resolved once here so the
+			// rollback addresses the same card the patch did.
 			const numericCardId = Number(resolve(cardId))
+
+			// Snapshot ONLY `type`, not the whole cached objects (#10927). The
+			// attribute pickers in the card modal save independently, so a type
+			// write and a label, assignee or project write are genuinely in flight
+			// at once - and re-setting a whole card object on failure erases
+			// whatever the other picker committed in between, which the server has
+			// kept, leaving the client lying until something reads the card again.
+			// The board snapshot was wider still: a whole-board restore rewinds
+			// every OTHER card in the cache too, including a title a realtime delta
+			// changed mid-flight. `undefined` here means "no such cache entry",
+			// i.e. nothing to undo; an entry with no usable type is snapshotted as
+			// the '' ("none") the UI already renders it as.
+			const snapshotType = (card) => card
+				? (typeof card.type === 'string' ? card.type : '')
+				: undefined
+			const previousDetailType = snapshotType(queryClient.getQueryData(cardKey))
+			const previousSummaryType = snapshotType(
+				queryClient.getQueryData(boardKey)?.cards?.find((c) => c.id === numericCardId),
+			)
+
+			// Patch board summary cache
 			queryClient.setQueryData(boardKey, (old) => {
 				if (!old) return old
 				return {
@@ -89,15 +111,29 @@ export function useCardType(boardId, cardId) {
 				return { ...old, type }
 			})
 
-			return { previousBoard, previousCard, cardKey }
+			return { previousDetailType, previousSummaryType, cardKey, numericCardId }
 		},
 
 		onError: (_err, _vars, context) => {
-			if (context?.previousBoard !== undefined) {
-				queryClient.setQueryData(getBoardKey(), context.previousBoard)
+			// Put `type` back, and ONLY `type` - layered onto whatever the cache
+			// holds at rollback time (the functional updater form) rather than over
+			// the top of it. See the snapshot comment in onMutate.
+			if (context?.previousSummaryType !== undefined) {
+				queryClient.setQueryData(getBoardKey(), (old) => {
+					if (!old) return old
+					return {
+						...old,
+						cards: old.cards.map((c) => (c.id === context.numericCardId
+							? { ...c, type: context.previousSummaryType }
+							: c)),
+					}
+				})
 			}
-			if (context?.previousCard !== undefined && context?.cardKey) {
-				queryClient.setQueryData(context.cardKey, context.previousCard)
+			if (context?.previousDetailType !== undefined && context?.cardKey) {
+				queryClient.setQueryData(context.cardKey, (old) => {
+					if (!old) return old
+					return { ...old, type: context.previousDetailType }
+				})
 			}
 		},
 

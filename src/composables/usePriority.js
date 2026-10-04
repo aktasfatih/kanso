@@ -6,7 +6,10 @@
  *
  * Mirrors the dual-cache pattern from useCardActions:
  *   1. Cancel in-flight board + card queries.
- *   2. Snapshot previous values for rollback.
+ *   2. Snapshot the card's PREVIOUS `priority` - that one field, in both caches,
+ *      not the whole cached objects - so a failure can put it back without
+ *      disturbing anything else that changed meanwhile (#10927, the same
+ *      narrowing useLabels/useAssignees got in #10923).
  *   3. Patch the board summary cache (card.priority field).
  *   4. Patch the card detail cache.
  *   5. On settled: invalidate both caches so server truth wins.
@@ -64,14 +67,33 @@ export function usePriority(boardId, cardId) {
 			await queryClient.cancelQueries({ queryKey: boardKey })
 			await queryClient.cancelQueries({ queryKey: cardKey })
 
-			const previousBoard = queryClient.getQueryData(boardKey)
-			const previousCard = queryClient.getQueryData(cardKey)
-
-			// Patch board summary cache - update the card's priority. Board card
-			// ids are numbers; the resolved cardId is the string route param, so
-			// coerce (a raw === would never match and the tile wouldn't update
-			// optimistically - matches useChecklist's Number() comparison).
+			// Board card ids are numbers; the resolved cardId is the string route
+			// param, so coerce (a raw === would never match and the tile wouldn't
+			// update optimistically - matches useChecklist's Number() comparison).
+			// Resolved once here so the rollback addresses the same card the patch
+			// did, whatever the route has moved on to by then.
 			const numericCardId = Number(resolve(cardId))
+
+			// Snapshot ONLY `priority`, not the whole cached objects (#10927). The
+			// attribute pickers in the card modal save independently, so a priority
+			// write and a label, assignee or project write are genuinely in flight
+			// at once - and re-setting a whole card object on failure erases
+			// whatever the other picker committed in between, which the server has
+			// kept, leaving the client lying until something reads the card again.
+			// The board snapshot was wider still: a whole-board restore rewinds
+			// every OTHER card in the cache too, including a title a realtime delta
+			// changed mid-flight. `undefined` here means "no such cache entry",
+			// i.e. nothing to undo; an entry with no usable priority is
+			// snapshotted as the 0 ("none") the UI already renders it as.
+			const snapshotPriority = (card) => card
+				? (Number.isFinite(card.priority) ? card.priority : 0)
+				: undefined
+			const previousDetailPriority = snapshotPriority(queryClient.getQueryData(cardKey))
+			const previousSummaryPriority = snapshotPriority(
+				queryClient.getQueryData(boardKey)?.cards?.find((c) => c.id === numericCardId),
+			)
+
+			// Patch board summary cache - update the card's priority.
 			queryClient.setQueryData(boardKey, (old) => {
 				if (!old) return old
 				return {
@@ -88,15 +110,29 @@ export function usePriority(boardId, cardId) {
 				return { ...old, priority }
 			})
 
-			return { previousBoard, previousCard, cardKey }
+			return { previousDetailPriority, previousSummaryPriority, cardKey, numericCardId }
 		},
 
 		onError: (_err, _vars, context) => {
-			if (context?.previousBoard !== undefined) {
-				queryClient.setQueryData(getBoardKey(), context.previousBoard)
+			// Put `priority` back, and ONLY `priority` - layered onto whatever the
+			// cache holds at rollback time (the functional updater form) rather
+			// than over the top of it. See the snapshot comment in onMutate.
+			if (context?.previousSummaryPriority !== undefined) {
+				queryClient.setQueryData(getBoardKey(), (old) => {
+					if (!old) return old
+					return {
+						...old,
+						cards: old.cards.map((c) => (c.id === context.numericCardId
+							? { ...c, priority: context.previousSummaryPriority }
+							: c)),
+					}
+				})
 			}
-			if (context?.previousCard !== undefined && context?.cardKey) {
-				queryClient.setQueryData(context.cardKey, context.previousCard)
+			if (context?.previousDetailPriority !== undefined && context?.cardKey) {
+				queryClient.setQueryData(context.cardKey, (old) => {
+					if (!old) return old
+					return { ...old, priority: context.previousDetailPriority }
+				})
 			}
 		},
 
