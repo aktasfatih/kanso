@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— нет —"
 
-#: src/components/BoardSettingsModal.vue:4576
+#: src/components/BoardSettingsModal.vue:4702
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· повторов: %n"
@@ -118,6 +118,13 @@ msgstr "{card} перемещена в {stack}"
 #: src/components/BoardSettingsModal.vue
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "Карточек с оценкой, не подходящей под новую шкалу: {count}. Их оценки будут очищены. Это действие нельзя отменить."
+
+#: src/components/BoardSettingsModal.vue:145
+msgid "{count} character left"
+msgid_plural "{count} characters left"
+msgstr[0] "Остался {count} символ"
+msgstr[1] "Осталось {count} символа"
+msgstr[2] "Осталось {count} символов"
 
 #: src/components/BulkSelectionBar.vue
 msgid "{count} selected"
@@ -956,6 +963,11 @@ msgstr "Вложения доски"
 #: src/components/BoardSettingsModal.vue
 msgid "Board background"
 msgstr "Фон доски"
+
+#: src/components/BoardDescriptionModal.vue
+#: src/components/BoardSettingsModal.vue
+msgid "Board description"
+msgstr "Описание доски"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Board name"
@@ -1858,7 +1870,7 @@ msgstr "Опасная зона"
 msgid "Date"
 msgstr "Дата"
 
-#: src/components/BoardSettingsModal.vue:2162
+#: src/components/BoardSettingsModal.vue:2209
 #: src/components/CardDetail.vue:4928
 msgid "day"
 msgid_plural "days"
@@ -2261,6 +2273,10 @@ msgstr "Изменить"
 msgid "Edit comment"
 msgstr "Изменить комментарий"
 
+#: src/components/BoardDescriptionModal.vue
+msgid "Edit description"
+msgstr "Изменить описание"
+
 #: src/components/CardDetail.vue
 msgid "Edit item"
 msgstr "Изменить пункт"
@@ -2387,28 +2403,28 @@ msgstr "каждые"
 msgid "Every"
 msgstr "Каждые"
 
-#: src/components/BoardSettingsModal.vue:4556
+#: src/components/BoardSettingsModal.vue:4682
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Каждый %n день"
 msgstr[1] "Каждые %n дня"
 msgstr[2] "Каждые %n дней"
 
-#: src/components/BoardSettingsModal.vue:4566
+#: src/components/BoardSettingsModal.vue:4692
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Каждый %n месяц"
 msgstr[1] "Каждые %n месяца"
 msgstr[2] "Каждые %n месяцев"
 
-#: src/components/BoardSettingsModal.vue:4558
+#: src/components/BoardSettingsModal.vue:4684
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Каждую %n неделю"
 msgstr[1] "Каждые %n недели"
 msgstr[2] "Каждые %n недель"
 
-#: src/components/BoardSettingsModal.vue:4568
+#: src/components/BoardSettingsModal.vue:4694
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Каждый %n год"
@@ -2878,6 +2894,7 @@ msgstr "Не удалось обновить контакт."
 msgid "Failed to update cover."
 msgstr "Не удалось обновить обложку."
 
+#: src/components/BoardSettingsModal.vue
 #: src/views/ProjectView.vue
 msgid "Failed to update description."
 msgstr "Не удалось обновить описание."
@@ -3333,6 +3350,10 @@ msgstr "Файла нет ни в чьих Файлах, поэтому отме
 msgid "Italic"
 msgstr "Курсив"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Its purpose, scope or house rules. Everyone on this board can read it from the ⓘ button beside the board name. Leave empty to remove it."
+msgstr "Назначение, границы или правила. Любой участник доски может прочитать их по кнопке ⓘ рядом с названием доски. Оставьте пустым, чтобы удалить."
+
 #: src/components/CardDetail.vue
 msgid "Jump to the discussion"
 msgstr "Перейти к обсуждению"
@@ -3640,6 +3661,10 @@ msgstr "Сделать шаблоном"
 msgid "Mark done"
 msgstr "Отметить готовым"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Maximize"
+msgstr "Развернуть"
+
 #: src/composables/usePriority.js
 msgid "Med"
 msgstr "Ср."
@@ -3665,7 +3690,7 @@ msgstr "Режим"
 msgid "Mon"
 msgstr "Пн"
 
-#: src/components/BoardSettingsModal.vue:2164
+#: src/components/BoardSettingsModal.vue:2211
 #: src/components/CardDetail.vue:4930
 msgid "month"
 msgid_plural "months"
@@ -4832,6 +4857,10 @@ msgstr "закрыл ветку"
 msgid "Restore"
 msgstr "Восстановить"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Restore panel size"
+msgstr "Восстановить размер панели"
+
 #: src/views/ArchivedView.vue
 msgid "Restore selected"
 msgstr "Восстановить выбранные"
@@ -5877,7 +5906,7 @@ msgstr "Webhook активен"
 msgid "Wed"
 msgstr "Ср"
 
-#: src/components/BoardSettingsModal.vue:2163
+#: src/components/BoardSettingsModal.vue:2210
 #: src/components/CardDetail.vue:4929
 msgid "week"
 msgid_plural "weeks"
@@ -5900,6 +5929,14 @@ msgstr "Что попадает в эту колонку?"
 #: src/components/CardDetail.vue
 msgid "What changes are needed? (posted as a comment)"
 msgstr "Какие изменения нужны? (будет опубликовано как комментарий)"
+
+#: src/components/BoardSettingsModal.vue
+msgid "What is this board for? Markdown supported."
+msgstr "Для чего эта доска? Поддерживается Markdown."
+
+#: src/views/BoardView.vue
+msgid "What this board is for"
+msgstr "Для чего эта доска"
 
 #: src/components/BoardSettingsModal.vue
 msgid "When a card enters {role}"
@@ -5971,7 +6008,7 @@ msgstr "Записана"
 msgid "wrote"
 msgstr "написал"
 
-#: src/components/BoardSettingsModal.vue:2165
+#: src/components/BoardSettingsModal.vue:2212
 #: src/components/CardDetail.vue:4931
 msgid "year"
 msgid_plural "years"

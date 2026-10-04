@@ -50,9 +50,17 @@ test.describe('Settings panel (right-docked drawer)', () => {
 		// Right edge of panel must be near the right edge of viewport (within 30px)
 		expect(panelBox.x + panelBox.width).toBeGreaterThanOrEqual(viewport.width - 30)
 
-		// Left edge of panel must be well right of the viewport center
-		// (panel width ~500px; viewport is typically ≥1280px in CI)
-		expect(panelBox.x).toBeGreaterThan(viewport.width / 2)
+		// Docked, never full-width: the panel is capped at 60% of the content
+		// area (760px at most, #180), so the board is always still there beside
+		// it. Asserted against the content area rather than the viewport centre,
+		// which the pre-#180 500px panel happened to clear: the panel is sized
+		// relative to the content column, so whether its left edge falls right of
+		// the viewport midpoint depends on how wide the app navigation is, not on
+		// anything this test is about. What matters is that the board keeps room —
+		// which the card assertions below check directly.
+		const contentBox = await page.locator('#content-vue').boundingBox()
+		expect(panelBox.width).toBeLessThan(contentBox.width)
+		expect(panelBox.x).toBeGreaterThan(contentBox.x)
 
 		// ── Board card still visible & interactive while panel is open ────────
 		// The card is in the left column (not under the right-docked panel) and

@@ -393,6 +393,82 @@ class ImportServiceTest extends TestCase {
 		);
 	}
 
+	/**
+	 * The BOARD description (#173) rides the document the same way, so export →
+	 * import and board duplicate carry what the board is for. It reaches the new
+	 * board through the board-settings update create() does not take, and an
+	 * over-long one is truncated to the cap a write enforces rather than failing
+	 * the whole import.
+	 */
+	public function testImportCarriesBoardDescriptionAndTruncatesAnOverLongOne(): void {
+		$this->primeDb();
+		$this->boardService->method('create')->willReturn($this->newBoard('Roadmap'));
+		$this->stackMapper->method('insert')->willReturnCallback(
+			static function (Stack $s): Stack {
+				$s->setId(31);
+				return $s;
+			}
+		);
+
+		$captured = null;
+		$this->boardService->expects(self::once())->method('update')
+			->willReturnCallback(function (...$args) use (&$captured): Board {
+				// Positional signature: (id, title, color, archived, uid,
+				// estimateScale, newCardsOnTop, prefix, background, chatUrl,
+				// cardFeatures, description).
+				$captured = $args[11] ?? null;
+				return $this->newBoard('Roadmap');
+			});
+
+		$doc = [
+			'kanso' => ExportService::FORMAT_VERSION,
+			'exportedAt' => 1234,
+			'board' => [
+				'title' => 'Roadmap',
+				'description' => str_repeat('x', BoardService::MAX_DESCRIPTION_LENGTH + 500),
+				'stacks' => [['id' => 1, 'title' => 'Todo', 'sortKey' => 'a', 'role' => 0]],
+				'cards' => [],
+			],
+		];
+
+		$this->service->import((string)json_encode($doc), 'importer');
+
+		self::assertSame(
+			BoardService::MAX_DESCRIPTION_LENGTH,
+			mb_strlen((string)$captured),
+			'an over-long board description is truncated to the cap'
+		);
+	}
+
+	public function testImportNormalizesABlankBoardDescriptionToNull(): void {
+		$this->primeDb();
+		$this->boardService->method('create')->willReturn($this->newBoard('Roadmap'));
+		$this->stackMapper->method('insert')->willReturnCallback(
+			static function (Stack $s): Stack {
+				$s->setId(31);
+				return $s;
+			}
+		);
+
+		// A whitespace-only description normalises to null, exactly as a write
+		// does - and since there is then nothing else to set, the board-settings
+		// update is not called at all.
+		$this->boardService->expects(self::never())->method('update');
+
+		$doc = [
+			'kanso' => ExportService::FORMAT_VERSION,
+			'exportedAt' => 1234,
+			'board' => [
+				'title' => 'Roadmap',
+				'description' => "  \n ",
+				'stacks' => [['id' => 1, 'title' => 'Todo', 'sortKey' => 'a', 'role' => 0]],
+				'cards' => [],
+			],
+		];
+
+		$this->service->import((string)json_encode($doc), 'importer');
+	}
+
 	// ── happy path + remapping ─────────────────────────────────────────────────
 
 	public function testImportRemapsGraphAndSetsImporterAsOwner(): void {

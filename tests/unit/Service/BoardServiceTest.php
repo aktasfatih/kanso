@@ -649,4 +649,125 @@ class BoardServiceTest extends TestCase {
 
 		self::assertSame([], $this->service->findAllWithStats('alice'));
 	}
+
+	// --- Board description (#173) -------------------------------------------
+
+	public function testUpdateSetsDescriptionAndSerializesIt(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->with(1, Change::ENTITY_BOARD, 1, Change::ACTION_UPDATE, 'alice')
+			->willReturn(new Change());
+
+		$markdown = "## Scope\n\n- Support escalations **only**";
+		$updated = $this->service->update(1, null, null, null, 'alice', null, null, null, null, null, null, $markdown);
+		// Stored RAW: the client renders the markdown, so nothing is pre-rendered
+		// or escaped on the way in.
+		self::assertSame($markdown, $updated->getDescription());
+		// It rides the single-board payload, so every member (and the MCP) sees it.
+		self::assertSame($markdown, $updated->jsonSerialize()['description']);
+	}
+
+	public function testUpdateClearsDescriptionWithEmptyString(): void {
+		$board = $this->board();
+		$board->setDescription('Support escalations only.');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		// An empty (or whitespace-only) string clears it (stored as null), so a
+		// client clears the description with a plain empty submit.
+		$updated = $this->service->update(1, null, null, null, 'alice', null, null, null, null, null, null, "  \n ");
+		self::assertNull($updated->getDescription());
+		self::assertNull($updated->jsonSerialize()['description']);
+	}
+
+	public function testUpdateRejectsOverlongDescription(): void {
+		$board = $this->board();
+		$board->setDescription('kept');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(
+			1, null, null, null, 'alice', null, null, null, null, null, null,
+			str_repeat('x', BoardService::MAX_DESCRIPTION_LENGTH + 1)
+		);
+	}
+
+	public function testUpdateAcceptsDescriptionExactlyAtTheCap(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$atCap = str_repeat('y', BoardService::MAX_DESCRIPTION_LENGTH);
+		$updated = $this->service->update(1, null, null, null, 'alice', null, null, null, null, null, null, $atCap);
+		self::assertSame($atCap, $updated->getDescription());
+	}
+
+	public function testUpdateDescriptionAssertsManagePermission(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->expects(self::once())
+			->method('assertPermission')
+			->with($board, 'bob', PermissionService::PERMISSION_MANAGE)
+			->willThrowException(new NotPermittedException());
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		// A non-MANAGE user cannot set the description (they can read it).
+		$this->service->update(1, null, null, null, 'bob', null, null, null, null, null, null, 'Mine now');
+	}
+
+	/**
+	 * The boards LIST must not carry descriptions: it is one row per board, and
+	 * a description runs to MAX_DESCRIPTION_LENGTH characters. The single-board
+	 * payload is where it belongs (asserted above).
+	 */
+	public function testFindAllWithStatsOmitsTheDescription(): void {
+		$board = $this->board(1, 'alice');
+		$board->setDescription('Support escalations only.');
+		$this->permissionService->method('getUserGroupIds')->with('alice')->willReturn([]);
+		$this->boardMapper->method('findAllForUser')->with('alice', [])->willReturn([$board]);
+		$this->boardAccess->method('rolesFor')->willReturn([1 => ViewerContext::ROLE_INTERNAL]);
+		$this->cardMapper->method('countByBoards')->willReturn([]);
+		$this->cardMapper->method('doneRatioByBoards')->willReturn([]);
+		$this->cardMapper->method('overdueCountByBoards')->willReturn([]);
+		$this->cardReviewMapper->method('needsReviewCountByBoards')->willReturn([]);
+		$this->boardGroupMemberMapper->method('findGroupIdsByBoards')->willReturn([]);
+		$this->boardPinMapper->method('pinnedMap')->willReturn([]);
+		$this->permissionService->method('getPermissionsForBoards')->willReturn([]);
+
+		$result = $this->service->findAllWithStats('alice');
+
+		self::assertCount(1, $result);
+		self::assertArrayNotHasKey('description', $result[0]);
+		// The rest of the summary is untouched.
+		self::assertSame(1, $result[0]['id']);
+		self::assertSame('Existing board', $result[0]['title']);
+	}
+
+	public static function descriptionNormalizationProvider(): array {
+		return [
+			'null stays null' => [null, null],
+			'blank becomes null' => ['', null],
+			'whitespace becomes null' => ["  \t\n ", null],
+			'trimmed' => ['  Scope  ', 'Scope'],
+			'inner whitespace kept' => ["Line one\n\nLine two", "Line one\n\nLine two"],
+		];
+	}
+
+	/**
+	 * ImportService normalises an imported document by this exact rule, so it is
+	 * asserted directly: a board that arrives with "   " must end up null there
+	 * too, not as an empty strip under the board title.
+	 */
+	#[\PHPUnit\Framework\Attributes\DataProvider('descriptionNormalizationProvider')]
+	public function testNormalizeDescription(?string $input, ?string $expected): void {
+		self::assertSame($expected, BoardService::normalizeDescription($input));
+	}
 }

@@ -209,6 +209,7 @@ class ExportService {
 			'board' => [
 				'title' => $board->getTitle(),
 				'color' => $board->getColor(),
+				'description' => $board->getDescription(),
 				'archived' => $board->getArchived(),
 				'estimateScale' => $board->getEstimateScale(),
 				'newCardsOnTop' => $board->getNewCardsOnTop() ?? false,

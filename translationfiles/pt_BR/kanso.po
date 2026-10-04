@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— nenhum —"
 
-#: src/components/BoardSettingsModal.vue:4576
+#: src/components/BoardSettingsModal.vue:4702
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n vez"
@@ -117,6 +117,12 @@ msgstr "{card} movido para {stack}"
 #: src/components/BoardSettingsModal.vue
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "{count} cartão(ões) têm uma estimativa que não cabe na nova escala e serão limpos. Isso não pode ser desfeito."
+
+#: src/components/BoardSettingsModal.vue:145
+msgid "{count} character left"
+msgid_plural "{count} characters left"
+msgstr[0] "{count} caractere restante"
+msgstr[1] "{count} caracteres restantes"
 
 #: src/components/BulkSelectionBar.vue
 msgid "{count} selected"
@@ -930,6 +936,11 @@ msgstr "Anexos do quadro"
 #: src/components/BoardSettingsModal.vue
 msgid "Board background"
 msgstr "Plano de fundo do quadro"
+
+#: src/components/BoardDescriptionModal.vue
+#: src/components/BoardSettingsModal.vue
+msgid "Board description"
+msgstr "Descrição do quadro"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Board name"
@@ -1831,7 +1842,7 @@ msgstr "Zona de perigo"
 msgid "Date"
 msgstr "Data"
 
-#: src/components/BoardSettingsModal.vue:2162
+#: src/components/BoardSettingsModal.vue:2209
 #: src/components/CardDetail.vue:4928
 msgid "day"
 msgid_plural "days"
@@ -2233,6 +2244,10 @@ msgstr "Editar"
 msgid "Edit comment"
 msgstr "Editar comentário"
 
+#: src/components/BoardDescriptionModal.vue
+msgid "Edit description"
+msgstr "Editar a descrição"
+
 #: src/components/CardDetail.vue
 msgid "Edit item"
 msgstr "Editar item"
@@ -2359,25 +2374,25 @@ msgstr "a cada"
 msgid "Every"
 msgstr "A cada"
 
-#: src/components/BoardSettingsModal.vue:4556
+#: src/components/BoardSettingsModal.vue:4682
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Todo dia"
 msgstr[1] "A cada %n dias"
 
-#: src/components/BoardSettingsModal.vue:4566
+#: src/components/BoardSettingsModal.vue:4692
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Todo mês"
 msgstr[1] "A cada %n meses"
 
-#: src/components/BoardSettingsModal.vue:4558
+#: src/components/BoardSettingsModal.vue:4684
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Toda semana"
 msgstr[1] "A cada %n semanas"
 
-#: src/components/BoardSettingsModal.vue:4568
+#: src/components/BoardSettingsModal.vue:4694
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Todo ano"
@@ -2846,6 +2861,7 @@ msgstr "Não foi possível atualizar o contato."
 msgid "Failed to update cover."
 msgstr "Não foi possível atualizar a capa."
 
+#: src/components/BoardSettingsModal.vue
 #: src/views/ProjectView.vue
 msgid "Failed to update description."
 msgstr "Não foi possível atualizar a descrição."
@@ -3301,6 +3317,10 @@ msgstr "Ele não fica no Files de ninguém, então não há de onde desfazer a e
 msgid "Italic"
 msgstr "Itálico"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Its purpose, scope or house rules. Everyone on this board can read it from the ⓘ button beside the board name. Leave empty to remove it."
+msgstr "Seu propósito, escopo ou regras. Todos os membros do quadro podem lê-la no botão ⓘ ao lado do nome do quadro. Deixe vazio para removê-la."
+
 #: src/components/CardDetail.vue
 msgid "Jump to the discussion"
 msgstr "Ir para a discussão"
@@ -3607,6 +3627,10 @@ msgstr "Marcar como modelo"
 msgid "Mark done"
 msgstr "Marcar como concluído"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Maximize"
+msgstr "Maximizar"
+
 #: src/composables/usePriority.js
 msgid "Med"
 msgstr "Méd"
@@ -3632,7 +3656,7 @@ msgstr "Modo"
 msgid "Mon"
 msgstr "Seg"
 
-#: src/components/BoardSettingsModal.vue:2164
+#: src/components/BoardSettingsModal.vue:2211
 #: src/components/CardDetail.vue:4930
 msgid "month"
 msgid_plural "months"
@@ -4798,6 +4822,10 @@ msgstr "resolveu uma conversa"
 msgid "Restore"
 msgstr "Restaurar"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Restore panel size"
+msgstr "Restaurar o tamanho do painel"
+
 #: src/views/ArchivedView.vue
 msgid "Restore selected"
 msgstr "Restaurar selecionados"
@@ -5840,7 +5868,7 @@ msgstr "Webhook ativo"
 msgid "Wed"
 msgstr "Qua"
 
-#: src/components/BoardSettingsModal.vue:2163
+#: src/components/BoardSettingsModal.vue:2210
 #: src/components/CardDetail.vue:4929
 msgid "week"
 msgid_plural "weeks"
@@ -5862,6 +5890,14 @@ msgstr "O que pertence a esta coluna?"
 #: src/components/CardDetail.vue
 msgid "What changes are needed? (posted as a comment)"
 msgstr "Quais alterações são necessárias? (publicado como comentário)"
+
+#: src/components/BoardSettingsModal.vue
+msgid "What is this board for? Markdown supported."
+msgstr "Para que serve este quadro? Markdown é suportado."
+
+#: src/views/BoardView.vue
+msgid "What this board is for"
+msgstr "Para que serve este quadro"
 
 #: src/components/BoardSettingsModal.vue
 msgid "When a card enters {role}"
@@ -5933,7 +5969,7 @@ msgstr "Gravado em"
 msgid "wrote"
 msgstr "escreveu"
 
-#: src/components/BoardSettingsModal.vue:2165
+#: src/components/BoardSettingsModal.vue:2212
 #: src/components/CardDetail.vue:4931
 msgid "year"
 msgid_plural "years"
