@@ -1213,13 +1213,25 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<div v-if="allProjects.length === 0" class="card-modal__popover-empty">
 								{{ t('kanso', 'No projects yet.') }}
 							</div>
+							<!-- Same rule as the assign and label rows above (#10705):
+							     `aria-busy`, never `disabled`. This picker was the last one
+							     still binding `disabled` on EVERY row, and here that one
+							     attribute was BOTH halves of the bug (#10922) - it blurred the
+							     focused row, and it silently ate a project picked while the
+							     previous write was in flight, because a browser never delivers
+							     a click to a disabled button. Measured: 1 of 3 picks reached
+							     the server, 3 of 3 with the attribute out of the way. The
+							     double-submit `disabled` was covering is handled per-row by
+							     useCardProjects' toggle queue, and the visual cue is the shared
+							     `.card-modal__label-toggle[aria-busy='true']` rule these rows
+							     already match. -->
 							<button
 								v-for="project in allProjects"
 								:key="project.id"
 								class="card-modal__label-toggle"
 								:class="{ 'card-modal__label-toggle--active': cardProjectIds.has(project.id) }"
 								:aria-pressed="cardProjectIds.has(project.id)"
-								:disabled="projectTogglePending"
+								:aria-busy="isProjectTogglePending(project.id) ? 'true' : undefined"
 								@click="handleToggleProject(project.id)">
 								<span
 									class="card-modal__project-dot"
@@ -2707,8 +2719,7 @@ import TableColumnIcon from 'vue-material-design-icons/TableColumn.vue'
 // when a card modal is actually opened, not on the main board bundle.
 const MarkdownEditor = defineAsyncComponent(() => import('./MarkdownEditor.vue'))
 import { useCard } from '../composables/useCard.js'
-import { useProjects } from '../composables/useProjects.js'
-import { addCardToProject as apiAddCardToProject, removeCardFromProject as apiRemoveCardFromProject } from '../services/api.js'
+import { useProjects, useCardProjects } from '../composables/useProjects.js'
 import { usePriority, PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { useCardType, CARD_TYPES } from '../composables/useCardType.js'
 import { useBoard } from '../composables/useBoard.js'
@@ -6994,27 +7005,30 @@ const cardProjectIds = computed(() => {
 	return new Set(ids)
 })
 
-const projectTogglePending = ref(false)
 const projectToggleError = ref('')
+const {
+	enqueueToggle: enqueueProjectToggle,
+	isTogglePending: isProjectMembershipPending,
+} = useCardProjects(computed(() => props.cardId))
 
+// Whether this card's row for `projectId` is writing or waiting its turn - drives
+// `aria-busy` on that one row, in place of the `disabled` that used to blur the
+// focused row AND eat the click entirely (#10922).
+function isProjectTogglePending(projectId) {
+	return isProjectMembershipPending(props.cardId, projectId)
+}
+
+// Leaves `openPicker` alone, like the label and assignee pickers: it is a
+// multi-select, so it stays open across picks (#10603).
 async function handleToggleProject(projectId) {
 	projectToggleError.value = ''
-	projectTogglePending.value = true
-	const isMember = cardProjectIds.value.has(projectId)
+	// Read membership at CLICK time, not when the write starts: the pick queued
+	// behind another one must still mean what the user saw when they made it.
+	const assign = !cardProjectIds.value.has(projectId)
 	try {
-		if (isMember) {
-			await apiRemoveCardFromProject(projectId, Number(props.cardId))
-		} else {
-			await apiAddCardToProject(projectId, Number(props.cardId))
-		}
-		// Invalidate card (so projectIds refreshes) + the project's card list
-		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
-		queryClient.invalidateQueries({ queryKey: ['project', String(projectId), 'cards'] })
-		queryClient.invalidateQueries({ queryKey: ['projects'] })
+		await enqueueProjectToggle({ cardId: props.cardId, projectId, assign })
 	} catch (err) {
 		projectToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update project membership.')
-	} finally {
-		projectTogglePending.value = false
 	}
 }
 </script>

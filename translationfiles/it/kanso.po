@@ -316,7 +316,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n riga di dati rilevata"
 msgstr[1] "%n righe di dati rilevate"
 
-#: src/components/CardDetail.vue:4843
+#: src/components/CardDetail.vue:4854
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n giorno fa"
@@ -328,7 +328,7 @@ msgid_plural "%n files"
 msgstr[0] "%n file"
 msgstr[1] "%n file"
 
-#: src/components/CardDetail.vue:4841
+#: src/components/CardDetail.vue:4852
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n ora fa"
@@ -352,7 +352,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etichetta non è stata creata e manca dalle schede importate: solo i gestori della bacheca possono aggiungere nuove etichette. Chiedi a un gestore di aggiungerla, poi impostala sulle schede."
 msgstr[1] "%n etichette non sono state create e mancano dalle schede importate: solo i gestori della bacheca possono aggiungere nuove etichette. Chiedi a un gestore di aggiungerle, poi impostale sulle schede."
 
-#: src/components/CardDetail.vue:4839
+#: src/components/CardDetail.vue:4850
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuto fa"
@@ -382,7 +382,7 @@ msgid_plural "%n projects"
 msgstr[0] "%n progetto"
 msgstr[1] "%n progetti"
 
-#: src/components/CardDetail.vue:2223
+#: src/components/CardDetail.vue:2235
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n risposta"
@@ -1847,7 +1847,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:2209
-#: src/components/CardDetail.vue:5032
+#: src/components/CardDetail.vue:5043
 msgid "day"
 msgid_plural "days"
 msgstr[0] "giorno"
@@ -3329,7 +3329,7 @@ msgstr "Scopo, ambito o regole. Tutti i membri della bacheca possono leggerla da
 msgid "Jump to the discussion"
 msgstr "Vai alla discussione"
 
-#: src/components/CardDetail.vue:6805
+#: src/components/CardDetail.vue:6816
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Vai alla discussione (%n commento)"
@@ -3661,7 +3661,7 @@ msgid "Mon"
 msgstr "Lun"
 
 #: src/components/BoardSettingsModal.vue:2211
-#: src/components/CardDetail.vue:5034
+#: src/components/CardDetail.vue:5045
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mese"
@@ -5133,7 +5133,7 @@ msgstr "Mostra la discussione sotto la scheda"
 msgid "Show the discussion panel"
 msgstr "Mostra il pannello della discussione"
 
-#: src/components/CardDetail.vue:6811
+#: src/components/CardDetail.vue:6822
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostra il pannello della discussione (%n commento)"
@@ -5873,7 +5873,7 @@ msgid "Wed"
 msgstr "Mer"
 
 #: src/components/BoardSettingsModal.vue:2210
-#: src/components/CardDetail.vue:5033
+#: src/components/CardDetail.vue:5044
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "settimana"
@@ -5974,7 +5974,7 @@ msgid "wrote"
 msgstr "ha scritto"
 
 #: src/components/BoardSettingsModal.vue:2212
-#: src/components/CardDetail.vue:5035
+#: src/components/CardDetail.vue:5046
 msgid "year"
 msgid_plural "years"
 msgstr[0] "anno"

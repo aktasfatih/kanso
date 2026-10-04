@@ -4,7 +4,8 @@
 // Card #10705 — a picker row must not drop keyboard focus while its toggle is
 // in flight.
 //
-// Both attribute pickers in the card modal (assignee and label) used to set
+// All three multi-select pickers in the card modal (assignee, label and — until
+// #10922 — projects) used to set
 // `disabled` on EVERY row for as long as the toggle mutation was pending.
 // Disabling the element that currently has focus is one of the few things the
 // HTML spec makes the browser undo for you: it blurs it, and focus falls back
@@ -26,19 +27,36 @@
 import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
 test.describe('Picker rows keep keyboard focus across an in-flight toggle (#10705)', () => {
-	const state = { boardId: 0, assignCardId: 0, labelCardId: 0, labelId: 0, boardUrl: '' }
+	const state = {
+		boardId: 0,
+		assignCardId: 0,
+		labelCardId: 0,
+		projectCardId: 0,
+		labelId: 0,
+		projectId: 0,
+		projectTitle: '',
+		boardUrl: '',
+	}
 
 	test.beforeAll(async () => {
-		const board = await api.post('/boards', { title: 'Picker focus ' + Math.floor(Date.now() / 1000) })
+		const ts = Math.floor(Date.now() / 1000)
+		const board = await api.post('/boards', { title: 'Picker focus ' + ts })
 		state.boardId = board.id
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 		const stack = await api.post('/stacks', { boardId: board.id, title: 'To do' })
 		state.assignCardId = (await api.post('/cards', { stackId: stack.id, title: 'Focus assign case' })).id
 		state.labelCardId = (await api.post('/cards', { stackId: stack.id, title: 'Focus label case' })).id
+		state.projectCardId = (await api.post('/cards', { stackId: stack.id, title: 'Focus project case' })).id
 		state.labelId = (await api.post('/labels', { boardId: board.id, title: 'Focusable', color: '2ecc71' })).id
+		// Projects are cross-board and user-owned, so this one is named uniquely:
+		// the picker lists every project the viewer owns, including any another
+		// spec left behind.
+		state.projectTitle = `Focusable project ${ts}`
+		state.projectId = (await api.post('/projects', { title: state.projectTitle })).id
 	})
 
 	test.afterAll(async () => {
+		if (state.projectId) await api.delete(`/projects/${state.projectId}`).catch(() => {})
 		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
 	})
 
@@ -177,5 +195,53 @@ test.describe('Picker rows keep keyboard focus across an in-flight toggle (#1070
 		expect(gate.count()).toBe(1)
 		const served = await api.get(`/cards/${state.labelCardId}`)
 		expect(served.labelIds).toEqual([state.labelId])
+	})
+
+	// The third picker (#10922). It kept `disabled` long after the other two had
+	// moved to `aria-busy`, and on this one that attribute was doing BOTH jobs:
+	// blurring the focused row, and eating a pick made during the previous write
+	// outright — a browser never delivers a click to a disabled button, so there
+	// was nothing for the handler to drop (the handler had no guard at all). The
+	// queued-not-dropped half is in projects.spec.js; this is the focus half.
+	test('the project row stays focused while its membership request is in flight', async ({ page }) => {
+		// Start from a card in no projects so the row toggles ON.
+		const before = await api.get(`/cards/${state.projectCardId}`)
+		for (const pid of before.projectIds || []) {
+			await api.delete(`/projects/${pid}/cards/${state.projectCardId}`)
+		}
+
+		await openCard(page, 'Focus project case')
+		await page.locator('.card-modal__attrbar button[data-pill="project"]').click()
+
+		const popover = page.locator('.card-modal__attrbar .card-modal__popover')
+		await expect(popover).toBeVisible()
+		const row = popover.locator('.card-modal__label-toggle', { hasText: state.projectTitle }).first()
+		await expect(row).toBeVisible()
+
+		const gate = await gateRequests(page, /\/api\/projects\/\d+\/cards\/\d+$/)
+
+		await row.press('Enter')
+
+		await expect(row).toHaveAttribute('aria-busy', 'true')
+		await settleFocus(page)
+		await expect(row).toBeFocused()
+
+		// The held-down Enter `disabled` used to cover. Nothing but the per-row
+		// queue stops these now.
+		await row.press('Enter')
+		await row.press('Enter')
+
+		gate.release()
+
+		// The pill count is the modal's only visible read-back for projects (there
+		// are no per-project chips), and it refreshes off the settled write.
+		await expect(page.locator('.card-modal__attrbar button[data-pill="project"]'))
+			.toHaveText(/1 project/)
+		await expect(row).not.toHaveAttribute('aria-busy', 'true')
+		await expect(row).toBeFocused()
+
+		expect(gate.count()).toBe(1)
+		const served = await api.get(`/cards/${state.projectCardId}`)
+		expect(served.projectIds).toEqual([state.projectId])
 	})
 })
