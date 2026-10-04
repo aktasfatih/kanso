@@ -947,14 +947,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							     after every single pick, once per person added. `aria-busy`
 							     says the same thing to assistive tech and leaves the row in
 							     the focus order; the double-submit `disabled` was covering is
-							     handled in handleToggleAssignee instead. -->
+							     handled by useAssignees' per-row toggle queue, which
+							     also keeps a pick taken mid-write from being dropped
+							     (#10799). -->
 							<button
 								v-for="p in assignCandidates"
 								:key="p.uid"
 								class="card-modal__assign-option"
 								:class="{ 'card-modal__assign-option--active': p.assigned }"
 								:aria-pressed="p.assigned"
-								:aria-busy="assigneeTogglePending === p.uid ? 'true' : undefined"
+								:aria-busy="isAssigneeTogglePending(p.uid) ? 'true' : undefined"
 								@click="handleToggleAssignee(p.uid, !p.assigned)">
 								<NcAvatar
 									:user="p.uid"
@@ -2682,7 +2684,7 @@ import { useCardType, CARD_TYPES } from '../composables/useCardType.js'
 import { useBoard } from '../composables/useBoard.js'
 import { scaleTokens } from '../services/estimateScales.js'
 import { useLabels } from '../composables/useLabels.js'
-import { useAssignees } from '../composables/useAssignees.js'
+import { useAssignees, TOGGLE_ALREADY_PENDING } from '../composables/useAssignees.js'
 import { useContacts } from '../composables/useContacts.js'
 import { fetchCardContacts, fetchParticipants } from '../services/api.js'
 import { useReviews } from '../composables/useReviews.js'
@@ -3110,7 +3112,7 @@ async function submitCreateLabel() {
 }
 
 // ── Assignees ────────────────────────────────────────────────────────────────
-const { participants, participantList, participantsTruncated, participantsLimit, toggleAssignee } = useAssignees(boardId)
+const { participants, participantList, participantsTruncated, participantsLimit, toggleAssignee, enqueueToggle, isTogglePending } = useAssignees(boardId)
 const assigneeError = ref('')
 
 // Picker search (#10704). The participants payload is capped server-side, so on
@@ -3298,35 +3300,40 @@ async function toggleAssignPicker() {
 	assigneeSearchInput.value?.focus?.()
 }
 
-// The uid whose toggle is in flight, or null when idle — the assignee twin of
-// labelTogglePending, and there for the same two reasons (#10705): it drives
-// `aria-busy` on the one row being written, and it serialises the picker in
-// place of the `disabled` that used to blur the focused row. Set before the
-// first await so a held-down Enter cannot slip a second write past it.
-const assigneeTogglePending = ref(null)
+// Whether this card's row for `uid` is writing or waiting its turn — drives
+// `aria-busy` on that one row, in place of the `disabled` that used to blur the
+// focused row (#10705).
+//
+// The serialisation itself lives in useAssignees' queue (#10799), not here: the
+// flag this replaced was a single uid for the whole picker, so a pick taken
+// during another row's round trip hit an early `return` and was never sent at
+// all. Queueing and "don't submit the same row twice" are now one mechanism in
+// one place, so neither can be true while the other is false.
+function isAssigneeTogglePending(uid) {
+	return isTogglePending(Number(props.cardId), uid)
+}
 
 // NB: this deliberately leaves `openPicker` alone. The picker is a multi-select
 // (same as the label one), so it stays open across picks - closing it after the
 // first assignee is what made a second one feel unreachable (#10603). It closes
 // on Escape / a click outside, like every other attribute-bar popover.
 async function handleToggleAssignee(uid, assign) {
-	if (assigneeTogglePending.value !== null) return
-	assigneeTogglePending.value = uid
 	assigneeError.value = ''
 	try {
-		await toggleAssignee.mutateAsync({
+		const result = await enqueueToggle({
 			cardId: Number(props.cardId),
 			userId: uid,
 			assign,
 		})
+		// A repeat of the row that is already writing (a held Enter): nothing was
+		// sent, so there is nothing to announce either.
+		if (result === TOGGLE_ALREADY_PENDING) return
 		const who = participantName(uid)
 		announceMove(assign
 			? t('kanso', '{user} assigned', { user: who })
 			: t('kanso', '{user} unassigned', { user: who }))
 	} catch (err) {
 		assigneeError.value = err?.response?.data?.error || t('kanso', 'Failed to update assignee.')
-	} finally {
-		assigneeTogglePending.value = null
 	}
 }
 
