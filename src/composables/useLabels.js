@@ -11,6 +11,7 @@ import {
 } from '../services/api.js'
 import { boardQueryKey } from './useBoard.js'
 import { invalidateCrossBoardFeeds } from './queryKeys.js'
+import { createToggleQueue } from './useToggleQueue.js'
 
 /**
  * Label mutations for a given board.
@@ -25,6 +26,10 @@ import { invalidateCrossBoardFeeds } from './queryKeys.js'
  *      re-setting it on error.
  *   4. On settled: invalidate ['card', cardId] (detail query), the board query
  *      and the cross-board feeds so the UI reconciles with server truth.
+ *
+ * Toggles are SERIALISED through enqueueToggle, not fired in parallel and not
+ * dropped - see useToggleQueue.js (shared with the assignee picker) for why that
+ * distinction is the whole point (#10920).
  *
  * For create / update / delete label we do NOT do optimistic patches because
  * these are low-frequency settings-panel actions; invalidating on settled is
@@ -145,10 +150,53 @@ export function useLabels(boardId) {
 		},
 	})
 
+	// ── Serialising the picker's picks (#10920) ─────────────────────────────────
+	// One pick at a time, queued rather than dropped, keyed per (card, label).
+	// The card modal used to hold a single `labelTogglePending` label id for the
+	// whole picker and return early while it was set, so a label picked during
+	// the previous write's round trip sent no request at all - measured in the
+	// browser at 1 of 3 picks reaching the server with the label write delayed
+	// 800ms, and 2 of 3 with no added latency, silently either way. The mechanism
+	// lives in useToggleQueue.js, shared with the assignee picker, which had the
+	// identical defect (#10799).
+	const { enqueue, isPending } = createToggleQueue({
+		mutate: (vars) => toggleLabel.mutateAsync(vars),
+		keyOf: ({ cardId, labelId }) => `${cardId}:${labelId}`,
+	})
+
+	/**
+	 * Queue one label assign/unassign behind whatever is already running.
+	 *
+	 * @param {{cardId: number, labelId: number, assign: boolean}} vars
+	 * @return {Promise<*>} this pick's own outcome - resolves with the mutation
+	 *   result, with TOGGLE_ALREADY_PENDING when it was a same-row
+	 *   double-submit, or rejects with this pick's error.
+	 */
+	function enqueueToggle({ cardId, labelId, assign }) {
+		return enqueue({ cardId, labelId, assign })
+	}
+
+	/**
+	 * Whether this (card, label) toggle is on the wire or waiting its turn.
+	 * Reactive - a template reading it re-renders when a toggle starts or ends.
+	 *
+	 * @param {number|string} cardId
+	 * @param {number} labelId
+	 * @return {boolean}
+	 */
+	function isTogglePending(cardId, labelId) {
+		return isPending({ cardId, labelId })
+	}
+
+	// `toggleLabel` itself is deliberately NOT returned: a second, un-queued
+	// handle to the same mutation is exactly how a pick would get past the queue,
+	// and a guard a caller can opt out of in one destructure is not a guard.
+	// enqueueToggle is the only way to toggle a label on a card.
 	return {
 		createLabel,
 		updateLabel,
 		deleteLabel,
-		toggleLabel,
+		enqueueToggle,
+		isTogglePending,
 	}
 }

@@ -15,6 +15,10 @@
 // card-multi-assign.spec.js's three-pick test, and a real loss of a user's
 // action.
 //
+// The queue itself now lives in src/composables/useToggleQueue.js, shared with
+// the label picker, which had the identical defect (#10920). This file pins
+// useAssignees' side of that wiring; labelToggleQueue.test.mjs pins the other.
+//
 // Exercised for real, in the style of cardMoveQueue.test.mjs: useAssignees is a
 // plain composable, so it runs under a Vue app context with no DOM and no
 // bundler (app.runWithContext supplies the injected QueryClient without
@@ -43,7 +47,8 @@ globalThis.window = {
 const { createApp, effectScope } = await import('vue')
 const { QueryClient, VueQueryPlugin } = await import('@tanstack/vue-query')
 const axios = (await import('@nextcloud/axios')).default
-const { useAssignees, TOGGLE_ALREADY_PENDING } = await import('../../src/composables/useAssignees.js')
+const { useAssignees } = await import('../../src/composables/useAssignees.js')
+const { TOGGLE_ALREADY_PENDING } = await import('../../src/composables/useToggleQueue.js')
 
 // TanStack's focusManager reads document.visibilityState when it decides
 // whether to refetch, so it has to be present and 'visible'.
@@ -182,6 +187,19 @@ test('clicking the SAME row twice while it writes is still one write', async (t)
 	await first
 	assert.deepEqual(writes.map((w) => w.userId), ['alice'], 'exactly one write')
 	assert.equal(isTogglePending(33, 'alice'), false, 'and the row must go idle again')
+})
+
+test('one busy assignee row does not report the OTHER rows busy', async (t) => {
+	// The flag this replaced was a single uid for the whole picker, so while one
+	// row wrote, the guard refused every row. Per-row is the whole correction —
+	// pinned on both sides of the shared queue (labelToggleQueue.test.mjs has
+	// the label twin of this test).
+	const { enqueueToggle, isTogglePending } = harness(t, 5, 55, 80)
+
+	const first = enqueueToggle({ cardId: 55, userId: 'alice', assign: true })
+	assert.equal(isTogglePending(55, 'bob'), false, 'a different person must not read as busy')
+	assert.equal(isTogglePending(999, 'alice'), false, 'nor the same person on a different card')
+	await first
 })
 
 test('a refused pick does not strand the picks queued behind it', async (t) => {

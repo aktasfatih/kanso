@@ -876,11 +876,26 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<!-- Unassigning is a write (#10703): a member shared in with READ
 						     only keeps the avatar and the name - the whole point of the
 						     pill - but is not offered a button the server answers 403 to. -->
+						<!-- `aria-busy`, not `disabled`, and per-ROW (#10920). This used to
+						     be `:disabled="toggleAssignee.isPending.value"`, i.e. ANY
+						     assignee write in flight greyed out EVERY pill's "×". Two things
+						     were wrong with it and only one is the per-row part:
+						       - `disabled` here duplicated a refusal the queue already
+						         makes. A second click on this uid returns
+						         TOGGLE_ALREADY_PENDING and sends nothing, so a `disabled`
+						         saying the same thing makes BOTH copies unfalsifiable -
+						         exactly what src/main.js:192-197 warns about.
+						       - `disabled` blurs the control the keyboard user is standing
+						         on (#10705), which is why every other write control in this
+						         modal announces in-flight with `aria-busy` instead.
+						     The window this can actually paint in is the QUEUED one: once
+						     the write starts, onMutate drops the uid from the detail cache
+						     and the pill unmounts with it. -->
 						<button
 							v-if="canEdit"
 							class="card-modal__pill-x"
 							:title="t('kanso', 'Remove assignee')"
-							:disabled="toggleAssignee.isPending.value"
+							:aria-busy="isAssigneeTogglePending(uid) ? 'true' : undefined"
 							@click="handleToggleAssignee(uid, false)">
 							<CloseIcon :size="12" />
 						</button>
@@ -1091,7 +1106,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</div>
 							<!-- Same rule as the assign rows above (#10705): `aria-busy`,
 							     never `disabled`, so activating a label by keyboard does not
-							     blur the row the user is standing on. -->
+							     blur the row the user is standing on. The double-submit that
+							     `disabled` was covering is handled by useLabels' per-row toggle
+							     queue, which also keeps a label picked mid-write from being
+							     dropped (#10920). -->
 							<button
 								v-for="label in boardLabels"
 								:key="label.id"
@@ -1102,7 +1120,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								}"
 								:style="label.color ? { '--label-color': cssColor(label.color) } : {}"
 								:aria-pressed="cardLabelIds.has(label.id)"
-								:aria-busy="labelTogglePending === label.id ? 'true' : undefined"
+								:aria-busy="isLabelTogglePending(label.id) ? 'true' : undefined"
 								@click="handleToggleLabel(label)">
 								{{ label.title }}
 							</button>
@@ -2684,7 +2702,8 @@ import { useCardType, CARD_TYPES } from '../composables/useCardType.js'
 import { useBoard } from '../composables/useBoard.js'
 import { scaleTokens } from '../services/estimateScales.js'
 import { useLabels } from '../composables/useLabels.js'
-import { useAssignees, TOGGLE_ALREADY_PENDING } from '../composables/useAssignees.js'
+import { useAssignees } from '../composables/useAssignees.js'
+import { TOGGLE_ALREADY_PENDING } from '../composables/useToggleQueue.js'
 import { useContacts } from '../composables/useContacts.js'
 import { fetchCardContacts, fetchParticipants } from '../services/api.js'
 import { useReviews } from '../composables/useReviews.js'
@@ -3029,41 +3048,50 @@ const cardLabelIds = computed(() => {
 })
 
 // Label toggle + create mutations (create is board-management → MANAGE-gated server-side)
-const { toggleLabel, createLabel } = useLabels(boardId)
+// useLabels no longer hands out `toggleLabel` at all — every label write from
+// this modal goes through the queue, and that is enforced there rather than
+// asserted here.
+const {
+	createLabel,
+	enqueueToggle: enqueueLabelToggle,
+	isTogglePending: labelTogglePendingFor,
+} = useLabels(boardId)
 const labelToggleError = ref('')
 
-// The id of the label whose toggle is in flight, or null when idle (#10705).
-// Two jobs, both of which `:disabled` on the rows used to do — badly, because
-// disabling the focused row blurs it:
-//   1. it drives `aria-busy` on that one row, so the in-flight state is still
-//      announced without taking the row out of the focus order;
-//   2. it serialises the picker. Set SYNCHRONOUSLY on entry (before the first
-//      await), so a keyboard user leaning on Enter can't fire a second write
-//      into the window — a mutation's own `isPending` flips through the query
-//      client's batched notifier and is NOT guaranteed to be true by the time
-//      the next key event is handled. Serialising also keeps the optimistic
-//      rollback honest: onError restores a snapshot taken before ITS mutation,
-//      which a concurrent second toggle would have made stale.
-const labelTogglePending = ref(null)
+// Whether this card's row for `labelId` is writing or waiting its turn — drives
+// `aria-busy` on that one row, in place of the `disabled` that used to blur the
+// focused row (#10705).
+//
+// The serialisation itself lives in useLabels' queue (#10920), not here: the
+// flag this replaced was a single label id for the whole picker, so a label
+// picked during another row's round trip hit an early `return` and was never
+// sent at all. Queueing and "don't submit the same row twice" are now one
+// mechanism in one place, so neither can be true while the other is false.
+function isLabelTogglePending(labelId) {
+	return labelTogglePendingFor(Number(props.cardId), labelId)
+}
 
+// NB: like the assignee picker, this deliberately leaves `openPicker` alone —
+// the label picker is a multi-select and stays open across picks, which is what
+// makes adding three labels three clicks and, before the queue, lost one of the
+// three on a local link and two of the three with the write delayed 800ms.
 async function handleToggleLabel(label) {
-	if (labelTogglePending.value !== null) return
-	labelTogglePending.value = label.id
 	const assign = !cardLabelIds.value.has(label.id)
 	labelToggleError.value = ''
 	try {
-		await toggleLabel.mutateAsync({
+		const result = await enqueueLabelToggle({
 			cardId: Number(props.cardId),
 			labelId: label.id,
 			assign,
 		})
+		// A repeat of the row that is already writing (a held Enter): nothing was
+		// sent, so there is nothing to announce either.
+		if (result === TOGGLE_ALREADY_PENDING) return
 		announceMove(assign
 			? t('kanso', 'Label {label} added', { label: label.title })
 			: t('kanso', 'Label {label} removed', { label: label.title }))
 	} catch (err) {
 		labelToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update label.')
-	} finally {
-		labelTogglePending.value = null
 	}
 }
 
@@ -3098,10 +3126,12 @@ async function submitCreateLabel() {
 	newLabelTitle.value = ''
 	newLabelColor.value = ''
 
-	// Step 2: assign the freshly-created label to this card.
+	// Step 2: assign the freshly-created label to this card — through the SAME
+	// queue the picker rows use, so this write cannot overlap a pick the user
+	// made just before hitting create and clobber its optimistic snapshot.
 	try {
 		if (label?.id != null) {
-			await toggleLabel.mutateAsync({ cardId: Number(props.cardId), labelId: label.id, assign: true })
+			await enqueueLabelToggle({ cardId: Number(props.cardId), labelId: label.id, assign: true })
 		}
 	} catch (err) {
 		createLabelError.value = err?.response?.data?.error
@@ -3112,7 +3142,9 @@ async function submitCreateLabel() {
 }
 
 // ── Assignees ────────────────────────────────────────────────────────────────
-const { participants, participantList, participantsTruncated, participantsLimit, toggleAssignee, enqueueToggle, isTogglePending } = useAssignees(boardId)
+// useAssignees likewise no longer hands out `toggleAssignee` — see the label
+// block above.
+const { participants, participantList, participantsTruncated, participantsLimit, enqueueToggle, isTogglePending } = useAssignees(boardId)
 const assigneeError = ref('')
 
 // Picker search (#10704). The participants payload is capped server-side, so on
@@ -7717,7 +7749,11 @@ async function handleToggleProject(projectId) {
    only `aria-busy` marks it - so this is the whole visual cue that the pick
    has not been confirmed yet, matching the checklist rows' pending look. */
 .card-modal__assign-option[aria-busy='true'],
-.card-modal__label-toggle[aria-busy='true'] {
+.card-modal__label-toggle[aria-busy='true'],
+/* The assignee pill's "×" is on the same footing since #10920: it used to grey
+   out via `disabled` (on every pill at once), and this is what replaces the
+   greying without taking the button out of the tab order. */
+.card-modal__pill-x[aria-busy='true'] {
 	opacity: 0.65;
 }
 /* Already on the card. Marked like the label toggles above: the row stays in
