@@ -457,6 +457,45 @@ Kanso 是一款为速度而生的 Nextcloud 看板应用。看板、列和卡片
 		     untested promise - unit-php runs the suite on 8.4 and 8.5, and
 		     parse-checks this shipped tree on both. -->
 		<php min-version="8.2"/>
+		<!-- `<lib>` is this schema's PHP-extension slot, NOT a Composer package:
+		     scripts/schema/info.xsd puts it between <command> and <owncloud> in
+		     the <dependencies> xs:sequence, so it belongs exactly here, after
+		     <php> and before <nextcloud>. Nextcloud resolves each entry against
+		     the loaded extensions (DependencyAnalyzer::analyzeLibraries ->
+		     Platform::getLibraryVersion -> PlatformRepository, which is built
+		     from get_loaded_extensions()) and AppManager::checkAppDependencies
+		     throws "App ... cannot be installed because the following
+		     dependencies are not fulfilled: The library zip is not available."
+
+		     zip is listed because the shipped tree instantiates \ZipArchive
+		     unconditionally - BoardArchiveService::build() for board
+		     export/backup, ImportArchiveReader for board import - with no
+		     class_exists/extension_loaded guard anywhere, so on a zip-less PHP
+		     every one of them raises
+		       Error: Class "ZipArchive" not found
+		     and that reaches the user as a bare HTTP 500: ApiErrorTrait's
+		     respond() maps only the five named service exceptions plus
+		     \OverflowException, and an \Error matches no arm, so it propagates
+		     out of export, import AND duplicate (duplicate runs export into
+		     import in-process). All three carry #[NoAdminRequired]
+		     (BoardPortabilityController), so any board member can hit them - it
+		     is not an admin-only or opt-in path. Without this element the App
+		     Store offers the app and `occ app:enable` accepts it on a server
+		     that cannot run it - same failure mode as a missing PHP floor, so
+		     the same remedy: the declaration IS the guard. Note it also gates
+		     upgrades (AppManager::upgradeApp), so a zip-less server already
+		     running Kanso stops at the next upgrade rather than silently
+		     keeping a half-working app.
+
+		     composer.json's "ext-zip" is the dev-side half of this and cannot
+		     substitute for it - no vendor/ ships, so composer never runs on a
+		     user's server.
+
+		     Deliberately no min-version: the analyzer compares against the
+		     EXTENSION's own version (\ReflectionExtension::getVersion(), e.g.
+		     1.22.8 on NC 34), not PHP's, so any bound written here would
+		     measure the wrong number and lock out working servers. -->
+		<lib>zip</lib>
 		<!-- Floor is 32, not 30: opening the app binds
 		     IQueryBuilder::PARAM_DATETIME_MUTABLE in the boards-list stats, and
 		     that constant is only @since 31.0.0 - so on NC 30 the very first
