@@ -22,8 +22,10 @@ import { createToggleQueue } from './useToggleQueue.js'
  *      The functional updater form is used so the patch always operates on the
  *      latest snapshot in the cache (same pattern as applyOptimisticPatch in
  *      useCardMove).
- *   3. Also snapshot the previous board cache value so we can roll back by
- *      re-setting it on error.
+ *   3. Also snapshot the card's PREVIOUS labelIds - that array alone, in both
+ *      caches, not the whole cached objects - so a failure can put that one
+ *      field back without disturbing anything another picker changed meanwhile
+ *      (#10923).
  *   4. On settled: invalidate ['card', cardId] (detail query), the board query
  *      and the cross-board feeds so the UI reconciles with server truth.
  *
@@ -99,9 +101,23 @@ export function useLabels(boardId) {
 			await queryClient.cancelQueries({ queryKey: boardKey })
 			await queryClient.cancelQueries({ queryKey: cardKey })
 
-			// Snapshot previous state for potential rollback
-			const previousBoard = queryClient.getQueryData(boardKey)
-			const previousCard = queryClient.getQueryData(cardKey)
+			// Snapshot ONLY `labelIds`, not the whole cached objects (#10923): the
+			// three pickers have one queue EACH, so a label write and an assignee
+			// write genuinely overlap, and re-setting a whole card object on
+			// failure erases whatever the other picker committed in between -
+			// which the server has kept, so the client would be left lying. A
+			// label snapshot can only ever be stale about a DIFFERENT field,
+			// because the queue keeps two label writes from overlapping.
+			// `undefined` here means "no such cache entry", i.e. nothing to undo;
+			// an entry whose labelIds is not an array is snapshotted as the []
+			// the patch below treats it as.
+			const snapshotIds = (card) => card
+				? (Array.isArray(card.labelIds) ? card.labelIds : [])
+				: undefined
+			const previousDetailIds = snapshotIds(queryClient.getQueryData(cardKey))
+			const previousSummaryIds = snapshotIds(
+				queryClient.getQueryData(boardKey)?.cards?.find((c) => c.id === cardId),
+			)
 
 			const patchIds = (ids) => assign
 				? (ids.includes(labelId) ? ids : [...ids, labelId])
@@ -126,16 +142,29 @@ export function useLabels(boardId) {
 				return { ...old, labelIds: patchIds(Array.isArray(old.labelIds) ? old.labelIds : []) }
 			})
 
-			return { previousBoard, previousCard, cardKey }
+			return { previousDetailIds, previousSummaryIds, cardKey }
 		},
 
-		onError: (_err, _vars, context) => {
-			// Roll back to the snapshots taken before the optimistic patches
-			if (context?.previousBoard !== undefined) {
-				queryClient.setQueryData(getBoardKey(), context.previousBoard)
+		onError: (_err, { cardId }, context) => {
+			// Put `labelIds` back, and ONLY `labelIds` - layered onto whatever the
+			// cache holds at rollback time (the functional updater form) rather
+			// than over the top of it. See the snapshot comment in onMutate.
+			if (context?.previousSummaryIds !== undefined) {
+				queryClient.setQueryData(getBoardKey(), (old) => {
+					if (!old) return old
+					return {
+						...old,
+						cards: old.cards.map((c) => (c.id === cardId
+							? { ...c, labelIds: context.previousSummaryIds }
+							: c)),
+					}
+				})
 			}
-			if (context?.previousCard !== undefined && context?.cardKey) {
-				queryClient.setQueryData(context.cardKey, context.previousCard)
+			if (context?.previousDetailIds !== undefined && context?.cardKey) {
+				queryClient.setQueryData(context.cardKey, (old) => {
+					if (!old) return old
+					return { ...old, labelIds: context.previousDetailIds }
+				})
 			}
 		},
 

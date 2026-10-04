@@ -39,7 +39,8 @@ function isUsableBoardId(id) {
  * Optimistic strategy for toggleAssignee (assign / unassign):
  *   Mirrors useLabels' onMutate EXACTLY - patch assigneeIds in BOTH the board
  *   summary cache (via boardQueryKey) and the ['card', String(cardId)] detail
- *   cache; rollback both on error; invalidate both on settled.
+ *   cache; on error put back assigneeIds AND ONLY assigneeIds in both (#10923);
+ *   invalidate both on settled.
  *
  * Toggles are SERIALISED through enqueueToggle, not fired in parallel and not
  * dropped - see useToggleQueue.js (shared with the label picker) for why that
@@ -95,9 +96,18 @@ export function useAssignees(boardId) {
 			await queryClient.cancelQueries({ queryKey: boardKey })
 			await queryClient.cancelQueries({ queryKey: cardKey })
 
-			// Snapshot previous state for potential rollback
-			const previousBoard = queryClient.getQueryData(boardKey)
-			const previousCard = queryClient.getQueryData(cardKey)
+			// Snapshot ONLY `assigneeIds`, not the whole cached objects (#10923) -
+			// the mirror of useLabels' snapshot, and for the same reason: this
+			// picker and the label picker have a queue each, so their writes
+			// overlap, and a whole-object restore on failure erases the label the
+			// user picked meanwhile even though the server kept it.
+			const snapshotIds = (card) => card
+				? (Array.isArray(card.assigneeIds) ? card.assigneeIds : [])
+				: undefined
+			const previousDetailIds = snapshotIds(queryClient.getQueryData(cardKey))
+			const previousSummaryIds = snapshotIds(
+				queryClient.getQueryData(boardKey)?.cards?.find((c) => c.id === cardId),
+			)
 
 			const patchIds = (ids) => assign
 				? (ids.includes(userId) ? ids : [...ids, userId])
@@ -121,16 +131,28 @@ export function useAssignees(boardId) {
 				return { ...old, assigneeIds: patchIds(Array.isArray(old.assigneeIds) ? old.assigneeIds : []) }
 			})
 
-			return { previousBoard, previousCard, cardKey }
+			return { previousDetailIds, previousSummaryIds, cardKey }
 		},
 
-		onError: (_err, _vars, context) => {
-			// Roll back to the snapshots taken before the optimistic patches
-			if (context?.previousBoard !== undefined) {
-				queryClient.setQueryData(getBoardKey(), context.previousBoard)
+		onError: (_err, { cardId }, context) => {
+			// Put `assigneeIds` back, and ONLY `assigneeIds` - layered onto
+			// whatever the cache holds at rollback time. See onMutate.
+			if (context?.previousSummaryIds !== undefined) {
+				queryClient.setQueryData(getBoardKey(), (old) => {
+					if (!old) return old
+					return {
+						...old,
+						cards: old.cards.map((c) => (c.id === cardId
+							? { ...c, assigneeIds: context.previousSummaryIds }
+							: c)),
+					}
+				})
 			}
-			if (context?.previousCard !== undefined && context?.cardKey) {
-				queryClient.setQueryData(context.cardKey, context.previousCard)
+			if (context?.previousDetailIds !== undefined && context?.cardKey) {
+				queryClient.setQueryData(context.cardKey, (old) => {
+					if (!old) return old
+					return { ...old, assigneeIds: context.previousDetailIds }
+				})
 			}
 		},
 
