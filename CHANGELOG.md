@@ -11,6 +11,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.38.0](https://github.com/aktasfatih/kanso/compare/v0.37.0...v0.38.0) (2026-10-04)
+
+
+### Features
+
+* give board settings the width its fields need, and a way to maximize it ([eaf4baf](https://github.com/aktasfatih/kanso/commit/eaf4baf721b80b05a360a0a5eb2de0e37c3daa8f)), closes [#180](https://github.com/aktasfatih/kanso/issues/180)
+* say what a board is for, on demand from the board header ([bfafd6d](https://github.com/aktasfatih/kanso/commit/bfafd6d41f0eaad07b10333f957be3f5ef1535c9)), closes [#173](https://github.com/aktasfatih/kanso/issues/173)
+
 # [0.37.0](https://github.com/aktasfatih/kanso/compare/v0.36.0...v0.37.0) (2026-10-01)
 
 
