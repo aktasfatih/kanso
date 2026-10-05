@@ -326,7 +326,7 @@ msgstr[0] "Обнаружена %n строка данных"
 msgstr[1] "Обнаружено %n строки данных"
 msgstr[2] "Обнаружено %n строк данных"
 
-#: src/components/CardDetail.vue:4739
+#: src/components/CardDetail.vue:4880
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n день назад"
@@ -340,7 +340,7 @@ msgstr[0] "%n файл"
 msgstr[1] "%n файла"
 msgstr[2] "%n файлов"
 
-#: src/components/CardDetail.vue:4737
+#: src/components/CardDetail.vue:4878
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n час назад"
@@ -368,7 +368,7 @@ msgstr[0] "%n метка не была создана и отсутствует 
 msgstr[1] "%n метки не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 msgstr[2] "%n меток не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 
-#: src/components/CardDetail.vue:4735
+#: src/components/CardDetail.vue:4876
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n минуту назад"
@@ -396,14 +396,14 @@ msgstr[0] "%n балл"
 msgstr[1] "%n балла"
 msgstr[2] "%n баллов"
 
-#: src/components/CardDetail.vue:1177
+#: src/components/CardDetail.vue:1209
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n проект"
 msgstr[1] "%n проекта"
 msgstr[2] "%n проектов"
 
-#: src/components/CardDetail.vue:2191
+#: src/components/CardDetail.vue:2235
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n ответ"
@@ -424,7 +424,7 @@ msgstr[0] "%n карточка без дат"
 msgstr[1] "%n карточки без дат"
 msgstr[2] "%n карточек без дат"
 
-#: src/components/CardDetail.vue:312
+#: src/components/CardDetail.vue:324
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n наблюдатель"
@@ -643,6 +643,10 @@ msgstr "Весь день (без времени)"
 #: src/components/BoardSettingsModal.vue
 msgid "All issues"
 msgstr "Все issue"
+
+#: src/components/CardDetail.vue
+msgid "All requested reviews must be approved before this card can be marked done. Waiting on {names}."
+msgstr "Все запрошенные проверки должны быть одобрены, прежде чем эту карточку можно отметить готовой. Ожидаемые проверяющие: {names}."
 
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
@@ -1871,7 +1875,7 @@ msgid "Date"
 msgstr "Дата"
 
 #: src/components/BoardSettingsModal.vue:2209
-#: src/components/CardDetail.vue:4928
+#: src/components/CardDetail.vue:5069
 msgid "day"
 msgid_plural "days"
 msgstr[0] "день"
@@ -3358,7 +3362,7 @@ msgstr "Назначение, границы или правила. Любой �
 msgid "Jump to the discussion"
 msgstr "Перейти к обсуждению"
 
-#: src/components/CardDetail.vue:6701
+#: src/components/CardDetail.vue:6842
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Перейти к обсуждению (%n комментарий)"
@@ -3691,7 +3695,7 @@ msgid "Mon"
 msgstr "Пн"
 
 #: src/components/BoardSettingsModal.vue:2211
-#: src/components/CardDetail.vue:4930
+#: src/components/CardDetail.vue:5071
 msgid "month"
 msgid_plural "months"
 msgstr[0] "месяц"
@@ -5166,7 +5170,7 @@ msgstr "Показывать обсуждение под карточкой"
 msgid "Show the discussion panel"
 msgstr "Показать панель обсуждения"
 
-#: src/components/CardDetail.vue:6707
+#: src/components/CardDetail.vue:6848
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Показать панель обсуждения (%n комментарий)"
@@ -5907,7 +5911,7 @@ msgid "Wed"
 msgstr "Ср"
 
 #: src/components/BoardSettingsModal.vue:2210
-#: src/components/CardDetail.vue:4929
+#: src/components/CardDetail.vue:5070
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "неделя"
@@ -6009,7 +6013,7 @@ msgid "wrote"
 msgstr "написал"
 
 #: src/components/BoardSettingsModal.vue:2212
-#: src/components/CardDetail.vue:4931
+#: src/components/CardDetail.vue:5072
 msgid "year"
 msgid_plural "years"
 msgstr[0] "год"

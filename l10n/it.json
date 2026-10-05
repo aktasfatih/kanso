@@ -208,6 +208,7 @@
         "All boards": "Tutte le bacheche",
         "All day (no time)": "Tutto il giorno (senza orario)",
         "All issues": "Tutte le issue",
+        "All requested reviews must be approved before this card can be marked done. Waiting on {names}.": "Tutte le revisioni richieste devono essere approvate prima di poter segnare questa scheda come completata. In attesa di {names}.",
         "Analytics": "Statistiche",
         "Any": "Qualsiasi",
         "Any card can be saved as a template from its ⋯ menu (\"Mark as template\"). Templates are hidden from the board and reused from a column's \"＋ From template\" menu.": "Qualsiasi scheda può essere salvata come modello dal suo menu ⋯ (voce «Segna come modello»). I modelli restano nascosti sulla bacheca e si riutilizzano dal menu «＋ Da modello» di una colonna.",

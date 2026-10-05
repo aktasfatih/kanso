@@ -10,6 +10,7 @@ import {
 } from '../services/api.js'
 import { boardQueryKey } from './useBoard.js'
 import { invalidateCrossBoardFeeds, participantsQueryKey } from './queryKeys.js'
+import { createToggleQueue } from './useToggleQueue.js'
 
 /**
  * Resolve a boardId argument that may be a plain value, a Vue ref (.value),
@@ -38,7 +39,12 @@ function isUsableBoardId(id) {
  * Optimistic strategy for toggleAssignee (assign / unassign):
  *   Mirrors useLabels' onMutate EXACTLY - patch assigneeIds in BOTH the board
  *   summary cache (via boardQueryKey) and the ['card', String(cardId)] detail
- *   cache; rollback both on error; invalidate both on settled.
+ *   cache; on error put back assigneeIds AND ONLY assigneeIds in both (#10923);
+ *   invalidate both on settled.
+ *
+ * Toggles are SERIALISED through enqueueToggle, not fired in parallel and not
+ * dropped - see useToggleQueue.js (shared with the label picker) for why that
+ * distinction is the whole point (#10799).
  */
 export function useAssignees(boardId) {
 	const queryClient = useQueryClient()
@@ -90,9 +96,18 @@ export function useAssignees(boardId) {
 			await queryClient.cancelQueries({ queryKey: boardKey })
 			await queryClient.cancelQueries({ queryKey: cardKey })
 
-			// Snapshot previous state for potential rollback
-			const previousBoard = queryClient.getQueryData(boardKey)
-			const previousCard = queryClient.getQueryData(cardKey)
+			// Snapshot ONLY `assigneeIds`, not the whole cached objects (#10923) -
+			// the mirror of useLabels' snapshot, and for the same reason: this
+			// picker and the label picker have a queue each, so their writes
+			// overlap, and a whole-object restore on failure erases the label the
+			// user picked meanwhile even though the server kept it.
+			const snapshotIds = (card) => card
+				? (Array.isArray(card.assigneeIds) ? card.assigneeIds : [])
+				: undefined
+			const previousDetailIds = snapshotIds(queryClient.getQueryData(cardKey))
+			const previousSummaryIds = snapshotIds(
+				queryClient.getQueryData(boardKey)?.cards?.find((c) => c.id === cardId),
+			)
 
 			const patchIds = (ids) => assign
 				? (ids.includes(userId) ? ids : [...ids, userId])
@@ -116,16 +131,28 @@ export function useAssignees(boardId) {
 				return { ...old, assigneeIds: patchIds(Array.isArray(old.assigneeIds) ? old.assigneeIds : []) }
 			})
 
-			return { previousBoard, previousCard, cardKey }
+			return { previousDetailIds, previousSummaryIds, cardKey }
 		},
 
-		onError: (_err, _vars, context) => {
-			// Roll back to the snapshots taken before the optimistic patches
-			if (context?.previousBoard !== undefined) {
-				queryClient.setQueryData(getBoardKey(), context.previousBoard)
+		onError: (_err, { cardId }, context) => {
+			// Put `assigneeIds` back, and ONLY `assigneeIds` - layered onto
+			// whatever the cache holds at rollback time. See onMutate.
+			if (context?.previousSummaryIds !== undefined) {
+				queryClient.setQueryData(getBoardKey(), (old) => {
+					if (!old) return old
+					return {
+						...old,
+						cards: old.cards.map((c) => (c.id === cardId
+							? { ...c, assigneeIds: context.previousSummaryIds }
+							: c)),
+					}
+				})
 			}
-			if (context?.previousCard !== undefined && context?.cardKey) {
-				queryClient.setQueryData(context.cardKey, context.previousCard)
+			if (context?.previousDetailIds !== undefined && context?.cardKey) {
+				queryClient.setQueryData(context.cardKey, (old) => {
+					if (!old) return old
+					return { ...old, assigneeIds: context.previousDetailIds }
+				})
 			}
 		},
 
@@ -138,11 +165,48 @@ export function useAssignees(boardId) {
 		},
 	})
 
+	// ── Serialising the picker's picks (#10799) ─────────────────────────────────
+	// One pick at a time, queued rather than dropped, keyed per (card, person).
+	// The mechanism - and the measurements behind it - live in useToggleQueue.js,
+	// shared with the label picker, which had the identical defect (#10920).
+	const { enqueue, isPending } = createToggleQueue({
+		mutate: (vars) => toggleAssignee.mutateAsync(vars),
+		keyOf: ({ cardId, userId }) => `${cardId}:${userId}`,
+	})
+
+	/**
+	 * Queue one assign/unassign behind whatever is already running.
+	 *
+	 * @param {{cardId: number, userId: string, assign: boolean}} vars
+	 * @return {Promise<*>} this pick's own outcome - resolves with the mutation
+	 *   result, with TOGGLE_ALREADY_PENDING when it was a same-row
+	 *   double-submit, or rejects with this pick's error.
+	 */
+	function enqueueToggle({ cardId, userId, assign }) {
+		return enqueue({ cardId, userId, assign })
+	}
+
+	/**
+	 * Whether this (card, person) toggle is on the wire or waiting its turn.
+	 * Reactive - a template reading it re-renders when a toggle starts or ends.
+	 *
+	 * @param {number|string} cardId
+	 * @param {string} userId
+	 * @return {boolean}
+	 */
+	function isTogglePending(cardId, userId) {
+		return isPending({ cardId, userId })
+	}
+
+	// `toggleAssignee` itself is deliberately NOT returned, for the reason spelled
+	// out at the end of useLabels.js: an un-queued handle to the same mutation is
+	// how a pick would get past the queue. enqueueToggle is the only way in.
 	return {
 		participants,
 		participantList,
 		participantsTruncated,
 		participantsLimit,
-		toggleAssignee,
+		enqueueToggle,
+		isTogglePending,
 	}
 }

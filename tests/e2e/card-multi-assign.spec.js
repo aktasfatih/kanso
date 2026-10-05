@@ -24,7 +24,7 @@ import { test, expect, api, ncLogin, provisionUser, deleteUser, BASE, me } from 
 
 test.describe('Adding a second assignee from the card modal (#10603)', () => {
 	const EXTRA_PASS = 'Kanso#MultiAssign2026'
-	const state = { boardId: 0, cardId: 0, trioCardId: 0, fullCardId: 0, extras: [], boardUrl: '' }
+	const state = { boardId: 0, cardId: 0, trioCardId: 0, fullCardId: 0, slowCardId: 0, extras: [], boardUrl: '' }
 
 	test.beforeAll(async ({}, workerInfo) => {
 		// Two extra identities beyond `me`, named off the worker index so
@@ -51,6 +51,10 @@ test.describe('Adding a second assignee from the card modal (#10603)', () => {
 		state.cardId = card.id
 		const trio = await api.post('/cards', { stackId: stack.id, title: 'Three on this one' })
 		state.trioCardId = trio.id
+		// The same three picks as the first test, but with the write held up on
+		// purpose - see that test for why it needs its own card (#10799).
+		const slow = await api.post('/cards', { stackId: stack.id, title: 'Slow link on this' })
+		state.slowCardId = slow.id
 		// A card that already has EVERY participant, for the "the control must
 		// not disappear when the candidate list runs dry" case.
 		const full = await api.post('/cards', { stackId: stack.id, title: 'Everyone is on it' })
@@ -139,6 +143,49 @@ test.describe('Adding a second assignee from the card modal (#10603)', () => {
 		await page.keyboard.press('Escape') // close card
 		const tile = page.locator('.card-tile').filter({ hasText: 'Pair up on this' })
 		await expect(tile.locator('.assignee-stack__avatar')).toHaveCount(3)
+	})
+
+	// The test above is the interaction as a healthy link serves it: the write
+	// usually answers before the next click arrives, so it only SOMETIMES lands
+	// in the window where picks used to be lost (measured 2 failures in 4 runs on
+	// `main`, and failing runs took ~45s against ~23s - latency-triggered). This
+	// one removes the chance: every assignee write is held for 800ms, so both the
+	// second and third pick are made while the previous one is still on the wire.
+	// Before the toggle queue (#10799) that silently sent nothing - 2 of 3 picks
+	// reached the server at 1200ms, 3 of 3 at no added latency - so this is the
+	// deterministic version of the same bug, and the one a regression trips on
+	// every run rather than every other run.
+	//
+	// It asserts the REQUESTS as well as the result: a cache-only assertion can
+	// be satisfied by an optimistic patch that no write ever backed.
+	test('a pick taken while the previous write is in flight is not lost', async ({ page }) => {
+		await setAssignees(state.slowCardId, [])
+
+		const sent = []
+		page.on('request', (r) => {
+			if (r.method() === 'PUT' && /\/cards\/\d+\/assignees\//.test(r.url())) sent.push(r.url())
+		})
+		await page.route(/\/cards\/\d+\/assignees\//, async (route) => {
+			await new Promise((resolve) => setTimeout(resolve, 800))
+			await route.continue()
+		})
+
+		await openCard(page, 'Slow link on this')
+		const assignPill = page.locator('.card-modal__attrbar button[data-pill="assign"]')
+		await assignPill.click()
+		const popover = page.locator('.card-modal__attrbar .card-modal__popover')
+		await expect(popover).toBeVisible()
+
+		// Three picks with nothing awaited between them but the previous row's
+		// own pill - deliberately the same shape as the test above.
+		await popover.locator('.card-modal__assign-option', { hasText: state.extras[0] }).click()
+		await expect(assigneePill(page, state.extras[0])).toBeVisible()
+		await popover.locator('.card-modal__assign-option', { hasText: state.extras[1] }).click()
+		await popover.locator('.card-modal__assign-option', { hasText: me }).first().click()
+
+		await expect(page.locator('.card-modal__attrbar .card-modal__assignee-pill')).toHaveCount(3)
+		await expect.poll(async () => (await api.get(`/cards/${state.slowCardId}`)).assigneeIds.length).toBe(3)
+		expect(sent.length, 'every pick must put a write on the wire, not just a pill on screen').toBe(3)
 	})
 
 	test('removing one of several assignees leaves the others alone', async ({ page }) => {

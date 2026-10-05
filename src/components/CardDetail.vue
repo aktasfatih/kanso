@@ -226,6 +226,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						     otherwise only rendered inside the due-date popover and the
 						     description editor, neither of which is open at this point. -->
 						<span v-if="editingTitle && saveError" class="card-modal__save-error" data-title-error>{{ saveError }}</span>
+						<!-- Why a status error needs its OWN surface (#10896): "Mark done" and
+						     the stage picker both sit in this header, and a refusal from either
+						     used to land in the shared `saveError`, which is only ever rendered
+						     inside the due-date popover and the description editor - neither of
+						     which is open when you press Done. The button simply did nothing.
+						     The review gate (CardService::assertReviewsApproved) is the refusal
+						     users actually hit, so it is also the one this names outright. -->
+						<span
+							v-if="statusError"
+							class="card-modal__save-error"
+							role="alert"
+							data-status-error>{{ statusError }}</span>
 					</div>
 
 					<div class="card-modal__header-actions">
@@ -876,11 +888,26 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<!-- Unassigning is a write (#10703): a member shared in with READ
 						     only keeps the avatar and the name - the whole point of the
 						     pill - but is not offered a button the server answers 403 to. -->
+						<!-- `aria-busy`, not `disabled`, and per-ROW (#10920). This used to
+						     be `:disabled="toggleAssignee.isPending.value"`, i.e. ANY
+						     assignee write in flight greyed out EVERY pill's "×". Two things
+						     were wrong with it and only one is the per-row part:
+						       - `disabled` here duplicated a refusal the queue already
+						         makes. A second click on this uid returns
+						         TOGGLE_ALREADY_PENDING and sends nothing, so a `disabled`
+						         saying the same thing makes BOTH copies unfalsifiable -
+						         exactly what src/main.js:192-197 warns about.
+						       - `disabled` blurs the control the keyboard user is standing
+						         on (#10705), which is why every other write control in this
+						         modal announces in-flight with `aria-busy` instead.
+						     The window this can actually paint in is the QUEUED one: once
+						     the write starts, onMutate drops the uid from the detail cache
+						     and the pill unmounts with it. -->
 						<button
 							v-if="canEdit"
 							class="card-modal__pill-x"
 							:title="t('kanso', 'Remove assignee')"
-							:disabled="toggleAssignee.isPending.value"
+							:aria-busy="isAssigneeTogglePending(uid) ? 'true' : undefined"
 							@click="handleToggleAssignee(uid, false)">
 							<CloseIcon :size="12" />
 						</button>
@@ -947,14 +974,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							     after every single pick, once per person added. `aria-busy`
 							     says the same thing to assistive tech and leaves the row in
 							     the focus order; the double-submit `disabled` was covering is
-							     handled in handleToggleAssignee instead. -->
+							     handled by useAssignees' per-row toggle queue, which
+							     also keeps a pick taken mid-write from being dropped
+							     (#10799). -->
 							<button
 								v-for="p in assignCandidates"
 								:key="p.uid"
 								class="card-modal__assign-option"
 								:class="{ 'card-modal__assign-option--active': p.assigned }"
 								:aria-pressed="p.assigned"
-								:aria-busy="assigneeTogglePending === p.uid ? 'true' : undefined"
+								:aria-busy="isAssigneeTogglePending(p.uid) ? 'true' : undefined"
 								@click="handleToggleAssignee(p.uid, !p.assigned)">
 								<NcAvatar
 									:user="p.uid"
@@ -1089,7 +1118,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</div>
 							<!-- Same rule as the assign rows above (#10705): `aria-busy`,
 							     never `disabled`, so activating a label by keyboard does not
-							     blur the row the user is standing on. -->
+							     blur the row the user is standing on. The double-submit that
+							     `disabled` was covering is handled by useLabels' per-row toggle
+							     queue, which also keeps a label picked mid-write from being
+							     dropped (#10920). -->
 							<button
 								v-for="label in boardLabels"
 								:key="label.id"
@@ -1100,7 +1132,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								}"
 								:style="label.color ? { '--label-color': cssColor(label.color) } : {}"
 								:aria-pressed="cardLabelIds.has(label.id)"
-								:aria-busy="labelTogglePending === label.id ? 'true' : undefined"
+								:aria-busy="isLabelTogglePending(label.id) ? 'true' : undefined"
 								@click="handleToggleLabel(label)">
 								{{ label.title }}
 							</button>
@@ -1181,13 +1213,25 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<div v-if="allProjects.length === 0" class="card-modal__popover-empty">
 								{{ t('kanso', 'No projects yet.') }}
 							</div>
+							<!-- Same rule as the assign and label rows above (#10705):
+							     `aria-busy`, never `disabled`. This picker was the last one
+							     still binding `disabled` on EVERY row, and here that one
+							     attribute was BOTH halves of the bug (#10922) - it blurred the
+							     focused row, and it silently ate a project picked while the
+							     previous write was in flight, because a browser never delivers
+							     a click to a disabled button. Measured: 1 of 3 picks reached
+							     the server, 3 of 3 with the attribute out of the way. The
+							     double-submit `disabled` was covering is handled per-row by
+							     useCardProjects' toggle queue, and the visual cue is the shared
+							     `.card-modal__label-toggle[aria-busy='true']` rule these rows
+							     already match. -->
 							<button
 								v-for="project in allProjects"
 								:key="project.id"
 								class="card-modal__label-toggle"
 								:class="{ 'card-modal__label-toggle--active': cardProjectIds.has(project.id) }"
 								:aria-pressed="cardProjectIds.has(project.id)"
-								:disabled="projectTogglePending"
+								:aria-busy="isProjectTogglePending(project.id) ? 'true' : undefined"
 								@click="handleToggleProject(project.id)">
 								<span
 									class="card-modal__project-dot"
@@ -2675,14 +2719,14 @@ import TableColumnIcon from 'vue-material-design-icons/TableColumn.vue'
 // when a card modal is actually opened, not on the main board bundle.
 const MarkdownEditor = defineAsyncComponent(() => import('./MarkdownEditor.vue'))
 import { useCard } from '../composables/useCard.js'
-import { useProjects } from '../composables/useProjects.js'
-import { addCardToProject as apiAddCardToProject, removeCardFromProject as apiRemoveCardFromProject } from '../services/api.js'
+import { useProjects, useCardProjects } from '../composables/useProjects.js'
 import { usePriority, PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { useCardType, CARD_TYPES } from '../composables/useCardType.js'
 import { useBoard } from '../composables/useBoard.js'
 import { scaleTokens } from '../services/estimateScales.js'
 import { useLabels } from '../composables/useLabels.js'
 import { useAssignees } from '../composables/useAssignees.js'
+import { TOGGLE_ALREADY_PENDING } from '../composables/useToggleQueue.js'
 import { useContacts } from '../composables/useContacts.js'
 import { fetchCardContacts, fetchParticipants } from '../services/api.js'
 import { useReviews } from '../composables/useReviews.js'
@@ -3027,41 +3071,50 @@ const cardLabelIds = computed(() => {
 })
 
 // Label toggle + create mutations (create is board-management → MANAGE-gated server-side)
-const { toggleLabel, createLabel } = useLabels(boardId)
+// useLabels no longer hands out `toggleLabel` at all — every label write from
+// this modal goes through the queue, and that is enforced there rather than
+// asserted here.
+const {
+	createLabel,
+	enqueueToggle: enqueueLabelToggle,
+	isTogglePending: labelTogglePendingFor,
+} = useLabels(boardId)
 const labelToggleError = ref('')
 
-// The id of the label whose toggle is in flight, or null when idle (#10705).
-// Two jobs, both of which `:disabled` on the rows used to do — badly, because
-// disabling the focused row blurs it:
-//   1. it drives `aria-busy` on that one row, so the in-flight state is still
-//      announced without taking the row out of the focus order;
-//   2. it serialises the picker. Set SYNCHRONOUSLY on entry (before the first
-//      await), so a keyboard user leaning on Enter can't fire a second write
-//      into the window — a mutation's own `isPending` flips through the query
-//      client's batched notifier and is NOT guaranteed to be true by the time
-//      the next key event is handled. Serialising also keeps the optimistic
-//      rollback honest: onError restores a snapshot taken before ITS mutation,
-//      which a concurrent second toggle would have made stale.
-const labelTogglePending = ref(null)
+// Whether this card's row for `labelId` is writing or waiting its turn — drives
+// `aria-busy` on that one row, in place of the `disabled` that used to blur the
+// focused row (#10705).
+//
+// The serialisation itself lives in useLabels' queue (#10920), not here: the
+// flag this replaced was a single label id for the whole picker, so a label
+// picked during another row's round trip hit an early `return` and was never
+// sent at all. Queueing and "don't submit the same row twice" are now one
+// mechanism in one place, so neither can be true while the other is false.
+function isLabelTogglePending(labelId) {
+	return labelTogglePendingFor(Number(props.cardId), labelId)
+}
 
+// NB: like the assignee picker, this deliberately leaves `openPicker` alone —
+// the label picker is a multi-select and stays open across picks, which is what
+// makes adding three labels three clicks and, before the queue, lost one of the
+// three on a local link and two of the three with the write delayed 800ms.
 async function handleToggleLabel(label) {
-	if (labelTogglePending.value !== null) return
-	labelTogglePending.value = label.id
 	const assign = !cardLabelIds.value.has(label.id)
 	labelToggleError.value = ''
 	try {
-		await toggleLabel.mutateAsync({
+		const result = await enqueueLabelToggle({
 			cardId: Number(props.cardId),
 			labelId: label.id,
 			assign,
 		})
+		// A repeat of the row that is already writing (a held Enter): nothing was
+		// sent, so there is nothing to announce either.
+		if (result === TOGGLE_ALREADY_PENDING) return
 		announceMove(assign
 			? t('kanso', 'Label {label} added', { label: label.title })
 			: t('kanso', 'Label {label} removed', { label: label.title }))
 	} catch (err) {
 		labelToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update label.')
-	} finally {
-		labelTogglePending.value = null
 	}
 }
 
@@ -3096,10 +3149,12 @@ async function submitCreateLabel() {
 	newLabelTitle.value = ''
 	newLabelColor.value = ''
 
-	// Step 2: assign the freshly-created label to this card.
+	// Step 2: assign the freshly-created label to this card — through the SAME
+	// queue the picker rows use, so this write cannot overlap a pick the user
+	// made just before hitting create and clobber its optimistic snapshot.
 	try {
 		if (label?.id != null) {
-			await toggleLabel.mutateAsync({ cardId: Number(props.cardId), labelId: label.id, assign: true })
+			await enqueueLabelToggle({ cardId: Number(props.cardId), labelId: label.id, assign: true })
 		}
 	} catch (err) {
 		createLabelError.value = err?.response?.data?.error
@@ -3110,7 +3165,9 @@ async function submitCreateLabel() {
 }
 
 // ── Assignees ────────────────────────────────────────────────────────────────
-const { participants, participantList, participantsTruncated, participantsLimit, toggleAssignee } = useAssignees(boardId)
+// useAssignees likewise no longer hands out `toggleAssignee` — see the label
+// block above.
+const { participants, participantList, participantsTruncated, participantsLimit, enqueueToggle, isTogglePending } = useAssignees(boardId)
 const assigneeError = ref('')
 
 // Picker search (#10704). The participants payload is capped server-side, so on
@@ -3298,35 +3355,40 @@ async function toggleAssignPicker() {
 	assigneeSearchInput.value?.focus?.()
 }
 
-// The uid whose toggle is in flight, or null when idle — the assignee twin of
-// labelTogglePending, and there for the same two reasons (#10705): it drives
-// `aria-busy` on the one row being written, and it serialises the picker in
-// place of the `disabled` that used to blur the focused row. Set before the
-// first await so a held-down Enter cannot slip a second write past it.
-const assigneeTogglePending = ref(null)
+// Whether this card's row for `uid` is writing or waiting its turn — drives
+// `aria-busy` on that one row, in place of the `disabled` that used to blur the
+// focused row (#10705).
+//
+// The serialisation itself lives in useAssignees' queue (#10799), not here: the
+// flag this replaced was a single uid for the whole picker, so a pick taken
+// during another row's round trip hit an early `return` and was never sent at
+// all. Queueing and "don't submit the same row twice" are now one mechanism in
+// one place, so neither can be true while the other is false.
+function isAssigneeTogglePending(uid) {
+	return isTogglePending(Number(props.cardId), uid)
+}
 
 // NB: this deliberately leaves `openPicker` alone. The picker is a multi-select
 // (same as the label one), so it stays open across picks - closing it after the
 // first assignee is what made a second one feel unreachable (#10603). It closes
 // on Escape / a click outside, like every other attribute-bar popover.
 async function handleToggleAssignee(uid, assign) {
-	if (assigneeTogglePending.value !== null) return
-	assigneeTogglePending.value = uid
 	assigneeError.value = ''
 	try {
-		await toggleAssignee.mutateAsync({
+		const result = await enqueueToggle({
 			cardId: Number(props.cardId),
 			userId: uid,
 			assign,
 		})
+		// A repeat of the row that is already writing (a held Enter): nothing was
+		// sent, so there is nothing to announce either.
+		if (result === TOGGLE_ALREADY_PENDING) return
 		const who = participantName(uid)
 		announceMove(assign
 			? t('kanso', '{user} assigned', { user: who })
 			: t('kanso', '{user} unassigned', { user: who }))
 	} catch (err) {
 		assigneeError.value = err?.response?.data?.error || t('kanso', 'Failed to update assignee.')
-	} finally {
-		assigneeTogglePending.value = null
 	}
 }
 
@@ -3663,12 +3725,80 @@ const currentStatus = computed(() => {
 	return 'not_started'
 })
 
+// A status change refused by the server, rendered in the header beside the
+// controls that attempted it. Deliberately NOT the shared `saveError`: that ref
+// is only rendered inside the due-date popover and the description editor, so
+// every refusal of Done or of a stage move was invisible (#10896). Cleared on
+// each new attempt, so a success leaves nothing behind.
+const statusError = ref('')
+
+// The reviews that still stand between this card and the done state, read from
+// the payload the card view already holds - completing is gated on the CARD's
+// review state (CardService::assertReviewsApproved), not on who is looking, so
+// every unapproved review counts, mine or anybody else's.
+const reviewsBlockingDone = computed(() =>
+	cardReviews.value.filter((r) => r.state !== 'approved'),
+)
+
+/**
+ * Explain a refused attempt to complete the card.
+ *
+ * The server's own sentence does not survive the trip: ApiErrorTrait flattens
+ * every NotPermittedException to a bare "Access denied", which is true but says
+ * nothing about what to do next. So when the refusal is a 403, the target was
+ * the done state, and the card is in fact carrying unapproved reviews, we say so
+ * in the review vocabulary the rest of this view already uses. The gate stays
+ * entirely the server's call - this only translates its verdict.
+ *
+ * @param {unknown} err the rejected request
+ * @param {boolean} targetsDone whether the attempt would have completed the card
+ * @return {string} the message to show
+ */
+function statusErrorMessage(err, targetsDone) {
+	const blocking = reviewsBlockingDone.value
+	if (targetsDone && apiAnswerStatus(err) === 403 && blocking.length > 0) {
+		// participantName() falls back to the bare uid, so this list is never empty
+		// when `blocking` is not - there is no nameless-reviewer case to handle.
+		const names = [...new Set(blocking.map((r) => participantName(r.reviewer)))]
+		// escape: false - this lands in a text interpolation, which escapes for
+		// itself; letting t() escape too would print "Ann &amp; Bo" for real names.
+		// t()'s DOMPurify pass still runs over the result, so a name carrying
+		// markup is stripped rather than inserted - and Vue escapes what is left.
+		return t(
+			'kanso',
+			'All requested reviews must be approved before this card can be marked done. Waiting on {names}.',
+			{ names: { value: names.join(', '), escape: false } },
+		)
+	}
+	return err?.response?.data?.error || t('kanso', 'Failed to update status.')
+}
+
+/**
+ * Whether the card open right now is still the one an attempt was started for.
+ *
+ * This component is REUSED across card→card navigation, so a request can reject
+ * AFTER the switch — and the props.cardId watcher's clear only covers failures
+ * that have already landed. Without this, card A's refusal is written into card
+ * B's header, which is the same component-reuse hazard that gave the wrong
+ * card's conflict text and leaked the comment drafts (#10069); see the watcher's
+ * own comment. Capture the id BEFORE the request and check it after.
+ *
+ * @param {string|number} cardId the card the attempt was started for
+ * @return {boolean} true when its outcome may still be shown
+ */
+function isStillCurrentCard(cardId) {
+	return String(props.cardId) === String(cardId)
+}
+
 async function setStatus(status) {
 	if (status === currentStatus.value) return
+	const forCard = props.cardId
+	statusError.value = ''
 	try {
 		await updateCard.mutateAsync({ data: { status } })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update status.')
+		if (!isStillCurrentCard(forCard)) return
+		statusError.value = statusErrorMessage(err, status === 'done')
 	}
 }
 
@@ -3689,6 +3819,9 @@ const WORKFLOW_ROLE_LABELS = {
 	4: t('kanso', 'Review'),
 	5: t('kanso', 'Done'),
 }
+// Stack::ROLE_DONE - a move into such a column stamps the card done, so it goes
+// through the same review gate as the status control.
+const ROLE_DONE = 5
 // Every live column, in board order - the options the stage picker offers.
 const boardColumns = computed(() =>
 	(boardData.value?.stacks ?? [])
@@ -3717,15 +3850,22 @@ const stageMoving = ref(false)
 async function setStage(col) {
 	// Already in this column - nothing to do.
 	if (!col || Number(col.id) === Number(cardData.value?.stackId)) return
+	// The card (and its board) this move belongs to, captured before the request:
+	// both the invalidations and the failure message below run AFTER an await, and
+	// a card→card switch in between would otherwise refresh the wrong card's key
+	// and show this card's refusal on the next one. See isStillCurrentCard().
+	const forCard = props.cardId
+	const forBoard = boardId.value
 	stageMoving.value = true
-	saveError.value = ''
+	statusError.value = ''
 	try {
-		await apiMoveCard(props.cardId, { targetStackId: col.id, afterCardId: null })
-		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
-		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
+		await apiMoveCard(forCard, { targetStackId: col.id, afterCardId: null })
+		queryClient.invalidateQueries({ queryKey: ['card', forCard] })
+		queryClient.invalidateQueries({ queryKey: boardQueryKey(forBoard) })
 		invalidateCrossBoardFeeds(queryClient)
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update status.')
+		if (!isStillCurrentCard(forCard)) return
+		statusError.value = statusErrorMessage(err, Number(col.role) === ROLE_DONE)
 	} finally {
 		stageMoving.value = false
 	}
@@ -4018,6 +4158,7 @@ watch(() => props.cardId, () => {
 	discardDrafts()
 	descriptionBaseVersion.value = null
 	saveError.value = ''
+	statusError.value = ''
 	commentError.value = ''
 })
 
@@ -6890,27 +7031,34 @@ const cardProjectIds = computed(() => {
 	return new Set(ids)
 })
 
-const projectTogglePending = ref(false)
 const projectToggleError = ref('')
+const {
+	enqueueToggle: enqueueProjectToggle,
+	isTogglePending: isProjectMembershipPending,
+// Deliberately no cardId argument: this component is REUSED across card→card
+// navigation, so every pick carries its own `cardId` in the mutation variables
+// instead (see useCardProjects' comment). A pick still waiting in the queue when
+// you open the next card must land on the card it was made for.
+} = useCardProjects()
 
+// Whether this card's row for `projectId` is writing or waiting its turn - drives
+// `aria-busy` on that one row, in place of the `disabled` that used to blur the
+// focused row AND eat the click entirely (#10922).
+function isProjectTogglePending(projectId) {
+	return isProjectMembershipPending(props.cardId, projectId)
+}
+
+// Leaves `openPicker` alone, like the label and assignee pickers: it is a
+// multi-select, so it stays open across picks (#10603).
 async function handleToggleProject(projectId) {
 	projectToggleError.value = ''
-	projectTogglePending.value = true
-	const isMember = cardProjectIds.value.has(projectId)
+	// Read membership at CLICK time, not when the write starts: the pick queued
+	// behind another one must still mean what the user saw when they made it.
+	const assign = !cardProjectIds.value.has(projectId)
 	try {
-		if (isMember) {
-			await apiRemoveCardFromProject(projectId, Number(props.cardId))
-		} else {
-			await apiAddCardToProject(projectId, Number(props.cardId))
-		}
-		// Invalidate card (so projectIds refreshes) + the project's card list
-		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
-		queryClient.invalidateQueries({ queryKey: ['project', String(projectId), 'cards'] })
-		queryClient.invalidateQueries({ queryKey: ['projects'] })
+		await enqueueProjectToggle({ cardId: props.cardId, projectId, assign })
 	} catch (err) {
 		projectToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update project membership.')
-	} finally {
-		projectTogglePending.value = false
 	}
 }
 </script>
@@ -7710,7 +7858,11 @@ async function handleToggleProject(projectId) {
    only `aria-busy` marks it - so this is the whole visual cue that the pick
    has not been confirmed yet, matching the checklist rows' pending look. */
 .card-modal__assign-option[aria-busy='true'],
-.card-modal__label-toggle[aria-busy='true'] {
+.card-modal__label-toggle[aria-busy='true'],
+/* The assignee pill's "×" is on the same footing since #10920: it used to grey
+   out via `disabled` (on every pill at once), and this is what replaces the
+   greying without taking the button out of the tab order. */
+.card-modal__pill-x[aria-busy='true'] {
 	opacity: 0.65;
 }
 /* Already on the card. Marked like the label toggles above: the row stays in

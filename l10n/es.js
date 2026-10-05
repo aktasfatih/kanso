@@ -134,6 +134,7 @@ OC.L10N.register(
     "All boards" : "Todos los tableros",
     "All day (no time)" : "Todo el día (sin hora)",
     "All issues" : "Todas las incidencias",
+    "All requested reviews must be approved before this card can be marked done. Waiting on {names}." : "Todas las revisiones solicitadas deben estar aprobadas antes de poder marcar esta tarjeta como terminada. En espera de {names}.",
     "Analytics" : "Estadísticas",
     "Any" : "Cualquiera",
     "Any card can be saved as a template from its ⋯ menu (\"Mark as template\"). Templates are hidden from the board and reused from a column's \"＋ From template\" menu." : "Cualquier tarjeta se puede guardar como plantilla desde su menú ⋯ («Marcar como plantilla»). Las plantillas se ocultan del tablero y se reutilizan desde el menú «＋ Desde plantilla» de una columna.",

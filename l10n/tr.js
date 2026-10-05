@@ -134,6 +134,7 @@ OC.L10N.register(
     "All boards" : "Tüm panolar",
     "All day (no time)" : "Tüm gün (saatsiz)",
     "All issues" : "Tüm sorunlar",
+    "All requested reviews must be approved before this card can be marked done. Waiting on {names}." : "Bu kartın tamamlandı olarak işaretlenebilmesi için istenen tüm incelemelerin onaylanması gerekir. {names} bekleniyor.",
     "Analytics" : "Analitik",
     "Any" : "Herhangi",
     "Any card can be saved as a template from its ⋯ menu (\"Mark as template\"). Templates are hidden from the board and reused from a column's \"＋ From template\" menu." : "Her kart, ⋯ menüsünden şablon olarak kaydedilebilir (\"Şablon olarak işaretle\"). Şablonlar panoda görünmez ve bir sütunun \"＋ Şablondan\" menüsünden yeniden kullanılır.",

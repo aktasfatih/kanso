@@ -134,6 +134,7 @@ OC.L10N.register(
     "All boards" : "Alle Boards",
     "All day (no time)" : "Ganztägig (keine Uhrzeit)",
     "All issues" : "Alle Issues",
+    "All requested reviews must be approved before this card can be marked done. Waiting on {names}." : "Alle angeforderten Reviews müssen genehmigt sein, bevor diese Karte als erledigt markiert werden kann. Wartet auf {names}.",
     "Analytics" : "Analysen",
     "Any" : "Beliebig",
     "Any card can be saved as a template from its ⋯ menu (\"Mark as template\"). Templates are hidden from the board and reused from a column's \"＋ From template\" menu." : "Jede Karte kann über ihr ⋯-Menü als Vorlage gespeichert werden (\"Als Vorlage markieren\"). Vorlagen werden auf dem Board ausgeblendet und über das Menü \"＋ Aus Vorlage\" einer Spalte wiederverwendet.",

@@ -242,4 +242,69 @@ test.describe('Projects — cross-board card collections', () => {
 		const cards = await api.get(`/projects/${state.projectId}/cards`)
 		expect(cards.some((c) => c.title === uniqueTitle)).toBe(true)
 	})
+
+	// #10922 — the card modal's Projects picker, the third and last picker with
+	// this defect, after the assignee (#10799) and label (#10920) ones.
+	//
+	// The picker stays open across picks, so collecting a card into three projects
+	// is three quick clicks. This one never had the other two's single-flight
+	// `return`: it bound its whole-picker pending boolean to `:disabled` on EVERY
+	// row, and a browser does not deliver a click to a disabled button — so the
+	// pick was swallowed one layer BELOW the JavaScript, and the same attribute
+	// blurred the focused row (covered by picker-focus.spec.js). Measured in the
+	// browser: 1 of 3 picks reached the server with the write delayed 800ms, and
+	// 1 of 3 with no added latency at all; 3 of 3 once the attribute was out of
+	// the way.
+	//
+	// It asserts the REQUESTS as well as the result: a cache-only assertion can be
+	// satisfied by a tick no write ever backed.
+	test('a project picked while the previous write is in flight is not lost', async ({ page }) => {
+		const ts = Date.now()
+		const stack = await api.post('/stacks', { boardId: state.boardA, title: 'Slow picks' })
+		const card = await api.post('/cards', { stackId: stack.id, title: `Slow project picks ${ts}` })
+		const names = [`QueueOne ${ts}`, `QueueTwo ${ts}`, `QueueThree ${ts}`]
+		const picked = []
+		for (const title of names) {
+			picked.push(await api.post('/projects', { title }))
+		}
+
+		const sent = []
+		page.on('request', (r) => {
+			if (r.method() === 'PUT' && /\/projects\/\d+\/cards\/\d+$/.test(r.url())) sent.push(r.url())
+		})
+		await page.route(/\/projects\/\d+\/cards\/\d+$/, async (route) => {
+			await new Promise((resolve) => setTimeout(resolve, 800))
+			await route.continue()
+		})
+
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardA}/card/${card.id}`)
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+
+		await page.locator('.card-modal__attr button[data-pill="project"]').first().click()
+		const popover = page.locator('.card-modal__attr .card-modal__popover')
+		await expect(popover).toBeVisible()
+
+		// `force: true` is load-bearing here, not a shortcut. A plain click() waits
+		// for the row to be ENABLED, so against the pre-fix build it would politely
+		// wait out each `disabled` window and land all three picks — the spec would
+		// pass on the bug. `force` skips only the actionability poll; the click is
+		// still a real trusted mouse click at the row's centre, i.e. what a fast
+		// user produces. Three of them, with nothing awaited in between.
+		for (const title of names) {
+			await popover.locator('.card-modal__label-toggle', { hasText: title }).click({ force: true })
+		}
+
+		// All three memberships reached the server…
+		await expect
+			.poll(async () => (await api.get(`/cards/${card.id}`)).projectIds.length, { timeout: 20_000 })
+			.toBe(3)
+		// …each behind its own request, not an optimistic guess…
+		expect(sent.length, 'every pick must put a write on the wire, not just a tick on screen').toBe(3)
+		// …and the pill the user actually reads agrees.
+		await expect(page.locator('.card-modal__attr button[data-pill="project"]').first())
+			.toHaveText(/3 projects/)
+
+		for (const p of picked) await api.delete(`/projects/${p.id}`).catch(() => {})
+	})
 })
