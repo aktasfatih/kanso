@@ -189,3 +189,84 @@ test.describe('Review gate — the card view says why Done did nothing (#10896)'
 		await expect(statusError).toHaveCount(0)
 	})
 })
+
+// The message from #10896, one card along. The card view is rendered through an
+// UNKEYED router-view, so navigating card→card REUSES the component — the reuse
+// the props.cardId watcher exists for. That watcher clears `statusError` on the
+// switch, which covers a refusal that has ALREADY landed; it cannot cover one
+// still on the wire. The request rejects after the switch and setStatus() then
+// wrote card A's refusal into card B's header: "all requested reviews must be
+// approved" on a card carrying no reviews at all, naming a reviewer who was
+// never asked. Precedented twice in this same component — the stale conflict
+// panel, and the comment drafts of #10069 (card-unsaved-guard.spec.js's "a draft
+// never leaks into the next card opened").
+test.describe('Review gate — a refused Done does not follow you to the next card', () => {
+	const state = { boardId: 0, gatedId: 0, cleanId: 0, cleanReviewId: 0 }
+
+	test.beforeAll(async () => {
+		const board = await api.post('/boards', { title: `Review Gate Carryover E2E ${Date.now()}` })
+		state.boardId = board.id
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
+		const gated = await api.post('/cards', { stackId: stack.id, title: 'Carryover source A' })
+		await api.put(`/cards/${gated.id}/reviews/${me}`)
+		state.gatedId = gated.id
+		// B carries NO reviews, so a review message on it is false on its face -
+		// there is no reading of the screen under which it could be about B.
+		const clean = await api.post('/cards', { stackId: stack.id, title: 'Carryover target B' })
+		state.cleanId = clean.id
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
+	})
+
+	test("card A's refusal is not shown on card B, and B's own still is", async ({ page }) => {
+		// The refusal has to still be in flight when the card switches, and a local
+		// 403 is not - so hold the status PATCH open. ONLY the PATCH on the gated
+		// card is held; every read card B needs goes through untouched.
+		await page.route(`**/apps/kanso/api/cards/${state.gatedId}`, async (route) => {
+			if (route.request().method() !== 'PATCH') return route.continue()
+			await new Promise((resolve) => setTimeout(resolve, 2500))
+			await route.continue()
+		})
+
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.gatedId}`)
+		await expect(page.locator('.card-modal__title')).toHaveText('Carryover source A', { timeout: 15_000 })
+
+		const statusError = page.locator('.card-modal__header [data-status-error]')
+		const refusal = page.waitForResponse(
+			(r) => r.request().method() === 'PATCH' && r.url().endsWith(`/cards/${state.gatedId}`),
+			{ timeout: 20_000 },
+		)
+
+		// Pressed and deliberately NOT awaited: the refusal is still on the wire.
+		await page.locator('.card-modal__header .card-modal__done-btn').click()
+		await expect(statusError).toHaveCount(0)
+
+		// …and card B is opened while it is. Same route record, so the component is
+		// REUSED rather than remounted - which is the whole hazard.
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.cleanId}`)
+		await expect(page.locator('.card-modal__title')).toHaveText('Carryover target B', { timeout: 15_000 })
+
+		// Wait for the 403 to actually reach the browser, so an absent message is
+		// one that was SUPPRESSED rather than one that has not been sent yet, plus
+		// a settle for the catch block and a render.
+		await refusal
+		await page.waitForTimeout(800)
+		await expect(statusError).toHaveCount(0)
+		await expect(page.locator('.card-modal__header')).not.toHaveText(/requested reviews/i)
+		// …and card A really did not complete, i.e. the refusal was real.
+		expect(await doneAt(state.gatedId)).toBe(0)
+
+		// Not over-broad: the guard drops a LATE error, not every error. Give card B
+		// its own blocking review and press its own Done - that refusal must show.
+		await api.put(`/cards/${state.cleanId}/reviews/${me}`)
+		await page.reload()
+		await expect(page.locator('.card-modal__title')).toHaveText('Carryover target B', { timeout: 15_000 })
+		await page.locator('.card-modal__header .card-modal__done-btn').click()
+		await expect(statusError).toBeVisible({ timeout: 15_000 })
+		await expect(statusError).toHaveText(/requested reviews must be approved/i)
+		expect(await doneAt(state.cleanId)).toBe(0)
+	})
+})

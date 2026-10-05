@@ -3773,12 +3773,31 @@ function statusErrorMessage(err, targetsDone) {
 	return err?.response?.data?.error || t('kanso', 'Failed to update status.')
 }
 
+/**
+ * Whether the card open right now is still the one an attempt was started for.
+ *
+ * This component is REUSED across card→card navigation, so a request can reject
+ * AFTER the switch — and the props.cardId watcher's clear only covers failures
+ * that have already landed. Without this, card A's refusal is written into card
+ * B's header, which is the same component-reuse hazard that gave the wrong
+ * card's conflict text and leaked the comment drafts (#10069); see the watcher's
+ * own comment. Capture the id BEFORE the request and check it after.
+ *
+ * @param {string|number} cardId the card the attempt was started for
+ * @return {boolean} true when its outcome may still be shown
+ */
+function isStillCurrentCard(cardId) {
+	return String(props.cardId) === String(cardId)
+}
+
 async function setStatus(status) {
 	if (status === currentStatus.value) return
+	const forCard = props.cardId
 	statusError.value = ''
 	try {
 		await updateCard.mutateAsync({ data: { status } })
 	} catch (err) {
+		if (!isStillCurrentCard(forCard)) return
 		statusError.value = statusErrorMessage(err, status === 'done')
 	}
 }
@@ -3831,14 +3850,21 @@ const stageMoving = ref(false)
 async function setStage(col) {
 	// Already in this column - nothing to do.
 	if (!col || Number(col.id) === Number(cardData.value?.stackId)) return
+	// The card (and its board) this move belongs to, captured before the request:
+	// both the invalidations and the failure message below run AFTER an await, and
+	// a card→card switch in between would otherwise refresh the wrong card's key
+	// and show this card's refusal on the next one. See isStillCurrentCard().
+	const forCard = props.cardId
+	const forBoard = boardId.value
 	stageMoving.value = true
 	statusError.value = ''
 	try {
-		await apiMoveCard(props.cardId, { targetStackId: col.id, afterCardId: null })
-		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
-		queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
+		await apiMoveCard(forCard, { targetStackId: col.id, afterCardId: null })
+		queryClient.invalidateQueries({ queryKey: ['card', forCard] })
+		queryClient.invalidateQueries({ queryKey: boardQueryKey(forBoard) })
 		invalidateCrossBoardFeeds(queryClient)
 	} catch (err) {
+		if (!isStillCurrentCard(forCard)) return
 		statusError.value = statusErrorMessage(err, Number(col.role) === ROLE_DONE)
 	} finally {
 		stageMoving.value = false
