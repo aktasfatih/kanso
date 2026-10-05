@@ -224,9 +224,21 @@ test.describe('Review gate — a refused Done does not follow you to the next ca
 		// The refusal has to still be in flight when the card switches, and a local
 		// 403 is not - so hold the status PATCH open. ONLY the PATCH on the gated
 		// card is held; every read card B needs goes through untouched.
+		//
+		// The hold is released by a promise, NOT by a sleep inside the handler. A
+		// sleep is not ordered with the card switch: if it expired while the
+		// navigation was still pending, the 403 would reach setStatus() while card A
+		// was still current, the props.cardId watcher would then clear the message on
+		// the switch anyway, and the assertion below would pass without ever
+		// exercising isStillCurrentCard() - the one thing this test exists to pin.
+		// That window is exactly what moves on a saturated runner pool (see
+		// playwright.config.js), so the ordering is stated rather than timed: the
+		// PATCH cannot come back until card B is on screen.
+		let releaseGatedPatch = () => {}
+		const gatedPatchHeld = new Promise((resolve) => { releaseGatedPatch = resolve })
 		await page.route(`**/apps/kanso/api/cards/${state.gatedId}`, async (route) => {
 			if (route.request().method() !== 'PATCH') return route.continue()
-			await new Promise((resolve) => setTimeout(resolve, 2500))
+			await gatedPatchHeld
 			await route.continue()
 		})
 
@@ -235,19 +247,33 @@ test.describe('Review gate — a refused Done does not follow you to the next ca
 		await expect(page.locator('.card-modal__title')).toHaveText('Carryover source A', { timeout: 15_000 })
 
 		const statusError = page.locator('.card-modal__header [data-status-error]')
+		let refusalArrived = false
 		const refusal = page.waitForResponse(
 			(r) => r.request().method() === 'PATCH' && r.url().endsWith(`/cards/${state.gatedId}`),
 			{ timeout: 20_000 },
-		)
+		).then((response) => {
+			refusalArrived = true
+			return response
+		})
 
 		// Pressed and deliberately NOT awaited: the refusal is still on the wire.
 		await page.locator('.card-modal__header .card-modal__done-btn').click()
 		await expect(statusError).toHaveCount(0)
 
 		// …and card B is opened while it is. Same route record, so the component is
-		// REUSED rather than remounted - which is the whole hazard.
-		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.cleanId}`)
-		await expect(page.locator('.card-modal__title')).toHaveText('Carryover target B', { timeout: 15_000 })
+		// REUSED rather than remounted - which is the whole hazard. The hold is
+		// released only once B is actually on screen, in a `finally` so a failing
+		// assertion cannot leave the request stuck in the handler.
+		try {
+			await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${state.cleanId}`)
+			await expect(page.locator('.card-modal__title')).toHaveText('Carryover target B', { timeout: 15_000 })
+			// The ordering this whole test rests on, asserted instead of assumed: the
+			// 403 has not come back yet, so when it does, card A is no longer the open
+			// card and nothing but isStillCurrentCard() can keep it off B's header.
+			expect(refusalArrived).toBe(false)
+		} finally {
+			releaseGatedPatch()
+		}
 
 		// Wait for the 403 to actually reach the browser, so an absent message is
 		// one that was SUPPRESSED rather than one that has not been sent yet, plus
