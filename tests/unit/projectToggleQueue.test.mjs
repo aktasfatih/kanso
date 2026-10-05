@@ -51,7 +51,7 @@ globalThis.window = {
 // Dynamic, and in this order, on purpose: static `import` declarations are
 // hoisted and evaluated BEFORE any statement in the module, so a static import
 // of the composable would reach @nextcloud/router before the stub above exists.
-const { createApp, effectScope, watchEffect, nextTick } = await import('vue')
+const { createApp, effectScope, watchEffect, nextTick, ref } = await import('vue')
 const { QueryClient, VueQueryPlugin } = await import('@tanstack/vue-query')
 const axios = (await import('@nextcloud/axios')).default
 const { useCardProjects } = await import('../../src/composables/useProjects.js')
@@ -81,12 +81,20 @@ after(() => {
  * every project-membership write and answers it after `latency` ms — the
  * in-flight window a fast clicker clicks into.
  *
+ * `openCard` stands in for the modal's `props.cardId` — the card that happens to
+ * be on screen. It is handed to useCardProjects DELIBERATELY, even though the
+ * composable takes no argument: "the composable must not bind a card id, even
+ * when it is given one" is itself an assertion, and the only way the regression
+ * below (reading a composable-level id at write time instead of the pick's own
+ * `vars.cardId`) stays reachable from a test.
+ *
  * @param {import('node:test').TestContext} t The running test.
- * @param {number} cardId Distinct per test.
+ * @param {import('vue').Ref<number>|number} openCard The card on screen, reactive
+ *   or plain. Distinct per test.
  * @param {number} latency How long each membership write takes to answer.
  * @param {Array<object|null>} outcomes Per call: a rejection value, or null to succeed.
  */
-function harness(t, cardId, latency, outcomes = []) {
+function harness(t, openCard, latency, outcomes = []) {
 	const app = createApp({})
 	// A SHORT gcTime, not TanStack's five-minute default, which parks a real
 	// timer and keeps `node --test` from ever exiting. retry:false so a refusal
@@ -99,6 +107,17 @@ function harness(t, cardId, latency, outcomes = []) {
 	})
 	app.use(VueQueryPlugin, { queryClient })
 	clients.push(queryClient)
+
+	// Every key the composable asks to invalidate, flattened. A write going to the
+	// right card is only half of a settle: the detail key it refreshes afterwards
+	// has to be that same card's, or the picker's ticks are reconciled on one card
+	// and left stale on the other.
+	const invalidated = []
+	const realInvalidate = queryClient.invalidateQueries.bind(queryClient)
+	queryClient.invalidateQueries = (filters, options) => {
+		invalidated.push((filters?.queryKey ?? []).join('/'))
+		return realInvalidate(filters, options)
+	}
 
 	const writes = []
 	let call = 0
@@ -127,10 +146,11 @@ function harness(t, cardId, latency, outcomes = []) {
 	return {
 		queryClient,
 		writes,
+		invalidated,
 		// Handed back so the reactivity test can register a watcher in the same
 		// scope the composable lives in (and have it torn down with it).
 		scope,
-		...app.runWithContext(() => scope.run(() => useCardProjects(cardId))),
+		...app.runWithContext(() => scope.run(() => useCardProjects(openCard))),
 	}
 }
 
@@ -246,6 +266,52 @@ test('a refused project pick does not strand the picks queued behind it', async 
 
 	assert.deepEqual(writes.map((w) => w.projectId), [1, 2],
 		'the queue must carry on after a refusal')
+})
+
+test('a pick queued before you open another card still lands on the card it was made for', async (t) => {
+	// The hazard the QUEUE opened. Before it, the write left in the click handler,
+	// so the card on screen and the card being written were the same thing by
+	// construction. A queued pick outlives that: the modal is rendered through an
+	// UNKEYED router-view, so navigating card→card REUSES the component and
+	// `props.cardId` changes under the live composable (CardDetail.vue's cardId
+	// watcher is there for exactly that reuse). useCardProjects used to read a
+	// composable-level `id.value` inside mutationFn and onSettled - i.e. at
+	// EXECUTION time - so a pick waiting its turn was sent for whichever card had
+	// been opened by then, and the settle refreshed that card's key too. The pick
+	// is not merely lost at that point: it is applied to a card the user never
+	// touched. Its own queue key already used `vars.cardId` (`keyOf`), so the row
+	// the queue thought it was writing and the row it wrote disagreed.
+	//
+	// Its two siblings take cardId from the mutation vars already
+	// (useLabels.js:94, useAssignees.js:89); this was the outlier.
+	const openCard = ref(888)
+	const { enqueueToggle, writes, invalidated } = harness(t, openCard, 80)
+
+	const first = enqueueToggle({ cardId: 888, projectId: 1, assign: true })
+	const queued = enqueueToggle({ cardId: 888, projectId: 2, assign: true })
+
+	await sleep(20)
+	assert.deepEqual(writes.map((w) => w.projectId), [1],
+		'the second pick must still be waiting its turn - otherwise the switch below '
+		+ 'happens after it has already gone out and the test proves nothing')
+
+	// The user opens another card while that second pick is still queued.
+	openCard.value = 999
+
+	await Promise.all([first, queued])
+	await sleep(20)
+
+	assert.deepEqual(writes, [
+		{ method: 'PUT', projectId: 1, cardId: 888 },
+		{ method: 'PUT', projectId: 2, cardId: 888 },
+	], 'both picks must be written against card 888 - the card whose picker they '
+		+ 'were made in - not against whatever card is open when they execute')
+
+	assert.ok(invalidated.includes('card/888'),
+		'and the settle must refresh card 888, whose projectIds actually changed')
+	assert.ok(!invalidated.includes('card/999'),
+		'never the card merely open at the time: refreshing it leaves 888 stale and '
+		+ 'spends a request re-reading a card nothing wrote to')
 })
 
 test('un-picking a project sends the remove, and queues behind an add', async (t) => {

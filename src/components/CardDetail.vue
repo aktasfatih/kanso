@@ -7009,7 +7009,11 @@ const projectToggleError = ref('')
 const {
 	enqueueToggle: enqueueProjectToggle,
 	isTogglePending: isProjectMembershipPending,
-} = useCardProjects(computed(() => props.cardId))
+// Deliberately no cardId argument: this component is REUSED across card→card
+// navigation, so every pick carries its own `cardId` in the mutation variables
+// instead (see useCardProjects' comment). A pick still waiting in the queue when
+// you open the next card must land on the card it was made for.
+} = useCardProjects()
 
 // Whether this card's row for `projectId` is writing or waiting its turn - drives
 // `aria-busy` on that one row, in place of the `disabled` that used to blur the

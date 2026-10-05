@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import {
 	getProjects as apiGetProjects,
@@ -107,29 +106,37 @@ export function useProjects() {
  * same `createToggleQueue` rather than to a third hand-written mechanism (see
  * the warning at src/main.js:192-197, and useToggleQueue.js for the rest).
  *
- * @param {import('vue').Ref<string|number>|string|number} cardId The card whose
- *   membership is being toggled; reactive or plain.
+ * Every write takes its card from the MUTATION VARIABLES, never from a card id
+ * bound at composable level — which is why this takes no cardId argument at all.
+ * Queuing the picks is what made that distinction matter: the card modal is
+ * rendered through an UNKEYED router-view, so navigating card→card REUSES the
+ * component and `props.cardId` changes under it (see the watcher in
+ * CardDetail.vue). A pick waiting its turn in the queue outlives that switch, so
+ * a composable-level id would be read at EXECUTION time and send the pick for
+ * whichever card happens to be open then — and invalidate that card's key too.
+ * The queue's own `keyOf` already keyed off `vars.cardId`, so the two disagreed.
+ *
  * @return {{enqueueToggle: (vars: {cardId: number|string, projectId: number, assign: boolean}) => Promise<*>,
  *   isTogglePending: (cardId: number|string, projectId: number) => boolean}}
  */
-export function useCardProjects(cardId) {
+export function useCardProjects() {
 	const queryClient = useQueryClient()
-	const id = computed(() => (typeof cardId === 'object' ? cardId.value : cardId))
 
 	const toggleMembership = useMutation({
-		mutationFn: ({ projectId, assign }) => assign
-			? apiAddCardToProject(projectId, Number(id.value))
-			: apiRemoveCardFromProject(projectId, Number(id.value)),
+		mutationFn: ({ cardId, projectId, assign }) => assign
+			? apiAddCardToProject(projectId, Number(cardId))
+			: apiRemoveCardFromProject(projectId, Number(cardId)),
 		// No optimistic patch, deliberately: the card detail carries `projectIds`
 		// and the project page carries its own card list, and a project is the
 		// viewer's OWN collection that another member's board rights cannot be
 		// inferred from (see the picker's comment in CardDetail.vue). The settle
 		// invalidation below is the only writer, so there is no snapshot to roll
 		// back and no window in which a rollback could resurrect a stale id.
-		onSettled: (_data, _err, { projectId }) => {
+		onSettled: (_data, _err, { cardId, projectId }) => {
 			// Refreshes the card's `projectIds` (the picker's ticks and the pill's
-			// count both read it)...
-			queryClient.invalidateQueries({ queryKey: ['card', String(id.value)] })
+			// count both read it) — the card this pick was MADE for, which is not
+			// necessarily the one open now.
+			queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })
 			// ...the project's own card feed...
 			queryClient.invalidateQueries({ queryKey: ['project', String(projectId), 'cards'] })
 			// ...and the projects list, whose rows show a card count.
