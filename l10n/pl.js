@@ -134,7 +134,7 @@ OC.L10N.register(
     "All boards" : "Wszystkie tablice",
     "All day (no time)" : "Cały dzień (bez godziny)",
     "All issues" : "Wszystkie zgłoszenia",
-    "All requested reviews must be approved before this card can be marked done. Waiting on {names}." : "Wszystkie recenzje, o które poproszono, muszą być zatwierdzone, aby można było oznaczyć tę kartę jako ukończoną. Oczekuje na {names}.",
+    "All requested reviews must be approved before this card can be marked done. Waiting on {names}." : "Wszystkie recenzje, o które poproszono, muszą być zatwierdzone, aby można było oznaczyć tę kartę jako ukończoną. Oczekujący recenzenci: {names}.",
     "Analytics" : "Statystyki",
     "Any" : "Dowolne",
     "Any card can be saved as a template from its ⋯ menu (\"Mark as template\"). Templates are hidden from the board and reused from a column's \"＋ From template\" menu." : "Każdą kartę można zapisać jako szablon z jej menu ⋯ („Oznacz jako szablon”). Szablony są ukryte na tablicy i używa się ich ponownie z menu „＋ Z szablonu” w kolumnie.",

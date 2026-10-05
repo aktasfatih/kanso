@@ -316,7 +316,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n veri satırı bulundu"
 msgstr[1] "%n veri satırı bulundu"
 
-#: src/components/CardDetail.vue:4854
+#: src/components/CardDetail.vue:4880
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n gün önce"
@@ -328,7 +328,7 @@ msgid_plural "%n files"
 msgstr[0] "%n dosya"
 msgstr[1] "%n dosya"
 
-#: src/components/CardDetail.vue:4852
+#: src/components/CardDetail.vue:4878
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
@@ -352,7 +352,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 msgstr[1] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 
-#: src/components/CardDetail.vue:4850
+#: src/components/CardDetail.vue:4876
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n dakika önce"
@@ -1847,7 +1847,7 @@ msgid "Date"
 msgstr "Tarih"
 
 #: src/components/BoardSettingsModal.vue:2209
-#: src/components/CardDetail.vue:5043
+#: src/components/CardDetail.vue:5069
 msgid "day"
 msgid_plural "days"
 msgstr[0] "gün"
@@ -3329,7 +3329,7 @@ msgstr "Amacı, kapsamı veya kuralları. Panodaki herkes pano adının yanında
 msgid "Jump to the discussion"
 msgstr "Tartışmaya atla"
 
-#: src/components/CardDetail.vue:6816
+#: src/components/CardDetail.vue:6842
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Tartışmaya atla (%n yorum)"
@@ -3661,7 +3661,7 @@ msgid "Mon"
 msgstr "Pzt"
 
 #: src/components/BoardSettingsModal.vue:2211
-#: src/components/CardDetail.vue:5045
+#: src/components/CardDetail.vue:5071
 msgid "month"
 msgid_plural "months"
 msgstr[0] "ay"
@@ -5133,7 +5133,7 @@ msgstr "Tartışmayı kartın altında göster"
 msgid "Show the discussion panel"
 msgstr "Tartışma panelini göster"
 
-#: src/components/CardDetail.vue:6822
+#: src/components/CardDetail.vue:6848
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Tartışma panelini göster (%n yorum)"
@@ -5873,7 +5873,7 @@ msgid "Wed"
 msgstr "Çar"
 
 #: src/components/BoardSettingsModal.vue:2210
-#: src/components/CardDetail.vue:5044
+#: src/components/CardDetail.vue:5070
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "hafta"
@@ -5974,7 +5974,7 @@ msgid "wrote"
 msgstr "yazdı"
 
 #: src/components/BoardSettingsModal.vue:2212
-#: src/components/CardDetail.vue:5046
+#: src/components/CardDetail.vue:5072
 msgid "year"
 msgid_plural "years"
 msgstr[0] "yıl"

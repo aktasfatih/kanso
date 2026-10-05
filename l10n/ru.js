@@ -134,7 +134,7 @@ OC.L10N.register(
     "All boards" : "Все доски",
     "All day (no time)" : "Весь день (без времени)",
     "All issues" : "Все issue",
-    "All requested reviews must be approved before this card can be marked done. Waiting on {names}." : "Все запрошенные проверки должны быть одобрены, прежде чем эту карточку можно отметить готовой. Ожидает {names}.",
+    "All requested reviews must be approved before this card can be marked done. Waiting on {names}." : "Все запрошенные проверки должны быть одобрены, прежде чем эту карточку можно отметить готовой. Ожидаемые проверяющие: {names}.",
     "Analytics" : "Аналитика",
     "Any" : "Любые",
     "Any card can be saved as a template from its ⋯ menu (\"Mark as template\"). Templates are hidden from the board and reused from a column's \"＋ From template\" menu." : "Любую карточку можно сохранить как шаблон через ее меню ⋯ («Сделать шаблоном»). Шаблоны скрыты с доски и используются повторно через меню колонки «＋ Из шаблона».",
