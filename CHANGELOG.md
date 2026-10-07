@@ -11,6 +11,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+## [0.38.1](https://github.com/aktasfatih/kanso/compare/v0.38.0...v0.38.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **cards:** keep a failed Mark done on the card you pressed it on ([d0a6e7a](https://github.com/aktasfatih/kanso/commit/d0a6e7a08d04834e7788879ccdd3f3b5674f84cf))
+* **cards:** keep a label you add while a priority is still saving ([fc7badd](https://github.com/aktasfatih/kanso/commit/fc7badd4921373f6e7ef271d04ecdf4a8a6ecf9b)), closes [#10927](https://github.com/aktasfatih/kanso/issues/10927)
+* **cards:** keep an assignee you add while a label is still saving ([140b7b4](https://github.com/aktasfatih/kanso/commit/140b7b4039a710a6ca977cae3fb9640fd05209f4)), closes [#10923](https://github.com/aktasfatih/kanso/issues/10923)
+* **cards:** keep the assignees you pick while the last one is still saving ([cd4be49](https://github.com/aktasfatih/kanso/commit/cd4be497d31602d3df4ad5185418d2d8f7e868c3)), closes [#10799](https://github.com/aktasfatih/kanso/issues/10799)
+* **cards:** keep the labels you pick while the last one is still saving ([e33c5e7](https://github.com/aktasfatih/kanso/commit/e33c5e73d769833e3db22a63824d15d6762029c1)), closes [#10920](https://github.com/aktasfatih/kanso/issues/10920)
+* **cards:** keep the projects you pick while the last one is still saving ([2e67b7e](https://github.com/aktasfatih/kanso/commit/2e67b7e03d86c38d07383dcf997568e4e5abcf95))
+* **cards:** say which reviews are blocking when Mark done is refused ([bbb6302](https://github.com/aktasfatih/kanso/commit/bbb63021b79dd1f438461bf3d5970409c736ac53))
+* **cards:** send a project pick to the card you picked it on ([c64ac75](https://github.com/aktasfatih/kanso/commit/c64ac754b9693b211ad003bbd56937a76121d61f))
+* **deps:** bump the npm-production group with 7 updates ([111802e](https://github.com/aktasfatih/kanso/commit/111802e2c1c83cbd4f226e4803f79300508f8b4c))
+* **install:** refuse to install without PHP's zip extension instead of breaking board export ([c5ef211](https://github.com/aktasfatih/kanso/commit/c5ef2113f6d601b58a06d49e8db13dfe2d3ac652))
+
 # [0.38.0](https://github.com/aktasfatih/kanso/compare/v0.37.0...v0.38.0) (2026-10-04)
 
 
