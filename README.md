@@ -485,7 +485,7 @@ still ships to everyone in the next release.
 
 ### Sponsors
 
-Thank you to [@dbmtrde](https://github.com/dbmtrde) for sponsoring Kanso.
+Thank you to [@dbmtrde](https://github.com/dbmtrde) and [@ratte](https://github.com/ratte) for sponsoring Kanso.
 
 *Your logo here* — [Team and Organization sponsors](https://github.com/sponsors/aktasfatih)
 get their logo in this README and on the [Kanso website](https://aktasfatih.com/kanso/#support).
