@@ -426,6 +426,7 @@ import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
 import CardTile from './CardTile.vue'
 import { cssColor } from '../services/color.js'
 import { parseDueToken } from '../utils/dueTokens.js'
+import { showCardCreatedToast } from '../utils/cardCreatedToast.js'
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
@@ -1118,16 +1119,19 @@ async function createCardsFromText(text) {
 	composerError.value = ''
 	isPending.value = true
 	const ordered = props.newCardsOnTop ? [...titles].reverse() : titles
+	let created = null
 	try {
 		for (const title of ordered) {
 			// A recognized trailing natural-date token (#3416) sets the card's due
 			// date and is stripped from the title; anything else leaves it intact.
 			const { title: parsedTitle, duedate, allDay } = parseDueToken(title)
-			await props.onCreateCard(props.stack.id, parsedTitle, duedate, allDay)
+			created = await props.onCreateCard(props.stack.id, parsedTitle, duedate, allDay)
 		}
 		newCardTitle.value = ''
 		// Re-focus for rapid entry - the signature UX
 		composerInputRef.value?.focus()
+		// Single-card create only: a multi-line paste has no one card to open.
+		if (titles.length === 1 && created?.id) showCardCreatedToast(() => openCard(created.id))
 	} catch (err) {
 		composerError.value =
 			err?.response?.data?.error || t('kanso', 'Failed to create card.')
@@ -1164,7 +1168,8 @@ async function createFromTemplate(templateId) {
 	composerError.value = ''
 	isPending.value = true
 	try {
-		await props.onCreateFromTemplate(props.stack.id, templateId)
+		const created = await props.onCreateFromTemplate(props.stack.id, templateId)
+		if (created?.id) showCardCreatedToast(() => openCard(created.id))
 	} catch (err) {
 		composerError.value =
 			err?.response?.data?.error || t('kanso', 'Failed to create card from template.')

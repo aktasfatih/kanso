@@ -2494,7 +2494,7 @@ async function handleCreateCard(stackId, title, duedate = null, allDay = false) 
 		payload.duedate = duedate
 		payload.allDay = allDay
 	}
-	await createCard.mutateAsync(payload)
+	return await createCard.mutateAsync(payload)
 }
 
 // Fetch the board's card templates for the composer picker (#3409). Lazily
@@ -2506,8 +2506,9 @@ async function handleFetchTemplates() {
 // Create a new card in stackId pre-filled from a template (#3409), then refetch
 // the board so the fresh card appears (database-first).
 async function handleCreateFromTemplate(stackId, templateId) {
-	await apiCreateCardFromTemplate(templateId, stackId)
+	const created = await apiCreateCardFromTemplate(templateId, stackId)
 	queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
+	return created
 }
 
 async function handleDeleteStack(stackId) {
