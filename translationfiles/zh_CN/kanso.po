@@ -281,7 +281,7 @@ msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] "%n 张卡片"
 
-#: src/components/StackColumn.vue:1053
+#: src/components/StackColumn.vue:1061
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "已归档 %n 张卡片"
@@ -306,7 +306,7 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:4880
+#: src/components/CardDetail.vue:4925
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
@@ -316,10 +316,15 @@ msgid "%n file"
 msgid_plural "%n files"
 msgstr[0] "%n 个文件"
 
-#: src/components/CardDetail.vue:4878
+#: src/components/CardDetail.vue:4923
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
+
+#: src/views/BoardView.vue:2630
+msgid "%n ID copied."
+msgid_plural "%n IDs copied."
+msgstr[0] "已复制 %n 个 ID。"
 
 #: src/views/BoardList.vue:215
 msgid "%n label"
@@ -336,7 +341,7 @@ msgid "%n label was not created and is missing from the imported cards: only boa
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
 msgstr[0] "有 %n 个标签未能创建，导入的卡片中缺少它们：只有看板管理者才能添加新标签。请让管理者添加，然后在卡片上设置它们。"
 
-#: src/components/CardDetail.vue:4876
+#: src/components/CardDetail.vue:4921
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -361,7 +366,7 @@ msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
 
-#: src/components/CardDetail.vue:2235
+#: src/components/CardDetail.vue:2271
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n 条回复"
@@ -871,6 +876,14 @@ msgstr "被阻塞于"
 msgid "Blocked by another card"
 msgstr "被另一张卡片阻塞"
 
+#: src/components/CardTile.vue
+msgid "Blocking"
+msgstr "正在阻塞"
+
+#: src/components/CardTile.vue
+msgid "Blocking another card"
+msgstr "正在阻塞另一张卡片"
+
 #: src/components/MarkdownEditor.vue
 msgid "Blockquote"
 msgstr "引用块"
@@ -1054,6 +1067,10 @@ msgstr "已把卡片复制为提示词。"
 #: src/components/CardDetail.vue
 msgid "Card copied."
 msgstr "卡片已复制。"
+
+#: src/utils/cardCreatedToast.js
+msgid "Card created"
+msgstr "卡片已创建"
 
 #: src/components/CardDetail.vue
 msgid "Card deleted"
@@ -1289,9 +1306,9 @@ msgstr "清单未完成"
 msgid "Checklist progress {done} of {total}"
 msgstr "清单进度 {total} 中的 {done}"
 
-#: src/components/BoardListView.vue:1071
+#: src/components/BoardListView.vue:1077
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:480
+#: src/components/CardTile.vue:492
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "清单进度 {total} 中的 {done}，%n 个步骤已逾期"
@@ -1312,6 +1329,10 @@ msgstr "选择 CSV 文件"
 #: src/components/CardDetail.vue
 msgid "Choose a file to attach"
 msgstr "选择要附加的文件"
+
+#: src/components/CardDetail.vue
+msgid "Choose a file to link"
+msgstr "选择要关联的文件"
 
 #: src/components/CardDetail.vue
 msgid "Choose from Files"
@@ -1380,6 +1401,7 @@ msgid "Client status"
 msgstr "客户状态"
 
 #: src/components/CardDetail.vue
+#: src/views/BoardView.vue
 msgid "Clipboard is not available in this context."
 msgstr "当前环境无法使用剪贴板。"
 
@@ -1405,6 +1427,10 @@ msgstr "已关闭"
 #: src/components/CardDetail.vue
 msgid "Code"
 msgstr "代码"
+
+#: src/components/MarkdownEditor.vue
+msgid "Code block"
+msgstr "代码块"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Code links"
@@ -1536,6 +1562,10 @@ msgstr "复制卡片到…"
 msgid "Copy cards too"
 msgstr "同时复制卡片"
 
+#: src/components/BulkActionBar.vue
+msgid "Copy IDs"
+msgstr "复制 ID"
+
 #: src/components/CardDetail.vue
 msgid "Copy reference {ref}"
 msgstr "复制引用 {ref}"
@@ -1570,6 +1600,7 @@ msgstr "无法复制到剪贴板"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
+#: src/views/BoardView.vue
 msgid "Could not copy to clipboard."
 msgstr "无法复制到剪贴板。"
 
@@ -1819,7 +1850,7 @@ msgid "Date"
 msgstr "日期"
 
 #: src/components/BoardSettingsModal.vue:2209
-#: src/components/CardDetail.vue:5069
+#: src/components/CardDetail.vue:5114
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -2579,6 +2610,10 @@ msgstr "退出看板失败。"
 msgid "Failed to link card."
 msgstr "关联卡片失败。"
 
+#: src/components/CardDetail.vue
+msgid "Failed to link the file."
+msgstr "关联文件失败。"
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Failed to load analytics. Please try again."
@@ -2715,6 +2750,10 @@ msgstr "移除关联失败。"
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to remove share."
 msgstr "移除共享失败。"
+
+#: src/components/CardDetail.vue
+msgid "Failed to remove the file link."
+msgstr "移除文件关联失败。"
 
 #: src/components/CardDetail.vue
 msgid "Failed to remove time entry."
@@ -3296,7 +3335,7 @@ msgstr "看板的用途、范围或协作约定。看板中的所有人都可以
 msgid "Jump to the discussion"
 msgstr "跳转到讨论"
 
-#: src/components/CardDetail.vue:6842
+#: src/components/CardDetail.vue:6941
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "跳转到讨论（%n 条评论）"
@@ -3487,13 +3526,37 @@ msgstr "链接已过期"
 msgid "Link expires on"
 msgstr "链接过期时间"
 
+#: src/components/CardDetail.vue
+msgid "Link file"
+msgstr "关联文件"
+
+#: src/components/CardDetail.vue
+msgid "Link from Files"
+msgstr "从“文件”中关联"
+
 #: templates/public-notfound.php
 msgid "Link not available"
 msgstr "链接不可用"
 
 #: src/components/CardDetail.vue
+msgid "Link the file itself — the card opens the current version in Files"
+msgstr "关联文件本身——卡片会在“文件”中打开其当前版本"
+
+#: src/components/CardDetail.vue
+msgid "linked {value}"
+msgstr "关联了 {value}"
+
+#: src/components/CardDetail.vue
 msgid "linked a contact"
 msgstr "关联了一位联系人"
+
+#: src/components/CardDetail.vue
+msgid "linked a file"
+msgstr "关联了一个文件"
+
+#: src/components/CardDetail.vue
+msgid "Linking…"
+msgstr "正在关联…"
 
 #: src/views/BoardView.vue
 #: src/views/ViewPage.vue
@@ -3627,7 +3690,7 @@ msgid "Mon"
 msgstr "周一"
 
 #: src/components/BoardSettingsModal.vue:2211
-#: src/components/CardDetail.vue:5071
+#: src/components/CardDetail.vue:5116
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -4101,6 +4164,10 @@ msgstr "有权访问此看板的人中没有匹配项。"
 msgid "None"
 msgstr "无"
 
+#: src/views/BoardView.vue
+msgid "None of the selected cards has an ID yet."
+msgstr "所选卡片都还没有 ID。"
+
 #: src/composables/useBoardFilters.js
 msgid "Not blocked"
 msgstr "未被阻塞"
@@ -4202,6 +4269,7 @@ msgstr "打开"
 
 #: src/components/CardDetail.vue
 #: src/components/CardPreview.vue
+#: src/utils/cardCreatedToast.js
 msgid "Open"
 msgstr "打开"
 
@@ -4629,6 +4697,10 @@ msgstr "移除标签 {label}"
 #: src/components/CardDetail.vue
 msgid "Remove link"
 msgstr "移除链接"
+
+#: src/components/CardDetail.vue
+msgid "Remove link to {name}"
+msgstr "移除与 {name} 的关联"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Remove mailbox"
@@ -5096,7 +5168,7 @@ msgstr "在卡片下方显示讨论"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:6848
+#: src/components/CardDetail.vue:6947
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -5673,8 +5745,16 @@ msgid "Unlink contact"
 msgstr "取消关联联系人"
 
 #: src/components/CardDetail.vue
+msgid "unlinked {value}"
+msgstr "取消关联了 {value}"
+
+#: src/components/CardDetail.vue
 msgid "unlinked a contact"
 msgstr "取消关联了一位联系人"
+
+#: src/components/CardDetail.vue
+msgid "unlinked a file"
+msgstr "取消关联了一个文件"
 
 #: src/components/CardDetail.vue
 #: src/components/ManageTemplatesModal.vue
@@ -5835,7 +5915,7 @@ msgid "Wed"
 msgstr "周三"
 
 #: src/components/BoardSettingsModal.vue:2210
-#: src/components/CardDetail.vue:5070
+#: src/components/CardDetail.vue:5115
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -5935,7 +6015,7 @@ msgid "wrote"
 msgstr "写道"
 
 #: src/components/BoardSettingsModal.vue:2212
-#: src/components/CardDetail.vue:5072
+#: src/components/CardDetail.vue:5117
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"

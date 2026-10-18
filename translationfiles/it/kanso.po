@@ -286,7 +286,7 @@ msgid_plural "%n cards"
 msgstr[0] "%n scheda"
 msgstr[1] "%n schede"
 
-#: src/components/StackColumn.vue:1053
+#: src/components/StackColumn.vue:1061
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "%n scheda archiviata"
@@ -316,7 +316,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n riga di dati rilevata"
 msgstr[1] "%n righe di dati rilevate"
 
-#: src/components/CardDetail.vue:4880
+#: src/components/CardDetail.vue:4925
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n giorno fa"
@@ -328,11 +328,17 @@ msgid_plural "%n files"
 msgstr[0] "%n file"
 msgstr[1] "%n file"
 
-#: src/components/CardDetail.vue:4878
+#: src/components/CardDetail.vue:4923
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n ora fa"
 msgstr[1] "%n ore fa"
+
+#: src/views/BoardView.vue:2630
+msgid "%n ID copied."
+msgid_plural "%n IDs copied."
+msgstr[0] "%n ID copiato."
+msgstr[1] "%n ID copiati."
 
 #: src/views/BoardList.vue:215
 msgid "%n label"
@@ -352,7 +358,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etichetta non è stata creata e manca dalle schede importate: solo i gestori della bacheca possono aggiungere nuove etichette. Chiedi a un gestore di aggiungerla, poi impostala sulle schede."
 msgstr[1] "%n etichette non sono state create e mancano dalle schede importate: solo i gestori della bacheca possono aggiungere nuove etichette. Chiedi a un gestore di aggiungerle, poi impostale sulle schede."
 
-#: src/components/CardDetail.vue:4876
+#: src/components/CardDetail.vue:4921
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuto fa"
@@ -382,7 +388,7 @@ msgid_plural "%n projects"
 msgstr[0] "%n progetto"
 msgstr[1] "%n progetti"
 
-#: src/components/CardDetail.vue:2235
+#: src/components/CardDetail.vue:2271
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n risposta"
@@ -898,6 +904,14 @@ msgstr "Bloccata da"
 msgid "Blocked by another card"
 msgstr "Bloccata da un'altra scheda"
 
+#: src/components/CardTile.vue
+msgid "Blocking"
+msgstr "Bloccante"
+
+#: src/components/CardTile.vue
+msgid "Blocking another card"
+msgstr "Blocca un'altra scheda"
+
 #: src/components/MarkdownEditor.vue
 msgid "Blockquote"
 msgstr "Citazione"
@@ -1081,6 +1095,10 @@ msgstr "Scheda copiata come prompt."
 #: src/components/CardDetail.vue
 msgid "Card copied."
 msgstr "Scheda copiata."
+
+#: src/utils/cardCreatedToast.js
+msgid "Card created"
+msgstr "Scheda creata"
 
 #: src/components/CardDetail.vue
 msgid "Card deleted"
@@ -1316,9 +1334,9 @@ msgstr "Lista di controllo incompleta"
 msgid "Checklist progress {done} of {total}"
 msgstr "Avanzamento della lista di controllo: {done} di {total}"
 
-#: src/components/BoardListView.vue:1071
+#: src/components/BoardListView.vue:1077
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:480
+#: src/components/CardTile.vue:492
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Avanzamento della lista di controllo: {done} di {total}, %n elemento in ritardo"
@@ -1340,6 +1358,10 @@ msgstr "Scegli un file CSV"
 #: src/components/CardDetail.vue
 msgid "Choose a file to attach"
 msgstr "Scegli un file da allegare"
+
+#: src/components/CardDetail.vue
+msgid "Choose a file to link"
+msgstr "Scegli un file da collegare"
 
 #: src/components/CardDetail.vue
 msgid "Choose from Files"
@@ -1408,6 +1430,7 @@ msgid "Client status"
 msgstr "Stato cliente"
 
 #: src/components/CardDetail.vue
+#: src/views/BoardView.vue
 msgid "Clipboard is not available in this context."
 msgstr "Gli appunti non sono disponibili in questo contesto."
 
@@ -1433,6 +1456,10 @@ msgstr "Chiusa"
 #: src/components/CardDetail.vue
 msgid "Code"
 msgstr "Codice"
+
+#: src/components/MarkdownEditor.vue
+msgid "Code block"
+msgstr "Blocco di codice"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Code links"
@@ -1564,6 +1591,10 @@ msgstr "Copia la scheda in…"
 msgid "Copy cards too"
 msgstr "Copia anche le schede"
 
+#: src/components/BulkActionBar.vue
+msgid "Copy IDs"
+msgstr "Copia ID"
+
 #: src/components/CardDetail.vue
 msgid "Copy reference {ref}"
 msgstr "Copia il riferimento {ref}"
@@ -1598,6 +1629,7 @@ msgstr "Impossibile copiare negli appunti"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
+#: src/views/BoardView.vue
 msgid "Could not copy to clipboard."
 msgstr "Impossibile copiare negli appunti."
 
@@ -1847,7 +1879,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:2209
-#: src/components/CardDetail.vue:5069
+#: src/components/CardDetail.vue:5114
 msgid "day"
 msgid_plural "days"
 msgstr[0] "giorno"
@@ -2612,6 +2644,10 @@ msgstr "Impossibile abbandonare la bacheca."
 msgid "Failed to link card."
 msgstr "Impossibile collegare la scheda."
 
+#: src/components/CardDetail.vue
+msgid "Failed to link the file."
+msgstr "Impossibile collegare il file."
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Failed to load analytics. Please try again."
@@ -2748,6 +2784,10 @@ msgstr "Impossibile rimuovere la relazione."
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to remove share."
 msgstr "Impossibile rimuovere la condivisione."
+
+#: src/components/CardDetail.vue
+msgid "Failed to remove the file link."
+msgstr "Impossibile rimuovere il collegamento al file."
 
 #: src/components/CardDetail.vue
 msgid "Failed to remove time entry."
@@ -3329,7 +3369,7 @@ msgstr "Scopo, ambito o regole. Tutti i membri della bacheca possono leggerla da
 msgid "Jump to the discussion"
 msgstr "Vai alla discussione"
 
-#: src/components/CardDetail.vue:6842
+#: src/components/CardDetail.vue:6941
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Vai alla discussione (%n commento)"
@@ -3521,13 +3561,37 @@ msgstr "Collegamento scaduto"
 msgid "Link expires on"
 msgstr "Il collegamento scade il"
 
+#: src/components/CardDetail.vue
+msgid "Link file"
+msgstr "Collega file"
+
+#: src/components/CardDetail.vue
+msgid "Link from Files"
+msgstr "Collega da File"
+
 #: templates/public-notfound.php
 msgid "Link not available"
 msgstr "Collegamento non disponibile"
 
 #: src/components/CardDetail.vue
+msgid "Link the file itself — the card opens the current version in Files"
+msgstr "Collega il file stesso: la scheda apre la versione attuale in File"
+
+#: src/components/CardDetail.vue
+msgid "linked {value}"
+msgstr "ha collegato {value}"
+
+#: src/components/CardDetail.vue
 msgid "linked a contact"
 msgstr "ha collegato un contatto"
+
+#: src/components/CardDetail.vue
+msgid "linked a file"
+msgstr "ha collegato un file"
+
+#: src/components/CardDetail.vue
+msgid "Linking…"
+msgstr "Collegamento in corso…"
 
 #: src/views/BoardView.vue
 #: src/views/ViewPage.vue
@@ -3661,7 +3725,7 @@ msgid "Mon"
 msgstr "Lun"
 
 #: src/components/BoardSettingsModal.vue:2211
-#: src/components/CardDetail.vue:5071
+#: src/components/CardDetail.vue:5116
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mese"
@@ -4136,6 +4200,10 @@ msgstr "Nessuna delle persone con accesso a questa bacheca corrisponde."
 msgid "None"
 msgstr "Nessuna"
 
+#: src/views/BoardView.vue
+msgid "None of the selected cards has an ID yet."
+msgstr "Nessuna delle schede selezionate ha ancora un ID."
+
 #: src/composables/useBoardFilters.js
 msgid "Not blocked"
 msgstr "Non bloccata"
@@ -4237,6 +4305,7 @@ msgstr "apri"
 
 #: src/components/CardDetail.vue
 #: src/components/CardPreview.vue
+#: src/utils/cardCreatedToast.js
 msgid "Open"
 msgstr "Apri"
 
@@ -4664,6 +4733,10 @@ msgstr "Rimuovi l'etichetta {label}"
 #: src/components/CardDetail.vue
 msgid "Remove link"
 msgstr "Rimuovi il collegamento"
+
+#: src/components/CardDetail.vue
+msgid "Remove link to {name}"
+msgstr "Rimuovi il collegamento a {name}"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Remove mailbox"
@@ -5133,7 +5206,7 @@ msgstr "Mostra la discussione sotto la scheda"
 msgid "Show the discussion panel"
 msgstr "Mostra il pannello della discussione"
 
-#: src/components/CardDetail.vue:6848
+#: src/components/CardDetail.vue:6947
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostra il pannello della discussione (%n commento)"
@@ -5711,8 +5784,16 @@ msgid "Unlink contact"
 msgstr "Scollega il contatto"
 
 #: src/components/CardDetail.vue
+msgid "unlinked {value}"
+msgstr "ha scollegato {value}"
+
+#: src/components/CardDetail.vue
 msgid "unlinked a contact"
 msgstr "ha scollegato un contatto"
+
+#: src/components/CardDetail.vue
+msgid "unlinked a file"
+msgstr "ha scollegato un file"
 
 #: src/components/CardDetail.vue
 #: src/components/ManageTemplatesModal.vue
@@ -5873,7 +5954,7 @@ msgid "Wed"
 msgstr "Mer"
 
 #: src/components/BoardSettingsModal.vue:2210
-#: src/components/CardDetail.vue:5070
+#: src/components/CardDetail.vue:5115
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "settimana"
@@ -5974,7 +6055,7 @@ msgid "wrote"
 msgstr "ha scritto"
 
 #: src/components/BoardSettingsModal.vue:2212
-#: src/components/CardDetail.vue:5072
+#: src/components/CardDetail.vue:5117
 msgid "year"
 msgid_plural "years"
 msgstr[0] "anno"
