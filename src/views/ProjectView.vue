@@ -971,19 +971,6 @@ async function handleDeleteComment(comment) {
 	color: var(--color-text-maxcontrast);
 }
 .project-view__desc-rendered :deep(a) { color: var(--color-primary-element); }
-.project-view__desc-rendered :deep(code) {
-	background: var(--color-border);
-	border-radius: 3px;
-	padding: 2px 5px;
-	font-size: 0.875em;
-}
-.project-view__desc-rendered :deep(pre) {
-	background: var(--color-background-dark);
-	border-radius: var(--border-radius);
-	padding: 10px 12px;
-	overflow: auto;
-}
-.project-view__desc-rendered :deep(pre) code { background: none; padding: 0; }
 
 .project-view__desc-placeholder {
 	display: inline-flex;

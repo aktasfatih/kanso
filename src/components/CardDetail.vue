@@ -8308,18 +8308,6 @@ async function handleToggleProject(projectId) {
 }
 .card-modal__desc-rendered :deep(p) { margin: 0 0 0.7em; }
 .card-modal__desc-rendered :deep(p:last-child) { margin-bottom: 0; }
-.card-modal__desc-rendered :deep(code) {
-	background: var(--color-border);
-	border-radius: 3px;
-	padding: 2px 5px;
-	font-size: 0.875em;
-}
-.card-modal__desc-rendered :deep(pre) {
-	background: var(--color-background-dark);
-	border-radius: var(--border-radius);
-	padding: 10px 12px;
-	overflow: auto;
-}
 .card-modal__desc-placeholder {
 	text-align: left;
 	padding: 16px;
@@ -9406,12 +9394,6 @@ async function handleToggleProject(projectId) {
 }
 .card-modal__comment-body :deep(p) { margin: 0 0 0.5em; }
 .card-modal__comment-body :deep(p:last-child) { margin-bottom: 0; }
-.card-modal__comment-body :deep(code) {
-	background: var(--color-border);
-	border-radius: 3px;
-	padding: 1px 4px;
-	font-size: 0.85em;
-}
 .card-modal__comment-controls {
 	display: flex;
 	flex-wrap: wrap;

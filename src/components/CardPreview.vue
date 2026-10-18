@@ -523,19 +523,6 @@ onBeforeUnmount(() => {
 /* Indent + markers come from the shared `.kanso-md` rules (src/styles/markdown.css). */
 .card-preview__desc-rendered :deep(ul),
 .card-preview__desc-rendered :deep(ol) { margin: 0.4em 0; }
-.card-preview__desc-rendered :deep(code) {
-	font-family: var(--font-face-monospace, monospace);
-	background: var(--color-background-dark);
-	padding: 1px 4px;
-	border-radius: 4px;
-	font-size: 0.85em;
-}
-.card-preview__desc-rendered :deep(pre) {
-	background: var(--color-background-dark);
-	padding: 8px 10px;
-	border-radius: 6px;
-	overflow-x: auto;
-}
 .card-preview__desc-rendered :deep(a) { color: var(--color-primary-element); }
 
 .card-preview__desc-empty {

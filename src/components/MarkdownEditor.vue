@@ -134,6 +134,16 @@ Emits:
 			<button
 				type="button"
 				class="kanso-md-editor__tb-btn"
+				:class="{ 'kanso-md-editor__tb-btn--active': editor.isActive('codeBlock') }"
+				:disabled="disabled"
+				:title="t('kanso', 'Code block')"
+				:aria-label="t('kanso', 'Code block')"
+				@click="editor.chain().focus().toggleCodeBlock().run()">
+				<CodeBracesIcon :size="16" />
+			</button>
+			<button
+				type="button"
+				class="kanso-md-editor__tb-btn"
 				:class="{ 'kanso-md-editor__tb-btn--active': editor.isActive('link') }"
 				:disabled="disabled"
 				:title="t('kanso', 'Link')"
@@ -190,6 +200,7 @@ import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted
 import FormatListNumberedIcon from 'vue-material-design-icons/FormatListNumbered.vue'
 import FormatQuoteOpenIcon from 'vue-material-design-icons/FormatQuoteOpen.vue'
 import CodeTagsIcon from 'vue-material-design-icons/CodeTags.vue'
+import CodeBracesIcon from 'vue-material-design-icons/CodeBraces.vue'
 import LinkVariantIcon from 'vue-material-design-icons/LinkVariant.vue'
 
 // tiptap-markdown has no built-in serializer for the mention node. With
