@@ -115,6 +115,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</NcActionButton>
 						<NcActionText
 							v-if="(templatesLoadedByStack[rows[vRow.index].stackId] ?? false) && (templatesByStack[rows[vRow.index].stackId] ?? []).length === 0">
+							<!-- Icon insets the text; see StackColumn.vue (#10833). -->
+							<template #icon>
+								<InformationOutlineIcon :size="20" />
+							</template>
 							{{ t('kanso', 'No templates yet. Open any card and choose "Mark as template" from its actions menu.') }}
 						</NcActionText>
 						<!-- Entry to the board-scoped template manager, exactly as the kanban
@@ -399,6 +403,7 @@ import TimerOutlineIcon from 'vue-material-design-icons/TimerOutline.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
+import InformationOutlineIcon from 'vue-material-design-icons/InformationOutline.vue'
 import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
 import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'

@@ -308,7 +308,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</template>
 					{{ tpl.title }}
 				</NcActionButton>
+				<!-- The icon is what insets the empty-state text: NcActionText has no
+				     padding of its own and takes its left gap from the icon column, so
+				     without one the paragraph sat flush against the popover edge (#10833). -->
 				<NcActionText v-if="templatesLoaded && templates.length === 0">
+					<template #icon>
+						<InformationOutlineIcon :size="20" />
+					</template>
 					{{ t('kanso', 'No templates yet. Open any card and choose "Mark as template" from its actions menu.') }}
 				</NcActionText>
 				<!-- Discoverable entry to the board-scoped template manager (view /
@@ -415,6 +421,7 @@ import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import TextBoxOutlineIcon from 'vue-material-design-icons/TextBoxOutline.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
+import InformationOutlineIcon from 'vue-material-design-icons/InformationOutline.vue'
 import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
 import CardTile from './CardTile.vue'
 import { cssColor } from '../services/color.js'
