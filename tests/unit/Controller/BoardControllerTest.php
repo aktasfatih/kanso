@@ -153,7 +153,8 @@ class BoardControllerTest extends TestCase {
 			$this->subscriptionService,
 			$this->boardAccess,
 			$cardSummaryService,
-			$this->cardRelationService
+			$this->cardRelationService,
+			$this->cardRelationMapper,
 		);
 	}
 
@@ -526,7 +527,7 @@ class BoardControllerTest extends TestCase {
 		$this->cardMapper->method('childProgressByBoard')->willReturn([]);
 		$this->commentMapper->method('countsByBoard')->willReturn([]);
 		$this->cardReviewMapper->method('reviewStatesByBoard')->willReturn([]);
-		$this->cardRelationMapper->method('blockedCardIdsByBoard')->willReturn([]);
+		$this->cardRelationMapper->method('liveBlocksEdgesByBoard')->willReturn([]);
 	}
 
 	public function testChangesResyncsWhenCursorIsZero(): void {
@@ -617,6 +618,7 @@ class BoardControllerTest extends TestCase {
 		self::assertSame([], $data['cards']['upsert'][0]['labelIds']);
 		self::assertSame(['total' => 0, 'done' => 0, 'overdue' => 0], $data['cards']['upsert'][0]['checklist']);
 		self::assertFalse($data['cards']['upsert'][0]['blocked']);
+		self::assertFalse($data['cards']['upsert'][0]['blocking']);
 		self::assertArrayNotHasKey('description', $data['cards']['upsert'][0]);
 		self::assertSame([], $data['cards']['remove']);
 	}
@@ -661,6 +663,73 @@ class BoardControllerTest extends TestCase {
 		self::assertFalse($data['resync']);
 		self::assertSame([], $data['cards']['upsert']);
 		self::assertSame([42], $data['cards']['remove']);
+	}
+
+	/**
+	 * KANSO-330: completing / reopening / deleting a card flips the badge of
+	 * the card at the other end of each blocks edge, but only the touched card
+	 * writes a change row. The delta must re-serialize that neighbour too, or
+	 * its tile keeps a stale `blocked` / `blocking` chip until a full reload.
+	 */
+	public function testChangesAlsoUpsertsBlocksNeighboursOfTouchedCards(): void {
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(8);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([
+			$this->change(8, Change::ENTITY_CARD, 42, Change::ACTION_UPDATE),
+		]);
+		$this->stubEnrichmentEmpty();
+		$this->cardRelationMapper->expects(self::once())
+			->method('blocksNeighbourIds')->with([42])->willReturn([43]);
+
+		$touched = new Card();
+		$touched->setId(42);
+		$touched->setBoardId(1);
+		$touched->setStackId(3);
+		$touched->setTitle('Blocker, just completed');
+		$neighbour = new Card();
+		$neighbour->setId(43);
+		$neighbour->setBoardId(1);
+		$neighbour->setStackId(3);
+		$neighbour->setTitle('No longer blocked');
+		$this->cardMapper->expects(self::once())
+			->method('findSummariesByIds')->with(1, [42, 43])->willReturn([$touched, $neighbour]);
+		$this->stackMapper->method('findByIds')->willReturn([]);
+
+		$data = $this->controller->changes(1, 5)->getData();
+		self::assertSame([42, 43], array_column($data['cards']['upsert'], 'id'));
+		self::assertFalse($data['cards']['upsert'][1]['blocked']);
+		self::assertSame([], $data['cards']['remove']);
+	}
+
+	/**
+	 * A neighbour the viewer can not see (or one already deleted) drops out
+	 * of the viewer-scoped summary read - and must then be OMITTED, never
+	 * reported as a `remove`: the window never touched it, so a remove would
+	 * make the client drop a card for no reason (or announce a hidden id).
+	 */
+	public function testChangesNeverRemovesAnUnseenBlocksNeighbour(): void {
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(8);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([
+			$this->change(8, Change::ENTITY_CARD, 42, Change::ACTION_UPDATE),
+		]);
+		$this->stubEnrichmentEmpty();
+		$this->cardRelationMapper->method('blocksNeighbourIds')->willReturn([77]);
+
+		$touched = new Card();
+		$touched->setId(42);
+		$touched->setBoardId(1);
+		$touched->setStackId(3);
+		$touched->setTitle('Visible');
+		// 77 is hidden from this viewer: absent from the live summary read.
+		$this->cardMapper->method('findSummariesByIds')->with(1, [42, 77])->willReturn([$touched]);
+		$this->stackMapper->method('findByIds')->willReturn([]);
+
+		$data = $this->controller->changes(1, 5)->getData();
+		self::assertSame([42], array_column($data['cards']['upsert'], 'id'));
+		self::assertSame([], $data['cards']['remove']);
 	}
 
 	public function testChangesEmptyWindowStillAdvancesCursor(): void {
@@ -715,7 +784,7 @@ class BoardControllerTest extends TestCase {
 		$this->cardMapper->method('childProgressByBoard')->willReturn([]);
 		$this->commentMapper->method('countsByBoard')->willReturn([]);
 		$this->cardReviewMapper->method('reviewStatesByBoard')->willReturn([]);
-		$this->cardRelationMapper->method('blockedCardIdsByBoard')->willReturn([]);
+		$this->cardRelationMapper->method('liveBlocksEdgesByBoard')->willReturn([]);
 
 		$shown = $this->controller->show(1)->getData()['cards'][0];
 		$delta = $this->controller->changes(1, 5)->getData()['cards']['upsert'][0];

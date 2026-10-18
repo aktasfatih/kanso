@@ -200,46 +200,105 @@ class CardRelationMapper extends QBMapper {
 	}
 
 	/**
-	 * Card ids on the board that are blocked by at least one NOT-done card -
-	 * powers the tile "blocked" badge in one board-scoped query.
+	 * Every LIVE `blocks` edge on the board - the source card not done, neither
+	 * end deleted - as one board-scoped query that powers BOTH tile badges:
+	 * the target is "blocked", the source is "blocking" while the target is
+	 * still open. `toDone` rides along so the caller can tell the two apart
+	 * off one result instead of paying a second query per badge.
 	 *
-	 * @return int[]
+	 * @return list<array{from: int, to: int, toDone: bool}>
 	 * @throws Exception
 	 */
-	public function blockedCardIdsByBoard(int $boardId): array {
-		return $this->blockedCardIdsByBoards([$boardId]);
+	public function liveBlocksEdgesByBoard(int $boardId): array {
+		return $this->liveBlocksEdgesByBoards([$boardId]);
 	}
 
 	/**
-	 * The BOARD-SET twin of {@see self::blockedCardIdsByBoard()} (#10298): the
-	 * same id list over MANY boards in ONE query, for the cross-board Views
+	 * The BOARD-SET twin of {@see self::liveBlocksEdgesByBoard()} (#10298): the
+	 * same edge list over MANY boards in ONE query, for the cross-board Views
 	 * feed - whose enrichment must not scale with how many boards the user can
-	 * read. Card ids are globally unique, so the union needs no per-board
-	 * nesting.
+	 * read. Card ids are globally unique (and a relation never spans boards),
+	 * so the union needs no per-board nesting.
 	 *
 	 * @param int[] $boardIds
-	 * @return int[]
+	 * @return list<array{from: int, to: int, toDone: bool}>
 	 * @throws Exception
 	 */
-	public function blockedCardIdsByBoards(array $boardIds): array {
+	public function liveBlocksEdgesByBoards(array $boardIds): array {
 		if ($boardIds === []) {
 			return [];
 		}
 		$qb = $this->db->getQueryBuilder();
-		$qb->selectDistinct('r.other_card_id')
+		$qb->select('r.card_id', 'r.other_card_id')
+			->selectAlias('dst.done_at', 'to_done_at')
 			->from($this->getTableName(), 'r')
-			->innerJoin('r', 'kanso_cards', 'blocker', $qb->expr()->eq('r.card_id', 'blocker.id'))
+			->innerJoin('r', 'kanso_cards', 'src', $qb->expr()->eq('r.card_id', 'src.id'))
+			->innerJoin('r', 'kanso_cards', 'dst', $qb->expr()->eq('r.other_card_id', 'dst.id'))
 			->where($qb->expr()->in('r.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('r.type', $qb->createNamedParameter(CardRelation::TYPE_BLOCKS)))
-			->andWhere($qb->expr()->eq('blocker.done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->eq('blocker.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+			// A done blocker blocks nothing, so it is neither "blocking" nor
+			// makes its target "blocked" - drop it in SQL, not in PHP.
+			->andWhere($qb->expr()->eq('src.done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('src.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('dst.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
 
 		$result = $qb->executeQuery();
-		$ids = [];
+		$edges = [];
 		while (($row = $result->fetch()) !== false) {
-			$ids[] = (int)$row['other_card_id'];
+			$edges[] = [
+				'from' => (int)$row['card_id'],
+				'to' => (int)$row['other_card_id'],
+				'toDone' => ((int)$row['to_done_at']) > 0,
+			];
 		}
 		$result->closeCursor();
-		return $ids;
+		return $edges;
+	}
+
+	/**
+	 * Ids of the cards at the OTHER end of any `blocks` edge touching $cardIds,
+	 * in either direction - the delta-sync neighbour set. Completing,
+	 * reopening or deleting a card flips its neighbours' blocked/blocking
+	 * badges without writing a change row for them, so the delta endpoint
+	 * re-serializes these alongside the touched cards.
+	 *
+	 * Deliberately UNFILTERED by done/deleted: the touched card may itself be
+	 * the one just deleted or completed, and that is exactly the edge whose
+	 * far end needs refreshing. The caller's viewer-scoped summary read drops
+	 * anything the viewer can not (or no longer) see.
+	 *
+	 * @param int[] $cardIds
+	 * @return int[] distinct, excluding $cardIds themselves
+	 * @throws Exception
+	 */
+	public function blocksNeighbourIds(array $cardIds): array {
+		if ($cardIds === []) {
+			return [];
+		}
+		$neighbours = [];
+		// Chunked like every other unbounded IN list in the app
+		// ({@see BoardCascade::CHUNK_SIZE}): a big delta window can touch more
+		// cards than one statement should carry.
+		foreach (array_chunk(array_values($cardIds), BoardCascade::CHUNK_SIZE) as $chunk) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('card_id', 'other_card_id')
+				->from($this->getTableName())
+				->where($qb->expr()->eq('type', $qb->createNamedParameter(CardRelation::TYPE_BLOCKS)))
+				->andWhere($qb->expr()->orX(
+					$qb->expr()->in('card_id', $qb->createNamedParameter($chunk, IQueryBuilder::PARAM_INT_ARRAY)),
+					$qb->expr()->in('other_card_id', $qb->createNamedParameter($chunk, IQueryBuilder::PARAM_INT_ARRAY)),
+				));
+
+			$result = $qb->executeQuery();
+			while (($row = $result->fetch()) !== false) {
+				$neighbours[(int)$row['card_id']] = true;
+				$neighbours[(int)$row['other_card_id']] = true;
+			}
+			$result->closeCursor();
+		}
+		foreach ($cardIds as $id) {
+			unset($neighbours[$id]);
+		}
+		return array_keys($neighbours);
 	}
 }

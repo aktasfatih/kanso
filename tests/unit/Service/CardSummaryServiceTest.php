@@ -82,7 +82,8 @@ class CardSummaryServiceTest extends TestCase {
 		$this->checklistItemMapper->method('waitingByBoard')->with(1)->willReturn([3 => 1700000000]);
 		$this->cardMapper->method('childProgressByBoard')->with(1)->willReturn([3 => ['total' => 2, 'done' => 1]]);
 		$this->commentMapper->method('countsByBoard')->with(1)->willReturn([3 => 5]);
-		$this->cardRelationMapper->method('blockedCardIdsByBoard')->with(1)->willReturn([3]);
+		// Card 9 (open, off-list) blocks card 3.
+		$this->cardRelationMapper->method('liveBlocksEdgesByBoard')->with(1)->willReturn([['from' => 9, 'to' => 3, 'toDone' => false]]);
 		// Card 3 has an enabled recurrence rule; card 4 does not.
 		$this->recurRuleMapper->method('findTemplateCardIdsByBoard')->with(1)->willReturn([3]);
 		// Card 3 has a running timer; card 4 does not.
@@ -101,6 +102,7 @@ class CardSummaryServiceTest extends TestCase {
 		self::assertTrue($out[0]['waitingOnExternal']);
 		self::assertSame(1700000000, $out[0]['waitingSince']);
 		self::assertTrue($out[0]['blocked']);
+		self::assertFalse($out[0]['blocking']);
 		self::assertTrue($out[0]['recurring']);
 		self::assertTrue($out[0]['timerRunning']);
 		self::assertArrayNotHasKey('description', $out[0]);
@@ -112,8 +114,48 @@ class CardSummaryServiceTest extends TestCase {
 		self::assertFalse($out[1]['waitingOnExternal']);
 		self::assertNull($out[1]['waitingSince']);
 		self::assertFalse($out[1]['blocked']);
+		self::assertFalse($out[1]['blocking']);
 		self::assertFalse($out[1]['recurring']);
 		self::assertFalse($out[1]['timerRunning']);
+	}
+
+	/**
+	 * `blocking` is the mirror of `blocked` off the SAME edge list (KANSO-330):
+	 * the source of a live blocks edge is blocking while its target is open,
+	 * the target is blocked either way (unchanged `blocked` semantics). A
+	 * blocker whose target is already done holds nothing up, so it must NOT
+	 * read blocking - that is the one case where the two badges are not a
+	 * plain pair.
+	 */
+	public function testBlockingMirrorsBlockedAndIgnoresDoneTargets(): void {
+		$cards = [];
+		foreach ([3, 4, 5, 6, 7] as $id) {
+			$card = new Card();
+			$card->setId($id);
+			$card->setBoardId(1);
+			$card->setStackId(2);
+			$card->setTitle('card ' . $id);
+			$cards[] = $card;
+		}
+		$this->cardRelationMapper->expects(self::once())->method('liveBlocksEdgesByBoard')->with(1)->willReturn([
+			['from' => 3, 'to' => 4, 'toDone' => false],
+			['from' => 5, 'to' => 6, 'toDone' => true],
+		]);
+
+		$viewer = ViewerContext::forMember('alice', 1, ViewerContext::ROLE_INTERNAL, true);
+		$out = array_column($this->service->serialize(1, $cards, $viewer), null, 'id');
+
+		self::assertTrue($out[3]['blocking']);
+		self::assertFalse($out[3]['blocked']);
+		self::assertTrue($out[4]['blocked']);
+		self::assertFalse($out[4]['blocking']);
+		self::assertFalse($out[5]['blocking'], 'a blocker of a done card holds nothing up');
+		self::assertFalse($out[5]['blocked']);
+		self::assertTrue($out[6]['blocked']);
+		self::assertFalse($out[6]['blocking']);
+		// No edges at all: both present, both false.
+		self::assertFalse($out[7]['blocked']);
+		self::assertFalse($out[7]['blocking']);
 	}
 
 	/**
@@ -172,8 +214,9 @@ class CardSummaryServiceTest extends TestCase {
 		$this->commentMapper->method('countsByBoards')->willReturn([3 => 5]);
 		$this->cardReviewMapper->method('reviewStatesByBoard')->willReturn([3 => 'pending']);
 		$this->cardReviewMapper->method('reviewStatesByBoards')->willReturn([3 => 'pending']);
-		$this->cardRelationMapper->method('blockedCardIdsByBoard')->willReturn([3]);
-		$this->cardRelationMapper->method('blockedCardIdsByBoards')->willReturn([3]);
+		$edges = [['from' => 3, 'to' => 8, 'toDone' => false], ['from' => 9, 'to' => 3, 'toDone' => false]];
+		$this->cardRelationMapper->method('liveBlocksEdgesByBoard')->willReturn($edges);
+		$this->cardRelationMapper->method('liveBlocksEdgesByBoards')->willReturn($edges);
 		$this->recurRuleMapper->method('findTemplateCardIdsByBoard')->willReturn([3]);
 		$this->recurRuleMapper->method('findTemplateCardIdsByBoards')->willReturn([3]);
 		$this->runningTimerMapper->method('findCardIdsByBoard')->willReturn([3]);
@@ -220,7 +263,7 @@ class CardSummaryServiceTest extends TestCase {
 		$this->cardMapper->expects(self::once())->method('childProgressByBoards')->with($boardIds, 'alice', $roles)->willReturn([]);
 		$this->commentMapper->expects(self::once())->method('countsByBoards')->with($boardIds)->willReturn([]);
 		$this->cardReviewMapper->expects(self::once())->method('reviewStatesByBoards')->with($boardIds)->willReturn([]);
-		$this->cardRelationMapper->expects(self::once())->method('blockedCardIdsByBoards')->with($boardIds)->willReturn([]);
+		$this->cardRelationMapper->expects(self::once())->method('liveBlocksEdgesByBoards')->with($boardIds)->willReturn([]);
 		$this->recurRuleMapper->expects(self::once())->method('findTemplateCardIdsByBoards')->with($boardIds)->willReturn([]);
 		$this->runningTimerMapper->expects(self::once())->method('findCardIdsByBoards')->with($boardIds)->willReturn([]);
 		// …and the board-SCOPED twins are never reached from this path.

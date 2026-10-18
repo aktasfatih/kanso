@@ -11,6 +11,7 @@ use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\CardFieldMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\LabelMapper;
@@ -64,6 +65,7 @@ class BoardController extends Controller {
 		private BoardAccess $boardAccess,
 		private CardSummaryService $cardSummaryService,
 		private CardRelationService $cardRelationService,
+		private CardRelationMapper $cardRelationMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -281,7 +283,19 @@ class BoardController extends Controller {
 			// hidden from THIS viewer is absent from $liveCards and lands in the
 			// remove list below - the client drops it from its cache, and its
 			// change rows (entity_id/action only, no title) leak nothing.
-			$liveCards = $this->cardSummaryService->serialize($id, $this->cardMapper->findSummariesByIds($id, $cardIds, $viewer), $viewer);
+			//
+			// Blocks neighbours ride along: completing, reopening or deleting a card
+			// flips the `blocked` / `blocking` badge of the card at the other end of
+			// each blocks edge, yet only the touched card writes a change row - so
+			// without this the neighbour's tile would keep a stale badge until the
+			// next full board read. They join the UPSERT set only: $removedCardIds
+			// below is computed over the window's own ids, so a neighbour hidden
+			// from this viewer (or already deleted) is simply omitted, never
+			// reported as a remove for a card the window never touched.
+			$upsertIds = $cardIds === []
+				? []
+				: array_values(array_unique(array_merge($cardIds, $this->cardRelationMapper->blocksNeighbourIds($cardIds))));
+			$liveCards = $this->cardSummaryService->serialize($id, $this->cardMapper->findSummariesByIds($id, $upsertIds, $viewer), $viewer);
 			$presentCardIds = array_flip(array_map(static fn (array $c): int => $c['id'], $liveCards));
 			$removedCardIds = array_values(array_filter(
 				$cardIds,

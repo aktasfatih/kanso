@@ -24,7 +24,7 @@ use OCA\Kanso\Db\RecurRuleMapper;
  * Builds board-card SUMMARIES enriched with the same per-card signal every
  * board-scoped surface carries (labelIds / assigneeIds / contacts / checklist /
  * waitingOnExternal + waitingSince / childProgress / commentCount / reviewState
- * / blocked).
+ * / blocked / blocking).
  *
  * Extracted verbatim from the old {@see \OCA\Kanso\Controller\BoardController}::serializeCardSummaries
  * so the board payload, the delta-sync upsert and the cross-board Views feed
@@ -64,6 +64,7 @@ class CardSummaryService {
 	 * @return list<array<string, mixed>>
 	 */
 	public function serialize(int $boardId, array $cards, ViewerContext $viewer): array {
+		$blocks = self::partitionBlocks($this->cardRelationMapper->liveBlocksEdgesByBoard($boardId));
 		return $this->decorate($cards, [
 			'labelIds' => $this->cardLabelMapper->findLabelIdsByBoard($boardId),
 			'assignees' => $this->cardAssigneeMapper->findUserIdsByBoard($boardId),
@@ -79,8 +80,11 @@ class CardSummaryService {
 			'childProgress' => $this->cardMapper->childProgressByBoard($boardId, $viewer),
 			'commentCount' => $this->commentMapper->countsByBoard($boardId),
 			'reviewState' => $this->cardReviewMapper->reviewStatesByBoard($boardId),
-			// Card ids blocked by a not-done card - drives the tile "blocked" badge.
-			'blocked' => array_flip($this->cardRelationMapper->blockedCardIdsByBoard($boardId)),
+			// Card ids blocked by a not-done card - drives the tile "blocked" badge -
+			// and not-done card ids still holding an open card up ("blocking").
+			// Both come from the ONE edge query above.
+			'blocked' => $blocks['blocked'],
+			'blocking' => $blocks['blocking'],
 			// Template card ids with a live (enabled) recurrence rule - drives the
 			// tile "recurring" badge. Only the boolean presence ships to the summary;
 			// the rrule/rule object stays out of the board payload.
@@ -111,6 +115,7 @@ class CardSummaryService {
 	 * @return list<array<string, mixed>>
 	 */
 	public function serializeForBoards(array $boardIds, array $cards, string $uid, array $rolesByBoard): array {
+		$blocks = self::partitionBlocks($this->cardRelationMapper->liveBlocksEdgesByBoards($boardIds));
 		return $this->decorate($cards, [
 			'labelIds' => $this->cardLabelMapper->findLabelIdsByBoards($boardIds),
 			'assignees' => $this->cardAssigneeMapper->findUserIdsByBoards($boardIds),
@@ -121,10 +126,32 @@ class CardSummaryService {
 			'childProgress' => $this->cardMapper->childProgressByBoards($boardIds, $uid, $rolesByBoard),
 			'commentCount' => $this->commentMapper->countsByBoards($boardIds),
 			'reviewState' => $this->cardReviewMapper->reviewStatesByBoards($boardIds),
-			'blocked' => array_flip($this->cardRelationMapper->blockedCardIdsByBoards($boardIds)),
+			'blocked' => $blocks['blocked'],
+			'blocking' => $blocks['blocking'],
 			'recurring' => array_flip($this->recurRuleMapper->findTemplateCardIdsByBoards($boardIds)),
 			'timerRunning' => array_flip($this->runningTimerMapper->findCardIdsByBoards($boardIds)),
 		]);
+	}
+
+	/**
+	 * Splits the live `blocks` edges into the two badge sets, keyed by card id.
+	 * The edges already exclude done / deleted blockers, so every target is
+	 * blocked; a source is only "blocking" while its target is still open -
+	 * a blocker of a finished card holds nothing up.
+	 *
+	 * @param list<array{from: int, to: int, toDone: bool}> $edges
+	 * @return array{blocked: array<int, int>, blocking: array<int, int>}
+	 */
+	private static function partitionBlocks(array $edges): array {
+		$blocked = [];
+		$blocking = [];
+		foreach ($edges as $edge) {
+			$blocked[$edge['to']] = 1;
+			if (!$edge['toDone']) {
+				$blocking[$edge['from']] = 1;
+			}
+		}
+		return ['blocked' => $blocked, 'blocking' => $blocking];
 	}
 
 	/**
@@ -145,6 +172,7 @@ class CardSummaryService {
 	 *     commentCount: array<int, int>,
 	 *     reviewState: array<int, string>,
 	 *     blocked: array<int, int>,
+	 *     blocking: array<int, int>,
 	 *     recurring: array<int, int>,
 	 *     timerRunning: array<int, int>,
 	 * } $maps
@@ -169,6 +197,7 @@ class CardSummaryService {
 				+ ['commentCount' => $maps['commentCount'][$card->getId()] ?? 0]
 				+ ['reviewState' => $maps['reviewState'][$card->getId()] ?? null]
 				+ ['blocked' => isset($maps['blocked'][$card->getId()])]
+				+ ['blocking' => isset($maps['blocking'][$card->getId()])]
 				+ ['recurring' => isset($maps['recurring'][$card->getId()])]
 				+ ['timerRunning' => isset($maps['timerRunning'][$card->getId()])],
 			$cards

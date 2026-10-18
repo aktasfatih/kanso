@@ -33,15 +33,40 @@ test.describe('Card relations (#3404)', () => {
 		expect(a.relations.blocks.map((r) => r.cardId)).toContain(state.b)
 		expect(b.relations.blockedBy.map((r) => r.cardId)).toContain(state.a)
 
-		// The board payload flags B blocked (its blocker A isn't done), A not.
+		// The board payload flags B blocked (its blocker A isn't done), A not -
+		// and the mirror badge (KANSO-330): A is blocking, B is not.
 		let board = await api.get(`/boards/${state.boardId}`)
 		expect(boardCard(board, state.b).blocked).toBe(true)
 		expect(boardCard(board, state.a).blocked).toBe(false)
+		expect(boardCard(board, state.a).blocking).toBe(true)
+		expect(boardCard(board, state.b).blocking).toBe(false)
 
-		// Completing the blocker clears the badge.
+		// Completing the BLOCKED card: A still blocks it on paper, but holds
+		// nothing up any more, so A stops reading "blocking"; reopening restores it.
+		await api.patch(`/cards/${state.b}`, { done: true })
+		board = await api.get(`/boards/${state.boardId}`)
+		expect(boardCard(board, state.a).blocking).toBe(false)
+		await api.patch(`/cards/${state.b}`, { done: false })
+		board = await api.get(`/boards/${state.boardId}`)
+		expect(boardCard(board, state.a).blocking).toBe(true)
+
+		// Completing the blocker clears BOTH badges...
+		const cursor = board.cursor
 		await api.patch(`/cards/${state.a}`, { done: true })
 		board = await api.get(`/boards/${state.boardId}`)
 		expect(boardCard(board, state.b).blocked).toBe(false)
+		expect(boardCard(board, state.a).blocking).toBe(false)
+
+		// ...and the delta carries the neighbour too: only A wrote a change row,
+		// yet B's tile must refresh live, so B rides the upsert set unblocked.
+		const delta = await api.get(`/boards/${state.boardId}/changes?since=${cursor}`)
+		expect(delta.resync).toBe(false)
+		const upsertedB = delta.cards.upsert.find((c) => c.id === state.b)
+		expect(upsertedB).toBeTruthy()
+		expect(upsertedB.blocked).toBe(false)
+		expect(delta.cards.upsert.find((c) => c.id === state.a).blocking).toBe(false)
+		expect(delta.cards.remove).not.toContain(state.b)
+
 		await api.patch(`/cards/${state.a}`, { done: false })
 	})
 
