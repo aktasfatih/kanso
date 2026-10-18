@@ -291,7 +291,7 @@ msgstr[0] "%n karta"
 msgstr[1] "%n karty"
 msgstr[2] "%n kart"
 
-#: src/components/StackColumn.vue:1061
+#: src/components/StackColumn.vue:1064
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "Zarchiwizowano %n kartę"

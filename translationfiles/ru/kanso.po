@@ -291,7 +291,7 @@ msgstr[0] "%n карточка"
 msgstr[1] "%n карточки"
 msgstr[2] "%n карточек"
 
-#: src/components/StackColumn.vue:1061
+#: src/components/StackColumn.vue:1064
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "Архивирована %n карточка"

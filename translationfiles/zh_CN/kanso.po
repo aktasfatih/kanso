@@ -281,7 +281,7 @@ msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] "%n 张卡片"
 
-#: src/components/StackColumn.vue:1061
+#: src/components/StackColumn.vue:1064
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "已归档 %n 张卡片"
