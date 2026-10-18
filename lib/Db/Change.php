@@ -89,6 +89,12 @@ class Change extends Entity {
 	public const VERB_ATTACHMENT_ADDED = 25;
 	public const VERB_ATTACHMENT_REMOVED = 26;
 
+	// Live Files links (KANSO-307). Distinct from the attachment verbs: a link
+	// copies no bytes, so "attached" would misdescribe it. The filename snapshot
+	// rides `kanso_change_details` the same way (`to` on link, `from` on unlink).
+	public const VERB_FILE_LINKED = 27;
+	public const VERB_FILE_UNLINKED = 28;
+
 	// Properties default to null (not to 0 / a constant): Entity::setter()
 	// skips values equal to the current one, so e.g. a default of
 	// ACTION_CREATE would silently drop `action` from INSERTs of create

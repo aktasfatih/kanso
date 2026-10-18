@@ -97,6 +97,7 @@ class BoardCascade {
 		'kanso_card_attachments' => ['card_id'],
 		'kanso_card_contacts' => ['card_id'],
 		'kanso_card_field_values' => ['card_id'],
+		'kanso_card_file_links' => ['card_id'],
 		'kanso_card_labels' => ['card_id'],
 		'kanso_card_links' => ['card_id'],
 		'kanso_card_relations' => ['card_id', 'other_card_id'],

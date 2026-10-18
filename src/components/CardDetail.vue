@@ -1829,11 +1829,47 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										@click="pickAttachmentFromFiles">
 										{{ attachFromFiles.isPending.value ? t('kanso', 'Copying…') : t('kanso', 'Choose from Files') }}
 									</NcButton>
+									<!-- KANSO-307 — the LIVE counterpart of the copy above: stores a
+									     reference to the node, so the card always opens the current
+									     file in Files. Same canEdit gate; the server re-checks EDIT
+									     and that the linker can read the node. -->
+									<NcButton
+										type="secondary"
+										class="card-modal__file-link-add"
+										:title="t('kanso', 'Link the file itself — the card opens the current version in Files')"
+										:disabled="addFileLink.isPending.value"
+										@click="pickFileLink">
+										{{ addFileLink.isPending.value ? t('kanso', 'Linking…') : t('kanso', 'Link from Files') }}
+									</NcButton>
 								</template>
 							</div>
 							<p v-if="canEdit" class="card-modal__attachment-hint">
 								{{ t('kanso', 'Choosing from Files stores a copy on the card — editing, renaming or deleting the original in Files does not change it.') }}
 							</p>
+							<!-- KANSO-307 — live Files links. Every member sees the chip (the
+							     owner ruled out a per-viewer read check); it opens NC's own
+							     /f/<fileid> permalink, so Files' ACL decides on open. -->
+							<ul v-if="cardFileLinks.length > 0" class="card-modal__links-list">
+								<li v-for="fl in cardFileLinks" :key="fl.id" class="card-modal__link-row">
+									<a
+										:href="fileLinkHref(fl.fileId)"
+										target="_blank"
+										rel="noopener noreferrer"
+										class="card-modal__link card-modal__file-link">
+										<LinkVariantIcon :size="14" class="card-modal__eyebrow-icon" />
+										<span class="card-modal__link-text">{{ fl.name }}</span>
+										<OpenInNewIcon :size="14" class="card-modal__link-ext" />
+									</a>
+									<button
+										v-if="canEdit"
+										class="card-modal__child-remove"
+										:title="t('kanso', 'Remove link to {name}', { name: fl.name })"
+										:aria-label="t('kanso', 'Remove link to {name}', { name: fl.name })"
+										@click="handleRemoveFileLink(fl.id)">
+										<CloseIcon :size="14" />
+									</button>
+								</li>
+							</ul>
 							<ul v-if="cardAttachments.length > 0" class="card-modal__links-list">
 								<li v-for="att in cardAttachments" :key="att.id" class="card-modal__link-row">
 									<div class="card-modal__attachment">
@@ -2746,6 +2782,7 @@ import { initial, between, after, before } from '../services/sortKey.js'
 import { useSubscription } from '../composables/useSubscription.js'
 import { useCardLinks, branchName } from '../composables/useCardLinks.js'
 import { useCardAttachments } from '../composables/useCardAttachments.js'
+import { useCardFileLinks } from '../composables/useCardFileLinks.js'
 import { useCardTimeEntries } from '../composables/useCardTimeEntries.js'
 import { cardAttachmentUrl, cardAttachmentInlineUrl } from '../services/api.js'
 import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, moveCardToBoard as apiMoveCardToBoard, moveCard as apiMoveCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
@@ -4686,6 +4723,8 @@ const ACTIVITY_VERBS = {
 	24: () => t('kanso', 'reopened a thread'),
 	25: () => t('kanso', 'attached a file'),
 	26: () => t('kanso', 'removed an attachment'),
+	27: () => t('kanso', 'linked a file'),
+	28: () => t('kanso', 'unlinked a file'),
 }
 function activityVerbText(item) {
 	const fn = ACTIVITY_VERBS[item.verb]
@@ -4788,6 +4827,12 @@ function activitySegments(item) {
 		break
 	case 26: // attachment removed
 		if (d && d.from) return withOne(t('kanso', 'removed the attachment {value}'), d.from)
+		break
+	case 27: // Files link added (KANSO-307)
+		if (d && d.to) return withOne(t('kanso', 'linked {value}'), d.to)
+		break
+	case 28: // Files link removed
+		if (d && d.from) return withOne(t('kanso', 'unlinked {value}'), d.from)
 		break
 	}
 	// Description (16) keeps the collapsible diff below; every other case falls
@@ -6379,6 +6424,60 @@ async function handleRemoveAttachment(attachmentId) {
 		await removeAttachment.mutateAsync(attachmentId)
 	} catch (e) {
 		attachmentError.value = e?.response?.data?.error || t('kanso', 'Failed to remove attachment.')
+	}
+}
+
+// ── Live Files links (KANSO-307) ─────────────────────────────────────────────
+// The reference counterpart of "Choose from Files": nothing is copied, the card
+// keeps the node's id and opens NC's /f/<fileid> permalink. There is no
+// per-viewer read check (owner ruling) - a member without access to the node
+// still sees the chip and Files' own ACL denies on open. Errors share the
+// section's attachmentError line.
+const { fileLinks: cardFileLinksData, addFileLink, removeFileLink } = useCardFileLinks(computed(() => props.cardId))
+const cardFileLinks = computed(() => cardFileLinksData.value ?? [])
+
+function fileLinkHref(fileId) {
+	return generateUrl('/f/{fileId}', { fileId })
+}
+
+// Same picker chain as pickAttachmentFromFiles; FilePickerClosed is a cancel.
+async function pickFileLink() {
+	attachmentError.value = ''
+	let nodes = []
+	try {
+		nodes = await getFilePickerBuilder(t('kanso', 'Choose a file to link'))
+			.setMultiSelect(false)
+			.allowDirectories(false)
+			.addButton({
+				label: t('kanso', 'Link file'),
+				variant: 'primary',
+				callback: () => {},
+			})
+			.build()
+			.pickNodes()
+	} catch (e) {
+		if (!(e instanceof FilePickerClosed)) {
+			attachmentError.value = t('kanso', 'Failed to link the file.')
+		}
+		return
+	}
+
+	const fileId = Number(nodes?.[0]?.fileid)
+	if (!Number.isInteger(fileId) || fileId <= 0) return
+
+	try {
+		await addFileLink.mutateAsync(fileId)
+	} catch (e) {
+		attachmentError.value = e?.response?.data?.error || t('kanso', 'Failed to link the file.')
+	}
+}
+
+async function handleRemoveFileLink(linkId) {
+	attachmentError.value = ''
+	try {
+		await removeFileLink.mutateAsync(linkId)
+	} catch (e) {
+		attachmentError.value = e?.response?.data?.error || t('kanso', 'Failed to remove the file link.')
 	}
 }
 

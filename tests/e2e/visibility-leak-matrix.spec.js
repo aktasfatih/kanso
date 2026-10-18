@@ -290,6 +290,11 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 		{ method: 'GET', path: `/cards/${id}/activity` },
 		{ method: 'GET', path: `/cards/${id}/relations` },
 		{ method: 'GET', path: `/cards/${id}/attachments` },
+		// Live Files links (KANSO-307): visibility answers before the fileId is
+		// ever resolved, and before the link id is looked up.
+		{ method: 'GET', path: `/cards/${id}/file-links` },
+		{ method: 'POST', path: `/cards/${id}/file-links`, body: { fileId: 1 } },
+		{ method: 'DELETE', path: `/cards/${id}/file-links/1` },
 		{ method: 'GET', path: `/cards/${id}/time-entries` },
 		{ method: 'GET', path: `/cards/${id}/checklist` },
 		{ method: 'POST', path: `/cards/${id}/move`, body: { targetStackId: state.stackId } },

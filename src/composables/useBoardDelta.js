@@ -63,6 +63,7 @@ const CARD_DETAIL_KEY_PREFIXES = new Set([
 	'checklist',
 	'card-links',
 	'card-attachments',
+	'card-file-links',
 	'card-time-entries',
 	'card-activity',
 ])
