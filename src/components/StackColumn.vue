@@ -1004,12 +1004,15 @@ onUnmounted(() => {
 	stackDragCleanup()
 })
 
-function openCard(cardId) {
+// `boardId` is passed by the card-created toast, which outlives a route change:
+// clicking "Open" after switching boards must open the card on ITS board, not
+// pair the current board's id with another board's card.
+function openCard(cardId, boardId = route.params.id) {
 	// Notify BoardView so keyboard focusedCardId stays in sync with mouse clicks
 	props.onCardFocus?.(cardId)
 	router.push({
 		name: 'card-modal',
-		params: { id: route.params.id, cardId },
+		params: { id: boardId, cardId },
 	})
 }
 
@@ -1128,15 +1131,21 @@ async function createCardsFromText(text) {
 			created = await props.onCreateCard(props.stack.id, parsedTitle, duedate, allDay)
 		}
 		newCardTitle.value = ''
-		// Re-focus for rapid entry - the signature UX
-		composerInputRef.value?.focus()
 		// Single-card create only: a multi-line paste has no one card to open.
-		if (titles.length === 1 && created?.id) showCardCreatedToast(() => openCard(created.id))
+		if (titles.length === 1 && created?.id) showCardCreatedToast(() => openCard(created.id, created.boardId))
 	} catch (err) {
 		composerError.value =
 			err?.response?.data?.error || t('kanso', 'Failed to create card.')
 	} finally {
 		isPending.value = false
+	}
+	// Re-focus for rapid entry - the signature UX. Only AFTER isPending clears
+	// and the DOM has re-rendered: the input is :disabled while a create is in
+	// flight, and focus() on a disabled input is a silent no-op, which left focus
+	// on <body> after every Enter.
+	if (!composerError.value) {
+		await nextTick()
+		composerInputRef.value?.focus()
 	}
 }
 
@@ -1169,7 +1178,7 @@ async function createFromTemplate(templateId) {
 	isPending.value = true
 	try {
 		const created = await props.onCreateFromTemplate(props.stack.id, templateId)
-		if (created?.id) showCardCreatedToast(() => openCard(created.id))
+		if (created?.id) showCardCreatedToast(() => openCard(created.id, created.boardId))
 	} catch (err) {
 		composerError.value =
 			err?.response?.data?.error || t('kanso', 'Failed to create card from template.')

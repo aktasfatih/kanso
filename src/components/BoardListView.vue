@@ -1184,14 +1184,18 @@ async function createCardsFromText(stackId, text) {
 			created = await props.onCreateCard(stackId, parsedTitle, duedate, allDay)
 		}
 		draftByStack[stackId] = ''
-		// Re-focus for rapid entry
-		composerRefs[stackId]?.focus()
 		// Single-card create only: a multi-line paste has no one card to open.
 		if (titles.length === 1 && created?.id) showCardCreatedToast(() => openCard(created))
 	} catch (err) {
 		errorByStack[stackId] = err?.response?.data?.error || t('kanso', 'Failed to create card.')
 	} finally {
 		isPendingByStack[stackId] = false
+	}
+	// Re-focus for rapid entry, once the input is enabled again: it is :disabled
+	// while the create is in flight and focus() on a disabled input is a no-op.
+	if (!errorByStack[stackId]) {
+		await nextTick()
+		composerRefs[stackId]?.focus()
 	}
 }
 

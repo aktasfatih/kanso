@@ -77,13 +77,17 @@ test.describe('Card-created toast', () => {
 		await page.locator('.board-view__display-menu button').first().click()
 		await page.getByRole('menuitemradio', { name: 'List', exact: true }).click()
 		await page.keyboard.press('Escape')
+		await page.waitForSelector('.board-list-group', { timeout: 15_000 })
 
-		const composer = page.locator('.card-composer__input').first()
+		// Scoped to the list table: the kanban column's composer stays mounted
+		// (hidden) after the view switch, and `.first()` would pick it.
+		const composer = page.locator('.board-list-table .card-composer__input').first()
 		await composer.fill('Toast list card')
 		await composer.press('Enter')
 
 		// short-budget-ok: a toast dismisses itself at TOAST_DEFAULT_TIMEOUT = 7s, so a 15s wait could outlive it
 		await expect(toast(page, 'Card created')).toBeVisible({ timeout: 6_000 })
+		await expect(composer).toBeFocused()
 		await toast(page, 'Card created').getByRole('button', { name: 'Open' }).click()
 
 		await expect.poll(() => cardIdByTitle('Toast list card')).toBeTruthy()

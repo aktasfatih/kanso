@@ -25,7 +25,9 @@ export function showCardCreatedToast(onOpen) {
 	current?.hideToast()
 
 	const node = document.createElement('span')
-	node.append(t('kanso', 'Card created'))
+	// The trailing space is for the screen-reader announcement, which is built
+	// from the node's text: without it, it reads "Card createdOpen".
+	node.append(t('kanso', 'Card created'), ' ')
 
 	const button = document.createElement('button')
 	button.type = 'button'
