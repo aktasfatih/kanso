@@ -96,20 +96,7 @@
 	display: block;
 }
 
-/*
- * Inline code + fenced code blocks. Same asymmetry as the lists/images above:
- * the EDITOR styled both (MarkdownEditor.vue's `.ProseMirror & code` / `& pre`),
- * but each read-only surface carried its own scoped `code` rule that also hit
- * `pre > code`, so a saved multi-line ``` block rendered as stacked inline-code
- * strips, and comments had no `pre` style at all. One shared rule fixes every
- * surface; the per-surface copies are gone because their scoped specificity
- * would out-rank these.
- *
- * Declarations mirror MarkdownEditor.vue so a block looks the same before and
- * after it is saved. `pre code` resets the inline chrome so the block's own
- * background is the only one; `white-space: pre` keeps line breaks and indent
- * (markdown-it emits the raw text inside `<pre><code>`).
- */
+/* Mirrors MarkdownEditor.vue; don't re-add scoped per-surface copies, they out-rank this. */
 .kanso-md code {
 	font-family: var(--font-face-monospace, 'Lucida Console', Monaco, monospace);
 	font-size: 0.85em;

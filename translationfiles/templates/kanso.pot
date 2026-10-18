@@ -285,7 +285,7 @@ msgid_plural "%n cards"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/StackColumn.vue:1064
+#: src/components/StackColumn.vue:1060
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] ""
@@ -315,7 +315,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4925
+#: src/components/CardDetail.vue:4919
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
@@ -327,13 +327,13 @@ msgid_plural "%n files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4923
+#: src/components/CardDetail.vue:4917
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/views/BoardView.vue:2630
+#: src/views/BoardView.vue:2625
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] ""
@@ -357,7 +357,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4921
+#: src/components/CardDetail.vue:4915
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -387,7 +387,7 @@ msgid_plural "%n projects"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:2271
+#: src/components/CardDetail.vue:2265
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -1333,9 +1333,9 @@ msgstr ""
 msgid "Checklist progress {done} of {total}"
 msgstr ""
 
-#: src/components/BoardListView.vue:1077
+#: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:492
+#: src/components/CardTile.vue:489
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] ""
@@ -1878,7 +1878,7 @@ msgid "Date"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2209
-#: src/components/CardDetail.vue:5114
+#: src/components/CardDetail.vue:5108
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -3368,7 +3368,7 @@ msgstr ""
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6941
+#: src/components/CardDetail.vue:6929
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3724,7 +3724,7 @@ msgid "Mon"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2211
-#: src/components/CardDetail.vue:5116
+#: src/components/CardDetail.vue:5110
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -5205,7 +5205,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr ""
 
-#: src/components/CardDetail.vue:6947
+#: src/components/CardDetail.vue:6935
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] ""
@@ -5953,7 +5953,7 @@ msgid "Wed"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2210
-#: src/components/CardDetail.vue:5115
+#: src/components/CardDetail.vue:5109
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -6054,7 +6054,7 @@ msgid "wrote"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2212
-#: src/components/CardDetail.vue:5117
+#: src/components/CardDetail.vue:5111
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

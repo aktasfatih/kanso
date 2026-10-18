@@ -308,9 +308,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</template>
 					{{ tpl.title }}
 				</NcActionButton>
-				<!-- The icon is what insets the empty-state text: NcActionText has no
-				     padding of its own and takes its left gap from the icon column, so
-				     without one the paragraph sat flush against the popover edge (#10833). -->
+				<!-- NcActionText takes its left inset from the icon column. -->
 				<NcActionText v-if="templatesLoaded && templates.length === 0">
 					<template #icon>
 						<InformationOutlineIcon :size="20" />
@@ -1004,9 +1002,7 @@ onUnmounted(() => {
 	stackDragCleanup()
 })
 
-// `boardId` is passed by the card-created toast, which outlives a route change:
-// clicking "Open" after switching boards must open the card on ITS board, not
-// pair the current board's id with another board's card.
+// The card-created toast passes its own boardId because it outlives a route change.
 function openCard(cardId, boardId = route.params.id) {
 	// Notify BoardView so keyboard focusedCardId stays in sync with mouse clicks
 	props.onCardFocus?.(cardId)
@@ -1131,7 +1127,6 @@ async function createCardsFromText(text) {
 			created = await props.onCreateCard(props.stack.id, parsedTitle, duedate, allDay)
 		}
 		newCardTitle.value = ''
-		// Single-card create only: a multi-line paste has no one card to open.
 		if (titles.length === 1 && created?.id) showCardCreatedToast(() => openCard(created.id, created.boardId))
 	} catch (err) {
 		composerError.value =
@@ -1139,10 +1134,8 @@ async function createCardsFromText(text) {
 	} finally {
 		isPending.value = false
 	}
-	// Re-focus for rapid entry - the signature UX. Only AFTER isPending clears
-	// and the DOM has re-rendered: the input is :disabled while a create is in
-	// flight, and focus() on a disabled input is a silent no-op, which left focus
-	// on <body> after every Enter.
+	// Re-focus for rapid entry - the signature UX
+	// after nextTick: the input is :disabled while pending, so focus() would no-op.
 	if (!composerError.value) {
 		await nextTick()
 		composerInputRef.value?.focus()

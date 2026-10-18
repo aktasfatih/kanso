@@ -11,13 +11,6 @@ use OCP\AppFramework\Db\Entity;
 use OCP\DB\Types;
 
 /**
- * A live link from a card to a Nextcloud Files node (table
- * `kanso_card_file_links`, KANSO-307). Unlike a {@see CardAttachment} no bytes
- * are copied: `fileId` is the reference, opened through NC's `/f/<fileid>`
- * permalink so Files' own ACL applies on open. `name`/`mime` are a display
- * snapshot from link time and may go stale after a rename - the chip still
- * opens the right node because the id, not the name, is what resolves.
- *
  * @method int getCardId()
  * @method void setCardId(int $cardId)
  * @method int getFileId()

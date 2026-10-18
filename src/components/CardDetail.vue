@@ -1829,10 +1829,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										@click="pickAttachmentFromFiles">
 										{{ attachFromFiles.isPending.value ? t('kanso', 'Copying…') : t('kanso', 'Choose from Files') }}
 									</NcButton>
-									<!-- KANSO-307 — the LIVE counterpart of the copy above: stores a
-									     reference to the node, so the card always opens the current
-									     file in Files. Same canEdit gate; the server re-checks EDIT
-									     and that the linker can read the node. -->
 									<NcButton
 										type="secondary"
 										class="card-modal__file-link-add"
@@ -1846,9 +1842,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<p v-if="canEdit" class="card-modal__attachment-hint">
 								{{ t('kanso', 'Choosing from Files stores a copy on the card — editing, renaming or deleting the original in Files does not change it.') }}
 							</p>
-							<!-- KANSO-307 — live Files links. Every member sees the chip (the
-							     owner ruled out a per-viewer read check); it opens NC's own
-							     /f/<fileid> permalink, so Files' ACL decides on open. -->
+							<!-- No per-viewer read check: Files' own ACL decides when the permalink opens. -->
 							<ul v-if="cardFileLinks.length > 0" class="card-modal__links-list">
 								<li v-for="fl in cardFileLinks" :key="fl.id" class="card-modal__link-row">
 									<a
@@ -4828,7 +4822,7 @@ function activitySegments(item) {
 	case 26: // attachment removed
 		if (d && d.from) return withOne(t('kanso', 'removed the attachment {value}'), d.from)
 		break
-	case 27: // Files link added (KANSO-307)
+	case 27: // Files link added
 		if (d && d.to) return withOne(t('kanso', 'linked {value}'), d.to)
 		break
 	case 28: // Files link removed
@@ -6427,12 +6421,7 @@ async function handleRemoveAttachment(attachmentId) {
 	}
 }
 
-// ── Live Files links (KANSO-307) ─────────────────────────────────────────────
-// The reference counterpart of "Choose from Files": nothing is copied, the card
-// keeps the node's id and opens NC's /f/<fileid> permalink. There is no
-// per-viewer read check (owner ruling) - a member without access to the node
-// still sees the chip and Files' own ACL denies on open. Errors share the
-// section's attachmentError line.
+// ── Live Files links ─────────────────────────────────────────────────────────
 const { fileLinks: cardFileLinksData, addFileLink, removeFileLink } = useCardFileLinks(computed(() => props.cardId))
 const cardFileLinks = computed(() => cardFileLinksData.value ?? [])
 
@@ -6440,7 +6429,6 @@ function fileLinkHref(fileId) {
 	return generateUrl('/f/{fileId}', { fileId })
 }
 
-// Same picker chain as pickAttachmentFromFiles; FilePickerClosed is a cancel.
 async function pickFileLink() {
 	attachmentError.value = ''
 	let nodes = []

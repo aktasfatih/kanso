@@ -4,29 +4,17 @@
 import { showMessage, ToastType } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 
-// The toast currently on screen, if any. Rapid entry (type, Enter, type, Enter)
-// would otherwise stack one toast per card; each new create replaces the last so
-// the "Open" action always points at the card the user just made.
+// Each create replaces the previous toast so rapid entry doesn't stack them.
 let current = null
 
 /**
- * "Card created" confirmation with an "Open" action (KANSO-302). Shown only for
- * a single-card create - a multi-line paste is a bulk add where "open which
- * one?" has no answer, so callers skip it there.
- *
- * showMessage accepts a DOM Node, which lets us ship an action button without
- * isHTML (the library would otherwise be handed an HTML string to inject).
- * Nothing here moves focus: the composer keeps it for rapid entry, and the
- * button is reachable by Tab like any other control.
- *
- * @param {() => void} onOpen opens the created card
+ * @param {() => void} onOpen
  */
 export function showCardCreatedToast(onOpen) {
 	current?.hideToast()
 
 	const node = document.createElement('span')
-	// The trailing space is for the screen-reader announcement, which is built
-	// from the node's text: without it, it reads "Card createdOpen".
+	// Trailing space, else screen readers announce "Card createdOpen".
 	node.append(t('kanso', 'Card created'), ' ')
 
 	const button = document.createElement('button')

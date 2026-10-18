@@ -85,9 +85,7 @@ class CardSummaryService {
 			'childProgress' => $this->cardMapper->childProgressByBoard($boardId, $viewer),
 			'commentCount' => $this->commentMapper->countsByBoard($boardId),
 			'reviewState' => $this->cardReviewMapper->reviewStatesByBoard($boardId),
-			// Card ids blocked by a not-done card - drives the tile "blocked" badge -
-			// and not-done card ids still holding an open card up ("blocking").
-			// Both come from the ONE edge query above.
+			// Card ids blocked by a not-done card - drives the tile "blocked" badge.
 			'blocked' => $blocks['blocked'],
 			'blocking' => $blocks['blocking'],
 			// Template card ids with a live (enabled) recurrence rule - drives the
@@ -143,26 +141,10 @@ class CardSummaryService {
 	}
 
 	/**
-	 * Splits the live `blocks` edges into the two badge sets, keyed by card id.
-	 * The edges already exclude done / deleted blockers, so every target is
-	 * blocked; a source is only "blocking" while its target is still open AND
-	 * on the board - a blocker of a finished or archived card holds nothing
-	 * the viewer can act on up.
-	 *
-	 * WHOLE-EDGE masking (#3743), the same rule as
-	 * {@see CardRelationService::blocksEdgesForBoard()}: an edge counts only
-	 * when the viewer can see BOTH ends. Otherwise "Blocking" on a visible card
-	 * would assert that some restricted card exists (and flip when it is
-	 * completed), and "Blocked" would do the same for a hidden blocker. The
-	 * card the badge sits on is already visibility-scoped by the caller, so
-	 * checking both ends here is the same as checking the far one. Evaluated
-	 * in PHP off the triples the edge query already carries - no extra query.
-	 *
-	 * Archived BLOCKERS still count toward `blocked` - unchanged behaviour: an
-	 * archived card is parked, not resolved, so the dependency still holds.
+	 * An edge counts only when the viewer can see BOTH ends.
 	 *
 	 * @param list<array{boardId: int, from: int, to: int, toDone: bool, toArchived: bool, fromVisibility: ?string, fromCreatorRole: ?string, fromOwner: string, toVisibility: ?string, toCreatorRole: ?string, toOwner: string}> $edges
-	 * @param callable(int): ?string $roleOn the viewer's role on an edge's board
+	 * @param callable(int): ?string $roleOn
 	 * @return array{blocked: array<int, int>, blocking: array<int, int>}
 	 */
 	private function partitionBlocks(array $edges, string $uid, callable $roleOn): array {

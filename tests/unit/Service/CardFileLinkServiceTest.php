@@ -28,13 +28,6 @@ use OCP\Files\IRootFolder;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
-/**
- * Live Files links on a card (KANSO-307). The owner ruling these tests pin:
- * LINKING needs board EDIT and a node the linker can read through their own
- * userfolder; LISTING is a plain DB read gated by board READ + card visibility,
- * with NO per-viewer Files lookup (NC's ACL applies when the permalink opens);
- * UNLINKING needs EDIT and never consults the node.
- */
 class CardFileLinkServiceTest extends TestCase {
 	private CardFileLinkMapper&MockObject $fileLinkMapper;
 	private CardMapper&MockObject $cardMapper;
@@ -60,7 +53,6 @@ class CardFileLinkServiceTest extends TestCase {
 		$change = new Change();
 		$change->setId(77);
 		$this->changeNotifier->method('notify')->willReturn($change);
-		// insert() hands back the entity with an id, like the real QBMapper.
 		$this->fileLinkMapper->method('insert')->willReturnCallback(static function (CardFileLink $l): CardFileLink {
 			$l->setId(5);
 			return $l;
@@ -91,11 +83,7 @@ class CardFileLinkServiceTest extends TestCase {
 		return $board;
 	}
 
-	/**
-	 * Wires the actor's userfolder so getById($fileId) yields $nodes.
-	 *
-	 * @param array<int, \OCP\Files\Node> $nodes
-	 */
+	/** @param array<int, \OCP\Files\Node> $nodes */
 	private function expectUserFolderById(int $fileId, array $nodes, string $uid = 'bob'): void {
 		$userFolder = $this->createMock(Folder::class);
 		$userFolder->method('getById')->with($fileId)->willReturn($nodes);
@@ -123,8 +111,6 @@ class CardFileLinkServiceTest extends TestCase {
 		return $l;
 	}
 
-	// ---- addLink ----------------------------------------------------------
-
 	public function testAddLinkSnapshotsTheNameAndRecordsAFileLinkedChange(): void {
 		$this->expectCardLoaded();
 		$this->expectUserFolderById(42, [$this->fileNode()]);
@@ -138,7 +124,6 @@ class CardFileLinkServiceTest extends TestCase {
 				&& $l->getCreatedAt() > 0));
 		$this->changeNotifier->expects(self::once())->method('notify')
 			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'bob', true, Change::VERB_FILE_LINKED);
-		// The name rides `to` (something appeared), like an attachment add.
 		$this->changeDetailMapper->expects(self::once())->method('insertDetail')
 			->with(77, null, 'report.pdf');
 
@@ -160,11 +145,6 @@ class CardFileLinkServiceTest extends TestCase {
 		$this->service->addLink(9, 42, 'viewer');
 	}
 
-	/**
-	 * A fileId the linker cannot reach resolves to no node in THEIR userfolder:
-	 * not found, and nothing is stored - a board member can never link (and so
-	 * learn the name of) a file they cannot read themselves.
-	 */
 	public function testAddLinkRejectsAFileTheLinkerCannotRead(): void {
 		$this->expectCardLoaded();
 		$this->expectUserFolderById(42, []);
@@ -208,11 +188,6 @@ class CardFileLinkServiceTest extends TestCase {
 		$this->service->addLink(9, 42, 'bob');
 	}
 
-	/**
-	 * Linking the same file twice (double click, two tabs) loses the
-	 * unique-index race: the existing row comes back and no second change is
-	 * recorded.
-	 */
 	public function testAddLinkReturnsTheExistingRowOnAUniqueViolation(): void {
 		$this->expectCardLoaded();
 		$this->expectUserFolderById(42, [$this->fileNode()]);
@@ -246,13 +221,6 @@ class CardFileLinkServiceTest extends TestCase {
 		$this->service->addLink(9, 42, 'bob');
 	}
 
-	// ---- listForCard ------------------------------------------------------
-
-	/**
-	 * The owner ruling: the list is DB rows only. Files is never consulted, so
-	 * a member who cannot read a linked node still sees its chip, and a card
-	 * open costs no Files lookups.
-	 */
 	public function testListForCardReturnsRowsWithoutTouchingFiles(): void {
 		$this->expectCardLoaded();
 		$this->fileLinkMapper->method('findByCard')->with(9)->willReturn([$this->link(1, 9)]);
@@ -295,15 +263,12 @@ class CardFileLinkServiceTest extends TestCase {
 		$this->service->listForCard(9, 'bob');
 	}
 
-	// ---- deleteLink -------------------------------------------------------
-
 	public function testDeleteLinkRemovesAndRecordsAFileUnlinkedChange(): void {
 		$this->expectCardLoaded();
 		$link = $this->link(5, 9);
 		$this->fileLinkMapper->method('find')->with(5)->willReturn($link);
 		$this->fileLinkMapper->expects(self::once())->method('delete')->with($link);
-		// Unlinking never consults Files - a link to a deleted/unshared node
-		// must still be removable.
+		// Never consults Files: a link to a deleted/unshared node must stay removable.
 		$this->rootFolder->expects(self::never())->method('getUserFolder');
 		$this->changeNotifier->expects(self::once())->method('notify')
 			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'bob', true, Change::VERB_FILE_UNLINKED);
@@ -325,10 +290,6 @@ class CardFileLinkServiceTest extends TestCase {
 		$this->service->deleteLink(9, 5, 'viewer');
 	}
 
-	/**
-	 * IDOR guard: an editor of card 9 cannot delete a link that lives on some
-	 * other card (possibly on a board they cannot even see) by naming its id.
-	 */
 	public function testDeleteLinkRejectsALinkOnAnotherCard(): void {
 		$this->expectCardLoaded();
 		$this->fileLinkMapper->method('find')->with(5)->willReturn($this->link(5, 99));

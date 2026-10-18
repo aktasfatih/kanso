@@ -2604,12 +2604,7 @@ const onBulkSetDue = (due) => runBulkAction('set_due_date', { duedate: due })
 const onBulkSetStatus = (status) => runBulkAction('set_status', { status })
 const onBulkArchive = () => runBulkAction('archive', {})
 
-/**
- * Copy the selected cards' human ids ("KAN-7 KAN-3") as one space-separated
- * line, in BOARD DISPLAY ORDER (column order, then the active card sort). Reads
- * the full board payload rather than the filtered per-column map, so a selected
- * card the current filter hides is still copied. Read-only: the selection stays.
- */
+// Unfiltered payload on purpose: selected cards hidden by the filter are still copied.
 async function onBulkCopyIds() {
 	const cards = boardData.value?.cards ?? []
 	const prefix = boardData.value?.board?.prefix

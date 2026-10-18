@@ -33,16 +33,13 @@ test.describe('Card relations (#3404)', () => {
 		expect(a.relations.blocks.map((r) => r.cardId)).toContain(state.b)
 		expect(b.relations.blockedBy.map((r) => r.cardId)).toContain(state.a)
 
-		// The board payload flags B blocked (its blocker A isn't done), A not -
-		// and the mirror badge (KANSO-330): A is blocking, B is not.
+		// The board payload flags B blocked (its blocker A isn't done), A not.
 		let board = await api.get(`/boards/${state.boardId}`)
 		expect(boardCard(board, state.b).blocked).toBe(true)
 		expect(boardCard(board, state.a).blocked).toBe(false)
 		expect(boardCard(board, state.a).blocking).toBe(true)
 		expect(boardCard(board, state.b).blocking).toBe(false)
 
-		// Completing the BLOCKED card: A still blocks it on paper, but holds
-		// nothing up any more, so A stops reading "blocking"; reopening restores it.
 		await api.patch(`/cards/${state.b}`, { done: true })
 		board = await api.get(`/boards/${state.boardId}`)
 		expect(boardCard(board, state.a).blocking).toBe(false)
@@ -50,15 +47,14 @@ test.describe('Card relations (#3404)', () => {
 		board = await api.get(`/boards/${state.boardId}`)
 		expect(boardCard(board, state.a).blocking).toBe(true)
 
-		// Completing the blocker clears BOTH badges...
+		// Completing the blocker clears the badge.
 		const cursor = board.cursor
 		await api.patch(`/cards/${state.a}`, { done: true })
 		board = await api.get(`/boards/${state.boardId}`)
 		expect(boardCard(board, state.b).blocked).toBe(false)
 		expect(boardCard(board, state.a).blocking).toBe(false)
 
-		// ...and the delta carries the neighbour too: only A wrote a change row,
-		// yet B's tile must refresh live, so B rides the upsert set unblocked.
+		// Only A wrote a change row, but B must ride the delta upsert set too.
 		const delta = await api.get(`/boards/${state.boardId}/changes?since=${cursor}`)
 		expect(delta.resync).toBe(false)
 		const upsertedB = delta.cards.upsert.find((c) => c.id === state.b)
@@ -149,16 +145,8 @@ test.describe('Card relations (#3404)', () => {
 	})
 })
 
-// KANSO-330 review: the blocked/blocking badges are counted off blocks edges,
-// so an edge to a card the viewer can NOT see must not count - otherwise a
-// public card's "Blocking" chip announces a hidden internal card exists (and
-// flips when it is completed). The unit tests prove the PHP rule; this proves
-// the visibility columns the edge query joins in are the right ones, through
-// real SQL, as a real EXTERNAL member.
 test.describe.serial('Blocks badges are masked for viewers who cannot see the other card (KANSO-330)', () => {
-	// Multi-user spec: must not inherit the shared admin storageState (it makes
-	// no page calls today, but a future UI assertion here would silently run as
-	// the owner and false-pass).
+	// Multi-user spec: opt out of the shared admin storageState.
 	test.use({ storageState: { cookies: [], origins: [] } })
 
 	const token = 'blkvis' + Math.floor(Date.now() / 1000)
@@ -180,11 +168,9 @@ test.describe.serial('Blocks badges are masked for viewers who cannot see the ot
 			if (visibility !== 'public') await api.patch(`/cards/${card.id}`, { visibility })
 			return card.id
 		}
-		// Public A blocks provider-internal B (hidden target)...
 		state.a = await mk('A', 'public')
 		state.b = await mk('B', 'internal')
 		await api.post(`/cards/${state.a}/relations`, { otherCardId: state.b, kind: 'blocks' })
-		// ...and provider-internal C blocks public D (hidden blocker).
 		state.c = await mk('C', 'internal')
 		state.d = await mk('D', 'public')
 		await api.post(`/cards/${state.c}/relations`, { otherCardId: state.d, kind: 'blocks' })
@@ -205,8 +191,6 @@ test.describe.serial('Blocks badges are masked for viewers who cannot see the ot
 	test('an external member sees neither hidden card through the badges', async ({ peer }) => {
 		const board = await peer.api.get(`/boards/${state.boardId}`)
 		const ids = board.cards.map((c) => c.id)
-		// The fixture is what we think it is: the public cards are there, the
-		// internal ones are not.
 		expect(ids).toContain(state.a)
 		expect(ids).toContain(state.d)
 		expect(ids).not.toContain(state.b)

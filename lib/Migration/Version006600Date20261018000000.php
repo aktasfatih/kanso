@@ -13,29 +13,9 @@ use OCP\DB\Types;
 use OCP\Migration\IOutput;
 use OCP\Migration\SimpleMigrationStep;
 
-/**
- * Card file links (`kanso_card_file_links`, KANSO-307): a LIVE reference from a
- * card to a node in Nextcloud Files, alongside (not instead of) the existing
- * copy-into-app-data attachment flow.
- *
- * Only the file id is authoritative - opening goes to Nextcloud's `/f/<fileid>`
- * permalink, where Files' own ACL decides who may read it. `name` and `mime`
- * are a display snapshot taken at link time so the chip renders from Kanso's
- * own rows with no per-viewer Files lookup; it is the bare filename, never the
- * linker's path (a path would leak the linker's folder layout to the board).
- *
- * One row per (card, file) - re-linking the same file is idempotent.
- *
- * The physical name (`oc_kanso_card_file_links`, 24 chars) is over the NC 30-32
- * primary-key name limit, so the key is named explicitly (PrimaryKeyNameLengthTest).
- *
- * Guarded (hasTable) so the step is idempotent.
- */
 class Version006600Date20261018000000 extends SimpleMigrationStep {
 	/**
-	 * @psalm-suppress UndefinedDocblockClass ISchemaWrapper::createTable() is
-	 *  docblocked as Doctrine\DBAL\Schema\Table, not part of the OCP stubs
-	 *  (Deck suppresses the same class in its psalm config).
+	 * @psalm-suppress UndefinedDocblockClass
 	 */
 	#[\Override]
 	public function changeSchema(IOutput $output, Closure $schemaClosure, array $options): ?ISchemaWrapper {
@@ -78,9 +58,9 @@ class Version006600Date20261018000000 extends SimpleMigrationStep {
 			'length' => 8,
 			'default' => 0,
 		]);
+		// Named explicitly: the default PK name exceeds the NC length limit.
 		$table->setPrimaryKey(['id'], 'kanso_cfl_pk');
-		// Also serves every per-card read (card_id is its leading column), so no
-		// separate card_id index.
+		// Also serves per-card reads, so no separate card_id index.
 		$table->addUniqueIndex(['card_id', 'file_id'], 'kanso_cfl_uniq');
 
 		return $schema;

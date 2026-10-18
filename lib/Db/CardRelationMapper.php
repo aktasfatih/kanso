@@ -200,18 +200,8 @@ class CardRelationMapper extends QBMapper {
 	}
 
 	/**
-	 * Every LIVE `blocks` edge on the board - the source card not done, neither
-	 * end deleted - as one board-scoped query that powers BOTH tile badges:
-	 * the target is "blocked", the source is "blocking" while the target is
-	 * still open and on the board. `toDone` / `toArchived` ride along so the
-	 * caller can tell the two apart off one result instead of paying a second
-	 * query per badge.
-	 *
-	 * Both endpoints' visibility triples ride along too, for the same reason
-	 * as {@see self::findBlocksEdgesWithVisibilityByBoard()}: the caller must
-	 * mask whole edges per viewer (#3743) - a badge counted off an edge to a
-	 * card the viewer can not see is an existence oracle - and doing it in PHP
-	 * off these columns keeps the board summary at a fixed query count.
+	 * Live `blocks` edges on the board (source not done) - powers the tile
+	 * "blocked" and "blocking" badges in one board-scoped query.
 	 *
 	 * @return list<array{boardId: int, from: int, to: int, toDone: bool, toArchived: bool, fromVisibility: ?string, fromCreatorRole: ?string, fromOwner: string, toVisibility: ?string, toCreatorRole: ?string, toOwner: string}>
 	 * @throws Exception
@@ -224,9 +214,8 @@ class CardRelationMapper extends QBMapper {
 	 * The BOARD-SET twin of {@see self::liveBlocksEdgesByBoard()} (#10298): the
 	 * same edge list over MANY boards in ONE query, for the cross-board Views
 	 * feed - whose enrichment must not scale with how many boards the user can
-	 * read. Card ids are globally unique (and a relation never spans boards),
-	 * so the union needs no per-board nesting; `boardId` rides along so the
-	 * caller can mask each edge under the viewer's role on THAT board.
+	 * read. Card ids are globally unique, so the union needs no per-board
+	 * nesting.
 	 *
 	 * @param int[] $boardIds
 	 * @return list<array{boardId: int, from: int, to: int, toDone: bool, toArchived: bool, fromVisibility: ?string, fromCreatorRole: ?string, fromOwner: string, toVisibility: ?string, toCreatorRole: ?string, toOwner: string}>
@@ -251,8 +240,6 @@ class CardRelationMapper extends QBMapper {
 			->innerJoin('r', 'kanso_cards', 'dst', $qb->expr()->eq('r.other_card_id', 'dst.id'))
 			->where($qb->expr()->in('r.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('r.type', $qb->createNamedParameter(CardRelation::TYPE_BLOCKS)))
-			// A done blocker blocks nothing, so it is neither "blocking" nor
-			// makes its target "blocked" - drop it in SQL, not in PHP.
 			->andWhere($qb->expr()->eq('src.done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('src.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('dst.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
@@ -279,18 +266,7 @@ class CardRelationMapper extends QBMapper {
 	}
 
 	/**
-	 * Every `blocks` edge touching $cardIds, in either direction, with BOTH
-	 * endpoints' visibility triples - the raw material of the delta-sync
-	 * neighbour set ({@see \OCA\Kanso\Service\CardRelationService::blocksNeighbourIdsFor()}).
-	 * Completing, reopening or deleting a card flips its neighbours'
-	 * blocked/blocking badges without writing a change row for them, so the
-	 * delta endpoint re-serializes those neighbours alongside the touched cards.
-	 *
-	 * Deliberately UNFILTERED by done/deleted: the touched card may itself be
-	 * the one just deleted or completed, and that is exactly the edge whose
-	 * far end needs refreshing. Not chunked: the only caller passes the card
-	 * ids of ONE delta window, which BoardController::changes() already caps
-	 * (a saturated window resyncs instead), so the IN list is bounded.
+	 * Unfiltered by done/deleted: the touched card may be the one just completed or deleted.
 	 *
 	 * @param int[] $cardIds
 	 * @return list<array{from: int, to: int, fromVisibility: ?string, fromCreatorRole: ?string, fromOwner: string, toVisibility: ?string, toCreatorRole: ?string, toOwner: string}>

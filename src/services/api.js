@@ -445,10 +445,7 @@ export const attachCardFileFromFiles = (cardId, fileId) =>
 export const deleteCardAttachment = (cardId, attachmentId) =>
 	axios.delete(url(`/api/cards/${cardId}/attachments/${attachmentId}`)).then((r) => r.data)
 
-// Live Nextcloud Files links (KANSO-307): a REFERENCE to a node, not a copy
-// (that is attachCardFileFromFiles above). The server resolves the fileId
-// through the linker's own userfolder and stores only the filename; viewers
-// open it via NC's /f/<fileid> permalink, where Files' own ACL applies.
+// Live Files links: a reference to a node, not a copy (cf. attachCardFileFromFiles).
 export const fetchCardFileLinks = (cardId) =>
 	axios.get(url(`/api/cards/${cardId}/file-links`)).then((r) => r.data)
 

@@ -19,12 +19,6 @@ use OCP\IUser;
 use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
 
-/**
- * Card file links (KANSO-307): the status mapping of every endpoint and the
- * wire shape of a row. The access model itself lives in (and is tested on)
- * CardFileLinkService - this only proves the controller passes the session uid
- * through and turns each service outcome into the status the client expects.
- */
 class CardFileLinkControllerTest extends TestCase {
 	public function testIndexReturnsTheRowsWithTheirWireShape(): void {
 		$service = $this->createMock(CardFileLinkService::class);
@@ -83,10 +77,6 @@ class CardFileLinkControllerTest extends TestCase {
 		self::assertSame(Http::STATUS_FORBIDDEN, $this->controller($service)->index(9)->getStatus());
 	}
 
-	/**
-	 * A fileId the actor cannot read is a 400 with the service's message - the
-	 * picker shows it, and it reveals nothing beyond "not found".
-	 */
 	public function testAnUnreadableFileAnswersBadRequest(): void {
 		$service = $this->createMock(CardFileLinkService::class);
 		$service->method('addLink')->willThrowException(new InvalidInputException('File not found'));
@@ -104,11 +94,6 @@ class CardFileLinkControllerTest extends TestCase {
 		self::assertSame(Http::STATUS_NOT_FOUND, $this->controller($service)->destroy(9, 5)->getStatus());
 	}
 
-	/**
-	 * The write path resolves a client-supplied id against the actor's
-	 * userfolder, so it is rate-limited like the copy-from-Files endpoint; the
-	 * list stays unlimited (it is opened with every card).
-	 */
 	public function testOnlyTheCreatePathIsRateLimited(): void {
 		$create = new \ReflectionMethod(CardFileLinkController::class, 'create');
 		$attributes = $create->getAttributes(UserRateLimit::class);

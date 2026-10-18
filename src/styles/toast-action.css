@@ -1,13 +1,9 @@
 /*
  * SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
  * SPDX-License-Identifier: AGPL-3.0-or-later
- *
- * Inline action button inside an @nextcloud/dialogs toast (see
- * utils/cardCreatedToast.js). Global on purpose: toasts mount on document.body,
- * outside every component tree, so a scoped style can never reach the button.
- * Tertiary look - plain text on the toast surface - so it reads as an action,
- * not a second toast.
  */
+
+/* Global on purpose: toasts mount on document.body, out of reach of scoped styles. */
 .kanso-toast-action {
 	margin-inline-start: 12px;
 	padding: 2px 8px;

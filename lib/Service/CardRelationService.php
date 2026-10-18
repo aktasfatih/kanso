@@ -164,33 +164,10 @@ class CardRelationService {
 	}
 
 	/**
-	 * The delta-sync neighbour set (KANSO-330): ids of the cards at the far end
-	 * of every `blocks` edge touching $cardIds whose TOUCHED end the viewer can
-	 * see. Completing / reopening / deleting a card flips its neighbours'
-	 * blocked / blocking badges without a change row of their own, so
-	 * BoardController::changes() re-serializes these too.
-	 *
-	 * Masked on the touched end because that is the only end the summary read
-	 * does not already scope: the neighbour itself goes through the
-	 * viewer-scoped findSummariesByIds, but re-sending a VISIBLE neighbour
-	 * because a HIDDEN card changed would tell the viewer "something you can
-	 * not see, adjacent to this card, just changed" - the same existence
-	 * oracle {@see self::blocksEdgesForBoard()} masks whole edges against. A
-	 * hidden card's edge never counts toward a visible card's badge either
-	 * ({@see CardSummaryService}), so nothing the viewer sees changes anyway.
-	 *
-	 * Accepted staleness: the mask reads the touched card's CURRENT visibility,
-	 * so a card that was just made hidden from this viewer (public -> internal)
-	 * does not re-send its neighbours either, and a visible neighbour can keep
-	 * a stale blocked / blocking badge until the next full board read. That is
-	 * not a leak - the viewer already saw that edge while both ends were
-	 * visible - and the alternative (re-sending on visibility we can no longer
-	 * vouch for) is exactly the oracle this masking exists to close.
-	 *
-	 * No permission check here: the caller has already gated READ on the board.
+	 * Masked on the touched end: a hidden card's change must not re-send a visible neighbour.
 	 *
 	 * @param int[] $cardIds
-	 * @return int[] distinct, excluding $cardIds themselves
+	 * @return int[]
 	 * @throws \OCP\DB\Exception
 	 */
 	public function blocksNeighbourIdsFor(array $cardIds, ViewerContext $viewer): array {

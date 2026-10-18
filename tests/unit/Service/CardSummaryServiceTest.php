@@ -65,9 +65,6 @@ class CardSummaryServiceTest extends TestCase {
 	}
 
 	/**
-	 * One live blocks edge in the mapper's shape - public on both ends unless
-	 * a test narrows one end to exercise the masking.
-	 *
 	 * @param array<string, mixed> $overrides
 	 * @return array<string, mixed>
 	 */
@@ -107,7 +104,6 @@ class CardSummaryServiceTest extends TestCase {
 		$this->checklistItemMapper->method('waitingByBoard')->with(1)->willReturn([3 => 1700000000]);
 		$this->cardMapper->method('childProgressByBoard')->with(1)->willReturn([3 => ['total' => 2, 'done' => 1]]);
 		$this->commentMapper->method('countsByBoard')->with(1)->willReturn([3 => 5]);
-		// Card 9 (open, off-list) blocks card 3.
 		$this->cardRelationMapper->method('liveBlocksEdgesByBoard')->with(1)->willReturn([self::edge(9, 3)]);
 		// Card 3 has an enabled recurrence rule; card 4 does not.
 		$this->recurRuleMapper->method('findTemplateCardIdsByBoard')->with(1)->willReturn([3]);
@@ -144,14 +140,6 @@ class CardSummaryServiceTest extends TestCase {
 		self::assertFalse($out[1]['timerRunning']);
 	}
 
-	/**
-	 * `blocking` is the mirror of `blocked` off the SAME edge list (KANSO-330):
-	 * the source of a live blocks edge is blocking while its target is open,
-	 * the target is blocked either way (unchanged `blocked` semantics). A
-	 * blocker whose target is already done holds nothing up, so it must NOT
-	 * read blocking - that is the one case where the two badges are not a
-	 * plain pair.
-	 */
 	public function testBlockingMirrorsBlockedAndIgnoresDoneTargets(): void {
 		$cards = [];
 		foreach ([3, 4, 5, 6, 7, 10] as $id) {
@@ -165,8 +153,6 @@ class CardSummaryServiceTest extends TestCase {
 		$this->cardRelationMapper->expects(self::once())->method('liveBlocksEdgesByBoard')->with(1)->willReturn([
 			self::edge(3, 4),
 			self::edge(5, 6, ['toDone' => true]),
-			// An ARCHIVED (not done) target is off the board: nothing the viewer
-			// can act on is held up, so 10 must not read blocking either.
 			self::edge(10, 11, ['toArchived' => true]),
 		]);
 
@@ -181,22 +167,11 @@ class CardSummaryServiceTest extends TestCase {
 		self::assertFalse($out[5]['blocked']);
 		self::assertTrue($out[6]['blocked']);
 		self::assertFalse($out[6]['blocking']);
-		// No edges at all: both present, both false.
 		self::assertFalse($out[7]['blocked']);
 		self::assertFalse($out[7]['blocking']);
 		self::assertFalse($out[10]['blocking'], 'a blocker of an archived card holds nothing on the board up');
 	}
 
-	/**
-	 * Whole-edge masking (#3743, KANSO-330 review): a badge counted off an edge
-	 * to a card the viewer can not see is an existence oracle - "Blocking"
-	 * would announce a restricted card, and flip when it is completed. So an
-	 * edge counts only when BOTH ends are visible to the viewer.
-	 *
-	 * The viewer is an EXTERNAL member: 3 blocks an internal-only card 4
-	 * (hidden), a hidden internal card 5 blocks 6, someone else's PRIVATE card
-	 * 7 blocks 8, and the control pair 9 -> 10 is public on both ends.
-	 */
 	public function testBlocksBadgesIgnoreEdgesToCardsTheViewerCannotSee(): void {
 		$cards = [];
 		foreach ([3, 6, 8, 9, 10] as $id) {
@@ -220,16 +195,10 @@ class CardSummaryServiceTest extends TestCase {
 		self::assertFalse($out[3]['blocking'], 'hidden target: the blocker must not reveal it');
 		self::assertFalse($out[6]['blocked'], 'hidden blocker: the blocked card must not reveal it');
 		self::assertFalse($out[8]['blocked'], 'another user\'s private blocker stays invisible');
-		// Visible on both ends: unchanged.
 		self::assertTrue($out[9]['blocking']);
 		self::assertTrue($out[10]['blocked']);
 	}
 
-	/**
-	 * The board-SET path masks each edge under the viewer's role on THAT
-	 * edge's board: the same internal-only edge is counted on the board where
-	 * the viewer is internal and dropped where they are external.
-	 */
 	public function testSerializeForBoardsMasksBlocksEdgesPerBoardRole(): void {
 		$cards = [];
 		foreach ([[3, 1], [4, 1], [13, 2], [14, 2]] as [$id, $boardId]) {

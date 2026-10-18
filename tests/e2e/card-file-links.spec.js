@@ -3,13 +3,7 @@
 
 import { test, expect, ncLogin, BASE, currentAuth, me, api } from './helpers.js'
 
-// KANSO-307 — live links from a card to Nextcloud Files nodes. Unlike "Choose
-// from Files" (a COPY, pinned in card-attachments.spec.js), a link stores only
-// the node's id + a filename snapshot and opens NC's own /f/<fileid> permalink,
-// so Files' ACL decides on open.
-
-// DAV root of the CURRENT user's own Files, built at call time so it reads the
-// live `me` binding (per-worker rebind under E2E_ISOLATE).
+// Built at call time: `me` is rebound per worker under E2E_ISOLATE.
 const davUrl = () => BASE + '/remote.php/dav/files/' + me
 
 async function putUserFile(name, content) {
@@ -30,7 +24,6 @@ async function deleteUserFile(name) {
 	}).catch(() => {})
 }
 
-// The node's numeric file id, read the way any DAV client does (oc:fileid).
 async function fileIdOf(name) {
 	const r = await fetch(`${davUrl()}/${name}`, {
 		method: 'PROPFIND',
@@ -77,8 +70,6 @@ test.describe('Card file links', () => {
 			await pickerRow.click()
 			await page.getByRole('button', { name: 'Link file', exact: true }).click()
 
-			// A LINK chip (not an attachment row): the filename, pointing at NC's
-			// own permalink for the node rather than any Kanso byte endpoint.
 			const chip = page.locator('a.card-modal__file-link', { hasText: name })
 			await expect(chip).toHaveCount(1, { timeout: 15_000 })
 			const href = await chip.getAttribute('href')
@@ -86,7 +77,6 @@ test.describe('Card file links', () => {
 			expect(href).not.toContain('/attachments/')
 			await expect(chip).toHaveAttribute('target', '_blank')
 
-			// Server state agrees: one link row naming that node.
 			const links = await api.get(`/cards/${cardId}/file-links`)
 			const mine = links.filter((l) => l.fileId === fileId)
 			expect(mine).toHaveLength(1)
@@ -108,7 +98,6 @@ test.describe('Card file links', () => {
 			expect(link.fileId).toBe(fileId)
 			expect(link.name).toBe(name)
 
-			// Re-linking the same node is idempotent - the same row comes back.
 			const again = await api.post(`/cards/${cardId}/file-links`, { fileId })
 			expect(again.id).toBe(link.id)
 
@@ -122,7 +111,6 @@ test.describe('Card file links', () => {
 			await row.getByRole('button', { name: `Remove link to ${name}` }).click()
 			await expect(page.locator('a.card-modal__file-link', { hasText: name })).toHaveCount(0, { timeout: 8000 })
 
-			// Unlinking removes the reference only - the file itself stays in Files.
 			const links = await api.get(`/cards/${cardId}/file-links`)
 			expect(links.filter((l) => l.fileId === fileId)).toHaveLength(0)
 			expect(await fileIdOf(name)).toBe(fileId)

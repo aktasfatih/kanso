@@ -13,17 +13,9 @@ use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
 /**
- * Mapper for `kanso_card_file_links` (KANSO-307).
- *
  * @template-extends QBMapper<CardFileLink>
  */
 class CardFileLinkMapper extends QBMapper {
-	/**
-	 * Hard cap on the file links one card may carry. Enforced on the write side
-	 * by {@see \OCA\Kanso\Service\CardFileLinkService::addLink()} and,
-	 * independently, as the read bound of {@see self::findByCard()} - so a card
-	 * holding more rows (legacy data, a lost race) still answers a bounded list.
-	 */
 	public const MAX_PER_CARD = 50;
 
 	public function __construct(IDBConnection $db) {
@@ -31,9 +23,7 @@ class CardFileLinkMapper extends QBMapper {
 	}
 
 	/**
-	 * A single file link by id.
-	 *
-	 * @throws \OCP\AppFramework\Db\DoesNotExistException if it does not exist
+	 * @throws \OCP\AppFramework\Db\DoesNotExistException
 	 * @throws \OCP\AppFramework\Db\MultipleObjectsReturnedException
 	 * @throws Exception
 	 */
@@ -47,8 +37,6 @@ class CardFileLinkMapper extends QBMapper {
 	}
 
 	/**
-	 * A card's file links, oldest first, bounded to {@see self::MAX_PER_CARD}.
-	 *
 	 * @return CardFileLink[]
 	 * @throws Exception
 	 */
@@ -64,8 +52,7 @@ class CardFileLinkMapper extends QBMapper {
 	}
 
 	/**
-	 * How many file links a card carries. Unbounded on purpose - it is the cap
-	 * check, so it must see rows beyond {@see self::MAX_PER_CARD} too.
+	 * Unbounded on purpose: the cap check must see rows beyond MAX_PER_CARD.
 	 *
 	 * @throws Exception
 	 */

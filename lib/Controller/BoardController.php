@@ -281,24 +281,10 @@ class BoardController extends Controller {
 			// hidden from THIS viewer is absent from $liveCards and lands in the
 			// remove list below - the client drops it from its cache, and its
 			// change rows (entity_id/action only, no title) leak nothing.
-			//
-			// Blocks neighbours ride along: completing, reopening or deleting a card
-			// flips the `blocked` / `blocking` badge of the card at the other end of
-			// each blocks edge, yet only the touched card writes a change row - so
-			// without this the neighbour's tile would keep a stale badge until the
-			// next full board read. They join the UPSERT set only: $removedCardIds
-			// below is computed over the window's own ids, so a neighbour hidden
-			// from this viewer (or already deleted) is simply omitted, never
-			// reported as a remove for a card the window never touched. Neighbours
-			// of a touched card the viewer can NOT see are left out at the source
-			// (see blocksNeighbourIdsFor) so a hidden change never re-sends a
-			// visible card.
+			// Blocks neighbours ride along (upsert only): their badge flips without a change row of their own.
 			$neighbourIds = $cardIds === [] ? [] : $this->cardRelationService->blocksNeighbourIdsFor($cardIds, $viewer);
 			$upsertIds = array_values(array_unique(array_merge($cardIds, $neighbourIds)));
-			// A hub card blocking hundreds of others would otherwise grow the
-			// summary read's IN list without bound. Past the window's own cap the
-			// delta stops being cheap, so take the same exit a saturated window
-			// does: the client refetches the board instead.
+			// Bound the IN list: a hub card can block hundreds of others.
 			if (count($upsertIds) >= $limit) {
 				return new JSONResponse(['cursor' => $latest, 'resync' => true]);
 			}

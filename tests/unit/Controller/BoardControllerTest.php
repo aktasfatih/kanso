@@ -667,12 +667,6 @@ class BoardControllerTest extends TestCase {
 		self::assertSame([42], $data['cards']['remove']);
 	}
 
-	/**
-	 * KANSO-330: completing / reopening / deleting a card flips the badge of
-	 * the card at the other end of each blocks edge, but only the touched card
-	 * writes a change row. The delta must re-serialize that neighbour too, or
-	 * its tile keeps a stale `blocked` / `blocking` chip until a full reload.
-	 */
 	public function testChangesAlsoUpsertsBlocksNeighboursOfTouchedCards(): void {
 		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
 		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(8);
@@ -706,12 +700,6 @@ class BoardControllerTest extends TestCase {
 		self::assertSame([], $data['cards']['remove']);
 	}
 
-	/**
-	 * A neighbour the viewer can not see (or one already deleted) drops out
-	 * of the viewer-scoped summary read - and must then be OMITTED, never
-	 * reported as a `remove`: the window never touched it, so a remove would
-	 * make the client drop a card for no reason (or announce a hidden id).
-	 */
 	public function testChangesNeverRemovesAnUnseenBlocksNeighbour(): void {
 		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
 		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(8);
@@ -727,7 +715,6 @@ class BoardControllerTest extends TestCase {
 		$touched->setBoardId(1);
 		$touched->setStackId(3);
 		$touched->setTitle('Visible');
-		// 77 is hidden from this viewer: absent from the live summary read.
 		$this->cardMapper->method('findSummariesByIds')->with(1, [42, 77])->willReturn([$touched]);
 		$this->stackMapper->method('findByIds')->willReturn([]);
 
@@ -736,15 +723,7 @@ class BoardControllerTest extends TestCase {
 		self::assertSame([], $data['cards']['remove']);
 	}
 
-	/**
-	 * A hub card blocking hundreds of others must not turn one delta into an
-	 * unbounded IN list: once window ids + neighbours reach the window cap
-	 * (500) the endpoint takes the saturated-window exit and asks for a
-	 * resync. Pinned at the boundary: 1 touched + 498 neighbours = 499 ids is
-	 * still a delta, 1 + 499 = 500 resyncs.
-	 *
-	 * @return array<string, array{int, bool}>
-	 */
+	/** @return array<string, array{int, bool}> */
 	public static function neighbourOverflowProvider(): array {
 		return [
 			'499 ids stays a delta' => [498, false],
@@ -762,7 +741,6 @@ class BoardControllerTest extends TestCase {
 		]);
 		$this->stubEnrichmentEmpty();
 		$this->cardRelationService->method('blocksNeighbourIdsFor')->willReturn(range(1000, 999 + $neighbours));
-		// The oversized read is never issued; the in-bounds one is, once.
 		$this->cardMapper->expects($resync ? self::never() : self::once())
 			->method('findSummariesByIds')->willReturn([]);
 		$this->stackMapper->method('findByIds')->willReturn([]);

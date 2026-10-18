@@ -283,9 +283,6 @@ return [
 		['name' => 'cardLink#create', 'url' => '/api/cards/{cardId}/links', 'verb' => 'POST'],
 		['name' => 'cardLink#destroy', 'url' => '/api/cards/{cardId}/links/{linkId}', 'verb' => 'DELETE'],
 
-		// Live Nextcloud Files links (KANSO-307) - a reference, not a copy (the
-		// copy flow is cardAttachment#createFromFile). Body on POST: {fileId}.
-		// Listing is board-READ gated only; Files' own ACL applies on open.
 		['name' => 'cardFileLink#index', 'url' => '/api/cards/{cardId}/file-links', 'verb' => 'GET'],
 		['name' => 'cardFileLink#create', 'url' => '/api/cards/{cardId}/file-links', 'verb' => 'POST'],
 		['name' => 'cardFileLink#destroy', 'url' => '/api/cards/{cardId}/file-links/{linkId}', 'verb' => 'DELETE'],

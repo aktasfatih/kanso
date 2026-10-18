@@ -90,9 +90,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<CancelIcon :size="12" />
 					{{ t('kanso', 'Blocked') }}
 				</span>
-				<!-- Blocking badge (KANSO-330) - the mirror of "Blocked": this open
-				     card holds up at least one other open card. Neutral, not red -
-				     the card itself is not stuck, it is what others are waiting on. -->
 				<span
 					v-if="card.blocking"
 					class="card-tile__blocking"
@@ -980,9 +977,7 @@ const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.
 	background: color-mix(in srgb, var(--kanso-error-legible) 8%, transparent);
 }
 
-/* Blocking badge (KANSO-330) - neutral chip, styled like the visibility one:
- * the blocker is not itself in trouble, so it must not borrow the blocked
- * chip's red or the waiting chip's amber. */
+/* Neutral on purpose: the blocker is not itself stuck, so no red/amber. */
 .card-tile__blocking {
 	display: inline-flex;
 	align-items: center;

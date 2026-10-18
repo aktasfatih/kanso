@@ -196,17 +196,12 @@ test.describe('Description formatting toolbar', () => {
 		await expect(items.nth(1)).toContainText('two')
 	})
 
-	// KANSO-332: a fenced ``` block must read as ONE multi-line block everywhere,
-	// not as stacked inline-code strips. The editor always styled it; the
-	// read-only surfaces carried a scoped `code` rule that also hit `pre > code`
-	// (and comments had no `pre` style at all). Assert COMPUTED styles — the
-	// markup was correct the whole time the bug was live.
+	// Computed styles, not markup: the markup was already correct.
 	async function expectRenderedCodeBlock(container) {
 		const pre = container.locator('pre')
 		const code = pre.locator('code')
 		await expect(code).toContainText('line one')
 		expect(await code.evaluate((el) => el.innerText)).toContain('line one\nline two')
-		// The block carries the background; the nested code must not paint a second one.
 		expect(await pre.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)')
 		expect(await code.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)')
 		expect(await code.evaluate((el) => getComputedStyle(el).paddingLeft)).toBe('0px')

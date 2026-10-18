@@ -114,12 +114,9 @@ test.describe('Bulk edit cards (multi-select)', () => {
 			.toEqual(['Charlie'])
 	})
 
-	// KANSO-334 — "Copy IDs" puts the selected cards' human ids on the clipboard,
-	// space-separated on one line, in BOARD order (not click order).
 	test('Copy IDs copies the selected cards\' human ids in board order and keeps the selection', async ({ page, context }) => {
 		await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE })
 
-		// A fresh board, so the per-board sequence numbers are known.
 		const board = await api.post('/boards', { title: `Copy IDs E2E ${Date.now()}` })
 		try {
 			const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
@@ -136,7 +133,6 @@ test.describe('Bulk edit cards (multi-select)', () => {
 			await page.getByRole('button', { name: 'More' }).click()
 			await page.getByRole('menuitem', { name: 'Select multiple cards' }).click()
 
-			// Reverse click order on purpose: the clipboard must follow the board.
 			await page.locator('.card-tile', { hasText: 'Copy Three' }).click()
 			await page.locator('.card-tile', { hasText: 'Copy One' }).click()
 			await expect(page.locator('.bulk-action-bar')).toContainText('2')
@@ -145,14 +141,11 @@ test.describe('Bulk edit cards (multi-select)', () => {
 			await page.getByRole('dialog', { name: 'More actions' })
 				.getByRole('button', { name: 'Copy IDs' }).click()
 
-			// The message is the assertion: it is the plural success toast, not the
-			// error or the "no IDs" warning.
-			// short-budget-ok: the toast dismisses itself after 7s
+			// short-budget-ok: toast auto-dismisses at 7s
 			await expect(toast(page, '2 IDs copied.')).toBeVisible({ timeout: 6_000 })
 			expect(await page.evaluate(() => navigator.clipboard.readText()))
 				.toBe(`${board.prefix}-${c1.boardSeq} ${board.prefix}-${c3.boardSeq}`)
 
-			// Read-only: the selection is untouched.
 			await expect(page.locator('.bulk-action-bar')).toContainText('2')
 		} finally {
 			await api.delete(`/boards/${board.id}`).catch(() => {})

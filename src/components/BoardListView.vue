@@ -115,7 +115,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</NcActionButton>
 						<NcActionText
 							v-if="(templatesLoadedByStack[rows[vRow.index].stackId] ?? false) && (templatesByStack[rows[vRow.index].stackId] ?? []).length === 0">
-							<!-- Icon insets the text; see StackColumn.vue (#10833). -->
 							<template #icon>
 								<InformationOutlineIcon :size="20" />
 							</template>
@@ -1184,15 +1183,14 @@ async function createCardsFromText(stackId, text) {
 			created = await props.onCreateCard(stackId, parsedTitle, duedate, allDay)
 		}
 		draftByStack[stackId] = ''
-		// Single-card create only: a multi-line paste has no one card to open.
 		if (titles.length === 1 && created?.id) showCardCreatedToast(() => openCard(created))
 	} catch (err) {
 		errorByStack[stackId] = err?.response?.data?.error || t('kanso', 'Failed to create card.')
 	} finally {
 		isPendingByStack[stackId] = false
 	}
-	// Re-focus for rapid entry, once the input is enabled again: it is :disabled
-	// while the create is in flight and focus() on a disabled input is a no-op.
+	// Re-focus for rapid entry
+	// after nextTick: the input is :disabled while pending, so focus() would no-op.
 	if (!errorByStack[stackId]) {
 		await nextTick()
 		composerRefs[stackId]?.focus()

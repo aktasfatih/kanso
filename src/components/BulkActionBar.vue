@@ -135,9 +135,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<DotsHorizontalIcon :size="20" />
 			</template>
 
-			<!-- Copy IDs lives in the overflow (not inline) because of the #10287
-			     inline-width rule. It is read-only and keeps the selection, and
-			     deliberately has no edit-permission gate, so viewers can use it. -->
+			<!-- No edit-permission gate on purpose: copying IDs is read-only. -->
 			<NcActionButton
 				:close-after-click="true"
 				@click="$emit('copy-ids')">

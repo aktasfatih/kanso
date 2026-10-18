@@ -105,10 +105,7 @@ export default defineConfig({
 				// redirecting the app to /unsupported. Pin a real, NC-supported iOS
 				// Safari UA so we get into the app; the rendering ENGINE is still
 				// WebKit (that's what we're exercising — the UA is just a header).
-				// The pinned version must stay inside NC's support window, which
-				// moves with server patch releases: NC 34.0.5 dropped iOS 17.4
-				// (17.6+ passes), turning every mobile-webkit test into an
-				// /unsupported redirect. Keep it a release or two behind current.
+				// The pinned iOS version must stay inside NC's supported-browser window.
 				userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',
 			},
 			testMatch: MOBILE_SPEC,

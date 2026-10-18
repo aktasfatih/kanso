@@ -3,9 +3,6 @@
 
 import { test, expect, api, ncLogin, BASE, toast } from './helpers.js'
 
-// KANSO-302 - creating ONE card from the inline composer confirms with a
-// "Card created" toast whose "Open" button opens the new card. A multi-line
-// paste is a bulk add (nothing single to open) and stays silent.
 test.describe('Card-created toast', () => {
 	const state = { boardId: 0, stackId: 0, boardUrl: '' }
 
@@ -34,9 +31,8 @@ test.describe('Card-created toast', () => {
 		await composer.fill('Toast board card')
 		await composer.press('Enter')
 
-		// short-budget-ok: a toast dismisses itself at TOAST_DEFAULT_TIMEOUT = 7s, so a 15s wait could outlive it
+		// short-budget-ok: toast auto-dismisses at 7s
 		await expect(toast(page, 'Card created')).toBeVisible({ timeout: 6_000 })
-		// Rapid entry must survive the toast: focus never leaves the composer.
 		await expect(composer).toBeFocused()
 
 		await toast(page, 'Card created').getByRole('button', { name: 'Open' }).click()
@@ -79,13 +75,12 @@ test.describe('Card-created toast', () => {
 		await page.keyboard.press('Escape')
 		await page.waitForSelector('.board-list-group', { timeout: 15_000 })
 
-		// Scoped to the list table: the kanban column's composer stays mounted
-		// (hidden) after the view switch, and `.first()` would pick it.
+		// The hidden kanban composer stays mounted after the view switch.
 		const composer = page.locator('.board-list-table .card-composer__input').first()
 		await composer.fill('Toast list card')
 		await composer.press('Enter')
 
-		// short-budget-ok: a toast dismisses itself at TOAST_DEFAULT_TIMEOUT = 7s, so a 15s wait could outlive it
+		// short-budget-ok: toast auto-dismisses at 7s
 		await expect(toast(page, 'Card created')).toBeVisible({ timeout: 6_000 })
 		await expect(composer).toBeFocused()
 		await toast(page, 'Card created').getByRole('button', { name: 'Open' }).click()

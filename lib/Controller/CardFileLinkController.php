@@ -16,11 +16,6 @@ use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
 use OCP\IUserSession;
 
-/**
- * Card file-link endpoints (KANSO-307): list a card's live Nextcloud Files
- * links, link a node by fileId, and remove a link. The service holds the
- * access model; this layer only maps exceptions to statuses.
- */
 class CardFileLinkController extends Controller {
 	use ApiErrorTrait;
 
@@ -42,11 +37,7 @@ class CardFileLinkController extends Controller {
 		});
 	}
 
-	/**
-	 * Body: {fileId}. Rate-limited like the copy-from-Files endpoint: each call
-	 * resolves the id against the actor's userfolder, so an unthrottled loop
-	 * would make it a cheap fileId probe.
-	 */
+	// Rate-limited: an unthrottled loop would be a cheap fileId probe.
 	#[NoAdminRequired]
 	#[UserRateLimit(limit: 120, period: 3600)]
 	public function create(int $cardId, int $fileId = 0): JSONResponse {
@@ -66,7 +57,7 @@ class CardFileLinkController extends Controller {
 	}
 
 	/**
-	 * @throws NotPermittedException if there is no user session
+	 * @throws NotPermittedException
 	 */
 	private function currentUserId(): string {
 		$user = $this->userSession->getUser();
