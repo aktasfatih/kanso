@@ -186,6 +186,28 @@ class CardFileLinkServiceTest extends TestCase {
 		$this->service->addLink(9, 42, 'bob');
 	}
 
+	public function testAddLinkReturnsTheExistingRowWhenRelinkingOnAFullCard(): void {
+		$this->expectCardLoaded();
+		$this->expectUserFolderById(42, [$this->fileNode()]);
+		$this->fileLinkMapper->method('countByCard')->with(9)->willReturn(CardFileLinkMapper::MAX_PER_CARD);
+		$existing = $this->link(3, 9, 42);
+		$this->fileLinkMapper->method('findByCard')->with(9)->willReturn([$this->link(2, 9, 41), $existing]);
+		$this->fileLinkMapper->expects(self::never())->method('insert');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		self::assertSame($existing, $this->service->addLink(9, 42, 'bob'));
+	}
+
+	public function testAddLinkRefusesAFolder(): void {
+		$this->expectCardLoaded();
+		$this->expectUserFolderById(42, [$this->createMock(Folder::class)]);
+		$this->fileLinkMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('File not found');
+		$this->service->addLink(9, 42, 'bob');
+	}
+
 	/**
 	 * Linking the same file twice (double click, two tabs) loses the
 	 * unique-index race: the existing row comes back and no second change is

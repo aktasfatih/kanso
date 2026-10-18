@@ -79,7 +79,8 @@ class Version006600Date20261018000000 extends SimpleMigrationStep {
 			'default' => 0,
 		]);
 		$table->setPrimaryKey(['id'], 'kanso_cfl_pk');
-		$table->addIndex(['card_id'], 'kanso_cfl_card');
+		// Also serves every per-card read (card_id is its leading column), so no
+		// separate card_id index.
 		$table->addUniqueIndex(['card_id', 'file_id'], 'kanso_cfl_uniq');
 
 		return $schema;

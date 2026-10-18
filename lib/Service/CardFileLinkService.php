@@ -16,6 +16,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeDetailMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\Files\File;
 use OCP\Files\IRootFolder;
 
 /**
@@ -98,19 +99,25 @@ class CardFileLinkService {
 
 		// Resolve from the ACTOR'S OWN userfolder (same as the copy flow): the
 		// actor can only link a node they can already read. First match wins (a
-		// node can appear under several mount points for one user). A folder is
-		// a valid target too - the permalink opens it in Files.
+		// node can appear under several mount points for one user). Files only,
+		// matching the picker - a folder id is refused like an unreadable one.
 		try {
 			$userFolder = $this->rootFolder->getUserFolder($actorUid);
 		} catch (\Throwable $e) {
 			throw new InvalidInputException('File not found');
 		}
 		$node = $userFolder->getById($fileId)[0] ?? null;
-		if ($node === null) {
+		if (!$node instanceof File) {
 			throw new InvalidInputException('File not found');
 		}
 
 		if ($this->fileLinkMapper->countByCard($cardId) >= CardFileLinkMapper::MAX_PER_CARD) {
+			// Re-linking a file that is already on a full card is still the
+			// documented idempotent no-op, not a cap error.
+			$existing = $this->findExistingLink($cardId, $fileId);
+			if ($existing !== null) {
+				return $existing;
+			}
 			throw new InvalidInputException(
 				'A card may have at most ' . CardFileLinkMapper::MAX_PER_CARD . ' file links'
 			);
@@ -134,17 +141,21 @@ class CardFileLinkService {
 			}
 			// Same file already linked (double click / concurrent add) - return
 			// the existing row, and record no second change for it.
-			foreach ($this->fileLinkMapper->findByCard($cardId) as $existing) {
-				if ($existing->getFileId() === $fileId) {
-					return $existing;
-				}
-			}
-			throw $e;
+			return $this->findExistingLink($cardId, $fileId) ?? throw $e;
 		}
 
 		$this->recordChange($card, $link->getName(), $actorUid, Change::VERB_FILE_LINKED);
 
 		return $link;
+	}
+
+	private function findExistingLink(int $cardId, int $fileId): ?CardFileLink {
+		foreach ($this->fileLinkMapper->findByCard($cardId) as $link) {
+			if ($link->getFileId() === $fileId) {
+				return $link;
+			}
+		}
+		return null;
 	}
 
 	/**
