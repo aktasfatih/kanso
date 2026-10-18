@@ -135,6 +135,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<DotsHorizontalIcon :size="20" />
 			</template>
 
+			<!-- Copy IDs lives in the overflow (not inline) because of the #10287
+			     inline-width rule. It is read-only and keeps the selection, and
+			     deliberately has no edit-permission gate, so viewers can use it. -->
+			<NcActionButton
+				:close-after-click="true"
+				@click="$emit('copy-ids')">
+				<template #icon>
+					<ContentCopyIcon :size="20" />
+				</template>
+				{{ t('kanso', 'Copy IDs') }}
+			</NcActionButton>
+			<NcActionSeparator />
+
 			<NcActionCaption v-if="labels.length" :name="t('kanso', 'Remove label')" />
 			<NcActionButton
 				v-for="label in labels"
@@ -221,6 +234,7 @@ import CalendarClockIcon from 'vue-material-design-icons/CalendarClock.vue'
 import CalendarRemoveIcon from 'vue-material-design-icons/CalendarRemove.vue'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
+import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import DotsHorizontalIcon from 'vue-material-design-icons/DotsHorizontal.vue'
 
@@ -328,7 +342,7 @@ function menuHint(items, label) {
 	return items.length > 1 ? { title: label } : {}
 }
 
-const emit = defineEmits(['move', 'add-label', 'remove-label', 'assign', 'set-due', 'set-status', 'archive', 'delete', 'close'])
+const emit = defineEmits(['move', 'add-label', 'remove-label', 'assign', 'set-due', 'set-status', 'archive', 'delete', 'copy-ids', 'close'])
 
 function onDueDateSubmit(value) {
 	if (!value) return
