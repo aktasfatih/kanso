@@ -11,6 +11,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+## [0.38.3](https://github.com/aktasfatih/kanso/compare/v0.38.2...v0.38.3) (2026-10-18)
+
+
+### Bug Fixes
+
+* **deps:** bump @atlaskit/pragmatic-drag-and-drop from 3.1.0 to 4.0.0 ([237bdbd](https://github.com/aktasfatih/kanso/commit/237bdbd55ee79736d74ec9b7998ce166381e375b))
+
 ## [0.38.2](https://github.com/aktasfatih/kanso/compare/v0.38.1...v0.38.2) (2026-10-15)
 
 
