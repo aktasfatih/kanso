@@ -56,6 +56,7 @@ class CardSummaryService {
 		private CardRelationMapper $cardRelationMapper,
 		private RecurRuleMapper $recurRuleMapper,
 		private CardRunningTimerMapper $runningTimerMapper,
+		private CardVisibilityScope $visibilityScope,
 	) {
 	}
 
@@ -64,7 +65,11 @@ class CardSummaryService {
 	 * @return list<array<string, mixed>>
 	 */
 	public function serialize(int $boardId, array $cards, ViewerContext $viewer): array {
-		$blocks = self::partitionBlocks($this->cardRelationMapper->liveBlocksEdgesByBoard($boardId));
+		$blocks = $this->partitionBlocks(
+			$this->cardRelationMapper->liveBlocksEdgesByBoard($boardId),
+			$viewer->userId,
+			static fn (int $edgeBoardId): string => $viewer->role,
+		);
 		return $this->decorate($cards, [
 			'labelIds' => $this->cardLabelMapper->findLabelIdsByBoard($boardId),
 			'assignees' => $this->cardAssigneeMapper->findUserIdsByBoard($boardId),
@@ -115,7 +120,11 @@ class CardSummaryService {
 	 * @return list<array<string, mixed>>
 	 */
 	public function serializeForBoards(array $boardIds, array $cards, string $uid, array $rolesByBoard): array {
-		$blocks = self::partitionBlocks($this->cardRelationMapper->liveBlocksEdgesByBoards($boardIds));
+		$blocks = $this->partitionBlocks(
+			$this->cardRelationMapper->liveBlocksEdgesByBoards($boardIds),
+			$uid,
+			static fn (int $edgeBoardId): ?string => $rolesByBoard[$edgeBoardId] ?? null,
+		);
 		return $this->decorate($cards, [
 			'labelIds' => $this->cardLabelMapper->findLabelIdsByBoards($boardIds),
 			'assignees' => $this->cardAssigneeMapper->findUserIdsByBoards($boardIds),
@@ -136,18 +145,37 @@ class CardSummaryService {
 	/**
 	 * Splits the live `blocks` edges into the two badge sets, keyed by card id.
 	 * The edges already exclude done / deleted blockers, so every target is
-	 * blocked; a source is only "blocking" while its target is still open -
-	 * a blocker of a finished card holds nothing up.
+	 * blocked; a source is only "blocking" while its target is still open AND
+	 * on the board - a blocker of a finished or archived card holds nothing
+	 * the viewer can act on up.
 	 *
-	 * @param list<array{from: int, to: int, toDone: bool}> $edges
+	 * WHOLE-EDGE masking (#3743), the same rule as
+	 * {@see CardRelationService::blocksEdgesForBoard()}: an edge counts only
+	 * when the viewer can see BOTH ends. Otherwise "Blocking" on a visible card
+	 * would assert that some restricted card exists (and flip when it is
+	 * completed), and "Blocked" would do the same for a hidden blocker. The
+	 * card the badge sits on is already visibility-scoped by the caller, so
+	 * checking both ends here is the same as checking the far one. Evaluated
+	 * in PHP off the triples the edge query already carries - no extra query.
+	 *
+	 * Archived BLOCKERS still count toward `blocked` - unchanged behaviour: an
+	 * archived card is parked, not resolved, so the dependency still holds.
+	 *
+	 * @param list<array{boardId: int, from: int, to: int, toDone: bool, toArchived: bool, fromVisibility: ?string, fromCreatorRole: ?string, fromOwner: string, toVisibility: ?string, toCreatorRole: ?string, toOwner: string}> $edges
+	 * @param callable(int): ?string $roleOn the viewer's role on an edge's board
 	 * @return array{blocked: array<int, int>, blocking: array<int, int>}
 	 */
-	private static function partitionBlocks(array $edges): array {
+	private function partitionBlocks(array $edges, string $uid, callable $roleOn): array {
 		$blocked = [];
 		$blocking = [];
 		foreach ($edges as $edge) {
+			$role = $roleOn($edge['boardId']);
+			if (!$this->visibilityScope->isTripleVisibleTo($edge['fromVisibility'], $edge['fromCreatorRole'], $edge['fromOwner'], $uid, $role)
+				|| !$this->visibilityScope->isTripleVisibleTo($edge['toVisibility'], $edge['toCreatorRole'], $edge['toOwner'], $uid, $role)) {
+				continue;
+			}
 			$blocked[$edge['to']] = 1;
-			if (!$edge['toDone']) {
+			if (!$edge['toDone'] && !$edge['toArchived']) {
 				$blocking[$edge['from']] = 1;
 			}
 		}

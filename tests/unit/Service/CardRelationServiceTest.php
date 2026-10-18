@@ -360,4 +360,41 @@ class CardRelationServiceTest extends TestCase {
 		$this->expectException(DoesNotExistException::class);
 		$this->service->addRelation(10, 20, 'relates', 'alice');
 	}
+
+	/**
+	 * The delta neighbour set (KANSO-330): touching 42 re-sends the cards at
+	 * the far end of its blocks edges in BOTH directions, excluding ids the
+	 * window already touched.
+	 */
+	public function testBlocksNeighbourIdsForCollectsBothDirections(): void {
+		$this->relationMapper->expects(self::once())->method('findBlocksEdgesTouching')->with([42, 50])->willReturn([
+			$this->edgeRow(42, 43),
+			$this->edgeRow(41, 42),
+			// Both ends already in the window: nothing new to add.
+			$this->edgeRow(42, 50),
+		]);
+
+		$viewer = ViewerContext::forMember('alice', 1, ViewerContext::ROLE_INTERNAL, true);
+		$ids = $this->service->blocksNeighbourIdsFor([42, 50], $viewer);
+		sort($ids);
+		self::assertSame([41, 43], $ids);
+	}
+
+	/**
+	 * A HIDDEN touched card must not re-send its visible neighbour: an
+	 * unchanged visible card riding a delta would tell the viewer "something
+	 * you can not see, next to this card, just changed". Here the external
+	 * viewer can not see internal card 42 (or carol's private 60), so neither
+	 * edge yields a neighbour; the public card 70's neighbour still does.
+	 */
+	public function testBlocksNeighbourIdsForSkipsEdgesWhoseTouchedEndIsHidden(): void {
+		$this->relationMapper->method('findBlocksEdgesTouching')->willReturn([
+			$this->edgeRow(42, 43, ['fromVisibility' => 'internal', 'fromCreatorRole' => 'internal']),
+			$this->edgeRow(61, 60, ['toVisibility' => 'private', 'toOwner' => 'carol']),
+			$this->edgeRow(70, 71),
+		]);
+
+		$viewer = ViewerContext::forMember('erin', 1, ViewerContext::ROLE_EXTERNAL, false);
+		self::assertSame([71], $this->service->blocksNeighbourIdsFor([42, 60, 70], $viewer));
+	}
 }

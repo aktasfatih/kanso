@@ -11,7 +11,6 @@ use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\AclMapper;
 use OCA\Kanso\Db\CardFieldMapper;
 use OCA\Kanso\Db\CardMapper;
-use OCA\Kanso\Db\CardRelationMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\LabelMapper;
@@ -65,7 +64,6 @@ class BoardController extends Controller {
 		private BoardAccess $boardAccess,
 		private CardSummaryService $cardSummaryService,
 		private CardRelationService $cardRelationService,
-		private CardRelationMapper $cardRelationMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -291,10 +289,19 @@ class BoardController extends Controller {
 			// next full board read. They join the UPSERT set only: $removedCardIds
 			// below is computed over the window's own ids, so a neighbour hidden
 			// from this viewer (or already deleted) is simply omitted, never
-			// reported as a remove for a card the window never touched.
-			$upsertIds = $cardIds === []
-				? []
-				: array_values(array_unique(array_merge($cardIds, $this->cardRelationMapper->blocksNeighbourIds($cardIds))));
+			// reported as a remove for a card the window never touched. Neighbours
+			// of a touched card the viewer can NOT see are left out at the source
+			// (see blocksNeighbourIdsFor) so a hidden change never re-sends a
+			// visible card.
+			$neighbourIds = $cardIds === [] ? [] : $this->cardRelationService->blocksNeighbourIdsFor($cardIds, $viewer);
+			$upsertIds = array_values(array_unique(array_merge($cardIds, $neighbourIds)));
+			// A hub card blocking hundreds of others would otherwise grow the
+			// summary read's IN list without bound. Past the window's own cap the
+			// delta stops being cheap, so take the same exit a saturated window
+			// does: the client refetches the board instead.
+			if (count($upsertIds) >= $limit) {
+				return new JSONResponse(['cursor' => $latest, 'resync' => true]);
+			}
 			$liveCards = $this->cardSummaryService->serialize($id, $this->cardMapper->findSummariesByIds($id, $upsertIds, $viewer), $viewer);
 			$presentCardIds = array_flip(array_map(static fn (array $c): int => $c['id'], $liveCards));
 			$removedCardIds = array_values(array_filter(

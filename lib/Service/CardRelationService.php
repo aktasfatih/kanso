@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -148,18 +149,8 @@ class CardRelationService {
 		// Resolve the viewer's side ONCE; each endpoint then evaluates the same
 		// rule the SQL scope applies - no per-row card fetch, no per-row ACL.
 		$role = $this->visibilityGuard->roleOn($board, $uid);
-		$sees = function (?string $visibility, ?string $creatorRole, string $owner) use ($uid, $role): bool {
-			$endpoint = new Card();
-			$endpoint->setOwner($owner);
-			// Pre-migration NULLs read as 'public'; a null creator_role is left
-			// UNSET so the scope applies its own backfill fold - verbatim the
-			// null handling in groupedForCard()'s $entry closure.
-			$endpoint->setVisibility($visibility ?? CardVisibilityScope::VISIBILITY_PUBLIC);
-			if ($creatorRole !== null) {
-				$endpoint->setCreatorRole($creatorRole);
-			}
-			return $this->visibilityScope->isVisibleTo($endpoint, $uid, $role);
-		};
+		$sees = fn (?string $visibility, ?string $creatorRole, string $owner): bool
+			=> $this->visibilityScope->isTripleVisibleTo($visibility, $creatorRole, $owner, $uid, $role);
 
 		$edges = [];
 		foreach ($rows as $row) {
@@ -170,6 +161,52 @@ class CardRelationService {
 			$edges[] = ['from' => $row['from'], 'to' => $row['to']];
 		}
 		return $edges;
+	}
+
+	/**
+	 * The delta-sync neighbour set (KANSO-330): ids of the cards at the far end
+	 * of every `blocks` edge touching $cardIds whose TOUCHED end the viewer can
+	 * see. Completing / reopening / deleting a card flips its neighbours'
+	 * blocked / blocking badges without a change row of their own, so
+	 * BoardController::changes() re-serializes these too.
+	 *
+	 * Masked on the touched end because that is the only end the summary read
+	 * does not already scope: the neighbour itself goes through the
+	 * viewer-scoped findSummariesByIds, but re-sending a VISIBLE neighbour
+	 * because a HIDDEN card changed would tell the viewer "something you can
+	 * not see, adjacent to this card, just changed" - the same existence
+	 * oracle {@see self::blocksEdgesForBoard()} masks whole edges against. A
+	 * hidden card's edge never counts toward a visible card's badge either
+	 * ({@see CardSummaryService}), so nothing the viewer sees changes anyway.
+	 *
+	 * Accepted staleness: the mask reads the touched card's CURRENT visibility,
+	 * so a card that was just made hidden from this viewer (public -> internal)
+	 * does not re-send its neighbours either, and a visible neighbour can keep
+	 * a stale blocked / blocking badge until the next full board read. That is
+	 * not a leak - the viewer already saw that edge while both ends were
+	 * visible - and the alternative (re-sending on visibility we can no longer
+	 * vouch for) is exactly the oracle this masking exists to close.
+	 *
+	 * No permission check here: the caller has already gated READ on the board.
+	 *
+	 * @param int[] $cardIds
+	 * @return int[] distinct, excluding $cardIds themselves
+	 * @throws \OCP\DB\Exception
+	 */
+	public function blocksNeighbourIdsFor(array $cardIds, ViewerContext $viewer): array {
+		$touched = array_flip($cardIds);
+		$neighbours = [];
+		foreach ($this->relationMapper->findBlocksEdgesTouching($cardIds) as $edge) {
+			if (isset($touched[$edge['from']]) && !isset($touched[$edge['to']])
+				&& $this->visibilityScope->isTripleVisibleTo($edge['fromVisibility'], $edge['fromCreatorRole'], $edge['fromOwner'], $viewer->userId, $viewer->role)) {
+				$neighbours[$edge['to']] = true;
+			}
+			if (isset($touched[$edge['to']]) && !isset($touched[$edge['from']])
+				&& $this->visibilityScope->isTripleVisibleTo($edge['toVisibility'], $edge['toCreatorRole'], $edge['toOwner'], $viewer->userId, $viewer->role)) {
+				$neighbours[$edge['from']] = true;
+			}
+		}
+		return array_keys($neighbours);
 	}
 
 	/**

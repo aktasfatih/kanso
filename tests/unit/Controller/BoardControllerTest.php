@@ -35,6 +35,7 @@ use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\CardRelationService;
 use OCA\Kanso\Service\CardSummaryService;
+use OCA\Kanso\Service\CardVisibilityScope;
 use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -48,6 +49,7 @@ use OCP\AppFramework\Http\Response;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -133,6 +135,7 @@ class BoardControllerTest extends TestCase {
 			$this->cardRelationMapper,
 			$this->recurRuleMapper,
 			$this->createMock(CardRunningTimerMapper::class),
+			new CardVisibilityScope(),
 		);
 
 		$this->controller = new BoardController(
@@ -154,7 +157,6 @@ class BoardControllerTest extends TestCase {
 			$this->boardAccess,
 			$cardSummaryService,
 			$this->cardRelationService,
-			$this->cardRelationMapper,
 		);
 	}
 
@@ -679,8 +681,10 @@ class BoardControllerTest extends TestCase {
 			$this->change(8, Change::ENTITY_CARD, 42, Change::ACTION_UPDATE),
 		]);
 		$this->stubEnrichmentEmpty();
-		$this->cardRelationMapper->expects(self::once())
-			->method('blocksNeighbourIds')->with([42])->willReturn([43]);
+		$this->cardRelationService->expects(self::once())
+			->method('blocksNeighbourIdsFor')
+			->with([42], self::isInstanceOf(ViewerContext::class))
+			->willReturn([43]);
 
 		$touched = new Card();
 		$touched->setId(42);
@@ -716,7 +720,7 @@ class BoardControllerTest extends TestCase {
 			$this->change(8, Change::ENTITY_CARD, 42, Change::ACTION_UPDATE),
 		]);
 		$this->stubEnrichmentEmpty();
-		$this->cardRelationMapper->method('blocksNeighbourIds')->willReturn([77]);
+		$this->cardRelationService->method('blocksNeighbourIdsFor')->willReturn([77]);
 
 		$touched = new Card();
 		$touched->setId(42);
@@ -730,6 +734,42 @@ class BoardControllerTest extends TestCase {
 		$data = $this->controller->changes(1, 5)->getData();
 		self::assertSame([42], array_column($data['cards']['upsert'], 'id'));
 		self::assertSame([], $data['cards']['remove']);
+	}
+
+	/**
+	 * A hub card blocking hundreds of others must not turn one delta into an
+	 * unbounded IN list: once window ids + neighbours reach the window cap
+	 * (500) the endpoint takes the saturated-window exit and asks for a
+	 * resync. Pinned at the boundary: 1 touched + 498 neighbours = 499 ids is
+	 * still a delta, 1 + 499 = 500 resyncs.
+	 *
+	 * @return array<string, array{int, bool}>
+	 */
+	public static function neighbourOverflowProvider(): array {
+		return [
+			'499 ids stays a delta' => [498, false],
+			'500 ids resyncs' => [499, true],
+		];
+	}
+
+	#[DataProvider('neighbourOverflowProvider')]
+	public function testChangesResyncsWhenBlocksNeighboursOverflowTheWindowCap(int $neighbours, bool $resync): void {
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(8);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([
+			$this->change(8, Change::ENTITY_CARD, 42, Change::ACTION_UPDATE),
+		]);
+		$this->stubEnrichmentEmpty();
+		$this->cardRelationService->method('blocksNeighbourIdsFor')->willReturn(range(1000, 999 + $neighbours));
+		// The oversized read is never issued; the in-bounds one is, once.
+		$this->cardMapper->expects($resync ? self::never() : self::once())
+			->method('findSummariesByIds')->willReturn([]);
+		$this->stackMapper->method('findByIds')->willReturn([]);
+
+		$data = $this->controller->changes(1, 5)->getData();
+		self::assertSame($resync, $data['resync']);
+		self::assertSame(8, $data['cursor']);
 	}
 
 	public function testChangesEmptyWindowStillAdvancesCursor(): void {

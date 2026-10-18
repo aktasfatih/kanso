@@ -203,10 +203,17 @@ class CardRelationMapper extends QBMapper {
 	 * Every LIVE `blocks` edge on the board - the source card not done, neither
 	 * end deleted - as one board-scoped query that powers BOTH tile badges:
 	 * the target is "blocked", the source is "blocking" while the target is
-	 * still open. `toDone` rides along so the caller can tell the two apart
-	 * off one result instead of paying a second query per badge.
+	 * still open and on the board. `toDone` / `toArchived` ride along so the
+	 * caller can tell the two apart off one result instead of paying a second
+	 * query per badge.
 	 *
-	 * @return list<array{from: int, to: int, toDone: bool}>
+	 * Both endpoints' visibility triples ride along too, for the same reason
+	 * as {@see self::findBlocksEdgesWithVisibilityByBoard()}: the caller must
+	 * mask whole edges per viewer (#3743) - a badge counted off an edge to a
+	 * card the viewer can not see is an existence oracle - and doing it in PHP
+	 * off these columns keeps the board summary at a fixed query count.
+	 *
+	 * @return list<array{boardId: int, from: int, to: int, toDone: bool, toArchived: bool, fromVisibility: ?string, fromCreatorRole: ?string, fromOwner: string, toVisibility: ?string, toCreatorRole: ?string, toOwner: string}>
 	 * @throws Exception
 	 */
 	public function liveBlocksEdgesByBoard(int $boardId): array {
@@ -218,10 +225,11 @@ class CardRelationMapper extends QBMapper {
 	 * same edge list over MANY boards in ONE query, for the cross-board Views
 	 * feed - whose enrichment must not scale with how many boards the user can
 	 * read. Card ids are globally unique (and a relation never spans boards),
-	 * so the union needs no per-board nesting.
+	 * so the union needs no per-board nesting; `boardId` rides along so the
+	 * caller can mask each edge under the viewer's role on THAT board.
 	 *
 	 * @param int[] $boardIds
-	 * @return list<array{from: int, to: int, toDone: bool}>
+	 * @return list<array{boardId: int, from: int, to: int, toDone: bool, toArchived: bool, fromVisibility: ?string, fromCreatorRole: ?string, fromOwner: string, toVisibility: ?string, toCreatorRole: ?string, toOwner: string}>
 	 * @throws Exception
 	 */
 	public function liveBlocksEdgesByBoards(array $boardIds): array {
@@ -229,8 +237,15 @@ class CardRelationMapper extends QBMapper {
 			return [];
 		}
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('r.card_id', 'r.other_card_id')
+		$qb->select('r.board_id', 'r.card_id', 'r.other_card_id')
 			->selectAlias('dst.done_at', 'to_done_at')
+			->selectAlias('dst.archived', 'to_archived')
+			->selectAlias('src.visibility', 'from_visibility')
+			->selectAlias('src.creator_role', 'from_creator_role')
+			->selectAlias('src.owner', 'from_owner')
+			->selectAlias('dst.visibility', 'to_visibility')
+			->selectAlias('dst.creator_role', 'to_creator_role')
+			->selectAlias('dst.owner', 'to_owner')
 			->from($this->getTableName(), 'r')
 			->innerJoin('r', 'kanso_cards', 'src', $qb->expr()->eq('r.card_id', 'src.id'))
 			->innerJoin('r', 'kanso_cards', 'dst', $qb->expr()->eq('r.other_card_id', 'dst.id'))
@@ -246,9 +261,17 @@ class CardRelationMapper extends QBMapper {
 		$edges = [];
 		while (($row = $result->fetch()) !== false) {
 			$edges[] = [
+				'boardId' => (int)$row['board_id'],
 				'from' => (int)$row['card_id'],
 				'to' => (int)$row['other_card_id'],
 				'toDone' => ((int)$row['to_done_at']) > 0,
+				'toArchived' => (bool)$row['to_archived'],
+				'fromVisibility' => $row['from_visibility'] !== null ? (string)$row['from_visibility'] : null,
+				'fromCreatorRole' => $row['from_creator_role'] !== null ? (string)$row['from_creator_role'] : null,
+				'fromOwner' => (string)$row['from_owner'],
+				'toVisibility' => $row['to_visibility'] !== null ? (string)$row['to_visibility'] : null,
+				'toCreatorRole' => $row['to_creator_role'] !== null ? (string)$row['to_creator_role'] : null,
+				'toOwner' => (string)$row['to_owner'],
 			];
 		}
 		$result->closeCursor();
@@ -256,49 +279,59 @@ class CardRelationMapper extends QBMapper {
 	}
 
 	/**
-	 * Ids of the cards at the OTHER end of any `blocks` edge touching $cardIds,
-	 * in either direction - the delta-sync neighbour set. Completing,
-	 * reopening or deleting a card flips its neighbours' blocked/blocking
-	 * badges without writing a change row for them, so the delta endpoint
-	 * re-serializes these alongside the touched cards.
+	 * Every `blocks` edge touching $cardIds, in either direction, with BOTH
+	 * endpoints' visibility triples - the raw material of the delta-sync
+	 * neighbour set ({@see \OCA\Kanso\Service\CardRelationService::blocksNeighbourIdsFor()}).
+	 * Completing, reopening or deleting a card flips its neighbours'
+	 * blocked/blocking badges without writing a change row for them, so the
+	 * delta endpoint re-serializes those neighbours alongside the touched cards.
 	 *
 	 * Deliberately UNFILTERED by done/deleted: the touched card may itself be
 	 * the one just deleted or completed, and that is exactly the edge whose
-	 * far end needs refreshing. The caller's viewer-scoped summary read drops
-	 * anything the viewer can not (or no longer) see.
+	 * far end needs refreshing. Not chunked: the only caller passes the card
+	 * ids of ONE delta window, which BoardController::changes() already caps
+	 * (a saturated window resyncs instead), so the IN list is bounded.
 	 *
 	 * @param int[] $cardIds
-	 * @return int[] distinct, excluding $cardIds themselves
+	 * @return list<array{from: int, to: int, fromVisibility: ?string, fromCreatorRole: ?string, fromOwner: string, toVisibility: ?string, toCreatorRole: ?string, toOwner: string}>
 	 * @throws Exception
 	 */
-	public function blocksNeighbourIds(array $cardIds): array {
+	public function findBlocksEdgesTouching(array $cardIds): array {
 		if ($cardIds === []) {
 			return [];
 		}
-		$neighbours = [];
-		// Chunked like every other unbounded IN list in the app
-		// ({@see BoardCascade::CHUNK_SIZE}): a big delta window can touch more
-		// cards than one statement should carry.
-		foreach (array_chunk(array_values($cardIds), BoardCascade::CHUNK_SIZE) as $chunk) {
-			$qb = $this->db->getQueryBuilder();
-			$qb->select('card_id', 'other_card_id')
-				->from($this->getTableName())
-				->where($qb->expr()->eq('type', $qb->createNamedParameter(CardRelation::TYPE_BLOCKS)))
-				->andWhere($qb->expr()->orX(
-					$qb->expr()->in('card_id', $qb->createNamedParameter($chunk, IQueryBuilder::PARAM_INT_ARRAY)),
-					$qb->expr()->in('other_card_id', $qb->createNamedParameter($chunk, IQueryBuilder::PARAM_INT_ARRAY)),
-				));
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('r.card_id', 'r.other_card_id')
+			->selectAlias('src.visibility', 'from_visibility')
+			->selectAlias('src.creator_role', 'from_creator_role')
+			->selectAlias('src.owner', 'from_owner')
+			->selectAlias('dst.visibility', 'to_visibility')
+			->selectAlias('dst.creator_role', 'to_creator_role')
+			->selectAlias('dst.owner', 'to_owner')
+			->from($this->getTableName(), 'r')
+			->innerJoin('r', 'kanso_cards', 'src', $qb->expr()->eq('r.card_id', 'src.id'))
+			->innerJoin('r', 'kanso_cards', 'dst', $qb->expr()->eq('r.other_card_id', 'dst.id'))
+			->where($qb->expr()->eq('r.type', $qb->createNamedParameter(CardRelation::TYPE_BLOCKS)))
+			->andWhere($qb->expr()->orX(
+				$qb->expr()->in('r.card_id', $qb->createNamedParameter(array_values($cardIds), IQueryBuilder::PARAM_INT_ARRAY)),
+				$qb->expr()->in('r.other_card_id', $qb->createNamedParameter(array_values($cardIds), IQueryBuilder::PARAM_INT_ARRAY)),
+			));
 
-			$result = $qb->executeQuery();
-			while (($row = $result->fetch()) !== false) {
-				$neighbours[(int)$row['card_id']] = true;
-				$neighbours[(int)$row['other_card_id']] = true;
-			}
-			$result->closeCursor();
+		$result = $qb->executeQuery();
+		$edges = [];
+		while (($row = $result->fetch()) !== false) {
+			$edges[] = [
+				'from' => (int)$row['card_id'],
+				'to' => (int)$row['other_card_id'],
+				'fromVisibility' => $row['from_visibility'] !== null ? (string)$row['from_visibility'] : null,
+				'fromCreatorRole' => $row['from_creator_role'] !== null ? (string)$row['from_creator_role'] : null,
+				'fromOwner' => (string)$row['from_owner'],
+				'toVisibility' => $row['to_visibility'] !== null ? (string)$row['to_visibility'] : null,
+				'toCreatorRole' => $row['to_creator_role'] !== null ? (string)$row['to_creator_role'] : null,
+				'toOwner' => (string)$row['to_owner'],
+			];
 		}
-		foreach ($cardIds as $id) {
-			unset($neighbours[$id]);
-		}
-		return array_keys($neighbours);
+		$result->closeCursor();
+		return $edges;
 	}
 }

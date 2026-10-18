@@ -148,3 +148,71 @@ test.describe('Card relations (#3404)', () => {
 		await expect(page.locator('.card-modal').getByText(state.cTitle).first()).toBeVisible()
 	})
 })
+
+// KANSO-330 review: the blocked/blocking badges are counted off blocks edges,
+// so an edge to a card the viewer can NOT see must not count - otherwise a
+// public card's "Blocking" chip announces a hidden internal card exists (and
+// flips when it is completed). The unit tests prove the PHP rule; this proves
+// the visibility columns the edge query joins in are the right ones, through
+// real SQL, as a real EXTERNAL member.
+test.describe.serial('Blocks badges are masked for viewers who cannot see the other card (KANSO-330)', () => {
+	// Multi-user spec: must not inherit the shared admin storageState (it makes
+	// no page calls today, but a future UI assertion here would silently run as
+	// the owner and false-pass).
+	test.use({ storageState: { cookies: [], origins: [] } })
+
+	const token = 'blkvis' + Math.floor(Date.now() / 1000)
+	const state = { boardId: 0, a: 0, b: 0, c: 0, d: 0 }
+
+	test.beforeAll(async ({ peer }) => {
+		const board = await api.post('/boards', { title: 'BlocksMask ' + token })
+		state.boardId = board.id
+		const stackId = (await api.post('/stacks', { boardId: board.id, title: 'Lane' })).id
+		await api.post(`/boards/${board.id}/acl`, {
+			participant: peer.user,
+			participantType: 'user',
+			permission: 3, // READ | EDIT
+			role: 'external',
+		})
+
+		const mk = async (name, visibility) => {
+			const card = await api.post('/cards', { stackId, title: `${name} ${token}` })
+			if (visibility !== 'public') await api.patch(`/cards/${card.id}`, { visibility })
+			return card.id
+		}
+		// Public A blocks provider-internal B (hidden target)...
+		state.a = await mk('A', 'public')
+		state.b = await mk('B', 'internal')
+		await api.post(`/cards/${state.a}/relations`, { otherCardId: state.b, kind: 'blocks' })
+		// ...and provider-internal C blocks public D (hidden blocker).
+		state.c = await mk('C', 'internal')
+		state.d = await mk('D', 'public')
+		await api.post(`/cards/${state.c}/relations`, { otherCardId: state.d, kind: 'blocks' })
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) await api.delete(`/boards/${state.boardId}`).catch(() => {})
+	})
+
+	test('the owner sees both edges counted', async () => {
+		const board = await api.get(`/boards/${state.boardId}`)
+		expect(boardCard(board, state.a).blocking).toBe(true)
+		expect(boardCard(board, state.b).blocked).toBe(true)
+		expect(boardCard(board, state.c).blocking).toBe(true)
+		expect(boardCard(board, state.d).blocked).toBe(true)
+	})
+
+	test('an external member sees neither hidden card through the badges', async ({ peer }) => {
+		const board = await peer.api.get(`/boards/${state.boardId}`)
+		const ids = board.cards.map((c) => c.id)
+		// The fixture is what we think it is: the public cards are there, the
+		// internal ones are not.
+		expect(ids).toContain(state.a)
+		expect(ids).toContain(state.d)
+		expect(ids).not.toContain(state.b)
+		expect(ids).not.toContain(state.c)
+
+		expect(boardCard(board, state.a).blocking, 'hidden target must not make A read blocking').toBe(false)
+		expect(boardCard(board, state.d).blocked, 'hidden blocker must not make D read blocked').toBe(false)
+	})
+})

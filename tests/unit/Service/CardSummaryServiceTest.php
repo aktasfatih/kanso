@@ -20,6 +20,7 @@ use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\RecurRuleMapper;
 use OCA\Kanso\Service\CardSummaryService;
+use OCA\Kanso\Service\CardVisibilityScope;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -59,7 +60,31 @@ class CardSummaryServiceTest extends TestCase {
 			$this->cardRelationMapper,
 			$this->recurRuleMapper,
 			$this->runningTimerMapper,
+			new CardVisibilityScope(),
 		);
+	}
+
+	/**
+	 * One live blocks edge in the mapper's shape - public on both ends unless
+	 * a test narrows one end to exercise the masking.
+	 *
+	 * @param array<string, mixed> $overrides
+	 * @return array<string, mixed>
+	 */
+	private static function edge(int $from, int $to, array $overrides = []): array {
+		return $overrides + [
+			'boardId' => 1,
+			'from' => $from,
+			'to' => $to,
+			'toDone' => false,
+			'toArchived' => false,
+			'fromVisibility' => 'public',
+			'fromCreatorRole' => 'internal',
+			'fromOwner' => 'carol',
+			'toVisibility' => 'public',
+			'toCreatorRole' => 'internal',
+			'toOwner' => 'carol',
+		];
 	}
 
 	public function testSerializeEnrichesSummariesAndNeverLeaksDescription(): void {
@@ -83,7 +108,7 @@ class CardSummaryServiceTest extends TestCase {
 		$this->cardMapper->method('childProgressByBoard')->with(1)->willReturn([3 => ['total' => 2, 'done' => 1]]);
 		$this->commentMapper->method('countsByBoard')->with(1)->willReturn([3 => 5]);
 		// Card 9 (open, off-list) blocks card 3.
-		$this->cardRelationMapper->method('liveBlocksEdgesByBoard')->with(1)->willReturn([['from' => 9, 'to' => 3, 'toDone' => false]]);
+		$this->cardRelationMapper->method('liveBlocksEdgesByBoard')->with(1)->willReturn([self::edge(9, 3)]);
 		// Card 3 has an enabled recurrence rule; card 4 does not.
 		$this->recurRuleMapper->method('findTemplateCardIdsByBoard')->with(1)->willReturn([3]);
 		// Card 3 has a running timer; card 4 does not.
@@ -129,7 +154,7 @@ class CardSummaryServiceTest extends TestCase {
 	 */
 	public function testBlockingMirrorsBlockedAndIgnoresDoneTargets(): void {
 		$cards = [];
-		foreach ([3, 4, 5, 6, 7] as $id) {
+		foreach ([3, 4, 5, 6, 7, 10] as $id) {
 			$card = new Card();
 			$card->setId($id);
 			$card->setBoardId(1);
@@ -138,8 +163,11 @@ class CardSummaryServiceTest extends TestCase {
 			$cards[] = $card;
 		}
 		$this->cardRelationMapper->expects(self::once())->method('liveBlocksEdgesByBoard')->with(1)->willReturn([
-			['from' => 3, 'to' => 4, 'toDone' => false],
-			['from' => 5, 'to' => 6, 'toDone' => true],
+			self::edge(3, 4),
+			self::edge(5, 6, ['toDone' => true]),
+			// An ARCHIVED (not done) target is off the board: nothing the viewer
+			// can act on is held up, so 10 must not read blocking either.
+			self::edge(10, 11, ['toArchived' => true]),
 		]);
 
 		$viewer = ViewerContext::forMember('alice', 1, ViewerContext::ROLE_INTERNAL, true);
@@ -156,6 +184,77 @@ class CardSummaryServiceTest extends TestCase {
 		// No edges at all: both present, both false.
 		self::assertFalse($out[7]['blocked']);
 		self::assertFalse($out[7]['blocking']);
+		self::assertFalse($out[10]['blocking'], 'a blocker of an archived card holds nothing on the board up');
+	}
+
+	/**
+	 * Whole-edge masking (#3743, KANSO-330 review): a badge counted off an edge
+	 * to a card the viewer can not see is an existence oracle - "Blocking"
+	 * would announce a restricted card, and flip when it is completed. So an
+	 * edge counts only when BOTH ends are visible to the viewer.
+	 *
+	 * The viewer is an EXTERNAL member: 3 blocks an internal-only card 4
+	 * (hidden), a hidden internal card 5 blocks 6, someone else's PRIVATE card
+	 * 7 blocks 8, and the control pair 9 -> 10 is public on both ends.
+	 */
+	public function testBlocksBadgesIgnoreEdgesToCardsTheViewerCannotSee(): void {
+		$cards = [];
+		foreach ([3, 6, 8, 9, 10] as $id) {
+			$card = new Card();
+			$card->setId($id);
+			$card->setBoardId(1);
+			$card->setStackId(2);
+			$card->setTitle('card ' . $id);
+			$cards[] = $card;
+		}
+		$this->cardRelationMapper->method('liveBlocksEdgesByBoard')->willReturn([
+			self::edge(3, 4, ['toVisibility' => 'internal', 'toCreatorRole' => 'internal']),
+			self::edge(5, 6, ['fromVisibility' => 'internal', 'fromCreatorRole' => 'internal']),
+			self::edge(7, 8, ['fromVisibility' => 'private', 'fromOwner' => 'carol']),
+			self::edge(9, 10),
+		]);
+
+		$viewer = ViewerContext::forMember('erin', 1, ViewerContext::ROLE_EXTERNAL, false);
+		$out = array_column($this->service->serialize(1, $cards, $viewer), null, 'id');
+
+		self::assertFalse($out[3]['blocking'], 'hidden target: the blocker must not reveal it');
+		self::assertFalse($out[6]['blocked'], 'hidden blocker: the blocked card must not reveal it');
+		self::assertFalse($out[8]['blocked'], 'another user\'s private blocker stays invisible');
+		// Visible on both ends: unchanged.
+		self::assertTrue($out[9]['blocking']);
+		self::assertTrue($out[10]['blocked']);
+	}
+
+	/**
+	 * The board-SET path masks each edge under the viewer's role on THAT
+	 * edge's board: the same internal-only edge is counted on the board where
+	 * the viewer is internal and dropped where they are external.
+	 */
+	public function testSerializeForBoardsMasksBlocksEdgesPerBoardRole(): void {
+		$cards = [];
+		foreach ([[3, 1], [4, 1], [13, 2], [14, 2]] as [$id, $boardId]) {
+			$card = new Card();
+			$card->setId($id);
+			$card->setBoardId($boardId);
+			$card->setStackId($boardId);
+			$card->setTitle('card ' . $id);
+			$cards[] = $card;
+		}
+		$this->cardRelationMapper->method('liveBlocksEdgesByBoards')->willReturn([
+			self::edge(3, 4, ['toVisibility' => 'internal', 'toCreatorRole' => 'internal']),
+			self::edge(13, 14, ['boardId' => 2, 'toVisibility' => 'internal', 'toCreatorRole' => 'internal']),
+		]);
+
+		$out = array_column($this->service->serializeForBoards(
+			[1, 2],
+			$cards,
+			'alice',
+			[1 => ViewerContext::ROLE_INTERNAL, 2 => ViewerContext::ROLE_EXTERNAL],
+		), null, 'id');
+
+		self::assertTrue($out[3]['blocking']);
+		self::assertTrue($out[4]['blocked']);
+		self::assertFalse($out[13]['blocking'], 'external on board 2: the internal target is hidden');
 	}
 
 	/**
@@ -214,7 +313,7 @@ class CardSummaryServiceTest extends TestCase {
 		$this->commentMapper->method('countsByBoards')->willReturn([3 => 5]);
 		$this->cardReviewMapper->method('reviewStatesByBoard')->willReturn([3 => 'pending']);
 		$this->cardReviewMapper->method('reviewStatesByBoards')->willReturn([3 => 'pending']);
-		$edges = [['from' => 3, 'to' => 8, 'toDone' => false], ['from' => 9, 'to' => 3, 'toDone' => false]];
+		$edges = [self::edge(3, 8), self::edge(9, 3)];
 		$this->cardRelationMapper->method('liveBlocksEdgesByBoard')->willReturn($edges);
 		$this->cardRelationMapper->method('liveBlocksEdgesByBoards')->willReturn($edges);
 		$this->recurRuleMapper->method('findTemplateCardIdsByBoard')->willReturn([3]);
@@ -352,6 +451,7 @@ class CardSummaryServiceTest extends TestCase {
 			new CardRelationMapper($db),
 			new RecurRuleMapper($db),
 			new CardRunningTimerMapper($db),
+			$scope,
 		);
 
 		$cards = [];

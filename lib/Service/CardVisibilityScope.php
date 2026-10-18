@@ -156,6 +156,26 @@ class CardVisibilityScope {
 	}
 
 	/**
+	 * {@see self::isVisibleTo()} for a card known only by its visibility
+	 * TRIPLE - the (visibility, creator_role, owner) columns an edge query
+	 * joins in so a board-wide relation list can be masked per viewer without
+	 * a card fetch per row. Builds a throwaway Card and delegates, so this can
+	 * never become a second copy of the rule.
+	 *
+	 * Pre-migration NULLs read as 'public'; a null creator_role is left UNSET
+	 * so isVisibleTo() applies its own backfill fold.
+	 */
+	public function isTripleVisibleTo(?string $visibility, ?string $creatorRole, string $owner, string $userId, ?string $role): bool {
+		$card = new Card();
+		$card->setOwner($owner);
+		$card->setVisibility($visibility ?? self::VISIBILITY_PUBLIC);
+		if ($creatorRole !== null) {
+			$card->setCreatorRole($creatorRole);
+		}
+		return $this->isVisibleTo($card, $userId, $role);
+	}
+
+	/**
 	 * The PHP counterpart of {@see self::applyPublicOnly()} for one loaded
 	 * card: true only for the 'public' class (a NULL pre-migration value
 	 * reads as 'public', matching the backfill). Used where an emission has
