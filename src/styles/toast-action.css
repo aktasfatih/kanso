@@ -1,0 +1,26 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+/* Global on purpose: toasts mount on document.body, out of reach of scoped styles. */
+.kanso-toast-action {
+	margin-inline-start: 12px;
+	padding: 2px 8px;
+	border: none;
+	border-radius: var(--border-radius-element, 8px);
+	background: transparent;
+	color: var(--color-primary-element);
+	font: inherit;
+	font-weight: bold;
+	cursor: pointer;
+}
+
+.kanso-toast-action:hover {
+	background: var(--color-background-hover);
+}
+
+.kanso-toast-action:focus-visible {
+	outline: 2px solid var(--color-main-text);
+	outline-offset: 1px;
+}

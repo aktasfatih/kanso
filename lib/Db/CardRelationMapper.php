@@ -200,46 +200,114 @@ class CardRelationMapper extends QBMapper {
 	}
 
 	/**
-	 * Card ids on the board that are blocked by at least one NOT-done card -
-	 * powers the tile "blocked" badge in one board-scoped query.
+	 * Live `blocks` edges on the board (source not done) - powers the tile
+	 * "blocked" and "blocking" badges in one board-scoped query.
 	 *
-	 * @return int[]
+	 * @return list<array{boardId: int, from: int, to: int, toDone: bool, toArchived: bool, fromVisibility: ?string, fromCreatorRole: ?string, fromOwner: string, toVisibility: ?string, toCreatorRole: ?string, toOwner: string}>
 	 * @throws Exception
 	 */
-	public function blockedCardIdsByBoard(int $boardId): array {
-		return $this->blockedCardIdsByBoards([$boardId]);
+	public function liveBlocksEdgesByBoard(int $boardId): array {
+		return $this->liveBlocksEdgesByBoards([$boardId]);
 	}
 
 	/**
-	 * The BOARD-SET twin of {@see self::blockedCardIdsByBoard()} (#10298): the
-	 * same id list over MANY boards in ONE query, for the cross-board Views
+	 * The BOARD-SET twin of {@see self::liveBlocksEdgesByBoard()} (#10298): the
+	 * same edge list over MANY boards in ONE query, for the cross-board Views
 	 * feed - whose enrichment must not scale with how many boards the user can
 	 * read. Card ids are globally unique, so the union needs no per-board
 	 * nesting.
 	 *
 	 * @param int[] $boardIds
-	 * @return int[]
+	 * @return list<array{boardId: int, from: int, to: int, toDone: bool, toArchived: bool, fromVisibility: ?string, fromCreatorRole: ?string, fromOwner: string, toVisibility: ?string, toCreatorRole: ?string, toOwner: string}>
 	 * @throws Exception
 	 */
-	public function blockedCardIdsByBoards(array $boardIds): array {
+	public function liveBlocksEdgesByBoards(array $boardIds): array {
 		if ($boardIds === []) {
 			return [];
 		}
 		$qb = $this->db->getQueryBuilder();
-		$qb->selectDistinct('r.other_card_id')
+		$qb->select('r.board_id', 'r.card_id', 'r.other_card_id')
+			->selectAlias('dst.done_at', 'to_done_at')
+			->selectAlias('dst.archived', 'to_archived')
+			->selectAlias('src.visibility', 'from_visibility')
+			->selectAlias('src.creator_role', 'from_creator_role')
+			->selectAlias('src.owner', 'from_owner')
+			->selectAlias('dst.visibility', 'to_visibility')
+			->selectAlias('dst.creator_role', 'to_creator_role')
+			->selectAlias('dst.owner', 'to_owner')
 			->from($this->getTableName(), 'r')
-			->innerJoin('r', 'kanso_cards', 'blocker', $qb->expr()->eq('r.card_id', 'blocker.id'))
+			->innerJoin('r', 'kanso_cards', 'src', $qb->expr()->eq('r.card_id', 'src.id'))
+			->innerJoin('r', 'kanso_cards', 'dst', $qb->expr()->eq('r.other_card_id', 'dst.id'))
 			->where($qb->expr()->in('r.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('r.type', $qb->createNamedParameter(CardRelation::TYPE_BLOCKS)))
-			->andWhere($qb->expr()->eq('blocker.done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->eq('blocker.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+			->andWhere($qb->expr()->eq('src.done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('src.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('dst.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
 
 		$result = $qb->executeQuery();
-		$ids = [];
+		$edges = [];
 		while (($row = $result->fetch()) !== false) {
-			$ids[] = (int)$row['other_card_id'];
+			$edges[] = [
+				'boardId' => (int)$row['board_id'],
+				'from' => (int)$row['card_id'],
+				'to' => (int)$row['other_card_id'],
+				'toDone' => ((int)$row['to_done_at']) > 0,
+				'toArchived' => (bool)$row['to_archived'],
+				'fromVisibility' => $row['from_visibility'] !== null ? (string)$row['from_visibility'] : null,
+				'fromCreatorRole' => $row['from_creator_role'] !== null ? (string)$row['from_creator_role'] : null,
+				'fromOwner' => (string)$row['from_owner'],
+				'toVisibility' => $row['to_visibility'] !== null ? (string)$row['to_visibility'] : null,
+				'toCreatorRole' => $row['to_creator_role'] !== null ? (string)$row['to_creator_role'] : null,
+				'toOwner' => (string)$row['to_owner'],
+			];
 		}
 		$result->closeCursor();
-		return $ids;
+		return $edges;
+	}
+
+	/**
+	 * Unfiltered by done/deleted: the touched card may be the one just completed or deleted.
+	 *
+	 * @param int[] $cardIds
+	 * @return list<array{from: int, to: int, fromVisibility: ?string, fromCreatorRole: ?string, fromOwner: string, toVisibility: ?string, toCreatorRole: ?string, toOwner: string}>
+	 * @throws Exception
+	 */
+	public function findBlocksEdgesTouching(array $cardIds): array {
+		if ($cardIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('r.card_id', 'r.other_card_id')
+			->selectAlias('src.visibility', 'from_visibility')
+			->selectAlias('src.creator_role', 'from_creator_role')
+			->selectAlias('src.owner', 'from_owner')
+			->selectAlias('dst.visibility', 'to_visibility')
+			->selectAlias('dst.creator_role', 'to_creator_role')
+			->selectAlias('dst.owner', 'to_owner')
+			->from($this->getTableName(), 'r')
+			->innerJoin('r', 'kanso_cards', 'src', $qb->expr()->eq('r.card_id', 'src.id'))
+			->innerJoin('r', 'kanso_cards', 'dst', $qb->expr()->eq('r.other_card_id', 'dst.id'))
+			->where($qb->expr()->eq('r.type', $qb->createNamedParameter(CardRelation::TYPE_BLOCKS)))
+			->andWhere($qb->expr()->orX(
+				$qb->expr()->in('r.card_id', $qb->createNamedParameter(array_values($cardIds), IQueryBuilder::PARAM_INT_ARRAY)),
+				$qb->expr()->in('r.other_card_id', $qb->createNamedParameter(array_values($cardIds), IQueryBuilder::PARAM_INT_ARRAY)),
+			));
+
+		$result = $qb->executeQuery();
+		$edges = [];
+		while (($row = $result->fetch()) !== false) {
+			$edges[] = [
+				'from' => (int)$row['card_id'],
+				'to' => (int)$row['other_card_id'],
+				'fromVisibility' => $row['from_visibility'] !== null ? (string)$row['from_visibility'] : null,
+				'fromCreatorRole' => $row['from_creator_role'] !== null ? (string)$row['from_creator_role'] : null,
+				'fromOwner' => (string)$row['from_owner'],
+				'toVisibility' => $row['to_visibility'] !== null ? (string)$row['to_visibility'] : null,
+				'toCreatorRole' => $row['to_creator_role'] !== null ? (string)$row['to_creator_role'] : null,
+				'toOwner' => (string)$row['to_owner'],
+			];
+		}
+		$result->closeCursor();
+		return $edges;
 	}
 }

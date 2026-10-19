@@ -915,7 +915,7 @@ test.describe('the bulk action bar at a phone width', () => {
 			// …and the page still does not scroll sideways.
 			expect(m.scrollWidth).toBeLessThanOrEqual(m.viewportWidth + 1)
 
-			// All 9 actions are still available: five inline (count aside), the rest
+			// All 10 actions are still available: three inline (count aside), the rest
 			// as entries in the one overflow menu.
 			// The overflow holds a date input as well as buttons, so NcActions gives
 			// its popover role=dialog rather than role=menu (a menu may only contain
@@ -923,6 +923,7 @@ test.describe('the bulk action bar at a phone width', () => {
 			// button-only "Move to…" picker below.
 			await page.getByRole('button', { name: 'More actions' }).tap()
 			const more = page.getByRole('dialog', { name: 'More actions' })
+			await expect(more.getByRole('button', { name: 'Copy IDs' })).toBeVisible()
 			await expect(more.getByRole('button', { name: 'Remove label Bug' })).toBeVisible()
 			await expect(more.getByRole('button', { name: /^Assign to / }).first()).toBeVisible()
 			await expect(more.getByRole('button', { name: 'Clear due date' })).toBeVisible()

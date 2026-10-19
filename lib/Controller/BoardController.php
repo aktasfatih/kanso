@@ -281,7 +281,14 @@ class BoardController extends Controller {
 			// hidden from THIS viewer is absent from $liveCards and lands in the
 			// remove list below - the client drops it from its cache, and its
 			// change rows (entity_id/action only, no title) leak nothing.
-			$liveCards = $this->cardSummaryService->serialize($id, $this->cardMapper->findSummariesByIds($id, $cardIds, $viewer), $viewer);
+			// Blocks neighbours ride along (upsert only): their badge flips without a change row of their own.
+			$neighbourIds = $cardIds === [] ? [] : $this->cardRelationService->blocksNeighbourIdsFor($cardIds, $viewer);
+			$upsertIds = array_values(array_unique(array_merge($cardIds, $neighbourIds)));
+			// Bound the IN list: a hub card can block hundreds of others.
+			if (count($upsertIds) >= $limit) {
+				return new JSONResponse(['cursor' => $latest, 'resync' => true]);
+			}
+			$liveCards = $this->cardSummaryService->serialize($id, $this->cardMapper->findSummariesByIds($id, $upsertIds, $viewer), $viewer);
 			$presentCardIds = array_flip(array_map(static fn (array $c): int => $c['id'], $liveCards));
 			$removedCardIds = array_values(array_filter(
 				$cardIds,

@@ -308,7 +308,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</template>
 					{{ tpl.title }}
 				</NcActionButton>
+				<!-- NcActionText takes its left inset from the icon column. -->
 				<NcActionText v-if="templatesLoaded && templates.length === 0">
+					<template #icon>
+						<InformationOutlineIcon :size="20" />
+					</template>
 					{{ t('kanso', 'No templates yet. Open any card and choose "Mark as template" from its actions menu.') }}
 				</NcActionText>
 				<!-- Discoverable entry to the board-scoped template manager (view /
@@ -415,10 +419,12 @@ import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import TextBoxOutlineIcon from 'vue-material-design-icons/TextBoxOutline.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
+import InformationOutlineIcon from 'vue-material-design-icons/InformationOutline.vue'
 import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
 import CardTile from './CardTile.vue'
 import { cssColor } from '../services/color.js'
 import { parseDueToken } from '../utils/dueTokens.js'
+import { showCardCreatedToast } from '../utils/cardCreatedToast.js'
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
@@ -996,12 +1002,13 @@ onUnmounted(() => {
 	stackDragCleanup()
 })
 
-function openCard(cardId) {
+// The card-created toast passes its own boardId because it outlives a route change.
+function openCard(cardId, boardId = route.params.id) {
 	// Notify BoardView so keyboard focusedCardId stays in sync with mouse clicks
 	props.onCardFocus?.(cardId)
 	router.push({
 		name: 'card-modal',
-		params: { id: route.params.id, cardId },
+		params: { id: boardId, cardId },
 	})
 }
 
@@ -1111,21 +1118,27 @@ async function createCardsFromText(text) {
 	composerError.value = ''
 	isPending.value = true
 	const ordered = props.newCardsOnTop ? [...titles].reverse() : titles
+	let created = null
 	try {
 		for (const title of ordered) {
 			// A recognized trailing natural-date token (#3416) sets the card's due
 			// date and is stripped from the title; anything else leaves it intact.
 			const { title: parsedTitle, duedate, allDay } = parseDueToken(title)
-			await props.onCreateCard(props.stack.id, parsedTitle, duedate, allDay)
+			created = await props.onCreateCard(props.stack.id, parsedTitle, duedate, allDay)
 		}
 		newCardTitle.value = ''
-		// Re-focus for rapid entry - the signature UX
-		composerInputRef.value?.focus()
+		if (titles.length === 1 && created?.id) showCardCreatedToast(() => openCard(created.id, created.boardId))
 	} catch (err) {
 		composerError.value =
 			err?.response?.data?.error || t('kanso', 'Failed to create card.')
 	} finally {
 		isPending.value = false
+	}
+	// Re-focus for rapid entry - the signature UX
+	// after nextTick: the input is :disabled while pending, so focus() would no-op.
+	if (!composerError.value) {
+		await nextTick()
+		composerInputRef.value?.focus()
 	}
 }
 
@@ -1157,7 +1170,8 @@ async function createFromTemplate(templateId) {
 	composerError.value = ''
 	isPending.value = true
 	try {
-		await props.onCreateFromTemplate(props.stack.id, templateId)
+		const created = await props.onCreateFromTemplate(props.stack.id, templateId)
+		if (created?.id) showCardCreatedToast(() => openCard(created.id, created.boardId))
 	} catch (err) {
 		composerError.value =
 			err?.response?.data?.error || t('kanso', 'Failed to create card from template.')

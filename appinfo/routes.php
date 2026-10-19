@@ -283,6 +283,10 @@ return [
 		['name' => 'cardLink#create', 'url' => '/api/cards/{cardId}/links', 'verb' => 'POST'],
 		['name' => 'cardLink#destroy', 'url' => '/api/cards/{cardId}/links/{linkId}', 'verb' => 'DELETE'],
 
+		['name' => 'cardFileLink#index', 'url' => '/api/cards/{cardId}/file-links', 'verb' => 'GET'],
+		['name' => 'cardFileLink#create', 'url' => '/api/cards/{cardId}/file-links', 'verb' => 'POST'],
+		['name' => 'cardFileLink#destroy', 'url' => '/api/cards/{cardId}/file-links/{linkId}', 'verb' => 'DELETE'],
+
 		['name' => 'cardAttachment#index', 'url' => '/api/cards/{cardId}/attachments', 'verb' => 'GET'],
 		['name' => 'cardAttachment#create', 'url' => '/api/cards/{cardId}/attachments', 'verb' => 'POST'],
 		// "Share from Files" (#3645): copy a file from the actor's own Nextcloud

@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
@@ -148,18 +149,8 @@ class CardRelationService {
 		// Resolve the viewer's side ONCE; each endpoint then evaluates the same
 		// rule the SQL scope applies - no per-row card fetch, no per-row ACL.
 		$role = $this->visibilityGuard->roleOn($board, $uid);
-		$sees = function (?string $visibility, ?string $creatorRole, string $owner) use ($uid, $role): bool {
-			$endpoint = new Card();
-			$endpoint->setOwner($owner);
-			// Pre-migration NULLs read as 'public'; a null creator_role is left
-			// UNSET so the scope applies its own backfill fold - verbatim the
-			// null handling in groupedForCard()'s $entry closure.
-			$endpoint->setVisibility($visibility ?? CardVisibilityScope::VISIBILITY_PUBLIC);
-			if ($creatorRole !== null) {
-				$endpoint->setCreatorRole($creatorRole);
-			}
-			return $this->visibilityScope->isVisibleTo($endpoint, $uid, $role);
-		};
+		$sees = fn (?string $visibility, ?string $creatorRole, string $owner): bool
+			=> $this->visibilityScope->isTripleVisibleTo($visibility, $creatorRole, $owner, $uid, $role);
 
 		$edges = [];
 		foreach ($rows as $row) {
@@ -170,6 +161,29 @@ class CardRelationService {
 			$edges[] = ['from' => $row['from'], 'to' => $row['to']];
 		}
 		return $edges;
+	}
+
+	/**
+	 * Masked on the touched end: a hidden card's change must not re-send a visible neighbour.
+	 *
+	 * @param int[] $cardIds
+	 * @return int[]
+	 * @throws \OCP\DB\Exception
+	 */
+	public function blocksNeighbourIdsFor(array $cardIds, ViewerContext $viewer): array {
+		$touched = array_flip($cardIds);
+		$neighbours = [];
+		foreach ($this->relationMapper->findBlocksEdgesTouching($cardIds) as $edge) {
+			if (isset($touched[$edge['from']]) && !isset($touched[$edge['to']])
+				&& $this->visibilityScope->isTripleVisibleTo($edge['fromVisibility'], $edge['fromCreatorRole'], $edge['fromOwner'], $viewer->userId, $viewer->role)) {
+				$neighbours[$edge['to']] = true;
+			}
+			if (isset($touched[$edge['to']]) && !isset($touched[$edge['from']])
+				&& $this->visibilityScope->isTripleVisibleTo($edge['toVisibility'], $edge['toCreatorRole'], $edge['toOwner'], $viewer->userId, $viewer->role)) {
+				$neighbours[$edge['from']] = true;
+			}
+		}
+		return array_keys($neighbours);
 	}
 
 	/**

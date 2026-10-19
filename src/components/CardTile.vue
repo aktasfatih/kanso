@@ -49,7 +49,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
-				v-if="card.parentCardId || isInProgress || card.blocked || card.waitingOnExternal || card.recurring || (card.timerRunning && cardFeatures.timeTracking) || card.duedate || (cardFeatures.checklist && card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate || isRestricted"
+				v-if="card.parentCardId || isInProgress || card.blocked || card.blocking || card.waitingOnExternal || card.recurring || (card.timerRunning && cardFeatures.timeTracking) || card.duedate || (cardFeatures.checklist && card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate || isRestricted"
 				class="card-tile__meta">
 				<!-- Sub-card marker: this card hangs under another one. The board draws
 				     no indent (columns are flat), so without this a sub-card is
@@ -89,6 +89,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:aria-label="t('kanso', 'Blocked by another card')">
 					<CancelIcon :size="12" />
 					{{ t('kanso', 'Blocked') }}
+				</span>
+				<span
+					v-if="card.blocking"
+					class="card-tile__blocking"
+					:aria-label="t('kanso', 'Blocking another card')"
+					:title="t('kanso', 'Blocking another card')">
+					<HandBackLeftOutlineIcon :size="12" />
+					{{ t('kanso', 'Blocking') }}
 				</span>
 				<!-- Waiting-on-client chip (#3746) - derived server-side from the
 				     card's open steps assigned to the external side; appears and
@@ -250,6 +258,7 @@ import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import CheckDecagramOutlineIcon from 'vue-material-design-icons/CheckDecagramOutline.vue'
 import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
 import CancelIcon from 'vue-material-design-icons/Cancel.vue'
+import HandBackLeftOutlineIcon from 'vue-material-design-icons/HandBackLeftOutline.vue'
 import AccountClockIcon from 'vue-material-design-icons/AccountClock.vue'
 import LockOutlineIcon from 'vue-material-design-icons/LockOutline.vue'
 import BugIcon from 'vue-material-design-icons/Bug.vue'
@@ -968,6 +977,20 @@ const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.
 	background: color-mix(in srgb, var(--kanso-error-legible) 8%, transparent);
 }
 
+/* Neutral on purpose: the blocker is not itself stuck, so no red/amber. */
+.card-tile__blocking {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 0.72rem;
+	font-weight: 600;
+	padding: 1px 6px;
+	border-radius: 8px;
+	color: var(--color-text-maxcontrast);
+	border: 1px solid var(--color-border-dark);
+	background: var(--color-background-hover);
+}
+
 /* Waiting-on-client chip (#3746) - amber "ball is with the client" signal.
  * --kanso-warning-legible adapts per theme and keeps text contrast; distinct
  * from the blocked chip's red (blocked = stuck, waiting = parked with the other
@@ -1088,6 +1111,7 @@ const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.
 .card-tile--compact .card-tile__review,
 .card-tile--compact .card-tile__inprogress,
 .card-tile--compact .card-tile__blocked,
+.card-tile--compact .card-tile__blocking,
 .card-tile--compact .card-tile__waiting {
 	font-size: 0.68rem;
 	padding: 0 5px;

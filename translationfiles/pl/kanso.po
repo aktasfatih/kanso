@@ -291,7 +291,7 @@ msgstr[0] "%n karta"
 msgstr[1] "%n karty"
 msgstr[2] "%n kart"
 
-#: src/components/StackColumn.vue:1053
+#: src/components/StackColumn.vue:1060
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "Zarchiwizowano %n kartę"
@@ -326,7 +326,7 @@ msgstr[0] "Wykryto %n wiersz danych"
 msgstr[1] "Wykryto %n wiersze danych"
 msgstr[2] "Wykryto %n wierszy danych"
 
-#: src/components/CardDetail.vue:4880
+#: src/components/CardDetail.vue:4919
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dzień temu"
@@ -340,12 +340,19 @@ msgstr[0] "%n plik"
 msgstr[1] "%n pliki"
 msgstr[2] "%n plików"
 
-#: src/components/CardDetail.vue:4878
+#: src/components/CardDetail.vue:4917
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n godzinę temu"
 msgstr[1] "%n godziny temu"
 msgstr[2] "%n godzin temu"
+
+#: src/views/BoardView.vue:2625
+msgid "%n ID copied."
+msgid_plural "%n IDs copied."
+msgstr[0] "Skopiowano %n identyfikator."
+msgstr[1] "Skopiowano %n identyfikatory."
+msgstr[2] "Skopiowano %n identyfikatorów."
 
 #: src/views/BoardList.vue:215
 msgid "%n label"
@@ -368,7 +375,7 @@ msgstr[0] "%n etykieta nie została utworzona i brakuje jej na zaimportowanych k
 msgstr[1] "%n etykiety nie zostały utworzone i brakuje ich na zaimportowanych kartach: tylko osoby zarządzające tablicą mogą dodawać nowe etykiety. Poproś taką osobę, aby je dodała, a potem ustaw je na kartach."
 msgstr[2] "%n etykiet nie zostało utworzonych i brakuje ich na zaimportowanych kartach: tylko osoby zarządzające tablicą mogą dodawać nowe etykiety. Poproś taką osobę, aby je dodała, a potem ustaw je na kartach."
 
-#: src/components/CardDetail.vue:4876
+#: src/components/CardDetail.vue:4915
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minutę temu"
@@ -403,7 +410,7 @@ msgstr[0] "%n projekt"
 msgstr[1] "%n projekty"
 msgstr[2] "%n projektów"
 
-#: src/components/CardDetail.vue:2235
+#: src/components/CardDetail.vue:2265
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n odpowiedź"
@@ -925,6 +932,14 @@ msgstr "Zablokowana przez"
 msgid "Blocked by another card"
 msgstr "Zablokowana przez inną kartę"
 
+#: src/components/CardTile.vue
+msgid "Blocking"
+msgstr "Blokująca"
+
+#: src/components/CardTile.vue
+msgid "Blocking another card"
+msgstr "Blokuje inną kartę"
+
 #: src/components/MarkdownEditor.vue
 msgid "Blockquote"
 msgstr "Cytat blokowy"
@@ -1108,6 +1123,10 @@ msgstr "Skopiowano kartę jako prompt."
 #: src/components/CardDetail.vue
 msgid "Card copied."
 msgstr "Skopiowano kartę."
+
+#: src/utils/cardCreatedToast.js
+msgid "Card created"
+msgstr "Utworzono kartę"
 
 #: src/components/CardDetail.vue
 msgid "Card deleted"
@@ -1343,9 +1362,9 @@ msgstr "Lista kontrolna nieukończona"
 msgid "Checklist progress {done} of {total}"
 msgstr "Postęp listy kontrolnej: {done} z {total}"
 
-#: src/components/BoardListView.vue:1071
+#: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:480
+#: src/components/CardTile.vue:489
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Postęp listy kontrolnej: {done} z {total}, %n krok po terminie"
@@ -1368,6 +1387,10 @@ msgstr "Wybierz plik CSV"
 #: src/components/CardDetail.vue
 msgid "Choose a file to attach"
 msgstr "Wybierz plik do załączenia"
+
+#: src/components/CardDetail.vue
+msgid "Choose a file to link"
+msgstr "Wybierz plik do powiązania"
 
 #: src/components/CardDetail.vue
 msgid "Choose from Files"
@@ -1436,6 +1459,7 @@ msgid "Client status"
 msgstr "Status po stronie klienta"
 
 #: src/components/CardDetail.vue
+#: src/views/BoardView.vue
 msgid "Clipboard is not available in this context."
 msgstr "Schowek jest niedostępny w tym kontekście."
 
@@ -1461,6 +1485,10 @@ msgstr "Zamknięte"
 #: src/components/CardDetail.vue
 msgid "Code"
 msgstr "Kod"
+
+#: src/components/MarkdownEditor.vue
+msgid "Code block"
+msgstr "Blok kodu"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Code links"
@@ -1592,6 +1620,10 @@ msgstr "Kopiuj kartę do…"
 msgid "Copy cards too"
 msgstr "Kopiuj także karty"
 
+#: src/components/BulkActionBar.vue
+msgid "Copy IDs"
+msgstr "Kopiuj identyfikatory"
+
 #: src/components/CardDetail.vue
 msgid "Copy reference {ref}"
 msgstr "Kopiuj oznaczenie {ref}"
@@ -1626,6 +1658,7 @@ msgstr "Nie udało się skopiować do schowka"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
+#: src/views/BoardView.vue
 msgid "Could not copy to clipboard."
 msgstr "Nie udało się skopiować do schowka."
 
@@ -1875,7 +1908,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:2209
-#: src/components/CardDetail.vue:5069
+#: src/components/CardDetail.vue:5108
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dzień"
@@ -2645,6 +2678,10 @@ msgstr "Nie udało się opuścić tablicy."
 msgid "Failed to link card."
 msgstr "Nie udało się powiązać karty."
 
+#: src/components/CardDetail.vue
+msgid "Failed to link the file."
+msgstr "Nie udało się powiązać pliku."
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Failed to load analytics. Please try again."
@@ -2781,6 +2818,10 @@ msgstr "Nie udało się usunąć powiązania."
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to remove share."
 msgstr "Nie udało się usunąć udostępnienia."
+
+#: src/components/CardDetail.vue
+msgid "Failed to remove the file link."
+msgstr "Nie udało się usunąć powiązania z plikiem."
 
 #: src/components/CardDetail.vue
 msgid "Failed to remove time entry."
@@ -3362,7 +3403,7 @@ msgstr "Cel, zakres lub zasady. Każdy użytkownik tej tablicy może je przeczyt
 msgid "Jump to the discussion"
 msgstr "Przejdź do dyskusji"
 
-#: src/components/CardDetail.vue:6842
+#: src/components/CardDetail.vue:6929
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Przejdź do dyskusji (%n komentarz)"
@@ -3555,13 +3596,37 @@ msgstr "Odnośnik wygasł"
 msgid "Link expires on"
 msgstr "Odnośnik wygasa dnia"
 
+#: src/components/CardDetail.vue
+msgid "Link file"
+msgstr "Powiąż plik"
+
+#: src/components/CardDetail.vue
+msgid "Link from Files"
+msgstr "Powiąż z Plików"
+
 #: templates/public-notfound.php
 msgid "Link not available"
 msgstr "Odnośnik niedostępny"
 
 #: src/components/CardDetail.vue
+msgid "Link the file itself — the card opens the current version in Files"
+msgstr "Powiąż sam plik — karta otwiera bieżącą wersję w Plikach"
+
+#: src/components/CardDetail.vue
+msgid "linked {value}"
+msgstr "powiązał {value}"
+
+#: src/components/CardDetail.vue
 msgid "linked a contact"
 msgstr "powiązał kontakt"
+
+#: src/components/CardDetail.vue
+msgid "linked a file"
+msgstr "powiązał plik"
+
+#: src/components/CardDetail.vue
+msgid "Linking…"
+msgstr "Wiązanie…"
 
 #: src/views/BoardView.vue
 #: src/views/ViewPage.vue
@@ -3695,7 +3760,7 @@ msgid "Mon"
 msgstr "Pn"
 
 #: src/components/BoardSettingsModal.vue:2211
-#: src/components/CardDetail.vue:5071
+#: src/components/CardDetail.vue:5110
 msgid "month"
 msgid_plural "months"
 msgstr[0] "miesiąc"
@@ -4171,6 +4236,10 @@ msgstr "Nikt z dostępem do tej tablicy nie pasuje do zapytania."
 msgid "None"
 msgstr "Brak"
 
+#: src/views/BoardView.vue
+msgid "None of the selected cards has an ID yet."
+msgstr "Żadna z zaznaczonych kart nie ma jeszcze identyfikatora."
+
 #: src/composables/useBoardFilters.js
 msgid "Not blocked"
 msgstr "Niezablokowana"
@@ -4272,6 +4341,7 @@ msgstr "otwórz"
 
 #: src/components/CardDetail.vue
 #: src/components/CardPreview.vue
+#: src/utils/cardCreatedToast.js
 msgid "Open"
 msgstr "Otwórz"
 
@@ -4699,6 +4769,10 @@ msgstr "Usuń etykietę {label}"
 #: src/components/CardDetail.vue
 msgid "Remove link"
 msgstr "Usuń odnośnik"
+
+#: src/components/CardDetail.vue
+msgid "Remove link to {name}"
+msgstr "Usuń powiązanie z {name}"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Remove mailbox"
@@ -5170,7 +5244,7 @@ msgstr "Pokaż dyskusję pod kartą"
 msgid "Show the discussion panel"
 msgstr "Pokaż panel dyskusji"
 
-#: src/components/CardDetail.vue:6848
+#: src/components/CardDetail.vue:6935
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Pokaż panel dyskusji (%n komentarz)"
@@ -5749,8 +5823,16 @@ msgid "Unlink contact"
 msgstr "Odłącz kontakt"
 
 #: src/components/CardDetail.vue
+msgid "unlinked {value}"
+msgstr "odłączył {value}"
+
+#: src/components/CardDetail.vue
 msgid "unlinked a contact"
 msgstr "odłączył kontakt"
+
+#: src/components/CardDetail.vue
+msgid "unlinked a file"
+msgstr "odłączył plik"
 
 #: src/components/CardDetail.vue
 #: src/components/ManageTemplatesModal.vue
@@ -5911,7 +5993,7 @@ msgid "Wed"
 msgstr "Śr"
 
 #: src/components/BoardSettingsModal.vue:2210
-#: src/components/CardDetail.vue:5070
+#: src/components/CardDetail.vue:5109
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "tydzień"
@@ -6013,7 +6095,7 @@ msgid "wrote"
 msgstr "napisał"
 
 #: src/components/BoardSettingsModal.vue:2212
-#: src/components/CardDetail.vue:5072
+#: src/components/CardDetail.vue:5111
 msgid "year"
 msgid_plural "years"
 msgstr[0] "rok"

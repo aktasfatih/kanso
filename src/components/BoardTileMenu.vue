@@ -68,6 +68,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				{{ t('kanso', 'Remove from folder') }}
 			</NcActionButton>
 			<NcActionText v-if="groups.length === 0">
+				<template #icon>
+					<FolderOutlineIcon :size="20" />
+				</template>
 				{{ t('kanso', 'No folders yet') }}
 			</NcActionText>
 

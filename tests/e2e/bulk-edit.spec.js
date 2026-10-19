@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, toast, BASE } from './helpers.js'
 
 // Titles of the cards currently in a stack (from the board summary payload).
 async function stackTitles(boardId, stackId) {
@@ -91,6 +91,7 @@ test.describe('Bulk edit cards (multi-select)', () => {
 		// menuitems) — the button-only "Move to…" picker below is still a menu.
 		await page.getByRole('button', { name: 'More actions' }).click()
 		const more = page.getByRole('dialog', { name: 'More actions' })
+		await expect(more.getByRole('button', { name: 'Copy IDs' })).toBeVisible()
 		await expect(more.getByRole('button', { name: 'Remove label Bug' })).toBeVisible()
 		await expect(more.getByRole('button', { name: 'Remove label Chore' })).toBeVisible()
 		await expect(more.getByRole('button', { name: /^Assign to / }).first()).toBeVisible()
@@ -111,6 +112,44 @@ test.describe('Bulk edit cards (multi-select)', () => {
 		await expect
 			.poll(() => stackTitles(state.boardId, state.todoId))
 			.toEqual(['Charlie'])
+	})
+
+	test('Copy IDs copies the selected cards\' human ids in board order and keeps the selection', async ({ page, context }) => {
+		await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE })
+
+		const board = await api.post('/boards', { title: `Copy IDs E2E ${Date.now()}` })
+		try {
+			const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
+			const c1 = await api.post('/cards', { stackId: stack.id, title: 'Copy One' })
+			await api.post('/cards', { stackId: stack.id, title: 'Copy Two' })
+			const c3 = await api.post('/cards', { stackId: stack.id, title: 'Copy Three' })
+			expect(board.prefix).toBeTruthy()
+
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/board/${board.id}`)
+			await page.waitForSelector('.stack-column', { timeout: 15_000 })
+			await expect(page.locator('.card-tile', { hasText: 'Copy One' })).toBeVisible()
+
+			await page.getByRole('button', { name: 'More' }).click()
+			await page.getByRole('menuitem', { name: 'Select multiple cards' }).click()
+
+			await page.locator('.card-tile', { hasText: 'Copy Three' }).click()
+			await page.locator('.card-tile', { hasText: 'Copy One' }).click()
+			await expect(page.locator('.bulk-action-bar')).toContainText('2')
+
+			await page.getByRole('button', { name: 'More actions' }).click()
+			await page.getByRole('dialog', { name: 'More actions' })
+				.getByRole('button', { name: 'Copy IDs' }).click()
+
+			// short-budget-ok: toast auto-dismisses at 7s
+			await expect(toast(page, '2 IDs copied.')).toBeVisible({ timeout: 6_000 })
+			expect(await page.evaluate(() => navigator.clipboard.readText()))
+				.toBe(`${board.prefix}-${c1.boardSeq} ${board.prefix}-${c3.boardSeq}`)
+
+			await expect(page.locator('.bulk-action-bar')).toContainText('2')
+		} finally {
+			await api.delete(`/boards/${board.id}`).catch(() => {})
+		}
 	})
 
 	// #10485 — "select every card in this column" from the column ⋯ menu, so a whole

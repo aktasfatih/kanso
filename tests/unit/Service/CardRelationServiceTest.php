@@ -360,4 +360,28 @@ class CardRelationServiceTest extends TestCase {
 		$this->expectException(DoesNotExistException::class);
 		$this->service->addRelation(10, 20, 'relates', 'alice');
 	}
+
+	public function testBlocksNeighbourIdsForCollectsBothDirections(): void {
+		$this->relationMapper->expects(self::once())->method('findBlocksEdgesTouching')->with([42, 50])->willReturn([
+			$this->edgeRow(42, 43),
+			$this->edgeRow(41, 42),
+			$this->edgeRow(42, 50),
+		]);
+
+		$viewer = ViewerContext::forMember('alice', 1, ViewerContext::ROLE_INTERNAL, true);
+		$ids = $this->service->blocksNeighbourIdsFor([42, 50], $viewer);
+		sort($ids);
+		self::assertSame([41, 43], $ids);
+	}
+
+	public function testBlocksNeighbourIdsForSkipsEdgesWhoseTouchedEndIsHidden(): void {
+		$this->relationMapper->method('findBlocksEdgesTouching')->willReturn([
+			$this->edgeRow(42, 43, ['fromVisibility' => 'internal', 'fromCreatorRole' => 'internal']),
+			$this->edgeRow(61, 60, ['toVisibility' => 'private', 'toOwner' => 'carol']),
+			$this->edgeRow(70, 71),
+		]);
+
+		$viewer = ViewerContext::forMember('erin', 1, ViewerContext::ROLE_EXTERNAL, false);
+		self::assertSame([71], $this->service->blocksNeighbourIdsFor([42, 60, 70], $viewer));
+	}
 }

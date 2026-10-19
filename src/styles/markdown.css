@@ -95,3 +95,28 @@
 	border-radius: 4px;
 	display: block;
 }
+
+/* Mirrors MarkdownEditor.vue; don't re-add scoped per-surface copies, they out-rank this. */
+.kanso-md code {
+	font-family: var(--font-face-monospace, 'Lucida Console', Monaco, monospace);
+	font-size: 0.85em;
+	background: var(--color-background-dark, rgba(0, 0, 0, 0.06));
+	border-radius: 4px;
+	padding: 0.1em 0.35em;
+}
+
+.kanso-md pre {
+	background: var(--color-background-dark, rgba(0, 0, 0, 0.06));
+	border-radius: 8px;
+	padding: 0.75em 1em;
+	overflow-x: auto;
+	margin: 0.5em 0;
+	white-space: pre;
+}
+
+.kanso-md pre code {
+	background: none;
+	border-radius: 0;
+	padding: 0;
+	font-size: 0.85em;
+}

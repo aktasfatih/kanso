@@ -155,6 +155,17 @@ class CardVisibilityScope {
 		return false;
 	}
 
+	// A null creator_role is left unset so isVisibleTo() applies its own backfill fold.
+	public function isTripleVisibleTo(?string $visibility, ?string $creatorRole, string $owner, string $userId, ?string $role): bool {
+		$card = new Card();
+		$card->setOwner($owner);
+		$card->setVisibility($visibility ?? self::VISIBILITY_PUBLIC);
+		if ($creatorRole !== null) {
+			$card->setCreatorRole($creatorRole);
+		}
+		return $this->isVisibleTo($card, $userId, $role);
+	}
+
 	/**
 	 * The PHP counterpart of {@see self::applyPublicOnly()} for one loaded
 	 * card: true only for the 'public' class (a NULL pre-migration value

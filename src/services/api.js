@@ -445,6 +445,16 @@ export const attachCardFileFromFiles = (cardId, fileId) =>
 export const deleteCardAttachment = (cardId, attachmentId) =>
 	axios.delete(url(`/api/cards/${cardId}/attachments/${attachmentId}`)).then((r) => r.data)
 
+// Live Files links: a reference to a node, not a copy (cf. attachCardFileFromFiles).
+export const fetchCardFileLinks = (cardId) =>
+	axios.get(url(`/api/cards/${cardId}/file-links`)).then((r) => r.data)
+
+export const addCardFileLink = (cardId, fileId) =>
+	axios.post(url(`/api/cards/${cardId}/file-links`), { fileId }).then((r) => r.data)
+
+export const deleteCardFileLink = (cardId, linkId) =>
+	axios.delete(url(`/api/cards/${cardId}/file-links/${linkId}`)).then((r) => r.data)
+
 // Direct download URL (browser navigates to it; server sets
 // Content-Disposition: attachment). Board-READ gated server-side.
 export const cardAttachmentUrl = (cardId, attachmentId) =>

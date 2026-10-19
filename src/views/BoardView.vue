@@ -642,6 +642,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			@set-status="onBulkSetStatus"
 			@archive="onBulkArchive"
 			@delete="onBulkDelete"
+			@copy-ids="onBulkCopyIds"
 			@close="bulk.exitMode()" />
 
 		<!-- One-time keyboard-shortcut discoverability hint (#3413): a subtle,
@@ -670,8 +671,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <script setup>
 import { ref, computed, provide, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { translate as t } from '@nextcloud/l10n'
-import { showSuccess, showWarning } from '@nextcloud/dialogs'
+import { translate as t, translatePlural as n } from '@nextcloud/l10n'
+import { showError, showSuccess, showWarning } from '@nextcloud/dialogs'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -702,6 +703,7 @@ import InformationOutlineIcon from 'vue-material-design-icons/InformationOutline
 import ForumOutlineIcon from 'vue-material-design-icons/ForumOutline.vue'
 import StackColumn from '../components/StackColumn.vue'
 import BulkActionBar from '../components/BulkActionBar.vue'
+import { humanId } from '../services/humanId.js'
 import { useBulkSelect } from '../composables/useBulkSelect.js'
 import SwimlaneRow from '../components/SwimlaneRow.vue'
 import { buildLanes, SWIMLANE_MODES } from '../composables/useSwimlanes.js'
@@ -2492,7 +2494,7 @@ async function handleCreateCard(stackId, title, duedate = null, allDay = false) 
 		payload.duedate = duedate
 		payload.allDay = allDay
 	}
-	await createCard.mutateAsync(payload)
+	return await createCard.mutateAsync(payload)
 }
 
 // Fetch the board's card templates for the composer picker (#3409). Lazily
@@ -2504,8 +2506,9 @@ async function handleFetchTemplates() {
 // Create a new card in stackId pre-filled from a template (#3409), then refetch
 // the board so the fresh card appears (database-first).
 async function handleCreateFromTemplate(stackId, templateId) {
-	await apiCreateCardFromTemplate(templateId, stackId)
+	const created = await apiCreateCardFromTemplate(templateId, stackId)
 	queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId.value) })
+	return created
 }
 
 async function handleDeleteStack(stackId) {
@@ -2600,6 +2603,30 @@ const onBulkAssign = (userId) => runBulkAction('assign_user', { userId })
 const onBulkSetDue = (due) => runBulkAction('set_due_date', { duedate: due })
 const onBulkSetStatus = (status) => runBulkAction('set_status', { status })
 const onBulkArchive = () => runBulkAction('archive', {})
+
+// Unfiltered payload on purpose: selected cards hidden by the filter are still copied.
+async function onBulkCopyIds() {
+	const cards = boardData.value?.cards ?? []
+	const prefix = boardData.value?.board?.prefix
+	const refs = sortedStacks.value
+		.flatMap((s) => sortCards(cards.filter((c) => c.stackId === s.id && !c.archived && bulk.isSelected(c.id))))
+		.map((c) => humanId(prefix, c.boardSeq))
+		.filter(Boolean)
+	if (refs.length === 0) {
+		showWarning(t('kanso', 'None of the selected cards has an ID yet.'))
+		return
+	}
+	try {
+		if (!navigator.clipboard?.writeText) {
+			showError(t('kanso', 'Clipboard is not available in this context.'))
+			return
+		}
+		await navigator.clipboard.writeText(refs.join(' '))
+		showSuccess(n('kanso', '%n ID copied.', '%n IDs copied.', refs.length))
+	} catch (err) {
+		showError(t('kanso', 'Could not copy to clipboard.'))
+	}
+}
 const onBulkDelete = () => runBulkAction('delete', {})
 
 // ── Column-level archive-all (#10430) ─────────────────────────────────────────

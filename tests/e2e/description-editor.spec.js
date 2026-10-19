@@ -8,12 +8,13 @@ import { test, expect, api, ncLogin, BASE } from './helpers.js'
 // (MarkdownEditor.vue). There is no separate "Preview" toggle anymore — markdown
 // renders live as you type. The formatting toolbar is .kanso-md-editor__toolbar.
 test.describe('Description formatting toolbar', () => {
-	const state = { boardId: 0, cardId: 0, cardUrl: '' }
+	const state = { boardId: 0, stackId: 0, cardId: 0, cardUrl: '' }
 
 	test.beforeAll(async () => {
 		const board = await api.post('/boards', { title: 'Desc-Editor E2E' })
 		state.boardId = board.id
 		const stack = await api.post('/stacks', { boardId: board.id, title: 'Do' })
+		state.stackId = stack.id
 		const card = await api.post('/cards', { stackId: stack.id, title: 'Editable card' })
 		state.cardId = card.id
 		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
@@ -193,5 +194,69 @@ test.describe('Description formatting toolbar', () => {
 		const items = prose.locator('ul li')
 		await expect(items.nth(0)).toContainText('one')
 		await expect(items.nth(1)).toContainText('two')
+	})
+
+	// Computed styles, not markup: the markup was already correct.
+	async function expectRenderedCodeBlock(container) {
+		const pre = container.locator('pre')
+		const code = pre.locator('code')
+		await expect(code).toContainText('line one')
+		expect(await code.evaluate((el) => el.innerText)).toContain('line one\nline two')
+		expect(await pre.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)')
+		expect(await code.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)')
+		expect(await code.evaluate((el) => getComputedStyle(el).paddingLeft)).toBe('0px')
+	}
+
+	test('typing ``` makes a multi-line code block that renders as a block after save', async ({ page }) => {
+		const card = await api.post('/cards', { stackId: state.stackId, title: 'Code block card' })
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`)
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+		await page.locator('.card-modal__desc-placeholder').click()
+
+		const prose = page.locator('.card-modal__section .kanso-md-editor .ProseMirror')
+		await expect(prose).toBeVisible()
+		await prose.click()
+		await page.keyboard.type('```')
+		await page.keyboard.press('Enter')
+		await page.keyboard.type('line one')
+		await page.keyboard.press('Enter')
+		await page.keyboard.type('line two')
+		await expect(prose.locator('pre code')).toContainText('line one')
+		await expect(prose.locator('pre code')).toContainText('line two')
+
+		await page.locator('.card-modal__desc-actions button', { hasText: 'Save' }).click()
+		const rendered = page.locator('.card-modal__desc-rendered')
+		await expect(rendered).toBeVisible()
+		await expectRenderedCodeBlock(rendered)
+	})
+
+	test('a fenced block in a comment renders as a styled code block', async ({ page }) => {
+		const card = await api.post('/cards', { stackId: state.stackId, title: 'Code comment card' })
+		await api.post(`/cards/${card.id}/comments`, { body: 'see:\n\n```\nline one\nline two\n```' })
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`)
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+		const body = page.locator('.card-modal__comment-body').first()
+		await expect(body.locator('pre code')).toBeVisible({ timeout: 15_000 })
+		await expectRenderedCodeBlock(body)
+	})
+
+	test('toolbar Code block button turns the line into a code block', async ({ page }) => {
+		const card = await api.post('/cards', { stackId: state.stackId, title: 'Code button card' })
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${card.id}`)
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+		await page.locator('.card-modal__desc-placeholder').click()
+
+		const editor = page.locator('.card-modal__section .kanso-md-editor')
+		const prose = editor.locator('.ProseMirror')
+		await expect(prose).toBeVisible()
+		await prose.click()
+		await page.keyboard.type('some code')
+		const btn = editor.locator('.kanso-md-editor__tb-btn[title="Code block"]')
+		await expect(btn).toBeVisible()
+		await btn.click()
+		await expect(prose.locator('pre')).toContainText('some code')
 	})
 })

@@ -115,6 +115,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</NcActionButton>
 						<NcActionText
 							v-if="(templatesLoadedByStack[rows[vRow.index].stackId] ?? false) && (templatesByStack[rows[vRow.index].stackId] ?? []).length === 0">
+							<template #icon>
+								<InformationOutlineIcon :size="20" />
+							</template>
 							{{ t('kanso', 'No templates yet. Open any card and choose "Mark as template" from its actions menu.') }}
 						</NcActionText>
 						<!-- Entry to the board-scoped template manager, exactly as the kanban
@@ -399,6 +402,7 @@ import TimerOutlineIcon from 'vue-material-design-icons/TimerOutline.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
+import InformationOutlineIcon from 'vue-material-design-icons/InformationOutline.vue'
 import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
 import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
@@ -412,6 +416,7 @@ import { humanId } from '../services/humanId.js'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { formatCardDate } from '../utils/dateDisplay.js'
 import { parseDueToken } from '../utils/dueTokens.js'
+import { showCardCreatedToast } from '../utils/cardCreatedToast.js'
 
 const props = defineProps({
 	/** Non-archived stacks in display order (already filtered by BoardView). */
@@ -1170,19 +1175,25 @@ async function createCardsFromText(stackId, text) {
 	if (titles.length === 0) return
 	errorByStack[stackId] = ''
 	isPendingByStack[stackId] = true
+	let created = null
 	const ordered = props.newCardsOnTop ? [...titles].reverse() : titles
 	try {
 		for (const title of ordered) {
 			const { title: parsedTitle, duedate, allDay } = parseDueToken(title)
-			await props.onCreateCard(stackId, parsedTitle, duedate, allDay)
+			created = await props.onCreateCard(stackId, parsedTitle, duedate, allDay)
 		}
 		draftByStack[stackId] = ''
-		// Re-focus for rapid entry
-		composerRefs[stackId]?.focus()
+		if (titles.length === 1 && created?.id) showCardCreatedToast(() => openCard(created))
 	} catch (err) {
 		errorByStack[stackId] = err?.response?.data?.error || t('kanso', 'Failed to create card.')
 	} finally {
 		isPendingByStack[stackId] = false
+	}
+	// Re-focus for rapid entry
+	// after nextTick: the input is :disabled while pending, so focus() would no-op.
+	if (!errorByStack[stackId]) {
+		await nextTick()
+		composerRefs[stackId]?.focus()
 	}
 }
 
@@ -1209,7 +1220,8 @@ async function createFromTemplate(stackId, templateId) {
 	errorByStack[stackId] = ''
 	isPendingByStack[stackId] = true
 	try {
-		await props.onCreateFromTemplate(stackId, templateId)
+		const created = await props.onCreateFromTemplate(stackId, templateId)
+		if (created?.id) showCardCreatedToast(() => openCard(created))
 	} catch (err) {
 		errorByStack[stackId] = err?.response?.data?.error || t('kanso', 'Failed to create card from template.')
 	} finally {
