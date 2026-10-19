@@ -11,6 +11,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.39.0](https://github.com/aktasfatih/kanso/compare/v0.38.3...v0.39.0) (2026-10-19)
+
+
+### Bug Fixes
+
+* give the empty "From template" and "No folders yet" menu entries proper spacing ([54ff15e](https://github.com/aktasfatih/kanso/commit/54ff15ef7287d627154b5785e28addded2a37d1f))
+* keep the card composer focused after adding a card so you can type the next one ([ca5f78f](https://github.com/aktasfatih/kanso/commit/ca5f78f983fbd0fc0bc709deb6cfce7404150417)), closes [#10834](https://github.com/aktasfatih/kanso/issues/10834)
+* render multi-line code blocks as proper blocks in descriptions and comments ([03cd177](https://github.com/aktasfatih/kanso/commit/03cd1777159c436a3ea5d7c9aec5bb976b1ef593))
+* stop the "Blocked" badge from revealing cards you cannot see ([dd0b0de](https://github.com/aktasfatih/kanso/commit/dd0b0debf4a0d35be33f3948ad09a81d1499181e)), closes [#11080](https://github.com/aktasfatih/kanso/issues/11080)
+
+
+### Features
+
+* confirm a newly created card with a toast that opens it ([c6ebd01](https://github.com/aktasfatih/kanso/commit/c6ebd01c3df0916deb858bcf0ccfc3d2561e3811))
+* copy the IDs of selected cards from the multi-select bar ([210e274](https://github.com/aktasfatih/kanso/commit/210e2740b9cfb53785cff3fc2676333a0815437b))
+* link a card to a file in Nextcloud Files ([b067193](https://github.com/aktasfatih/kanso/commit/b0671937e3492c20de92a06ffde4713009763d4d))
+* show a "Blocking" chip on cards that block other open cards ([e691fbc](https://github.com/aktasfatih/kanso/commit/e691fbc10a96cded371c9fa2ec6f8f5792f11d11))
+
 ## [0.38.3](https://github.com/aktasfatih/kanso/compare/v0.38.2...v0.38.3) (2026-10-18)
 
 
