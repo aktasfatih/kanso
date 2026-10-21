@@ -216,7 +216,8 @@ starts.
 
 A project holds no cards of its own: it points at cards that stay on their
 boards. Projects are private to their owner (no sharing), so every tool acts on
-the authenticated user's own projects only, and any other id answers 403.
+the authenticated user's own projects only: someone else's project id answers
+403, and an id that does not exist answers 404.
 
 - `kanso_list_projects` — your projects (`id`, `title`, `description`, `color`, `owner`, `createdAt`)
 - `kanso_get_project` — one project's record plus its member cards
