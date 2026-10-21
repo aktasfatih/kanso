@@ -25,6 +25,9 @@ from kanso_mcp.models import (
     ChecklistItem,
     Comment,
     Label,
+    Project,
+    ProjectCard,
+    ProjectComment,
     RecurRule,
     SearchResults,
     Stack,
@@ -522,6 +525,90 @@ class KansoClient:
     async def list_my_cards(self) -> List[CardSummary]:
         data = await self._request("GET", "/my-cards")
         return [CardSummary.model_validate(c) for c in (data or [])]
+
+    # ---------------------------------------------------------------- projects
+    # Every project endpoint is owner-only: a project id the authenticated user
+    # does not own answers 403, and one that does not exist answers 404.
+    async def list_projects(self) -> List[Project]:
+        data = await self._request("GET", "/projects")
+        return [Project.model_validate(p) for p in (data or [])]
+
+    async def create_project(
+        self,
+        title: str,
+        description: Optional[str] = None,
+        color: Optional[str] = None,
+    ) -> Project:
+        data = await self._request(
+            "POST",
+            "/projects",
+            json={"title": title, "description": description, "color": color},
+        )
+        return Project.model_validate(data)
+
+    async def update_project(
+        self,
+        project_id: int,
+        *,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+        color: Optional[str] = None,
+    ) -> Project:
+        # None fields are dropped => left unchanged. An empty color clears it.
+        data = await self._request(
+            "PATCH",
+            f"/projects/{project_id}",
+            json={"title": title, "description": description, "color": color},
+        )
+        return Project.model_validate(data)
+
+    async def delete_project(self, project_id: int) -> Any:
+        return await self._request("DELETE", f"/projects/{project_id}")
+
+    async def list_project_cards(self, project_id: int) -> List[ProjectCard]:
+        data = await self._request("GET", f"/projects/{project_id}/cards")
+        return [ProjectCard.model_validate(c) for c in (data or [])]
+
+    async def project_stats(self, project_id: int) -> Dict[str, Any]:
+        # Passed through untyped: the DTO is the board-analytics panel set
+        # (byPriority, byAssignee, throughput, cycleTime, …) and only exists to
+        # be read, so modelling it would just shadow StatsService::projectStats.
+        data = await self._request("GET", f"/projects/{project_id}/stats")
+        return data if isinstance(data, dict) else {}
+
+    async def add_card_to_project(self, project_id: int, card_id: int) -> Any:
+        # Idempotent server-side, like the remove below.
+        return await self._request("PUT", f"/projects/{project_id}/cards/{card_id}")
+
+    async def remove_card_from_project(self, project_id: int, card_id: int) -> Any:
+        return await self._request(
+            "DELETE", f"/projects/{project_id}/cards/{card_id}"
+        )
+
+    async def list_project_comments(self, project_id: int) -> List[ProjectComment]:
+        data = await self._request("GET", f"/projects/{project_id}/comments")
+        return [ProjectComment.model_validate(c) for c in (data or [])]
+
+    async def add_project_comment(
+        self, project_id: int, body: str, parent_comment_id: Optional[int] = None
+    ) -> ProjectComment:
+        data = await self._request(
+            "POST",
+            f"/projects/{project_id}/comments",
+            json={"body": body, "parentCommentId": parent_comment_id},
+        )
+        return ProjectComment.model_validate(data)
+
+    async def update_project_comment(self, comment_id: int, body: str) -> ProjectComment:
+        # Edit/delete address the comment directly under /project-comments,
+        # NOT nested under the project.
+        data = await self._request(
+            "PATCH", f"/project-comments/{comment_id}", json={"body": body}
+        )
+        return ProjectComment.model_validate(data)
+
+    async def delete_project_comment(self, comment_id: int) -> Any:
+        return await self._request("DELETE", f"/project-comments/{comment_id}")
 
     # ------------------------------------------------------------------- views
     async def list_views(self) -> List[Dict[str, Any]]:

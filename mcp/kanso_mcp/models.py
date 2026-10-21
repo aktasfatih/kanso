@@ -267,3 +267,50 @@ class BoardDetail(_Base):
     permissions: Optional[int] = None
     role: Optional[str] = None
     cursor: Optional[int] = None
+
+
+class Project(_Base):
+    """A project from ``/api/projects``: an owner-only, cross-board collection
+    of cards. ``owner`` is the uid, ``color`` a bare 6-hex string (no '#') and
+    ``createdAt`` unix seconds. There is no sharing: only the owner ever sees it.
+    """
+
+    id: int
+    title: str
+    description: Optional[str] = None
+    color: Optional[str] = None
+    owner: Optional[str] = None
+    createdAt: int = 0
+
+
+class ProjectCard(_Base):
+    """A member card from ``GET /api/projects/{id}/cards``. A slim row, not a
+    :class:`CardSummary`: it carries the board and column titles a cross-board
+    list needs, but no labels, assignees or description.
+    """
+
+    id: int
+    boardId: Optional[int] = None
+    boardTitle: Optional[str] = None
+    stackTitle: Optional[str] = None
+    title: str
+    duedate: Optional[str] = None
+    priority: int = 0
+    doneAt: int = 0
+    startedAt: int = 0
+    parentCardId: Optional[int] = None
+
+
+class ProjectComment(_Base):
+    """A project discussion comment from ``/api/projects/{id}/comments``. Same
+    shape as a card :class:`Comment` minus reactions, keyed on ``projectId``.
+    """
+
+    id: int
+    projectId: Optional[int] = None
+    parentCommentId: Optional[int] = None
+    author: Optional[str] = None
+    authorDisplayName: Optional[str] = None
+    body: Optional[str] = None
+    createdAt: int = 0
+    editedAt: int = 0

@@ -911,6 +911,146 @@ def test_filter_to_query_matches_the_js_original_key_for_key():
     assert js_single == list(_FILTER_SINGLE)
 
 
+PROJECTS = [
+    {"id": 4, "title": "Launch", "color": "0082c9", "owner": "admin", "createdAt": 1},
+    {"id": 5, "title": "Hiring", "owner": "admin", "createdAt": 2},
+]
+PROJECT_CARDS = [
+    {"id": 100, "boardId": 7, "boardTitle": "Board", "stackTitle": "To Do", "title": "A"},
+    {"id": 200, "boardId": 8, "boardTitle": "Other", "stackTitle": None, "title": "B"},
+]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_project_merges_the_record_and_its_cards():
+    respx.get(f"{BASE}/projects").mock(return_value=httpx.Response(200, json=PROJECTS))
+    respx.get(f"{BASE}/projects/4/cards").mock(
+        return_value=httpx.Response(200, json=PROJECT_CARDS)
+    )
+    tools, client = _tools()
+    async with client:
+        project = await tools["kanso_get_project"](4)
+
+    assert project["id"] == 4
+    assert project["title"] == "Launch"
+    assert [c["id"] for c in project["cards"]] == [100, 200]
+    assert {c["boardTitle"] for c in project["cards"]} == {"Board", "Other"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_project_rejects_an_unknown_id_without_fetching_cards():
+    respx.get(f"{BASE}/projects").mock(return_value=httpx.Response(200, json=PROJECTS))
+    cards_route = respx.get(f"{BASE}/projects/99/cards").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    tools, client = _tools()
+    async with client:
+        with pytest.raises(ValueError) as err:
+            await tools["kanso_get_project"](99)
+
+    assert not cards_route.called
+    assert "4 (Launch)" in str(err.value)
+    assert "5 (Hiring)" in str(err.value)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_project_tool_sends_only_what_changed():
+    route = respx.patch(f"{BASE}/projects/4").mock(
+        return_value=httpx.Response(200, json={**PROJECTS[0], "title": "Ship"})
+    )
+    tools, client = _tools()
+    async with client:
+        project = await tools["kanso_update_project"](4, title="Ship")
+
+    assert json.loads(route.calls.last.request.content) == {"title": "Ship"}
+    assert project["title"] == "Ship"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_project_membership_tools_echo_their_ids():
+    respx.put(f"{BASE}/projects/4/cards/100").mock(return_value=httpx.Response(200, json=[]))
+    respx.delete(f"{BASE}/projects/4/cards/100").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    tools, client = _tools()
+    async with client:
+        added = await tools["kanso_add_card_to_project"](4, 100)
+        removed = await tools["kanso_remove_card_from_project"](4, 100)
+
+    assert added == {"added": True, "projectId": 4, "cardId": 100}
+    assert removed == {"removed": True, "projectId": 4, "cardId": 100}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_add_project_comment_tool_forwards_the_parent():
+    route = respx.post(f"{BASE}/projects/4/comments").mock(
+        return_value=httpx.Response(
+            200, json={"id": 3, "projectId": 4, "parentCommentId": 1, "body": "re"}
+        )
+    )
+    tools, client = _tools()
+    async with client:
+        comment = await tools["kanso_add_project_comment"](4, "re", parent_comment_id=1)
+
+    assert json.loads(route.calls.last.request.content) == {
+        "body": "re",
+        "parentCommentId": 1,
+    }
+    assert comment["parentCommentId"] == 1
+
+
+@pytest.mark.asyncio
+async def test_project_tools_schema_and_hints():
+    from mcp.server.fastmcp import FastMCP
+
+    client = KansoClient(
+        KansoConfig(host="http://nc.test", username="admin", password="pw")
+    )
+    server = FastMCP("kanso-test")
+    register_tools(server, client)
+    async with client:
+        tools = {t.name: t for t in await server.list_tools()}
+
+    project_tools = {name for name in tools if "project" in name}
+    assert project_tools == {
+        "kanso_list_projects",
+        "kanso_get_project",
+        "kanso_create_project",
+        "kanso_update_project",
+        "kanso_delete_project",
+        "kanso_list_project_cards",
+        "kanso_get_project_stats",
+        "kanso_add_card_to_project",
+        "kanso_remove_card_from_project",
+        "kanso_list_project_comments",
+        "kanso_add_project_comment",
+        "kanso_update_project_comment",
+        "kanso_delete_project_comment",
+    }
+    for name in (
+        "kanso_list_projects",
+        "kanso_get_project",
+        "kanso_list_project_cards",
+        "kanso_get_project_stats",
+        "kanso_list_project_comments",
+    ):
+        assert tools[name].annotations.readOnlyHint is True, name
+    for name in ("kanso_delete_project", "kanso_delete_project_comment"):
+        assert tools[name].annotations.destructiveHint is True, name
+
+    assert tools["kanso_create_project"].inputSchema["required"] == ["title"]
+    assert tools["kanso_update_project"].inputSchema["required"] == ["project_id"]
+    assert tools["kanso_add_project_comment"].inputSchema["required"] == [
+        "project_id",
+        "body",
+    ]
+
+
 def test_filter_to_query_covers_every_dimension_the_parity_fixture_exercises():
     # tests/fixtures/board-filter-parity.json is the golden filter contract the
     # PHP (ViewFilterTest) and JS (boardFilters.test.mjs) runners both assert,

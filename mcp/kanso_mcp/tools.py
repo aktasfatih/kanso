@@ -1007,6 +1007,221 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         cards = await client.list_my_cards()
         return [c.model_dump() for c in cards]
 
+    # ---------------------------------------------------------------- projects
+    @mcp.tool(
+        title="List my Kanso projects",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_projects() -> List[dict]:
+        """List the current user's projects, in title order.
+
+        A project is a personal, cross-board COLLECTION of cards: it holds no
+        cards of its own, it points at cards that stay on their boards. Projects
+        are private to their owner — there is no sharing, so this only ever
+        returns the authenticated user's own. Each carries `id`, `title`,
+        `description`, `color` (6-hex, no '#'), `owner` and `createdAt`.
+        """
+        projects = await client.list_projects()
+        return [p.model_dump() for p in projects]
+
+    @mcp.tool(
+        title="Get a Kanso project",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_get_project(project_id: int) -> dict:
+        """Read one of your projects: its record plus its member cards.
+
+        `cards` are slim rows (`id`, `boardId`, `boardTitle`, `stackTitle`,
+        `title`, `duedate`, `priority`, `doneAt`, `startedAt`, `parentCardId`),
+        ordered by board then board position. Open one with `kanso_get_card` for
+        the full card.
+
+        Args:
+            project_id: The numeric project id (from `kanso_list_projects`).
+        """
+        projects = await client.list_projects()
+        project = next((p for p in projects if p.id == project_id), None)
+        if project is None:
+            known = ", ".join(f"{p.id} ({p.title})" for p in projects)
+            raise ValueError(
+                f"No project with id {project_id} among yours. "
+                f"Available projects: {known or 'none'}."
+            )
+        cards = await client.list_project_cards(project_id)
+        return {**project.model_dump(), "cards": [c.model_dump() for c in cards]}
+
+    @mcp.tool(title="Create a Kanso project")
+    async def kanso_create_project(
+        title: str, description: Optional[str] = None, color: Optional[str] = None
+    ) -> dict:
+        """Create a project owned by you. Add cards to it afterwards with
+        `kanso_add_card_to_project`.
+
+        Args:
+            title: The project title (non-empty, max 255 characters).
+            description: Optional free-text description.
+            color: Optional colour (6-hex, no '#'), e.g. "0082c9".
+        """
+        return (await client.create_project(title, description, color)).model_dump()
+
+    @mcp.tool(title="Update a Kanso project")
+    async def kanso_update_project(
+        project_id: int,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+        color: Optional[str] = None,
+    ) -> dict:
+        """Update one of your projects. Only the fields you pass are changed.
+
+        Args:
+            project_id: The numeric project id.
+            title: New title (non-empty, max 255 characters).
+            description: New description ("" empties it).
+            color: New colour (6-hex, no '#'); "" clears it.
+        """
+        return (
+            await client.update_project(
+                project_id, title=title, description=description, color=color
+            )
+        ).model_dump()
+
+    @mcp.tool(
+        title="Delete a Kanso project",
+        annotations={"destructiveHint": True},
+    )
+    async def kanso_delete_project(project_id: int) -> dict:
+        """Delete one of your projects and its card memberships. The member cards
+        themselves are NOT touched — they stay on their boards.
+
+        Args:
+            project_id: The numeric project id.
+        """
+        result = await client.delete_project(project_id)
+        return {"deleted": True, "result": result}
+
+    @mcp.tool(
+        title="List a Kanso project's cards",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_project_cards(project_id: int) -> List[dict]:
+        """List the cards in one of your projects, ordered by board then board
+        position.
+
+        Only live cards on boards you can still read come back: archived cards,
+        cards of an archived board and cards on a board you have lost access to
+        are left out, even though they stay members.
+
+        Args:
+            project_id: The numeric project id.
+        """
+        cards = await client.list_project_cards(project_id)
+        return [c.model_dump() for c in cards]
+
+    @mcp.tool(
+        title="Get a Kanso project's stats",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_get_project_stats(project_id: int) -> dict:
+        """Cross-board analytics over one of your projects — the board analytics
+        panels, computed over the project's cards instead of a board's.
+
+        Returns `cardCount`, `byPriority`, `byAssignee`, `byLabel`, per-day
+        `throughput` (done) and `created` timelines, `aging`, `overdue`,
+        `checklist` totals, `commentActivity`, `velocity` and `cycleTime`. The
+        card set is the same one `kanso_list_project_cards` returns. Velocity
+        counts cards only: estimate scales differ between boards, so points are
+        never summed.
+
+        Args:
+            project_id: The numeric project id.
+        """
+        return await client.project_stats(project_id)
+
+    @mcp.tool(title="Add a card to a Kanso project")
+    async def kanso_add_card_to_project(project_id: int, card_id: int) -> dict:
+        """Add a card (from any board you can read) to one of your projects.
+        Idempotent — re-adding a member succeeds without a duplicate. The card
+        stays where it is; the project only points at it.
+
+        Args:
+            project_id: The numeric project id.
+            card_id: The card to add.
+        """
+        await client.add_card_to_project(project_id, card_id)
+        return {"added": True, "projectId": project_id, "cardId": card_id}
+
+    @mcp.tool(title="Remove a card from a Kanso project")
+    async def kanso_remove_card_from_project(project_id: int, card_id: int) -> dict:
+        """Remove a card from one of your projects. The card itself is untouched.
+        Idempotent.
+
+        Args:
+            project_id: The numeric project id.
+            card_id: The card to remove.
+        """
+        await client.remove_card_from_project(project_id, card_id)
+        return {"removed": True, "projectId": project_id, "cardId": card_id}
+
+    @mcp.tool(
+        title="List a Kanso project's comments",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_project_comments(project_id: int) -> List[dict]:
+        """List the discussion comments on one of your projects, oldest first.
+
+        Each carries its `author` (uid), `authorDisplayName`, markdown `body`,
+        `createdAt`/`editedAt` timestamps and, for replies, the
+        `parentCommentId` of the top-level comment it answers.
+
+        Args:
+            project_id: The numeric project id.
+        """
+        comments = await client.list_project_comments(project_id)
+        return [c.model_dump() for c in comments]
+
+    @mcp.tool(title="Add a comment to a Kanso project")
+    async def kanso_add_project_comment(
+        project_id: int, body: str, parent_comment_id: Optional[int] = None
+    ) -> dict:
+        """Post a comment on one of your projects. Pass `parent_comment_id` to
+        reply to an existing top-level comment (replies are one level deep).
+
+        Args:
+            project_id: The numeric project id.
+            body: The comment text (markdown, max 10000 characters).
+            parent_comment_id: Optional id of the top-level comment to reply to;
+                omit (null) for a new top-level comment.
+        """
+        return (
+            await client.add_project_comment(project_id, body, parent_comment_id)
+        ).model_dump()
+
+    @mcp.tool(title="Edit a Kanso project comment")
+    async def kanso_update_project_comment(comment_id: int, body: str) -> dict:
+        """Replace the body of a project comment you wrote.
+
+        Note `comment_id` is the COMMENT's own id, NOT the project id.
+
+        Args:
+            comment_id: The numeric comment id.
+            body: The new comment text (markdown, max 10000 characters).
+        """
+        return (await client.update_project_comment(comment_id, body)).model_dump()
+
+    @mcp.tool(
+        title="Delete a Kanso project comment",
+        annotations={"destructiveHint": True},
+    )
+    async def kanso_delete_project_comment(comment_id: int) -> dict:
+        """Delete a project comment you wrote. Deleting a top-level comment also
+        deletes its replies.
+
+        Args:
+            comment_id: The numeric comment id (NOT the project id).
+        """
+        result = await client.delete_project_comment(comment_id)
+        return {"deleted": True, "result": result}
+
     # ------------------------------------------------------------------- views
     @mcp.tool(
         title="List my Kanso views",
