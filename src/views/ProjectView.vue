@@ -39,6 +39,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</button>
 
 					<NcActions :force-menu="true">
+						<NcActionButton
+							v-if="project"
+							:close-after-click="true"
+							data-test="project-pin-toggle"
+							@click="togglePin(project)">
+							<template #icon>
+								<StarIcon v-if="project.pinned" :size="20" />
+								<StarOutlineIcon v-else :size="20" />
+							</template>
+							{{ project.pinned ? t('kanso', 'Unpin project') : t('kanso', 'Pin to sidebar') }}
+						</NcActionButton>
 						<NcActionButton :close-after-click="true" @click="openEditDialog">
 							<template #icon>
 								<PencilIcon :size="20" />
@@ -58,358 +69,364 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 			<span v-if="actionError" class="project-view__action-error">{{ actionError }}</span>
 
-			<ProjectHealth
-				v-if="plan"
-				:plan="plan"
-				:project-id="id"
-				:error="datesError"
-				@update-dates="saveDates" />
-
-
-			<div class="project-view__layout">
-				<div class="project-view__main">
-					<ProjectBurnup v-if="plan && plan.total" class="project-view__burnup" :plan="plan" />
-
-					<div class="project-view__toolbar">
-						<div v-if="cards.length" class="project-view__modes" role="tablist" :aria-label="t('kanso', 'Card layout')">
-							<button
-								v-for="m in modes"
-								:key="m.key"
-								role="tab"
-								class="project-view__mode"
-								:class="{ 'project-view__mode--active': mode === m.key }"
-								:aria-selected="mode === m.key"
-								:data-test="'project-mode-' + m.key"
-								@click="setMode(m.key)">
-								<component :is="m.icon" :size="16" />
-								{{ m.label }}
-							</button>
-						</div>
-						<!-- Add card control -->
-						<div class="project-view__add-row">
-							<button
-								class="project-view__add-btn"
-								:aria-expanded="showPicker"
-								@click="togglePicker">
-								<PlusIcon :size="16" />
-								{{ t('kanso', 'Add card') }}
-							</button>
-
-							<CardSearchPicker
-								v-if="showPicker"
-								class="project-view__picker"
-								:disabled-card-ids="cardIdsInProject"
-								:error="addError"
-								@pick="handlePickCard"
-								@close="closePicker" />
-						</div>
+			<!-- Prominent, in-place editable description directly under the title.
+			     Reuses the shipped markdown editor (#3562): useMarkdownToolbar +
+			     renderMarkdown + the updateProject mutation path — no backend change. -->
+			<section class="project-view__description">
+				<template v-if="editingDescription">
+					<div class="project-view__md-toolbar" role="toolbar" :aria-label="t('kanso', 'Formatting')">
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Bold')" @mousedown.prevent @click="descToolbar.bold()"><FormatBoldIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Italic')" @mousedown.prevent @click="descToolbar.italic()"><FormatItalicIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Heading')" @mousedown.prevent @click="descToolbar.heading()"><FormatHeaderPoundIcon :size="18" /></button>
+						<span class="project-view__md-sep" />
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Bulleted list')" @mousedown.prevent @click="descToolbar.bulletList()"><FormatListBulletedIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Quote')" @mousedown.prevent @click="descToolbar.quote()"><FormatQuoteCloseIcon :size="18" /></button>
+						<span class="project-view__md-sep" />
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Inline code')" @mousedown.prevent @click="descToolbar.inlineCode()"><CodeTagsIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Link')" @mousedown.prevent @click="descToolbar.link()"><LinkVariantIcon :size="18" /></button>
+						<span class="project-view__md-toolbar-spacer" />
+						<button
+							type="button"
+							class="project-view__md-btn"
+							:class="{ 'project-view__md-btn--active': showInlinePreview }"
+							:aria-pressed="showInlinePreview"
+							:title="t('kanso', 'Toggle preview')"
+							@mousedown.prevent
+							@click="showInlinePreview = !showInlinePreview"><EyeOutlineIcon :size="18" /></button>
 					</div>
+					<textarea
+						ref="inlineDescRef"
+						v-model="draftDescription"
+						class="project-view__desc-textarea"
+						rows="6"
+						:placeholder="t('kanso', 'Add a description — markdown supported')"
+						:disabled="updateMutation.isPending.value"
+						@keydown="onInlineDescKeydown"
+						@blur="saveDescriptionOnBlur" />
+					<div v-if="showInlinePreview" class="project-view__desc-preview">
+						<span class="project-view__desc-preview-label">{{ t('kanso', 'Preview') }}</span>
+						<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
+						<div class="project-view__desc-rendered kanso-md" v-html="renderMarkdown(draftDescription)" />
+					</div>
+					<div class="project-view__desc-actions">
+						<NcButton type="primary" :disabled="updateMutation.isPending.value" @mousedown.prevent @click="saveDescription">
+							{{ t('kanso', 'Save') }}
+						</NcButton>
+						<NcButton @mousedown.prevent @click="cancelDescriptionEdit">
+							{{ t('kanso', 'Cancel') }}
+						</NcButton>
+						<span class="project-view__desc-hint">{{ t('kanso', 'Esc cancel · Ctrl+Enter save') }}</span>
+						<span v-if="descError" class="project-view__desc-error">{{ descError }}</span>
+					</div>
+				</template>
 
-					<!-- Empty state -->
-					<NcEmptyContent
-						v-if="!cards.length && !isLoadingCards"
-						:name="t('kanso', 'No cards in this project')"
-						:description="t('kanso', 'Use the Add card button above to collect cards from any board.')">
-						<template #icon>
-							<FolderMultipleOutlineIcon :size="64" />
-						</template>
-					</NcEmptyContent>
-
-					<template v-else>
-
-						<BoardTimelineView
-							v-if="mode === 'timeline'"
-							class="project-view__timeline"
-							:cards="cards"
-							:groups="boardGroups.map((g) => ({ key: g.boardId, title: g.boardTitle, cards: g.cards }))"
-							:can-edit="false"
-							:board-id="null"
-							@open="openCard" />
-
-						<template v-else>
-							<component
-								:is="group.collapsible ? 'details' : 'section'"
-								v-for="group in listGroups"
-								:key="group.key"
-								class="project-view__section"
-								:data-test="'project-group-' + group.key">
-								<component :is="group.collapsible ? 'summary' : 'h2'" class="project-view__section-title">
-									{{ group.title }} <span class="project-view__count">{{ group.cards.length }}</span>
-								</component>
-								<ul class="project-view__list">
-									<li
-										v-for="card in group.cards"
-										:key="card.id"
-										class="project-view__row"
-										:class="{ 'project-view__row--done': card.doneAt > 0 }"
-										tabindex="0"
-										role="button"
-										@click="openCard(card)"
-										@keydown.enter="openCard(card)">
-										<div class="project-view__row-main">
-											<span class="project-view__card-title">{{ card.title }}</span>
-											<span class="project-view__meta">
-												<span v-if="mode === 'status'">{{ card.boardTitle }} · </span>
-												<span class="project-view__stack">{{ card.stackTitle }}</span>
-											</span>
-										</div>
-										<span
-											v-if="card.blockers > 0 && !card.doneAt"
-											class="project-view__badge project-view__badge--warning"
-											:title="n('kanso', 'Blocked by {count} open card', 'Blocked by {count} open cards', card.blockers, { count: card.blockers })">
-											<BlockHelperIcon :size="14" />
-										</span>
-										<span v-if="card.estimate" class="project-view__badge">{{ card.estimate }}</span>
-										<span
-											v-if="card.duedate"
-											class="project-view__due"
-											:class="{ 'project-view__due--overdue': isOverdue(card) }">
-											{{ formatDue(card.duedate) }}
-										</span>
-										<NcActions :force-menu="false">
-											<NcActionButton
-												:close-after-click="true"
-												@click.stop="handleRemoveCard(card.id)">
-												<template #icon>
-													<CloseIcon :size="20" />
-												</template>
-												{{ t('kanso', 'Remove from project') }}
-											</NcActionButton>
-										</NcActions>
-									</li>
-								</ul>
-							</component>
-						</template>
+				<template v-else>
+					<template v-if="project?.description">
+						<div
+							class="project-view__desc-view"
+							:class="{ 'project-view__desc-view--collapsed': !descExpanded, 'project-view__desc-view--overflowing': descOverflows && !descExpanded }"
+							tabindex="0"
+							role="button"
+							data-test="project-description"
+							:title="t('kanso', 'Click to edit the description')"
+							@click="startDescriptionEdit"
+							@keydown.enter="startDescriptionEdit">
+							<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
+							<div ref="descContentRef" class="project-view__desc-rendered kanso-md" v-html="renderMarkdown(project.description)" />
+						</div>
+						<button
+							v-if="descOverflows || descExpanded"
+							type="button"
+							class="project-view__desc-toggle"
+							data-test="project-description-toggle"
+							:aria-expanded="descExpanded"
+							@click="descExpanded = !descExpanded">
+							<ChevronDownIcon :size="18" :class="{ 'project-view__desc-toggle-icon--up': descExpanded }" />
+							{{ descExpanded ? t('kanso', 'Show less') : t('kanso', 'Show more') }}
+						</button>
 					</template>
+					<button
+						v-else
+						type="button"
+						class="project-view__desc-placeholder"
+						@click="startDescriptionEdit">
+						{{ t('kanso', 'Add a description…') }}
+					</button>
+				</template>
+			</section>
+
+			<div v-if="plan" class="project-view__plan">
+				<ProjectHealth
+					:plan="plan"
+					:project-id="id"
+					:error="datesError"
+					@update-dates="saveDates" />
+				<ProjectBurnup v-if="plan && plan.total" class="project-view__burnup" :plan="plan" />
+			</div>
+
+			<div class="project-view__toolbar">
+				<div v-if="cards.length" class="project-view__modes" role="tablist" :aria-label="t('kanso', 'Card layout')">
+					<button
+						v-for="m in modes"
+						:key="m.key"
+						role="tab"
+						class="project-view__mode"
+						:class="{ 'project-view__mode--active': mode === m.key }"
+						:aria-selected="mode === m.key"
+						:data-test="'project-mode-' + m.key"
+						@click="setMode(m.key)">
+						<component :is="m.icon" :size="16" />
+						{{ m.label }}
+					</button>
 				</div>
+				<!-- Add card control -->
+				<div class="project-view__add-row">
+					<button
+						class="project-view__add-btn"
+						:aria-expanded="showPicker"
+						@click="togglePicker">
+						<PlusIcon :size="16" />
+						{{ t('kanso', 'Add card') }}
+					</button>
 
-				<aside class="project-view__side">
-					<!-- Prominent, in-place editable description directly under the title.
-					     Reuses the shipped markdown editor (#3562): useMarkdownToolbar +
-					     renderMarkdown + the updateProject mutation path — no backend change. -->
-					<section class="project-view__description">
-						<template v-if="editingDescription">
-							<div class="project-view__md-toolbar" role="toolbar" :aria-label="t('kanso', 'Formatting')">
-								<button type="button" class="project-view__md-btn" :title="t('kanso', 'Bold')" @mousedown.prevent @click="descToolbar.bold()"><FormatBoldIcon :size="18" /></button>
-								<button type="button" class="project-view__md-btn" :title="t('kanso', 'Italic')" @mousedown.prevent @click="descToolbar.italic()"><FormatItalicIcon :size="18" /></button>
-								<button type="button" class="project-view__md-btn" :title="t('kanso', 'Heading')" @mousedown.prevent @click="descToolbar.heading()"><FormatHeaderPoundIcon :size="18" /></button>
-								<span class="project-view__md-sep" />
-								<button type="button" class="project-view__md-btn" :title="t('kanso', 'Bulleted list')" @mousedown.prevent @click="descToolbar.bulletList()"><FormatListBulletedIcon :size="18" /></button>
-								<button type="button" class="project-view__md-btn" :title="t('kanso', 'Quote')" @mousedown.prevent @click="descToolbar.quote()"><FormatQuoteCloseIcon :size="18" /></button>
-								<span class="project-view__md-sep" />
-								<button type="button" class="project-view__md-btn" :title="t('kanso', 'Inline code')" @mousedown.prevent @click="descToolbar.inlineCode()"><CodeTagsIcon :size="18" /></button>
-								<button type="button" class="project-view__md-btn" :title="t('kanso', 'Link')" @mousedown.prevent @click="descToolbar.link()"><LinkVariantIcon :size="18" /></button>
-								<span class="project-view__md-toolbar-spacer" />
-								<button
-									type="button"
-									class="project-view__md-btn"
-									:class="{ 'project-view__md-btn--active': showInlinePreview }"
-									:aria-pressed="showInlinePreview"
-									:title="t('kanso', 'Toggle preview')"
-									@mousedown.prevent
-									@click="showInlinePreview = !showInlinePreview"><EyeOutlineIcon :size="18" /></button>
-							</div>
-							<textarea
-								ref="inlineDescRef"
-								v-model="draftDescription"
-								class="project-view__desc-textarea"
-								rows="6"
-								:placeholder="t('kanso', 'Add a description — markdown supported')"
-								:disabled="updateMutation.isPending.value"
-								@keydown="onInlineDescKeydown"
-								@blur="saveDescriptionOnBlur" />
-							<div v-if="showInlinePreview" class="project-view__desc-preview">
-								<span class="project-view__desc-preview-label">{{ t('kanso', 'Preview') }}</span>
-								<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
-								<div class="project-view__desc-rendered kanso-md" v-html="renderMarkdown(draftDescription)" />
-							</div>
-							<div class="project-view__desc-actions">
-								<NcButton type="primary" :disabled="updateMutation.isPending.value" @mousedown.prevent @click="saveDescription">
-									{{ t('kanso', 'Save') }}
-								</NcButton>
-								<NcButton @mousedown.prevent @click="cancelDescriptionEdit">
-									{{ t('kanso', 'Cancel') }}
-								</NcButton>
-								<span class="project-view__desc-hint">{{ t('kanso', 'Esc cancel · Ctrl+Enter save') }}</span>
-								<span v-if="descError" class="project-view__desc-error">{{ descError }}</span>
-							</div>
-						</template>
+					<CardSearchPicker
+						v-if="showPicker"
+						class="project-view__picker"
+						:disabled-card-ids="cardIdsInProject"
+						:error="addError"
+						@pick="handlePickCard"
+						@close="closePicker" />
+				</div>
+			</div>
 
-						<template v-else>
-							<div
-								v-if="project?.description"
-								class="project-view__desc-view"
+			<!-- Empty state -->
+			<NcEmptyContent
+				v-if="!cards.length && !isLoadingCards"
+				:name="t('kanso', 'No cards in this project')"
+				:description="t('kanso', 'Use the Add card button above to collect cards from any board.')">
+				<template #icon>
+					<FolderMultipleOutlineIcon :size="64" />
+				</template>
+			</NcEmptyContent>
+
+			<template v-else>
+
+				<BoardTimelineView
+					v-if="mode === 'timeline'"
+					class="project-view__timeline"
+					:cards="cards"
+					:groups="boardGroups.map((g) => ({ key: g.boardId, title: g.boardTitle, cards: g.cards }))"
+					:can-edit="false"
+					:board-id="null"
+					@open="openCard" />
+
+				<template v-else>
+					<component
+						:is="group.collapsible ? 'details' : 'section'"
+						v-for="group in listGroups"
+						:key="group.key"
+						class="project-view__section"
+						:data-test="'project-group-' + group.key">
+						<component :is="group.collapsible ? 'summary' : 'h2'" class="project-view__section-title">
+							{{ group.title }} <span class="project-view__count">{{ group.cards.length }}</span>
+						</component>
+						<ul class="project-view__list">
+							<li
+								v-for="card in group.cards"
+								:key="card.id"
+								class="project-view__row"
+								:class="{ 'project-view__row--done': card.doneAt > 0 }"
 								tabindex="0"
 								role="button"
-								:title="t('kanso', 'Click to edit the description')"
-								@click="startDescriptionEdit"
-								@keydown.enter="startDescriptionEdit">
-								<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
-								<div class="project-view__desc-rendered kanso-md" v-html="renderMarkdown(project.description)" />
-							</div>
-							<button
-								v-else
-								type="button"
-								class="project-view__desc-placeholder"
-								@click="startDescriptionEdit">
-								{{ t('kanso', 'Add a description…') }}
-							</button>
-						</template>
-					</section>
-
-					<!-- Discussion log — an owner-only personal thread on the project (#3563).
-					     Reuses the shipped markdown editor (useMarkdownToolbar + renderMarkdown,
-					     same as the description) and mirrors the card comment thread pattern:
-					     one-level replies, edit/delete. No @mention/notify — a project has a
-					     single reader (the owner). -->
-					<section class="project-view__discussion">
-						<h2 class="project-view__section-title">
-							{{ t('kanso', 'Discussion') }}<span v-if="commentTree.length"> · {{ commentTotal }}</span>
-						</h2>
-
-						<!-- Composer -->
-						<div class="project-view__composer">
-							<div class="project-view__md-toolbar" role="toolbar" :aria-label="t('kanso', 'Formatting')">
-								<button type="button" class="project-view__md-btn" :title="t('kanso', 'Bold')" @mousedown.prevent @click="commentToolbar.bold()"><FormatBoldIcon :size="18" /></button>
-								<button type="button" class="project-view__md-btn" :title="t('kanso', 'Italic')" @mousedown.prevent @click="commentToolbar.italic()"><FormatItalicIcon :size="18" /></button>
-								<button type="button" class="project-view__md-btn" :title="t('kanso', 'Bulleted list')" @mousedown.prevent @click="commentToolbar.bulletList()"><FormatListBulletedIcon :size="18" /></button>
-								<button type="button" class="project-view__md-btn" :title="t('kanso', 'Quote')" @mousedown.prevent @click="commentToolbar.quote()"><FormatQuoteCloseIcon :size="18" /></button>
-								<button type="button" class="project-view__md-btn" :title="t('kanso', 'Inline code')" @mousedown.prevent @click="commentToolbar.inlineCode()"><CodeTagsIcon :size="18" /></button>
-								<button type="button" class="project-view__md-btn" :title="t('kanso', 'Link')" @mousedown.prevent @click="commentToolbar.link()"><LinkVariantIcon :size="18" /></button>
-							</div>
-							<textarea
-								ref="newCommentRef"
-								v-model="newCommentBody"
-								class="project-view__comment-textarea"
-								rows="3"
-								:placeholder="t('kanso', 'Add a note to this project — markdown supported')"
-								:disabled="addComment.isPending.value"
-								@keydown.ctrl.enter.prevent="submitNewComment"
-								@keydown.meta.enter.prevent="submitNewComment" />
-							<div class="project-view__comment-actions">
-								<NcButton type="primary" :disabled="addComment.isPending.value || !newCommentBody.trim()" @click="submitNewComment">
-									{{ t('kanso', 'Post') }}
-								</NcButton>
-								<span class="project-view__desc-hint">{{ t('kanso', 'Ctrl+Enter to post') }}</span>
-								<span v-if="commentError" class="project-view__desc-error">{{ commentError }}</span>
-							</div>
-						</div>
-
-						<!-- Thread -->
-						<div v-if="commentTree.length" class="project-view__thread">
-							<div
-								v-for="{ comment: topComment, replies } in commentTree"
-								:key="topComment.id"
-								class="project-view__comment-group">
-								<div class="project-view__comment">
-									<div class="project-view__comment-main">
-										<div class="project-view__comment-meta">
-											<span class="project-view__comment-author">{{ topComment.authorDisplayName || topComment.author }}</span>
-											<span class="project-view__comment-time">{{ formatCommentTime(topComment.createdAt) }}</span>
-											<span v-if="topComment.editedAt > 0" class="project-view__comment-edited">{{ t('kanso', 'edited') }}</span>
-										</div>
-
-										<template v-if="editingCommentId === topComment.id">
-											<textarea
-												v-model="editingCommentBody"
-												class="project-view__comment-textarea"
-												rows="3"
-												@keydown.ctrl.enter.prevent="saveCommentEdit(topComment)"
-												@keydown.meta.enter.prevent="saveCommentEdit(topComment)"
-												@keydown.escape.stop="cancelCommentEdit" />
-											<div class="project-view__comment-edit-actions">
-												<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(topComment)">{{ t('kanso', 'Save') }}</NcButton>
-												<NcButton @click="cancelCommentEdit">{{ t('kanso', 'Cancel') }}</NcButton>
-											</div>
+								@click="openCard(card)"
+								@keydown.enter="openCard(card)">
+								<div class="project-view__row-main">
+									<span class="project-view__card-title">{{ card.title }}</span>
+									<span class="project-view__meta">
+										<span v-if="mode === 'status'">{{ card.boardTitle }} · </span>
+										<span class="project-view__stack">{{ card.stackTitle }}</span>
+									</span>
+								</div>
+								<span
+									v-if="card.blockers > 0 && !card.doneAt"
+									class="project-view__badge project-view__badge--warning"
+									:title="n('kanso', 'Blocked by {count} open card', 'Blocked by {count} open cards', card.blockers, { count: card.blockers })">
+									<BlockHelperIcon :size="14" />
+								</span>
+								<span v-if="card.estimate" class="project-view__badge">{{ card.estimate }}</span>
+								<span
+									v-if="card.duedate"
+									class="project-view__due"
+									:class="{ 'project-view__due--overdue': isOverdue(card) }">
+									{{ formatDue(card.duedate) }}
+								</span>
+								<NcActions :force-menu="false">
+									<NcActionButton
+										:close-after-click="true"
+										@click.stop="handleRemoveCard(card.id)">
+										<template #icon>
+											<CloseIcon :size="20" />
 										</template>
-										<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
-										<div v-else class="project-view__comment-body project-view__desc-rendered kanso-md" v-html="renderMarkdown(topComment.body)" />
+										{{ t('kanso', 'Remove from project') }}
+									</NcActionButton>
+								</NcActions>
+							</li>
+						</ul>
+					</component>
+				</template>
+			</template>
 
-										<div class="project-view__comment-controls">
-											<button
-												v-if="editingCommentId !== topComment.id"
-												class="project-view__comment-link-btn"
-												@click="openReplyBox(topComment.id)">
-												{{ t('kanso', 'Reply') }}
-											</button>
-											<button class="project-view__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(topComment)">
-												<PencilIcon :size="14" />
-											</button>
-											<button
-												class="project-view__comment-icon-btn project-view__comment-icon-btn--danger"
-												:title="t('kanso', 'Delete comment')"
-												:disabled="deleteComment.isPending.value"
-												@click="handleDeleteComment(topComment)">
-												<TrashCanIcon :size="14" />
-											</button>
-										</div>
-									</div>
+			<!-- Discussion log — an owner-only personal thread on the project (#3563).
+			     Reuses the shipped markdown editor (useMarkdownToolbar + renderMarkdown,
+			     same as the description) and mirrors the card comment thread pattern:
+			     one-level replies, edit/delete. No @mention/notify — a project has a
+			     single reader (the owner). -->
+			<section class="project-view__discussion">
+				<h2 class="project-view__section-title">
+					{{ t('kanso', 'Discussion') }}<span v-if="commentTree.length"> · {{ commentTotal }}</span>
+				</h2>
+
+				<!-- Composer -->
+				<div class="project-view__composer">
+					<div class="project-view__md-toolbar" role="toolbar" :aria-label="t('kanso', 'Formatting')">
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Bold')" @mousedown.prevent @click="commentToolbar.bold()"><FormatBoldIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Italic')" @mousedown.prevent @click="commentToolbar.italic()"><FormatItalicIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Bulleted list')" @mousedown.prevent @click="commentToolbar.bulletList()"><FormatListBulletedIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Quote')" @mousedown.prevent @click="commentToolbar.quote()"><FormatQuoteCloseIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Inline code')" @mousedown.prevent @click="commentToolbar.inlineCode()"><CodeTagsIcon :size="18" /></button>
+						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Link')" @mousedown.prevent @click="commentToolbar.link()"><LinkVariantIcon :size="18" /></button>
+					</div>
+					<textarea
+						ref="newCommentRef"
+						v-model="newCommentBody"
+						class="project-view__comment-textarea"
+						rows="3"
+						:placeholder="t('kanso', 'Add a note to this project — markdown supported')"
+						:disabled="addComment.isPending.value"
+						@keydown.ctrl.enter.prevent="submitNewComment"
+						@keydown.meta.enter.prevent="submitNewComment" />
+					<div class="project-view__comment-actions">
+						<NcButton type="primary" :disabled="addComment.isPending.value || !newCommentBody.trim()" @click="submitNewComment">
+							{{ t('kanso', 'Post') }}
+						</NcButton>
+						<span class="project-view__desc-hint">{{ t('kanso', 'Ctrl+Enter to post') }}</span>
+						<span v-if="commentError" class="project-view__desc-error">{{ commentError }}</span>
+					</div>
+				</div>
+
+				<!-- Thread -->
+				<div v-if="commentTree.length" class="project-view__thread">
+					<div
+						v-for="{ comment: topComment, replies } in commentTree"
+						:key="topComment.id"
+						class="project-view__comment-group">
+						<div class="project-view__comment">
+							<div class="project-view__comment-main">
+								<div class="project-view__comment-meta">
+									<span class="project-view__comment-author">{{ topComment.authorDisplayName || topComment.author }}</span>
+									<span class="project-view__comment-time">{{ formatCommentTime(topComment.createdAt) }}</span>
+									<span v-if="topComment.editedAt > 0" class="project-view__comment-edited">{{ t('kanso', 'edited') }}</span>
 								</div>
 
-								<div v-if="replyingToId === topComment.id" class="project-view__reply-compose">
+								<template v-if="editingCommentId === topComment.id">
 									<textarea
-										v-model="replyBody"
+										v-model="editingCommentBody"
 										class="project-view__comment-textarea"
-										:placeholder="t('kanso', 'Write a reply…')"
-										rows="2"
-										@keydown.ctrl.enter.prevent="submitReply(topComment.id)"
-										@keydown.meta.enter.prevent="submitReply(topComment.id)"
-										@keydown.escape.stop="closeReplyBox" />
+										rows="3"
+										@keydown.ctrl.enter.prevent="saveCommentEdit(topComment)"
+										@keydown.meta.enter.prevent="saveCommentEdit(topComment)"
+										@keydown.escape.stop="cancelCommentEdit" />
 									<div class="project-view__comment-edit-actions">
-										<NcButton type="primary" :disabled="addComment.isPending.value || !replyBody.trim()" @click="submitReply(topComment.id)">{{ t('kanso', 'Post reply') }}</NcButton>
-										<NcButton @click="closeReplyBox">{{ t('kanso', 'Cancel') }}</NcButton>
+										<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(topComment)">{{ t('kanso', 'Save') }}</NcButton>
+										<NcButton @click="cancelCommentEdit">{{ t('kanso', 'Cancel') }}</NcButton>
 									</div>
-								</div>
+								</template>
+								<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
+								<div v-else class="project-view__comment-body project-view__desc-rendered kanso-md" v-html="renderMarkdown(topComment.body)" />
 
-								<div v-if="replies.length" class="project-view__replies">
-									<div v-for="reply in replies" :key="reply.id" class="project-view__comment project-view__comment--reply">
-										<div class="project-view__comment-main">
-											<div class="project-view__comment-meta">
-												<span class="project-view__comment-author">{{ reply.authorDisplayName || reply.author }}</span>
-												<span class="project-view__comment-time">{{ formatCommentTime(reply.createdAt) }}</span>
-												<span v-if="reply.editedAt > 0" class="project-view__comment-edited">{{ t('kanso', 'edited') }}</span>
-											</div>
-
-											<template v-if="editingCommentId === reply.id">
-												<textarea
-													v-model="editingCommentBody"
-													class="project-view__comment-textarea"
-													rows="3"
-													@keydown.ctrl.enter.prevent="saveCommentEdit(reply)"
-													@keydown.meta.enter.prevent="saveCommentEdit(reply)"
-													@keydown.escape.stop="cancelCommentEdit" />
-												<div class="project-view__comment-edit-actions">
-													<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(reply)">{{ t('kanso', 'Save') }}</NcButton>
-													<NcButton @click="cancelCommentEdit">{{ t('kanso', 'Cancel') }}</NcButton>
-												</div>
-											</template>
-											<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
-											<div v-else class="project-view__comment-body project-view__desc-rendered kanso-md" v-html="renderMarkdown(reply.body)" />
-
-											<div class="project-view__comment-controls">
-												<button class="project-view__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(reply)">
-													<PencilIcon :size="14" />
-												</button>
-												<button
-													class="project-view__comment-icon-btn project-view__comment-icon-btn--danger"
-													:title="t('kanso', 'Delete comment')"
-													:disabled="deleteComment.isPending.value"
-													@click="handleDeleteComment(reply)">
-													<TrashCanIcon :size="14" />
-												</button>
-											</div>
-										</div>
-									</div>
+								<div class="project-view__comment-controls">
+									<button
+										v-if="editingCommentId !== topComment.id"
+										class="project-view__comment-link-btn"
+										@click="openReplyBox(topComment.id)">
+										{{ t('kanso', 'Reply') }}
+									</button>
+									<button class="project-view__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(topComment)">
+										<PencilIcon :size="14" />
+									</button>
+									<button
+										class="project-view__comment-icon-btn project-view__comment-icon-btn--danger"
+										:title="t('kanso', 'Delete comment')"
+										:disabled="deleteComment.isPending.value"
+										@click="handleDeleteComment(topComment)">
+										<TrashCanIcon :size="14" />
+									</button>
 								</div>
 							</div>
 						</div>
 
-						<div v-else class="project-view__discussion-empty">
-							{{ t('kanso', 'No notes yet. Start a discussion log for this project.') }}
+						<div v-if="replyingToId === topComment.id" class="project-view__reply-compose">
+							<textarea
+								v-model="replyBody"
+								class="project-view__comment-textarea"
+								:placeholder="t('kanso', 'Write a reply…')"
+								rows="2"
+								@keydown.ctrl.enter.prevent="submitReply(topComment.id)"
+								@keydown.meta.enter.prevent="submitReply(topComment.id)"
+								@keydown.escape.stop="closeReplyBox" />
+							<div class="project-view__comment-edit-actions">
+								<NcButton type="primary" :disabled="addComment.isPending.value || !replyBody.trim()" @click="submitReply(topComment.id)">{{ t('kanso', 'Post reply') }}</NcButton>
+								<NcButton @click="closeReplyBox">{{ t('kanso', 'Cancel') }}</NcButton>
+							</div>
 						</div>
-					</section>
-				</aside>
-			</div>
+
+						<div v-if="replies.length" class="project-view__replies">
+							<div v-for="reply in replies" :key="reply.id" class="project-view__comment project-view__comment--reply">
+								<div class="project-view__comment-main">
+									<div class="project-view__comment-meta">
+										<span class="project-view__comment-author">{{ reply.authorDisplayName || reply.author }}</span>
+										<span class="project-view__comment-time">{{ formatCommentTime(reply.createdAt) }}</span>
+										<span v-if="reply.editedAt > 0" class="project-view__comment-edited">{{ t('kanso', 'edited') }}</span>
+									</div>
+
+									<template v-if="editingCommentId === reply.id">
+										<textarea
+											v-model="editingCommentBody"
+											class="project-view__comment-textarea"
+											rows="3"
+											@keydown.ctrl.enter.prevent="saveCommentEdit(reply)"
+											@keydown.meta.enter.prevent="saveCommentEdit(reply)"
+											@keydown.escape.stop="cancelCommentEdit" />
+										<div class="project-view__comment-edit-actions">
+											<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(reply)">{{ t('kanso', 'Save') }}</NcButton>
+											<NcButton @click="cancelCommentEdit">{{ t('kanso', 'Cancel') }}</NcButton>
+										</div>
+									</template>
+									<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
+									<div v-else class="project-view__comment-body project-view__desc-rendered kanso-md" v-html="renderMarkdown(reply.body)" />
+
+									<div class="project-view__comment-controls">
+										<button class="project-view__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(reply)">
+											<PencilIcon :size="14" />
+										</button>
+										<button
+											class="project-view__comment-icon-btn project-view__comment-icon-btn--danger"
+											:title="t('kanso', 'Delete comment')"
+											:disabled="deleteComment.isPending.value"
+											@click="handleDeleteComment(reply)">
+											<TrashCanIcon :size="14" />
+										</button>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div v-else class="project-view__discussion-empty">
+					{{ t('kanso', 'No notes yet. Start a discussion log for this project.') }}
+				</div>
+			</section>
 		</template>
 
 		<!-- Edit project dialog -->
@@ -518,7 +535,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
@@ -533,6 +550,7 @@ import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import TrashCanIcon from 'vue-material-design-icons/TrashCan.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
+import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChartBarIcon from 'vue-material-design-icons/ChartBar.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import FormatBoldIcon from 'vue-material-design-icons/FormatBold.vue'
@@ -544,6 +562,8 @@ import CodeTagsIcon from 'vue-material-design-icons/CodeTags.vue'
 import LinkVariantIcon from 'vue-material-design-icons/LinkVariant.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
 import BlockHelperIcon from 'vue-material-design-icons/BlockHelper.vue'
+import StarIcon from 'vue-material-design-icons/Star.vue'
+import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
 import FormatListGroupIcon from 'vue-material-design-icons/FormatListGroup.vue'
 import ViewDashboardOutlineIcon from 'vue-material-design-icons/ViewDashboardOutline.vue'
 import ChartGanttIcon from 'vue-material-design-icons/ChartGantt.vue'
@@ -576,7 +596,7 @@ const router = useRouter()
 const queryClient = useQueryClient()
 
 // Resolve the project from the list query (already in cache)
-const { data: projectsData, update: updateMutation, remove: removeMutation } = useProjects()
+const { data: projectsData, update: updateMutation, remove: removeMutation, togglePin } = useProjects()
 const project = computed(() => (projectsData.value ?? []).find((p) => String(p.id) === String(props.id)) ?? null)
 
 // Browser tab title (#125). Empty until the (cached) projects list resolves.
@@ -768,6 +788,30 @@ async function handleDelete() {
 // renderMarkdown + updateProject path as the dialog, but inline under the title
 // so the description can be edited where it's read. No backend change.
 const editingDescription = ref(false)
+const descContentRef = ref(null)
+const descExpanded = ref(false)
+const descOverflows = ref(false)
+
+// Keep in sync with the collapsed max-height in the styles below.
+const COLLAPSED_DESC_PX = 240
+
+function measureDescription() {
+	descOverflows.value = (descContentRef.value?.scrollHeight ?? 0) > COLLAPSED_DESC_PX
+}
+
+let descObserver = null
+
+watch(descContentRef, (el) => {
+	descObserver?.disconnect()
+	descObserver = null
+	if (!el || typeof ResizeObserver === 'undefined') return
+	descObserver = new ResizeObserver(() => measureDescription())
+	descObserver.observe(el)
+})
+
+watch([() => project.value?.description, descExpanded], () => nextTick(measureDescription))
+
+onBeforeUnmount(() => descObserver?.disconnect())
 const draftDescription = ref('')
 const descError = ref('')
 const inlineDescRef = ref(null)
@@ -1009,34 +1053,34 @@ async function handleDeleteComment(comment) {
 	box-sizing: border-box;
 }
 
-.project-view__layout {
+.project-view__plan {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
-	gap: 32px;
-	align-items: start;
-}
-
-.project-view__main {
-	min-width: 0;
-}
-
-.project-view__side {
-	position: sticky;
-	top: 16px;
-	display: flex;
-	flex-direction: column;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 	gap: 24px;
-	min-width: 0;
+	align-items: stretch;
+	margin-bottom: 28px;
+}
+
+.project-view__plan .health {
+	margin-bottom: 0;
+}
+
+.project-view__plan .project-view__burnup {
+	margin: 0;
+	padding: 16px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large, 8px);
 }
 
 @media (max-width: 1100px) {
-	.project-view__layout {
+	.project-view__plan {
 		grid-template-columns: minmax(0, 1fr);
 	}
+}
 
-	.project-view__side {
-		position: static;
-	}
+/* Prose stays at a readable measure; media and code may use the full width. */
+.project-view :deep(.kanso-md) > :not(img, table, pre, figure, p:has(> img)) {
+	max-width: 90ch;
 }
 
 @media (max-width: 600px) {
@@ -1122,19 +1166,55 @@ async function handleDeleteComment(comment) {
 
 /* ── Prominent, in-place editable description ──────────────────────────────── */
 .project-view__description {
-	margin: 0;
+	margin: -4px 0 24px;
 }
 
 /* Read mode: comfortable typography + reading width. Long, multi-paragraph
    markdown scrolls inside a capped region instead of being clipped mid-block. */
 .project-view__desc-view {
+	position: relative;
 	cursor: text;
 	border-radius: var(--border-radius-large, 8px);
 	padding: 8px 10px;
 	margin: 0 -10px;
 	transition: background 0.15s;
-	max-height: 420px;
-	overflow-y: auto;
+}
+
+.project-view__desc-view--collapsed {
+	max-height: 240px;
+	overflow: hidden;
+}
+
+.project-view__desc-view--overflowing::after {
+	content: '';
+	position: absolute;
+	inset: auto 0 0;
+	height: 64px;
+	background: linear-gradient(to bottom, transparent, var(--color-main-background));
+	pointer-events: none;
+}
+
+.project-view__desc-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 32px;
+	margin: 4px 0 0;
+	padding: 2px 10px 2px 4px;
+	border: none;
+	border-radius: var(--border-radius);
+	background: none;
+	color: var(--color-primary-element);
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.project-view__desc-toggle:hover {
+	background: var(--color-background-hover);
+}
+
+.project-view__desc-toggle-icon--up {
+	transform: rotate(180deg);
 }
 
 .project-view__desc-view:hover,
@@ -1457,8 +1537,18 @@ details.project-view__section > summary {
 	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
-.project-view__timeline {
+.project-view .project-view__timeline {
 	margin-bottom: 32px;
+	padding: 0;
+	overflow: visible;
+}
+
+/* Fit the rows: a short project doesn't sit in an empty frame, a long one
+   scrolls inside the chart instead of stretching the page. */
+.project-view .project-view__timeline :deep(.timeline__body) {
+	flex: none;
+	min-height: 200px;
+	max-height: min(72vh, 960px);
 }
 
 .project-view__form {
@@ -1606,6 +1696,7 @@ details.project-view__section > summary {
 
 /* ── Discussion log ─────────────────────────────────────────────────────────── */
 .project-view__discussion {
+	margin-top: 8px;
 	padding-top: 20px;
 	border-top: 1px solid var(--color-border);
 }

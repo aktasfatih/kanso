@@ -975,7 +975,7 @@ msgstr ""
 msgid "Blocked by"
 msgstr ""
 
-#: src/views/ProjectView.vue:159
+#: src/views/ProjectView.vue:253
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] ""
@@ -4662,6 +4662,11 @@ msgstr ""
 msgid "Pin board"
 msgstr ""
 
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Pin to sidebar"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "Pinned"
 msgstr ""
@@ -5387,6 +5392,14 @@ msgstr ""
 msgid "Show formatting toolbar"
 msgstr ""
 
+#: src/views/ProjectView.vue
+msgid "Show less"
+msgstr ""
+
+#: src/views/ProjectView.vue
+msgid "Show more"
+msgstr ""
+
 #: src/App.vue
 msgid "Show the discussion below the card"
 msgstr ""
@@ -6016,6 +6029,12 @@ msgstr ""
 #: src/App.vue
 #: src/components/BoardTileMenu.vue
 msgid "Unpin board"
+msgstr ""
+
+#: src/App.vue
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Unpin project"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue

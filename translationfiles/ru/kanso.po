@@ -1011,7 +1011,7 @@ msgstr "Заблокирована"
 msgid "Blocked by"
 msgstr "Блокируется"
 
-#: src/views/ProjectView.vue:159
+#: src/views/ProjectView.vue:253
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Заблокирована {count} открытой карточкой"
@@ -4708,6 +4708,11 @@ msgstr "Выберите цвет нового типа проверки"
 msgid "Pin board"
 msgstr "Закрепить доску"
 
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Pin to sidebar"
+msgstr "Закрепить на боковой панели"
+
 #: src/views/BoardList.vue
 msgid "Pinned"
 msgstr "Закрепленные"
@@ -5435,6 +5440,14 @@ msgstr "Показывать комментарии (только для чте�
 msgid "Show formatting toolbar"
 msgstr "Показывать панель форматирования"
 
+#: src/views/ProjectView.vue
+msgid "Show less"
+msgstr "Показать меньше"
+
+#: src/views/ProjectView.vue
+msgid "Show more"
+msgstr "Показать больше"
+
 #: src/App.vue
 msgid "Show the discussion below the card"
 msgstr "Показывать обсуждение под карточкой"
@@ -6066,6 +6079,12 @@ msgstr "Снять отметку шаблона"
 #: src/components/BoardTileMenu.vue
 msgid "Unpin board"
 msgstr "Открепить доску"
+
+#: src/App.vue
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Unpin project"
+msgstr "Открепить проект"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Until"

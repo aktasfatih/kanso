@@ -94,6 +94,41 @@ test.describe('Project plan — progress, forecast and health', () => {
 		await expect(page.locator('[data-test=project-group-done]')).toContainText('3')
 	})
 
+	test('pinning a project lists it in the sidebar and unpinning removes it', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/projects`)
+
+		const tile = page.locator('.projects-view__row', { hasText: 'Plan Project' })
+		const navItem = page.locator('[data-test=nav-pinned-project]', { hasText: 'Plan Project' })
+		await expect(navItem).toHaveCount(0)
+
+		await tile.locator('[data-test=project-tile-pin]').click()
+		await expect(navItem).toBeVisible()
+		expect((await api.get('/projects')).find((p) => p.id === state.projectId).pinned).toBe(true)
+
+		await navItem.locator('a').first().click()
+		await expect(page).toHaveURL(new RegExp(`#/projects/${state.projectId}$`))
+
+		await api.delete(`/projects/${state.projectId}/pin`)
+		await page.reload()
+		await expect(navItem).toHaveCount(0)
+	})
+
+	test('a long description is collapsed until expanded', async ({ page }) => {
+		const long = Array.from({ length: 30 }, (_, i) => `Paragraph ${i + 1} of the plan.`).join('\n\n')
+		await api.patch(`/projects/${state.projectId}`, { description: long })
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)
+
+		const description = page.locator('[data-test=project-description]')
+		const toggle = page.locator('[data-test=project-description-toggle]')
+		await expect(toggle).toHaveText(/Show more/)
+		const collapsed = (await description.boundingBox()).height
+		await toggle.click()
+		await expect(toggle).toHaveText(/Show less/)
+		expect((await description.boundingBox()).height).toBeGreaterThan(collapsed)
+	})
+
 	test('the timeline tab renders the project cards on the board timeline', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${state.projectId}`)

@@ -976,7 +976,7 @@ msgstr "Bloqueado"
 msgid "Blocked by"
 msgstr "Bloqueado por"
 
-#: src/views/ProjectView.vue:159
+#: src/views/ProjectView.vue:253
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Bloqueado por {count} cartão aberto"
@@ -4663,6 +4663,11 @@ msgstr "Escolher a cor do novo tipo de revisão"
 msgid "Pin board"
 msgstr "Fixar quadro"
 
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Pin to sidebar"
+msgstr "Fixar na barra lateral"
+
 #: src/views/BoardList.vue
 msgid "Pinned"
 msgstr "Fixados"
@@ -5388,6 +5393,14 @@ msgstr "Mostrar comentários (somente leitura)"
 msgid "Show formatting toolbar"
 msgstr "Mostrar a barra de formatação"
 
+#: src/views/ProjectView.vue
+msgid "Show less"
+msgstr "Mostrar menos"
+
+#: src/views/ProjectView.vue
+msgid "Show more"
+msgstr "Mostrar mais"
+
 #: src/App.vue
 msgid "Show the discussion below the card"
 msgstr "Mostrar a discussão abaixo do cartão"
@@ -6018,6 +6031,12 @@ msgstr "Desmarcar como modelo"
 #: src/components/BoardTileMenu.vue
 msgid "Unpin board"
 msgstr "Desafixar quadro"
+
+#: src/App.vue
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Unpin project"
+msgstr "Desafixar projeto"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Until"

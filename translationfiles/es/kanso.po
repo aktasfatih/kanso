@@ -976,7 +976,7 @@ msgstr "Bloqueada"
 msgid "Blocked by"
 msgstr "Bloqueada por"
 
-#: src/views/ProjectView.vue:159
+#: src/views/ProjectView.vue:253
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Bloqueada por {count} tarjeta abierta"
@@ -4663,6 +4663,11 @@ msgstr "Elegir el color del nuevo tipo de revisión"
 msgid "Pin board"
 msgstr "Fijar el tablero"
 
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Pin to sidebar"
+msgstr "Fijar en la barra lateral"
+
 #: src/views/BoardList.vue
 msgid "Pinned"
 msgstr "Fijados"
@@ -5388,6 +5393,14 @@ msgstr "Mostrar los comentarios (solo lectura)"
 msgid "Show formatting toolbar"
 msgstr "Mostrar la barra de formato"
 
+#: src/views/ProjectView.vue
+msgid "Show less"
+msgstr "Mostrar menos"
+
+#: src/views/ProjectView.vue
+msgid "Show more"
+msgstr "Mostrar más"
+
 #: src/App.vue
 msgid "Show the discussion below the card"
 msgstr "Mostrar la conversación debajo de la tarjeta"
@@ -6018,6 +6031,12 @@ msgstr "Dejar de marcar como plantilla"
 #: src/components/BoardTileMenu.vue
 msgid "Unpin board"
 msgstr "Dejar de fijar el tablero"
+
+#: src/App.vue
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Unpin project"
+msgstr "Dejar de fijar el proyecto"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Until"

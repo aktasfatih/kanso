@@ -941,7 +941,7 @@ msgstr "被阻塞"
 msgid "Blocked by"
 msgstr "被阻塞于"
 
-#: src/views/ProjectView.vue:159
+#: src/views/ProjectView.vue:253
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "被 {count} 张未完成的卡片阻塞"
@@ -4618,6 +4618,11 @@ msgstr "为新评审类型选择颜色"
 msgid "Pin board"
 msgstr "置顶看板"
 
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Pin to sidebar"
+msgstr "置顶到侧边栏"
+
 #: src/views/BoardList.vue
 msgid "Pinned"
 msgstr "已置顶"
@@ -5341,6 +5346,14 @@ msgstr "显示评论（只读）"
 msgid "Show formatting toolbar"
 msgstr "显示格式工具栏"
 
+#: src/views/ProjectView.vue
+msgid "Show less"
+msgstr "收起"
+
+#: src/views/ProjectView.vue
+msgid "Show more"
+msgstr "显示更多"
+
 #: src/App.vue
 msgid "Show the discussion below the card"
 msgstr "在卡片下方显示讨论"
@@ -5970,6 +5983,12 @@ msgstr "取消标记为模板"
 #: src/components/BoardTileMenu.vue
 msgid "Unpin board"
 msgstr "取消置顶看板"
+
+#: src/App.vue
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Unpin project"
+msgstr "取消置顶项目"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Until"

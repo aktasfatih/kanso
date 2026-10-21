@@ -1011,7 +1011,7 @@ msgstr "Zablokowana"
 msgid "Blocked by"
 msgstr "Zablokowana przez"
 
-#: src/views/ProjectView.vue:159
+#: src/views/ProjectView.vue:253
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Zablokowana przez {count} otwartą kartę"
@@ -4708,6 +4708,11 @@ msgstr "Wybierz kolor nowego typu recenzji"
 msgid "Pin board"
 msgstr "Przypnij tablicę"
 
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Pin to sidebar"
+msgstr "Przypnij do paska bocznego"
+
 #: src/views/BoardList.vue
 msgid "Pinned"
 msgstr "Przypięte"
@@ -5435,6 +5440,14 @@ msgstr "Pokaż komentarze (tylko do odczytu)"
 msgid "Show formatting toolbar"
 msgstr "Pokaż pasek formatowania"
 
+#: src/views/ProjectView.vue
+msgid "Show less"
+msgstr "Pokaż mniej"
+
+#: src/views/ProjectView.vue
+msgid "Show more"
+msgstr "Pokaż więcej"
+
 #: src/App.vue
 msgid "Show the discussion below the card"
 msgstr "Pokaż dyskusję pod kartą"
@@ -6066,6 +6079,12 @@ msgstr "Cofnij oznaczenie jako szablon"
 #: src/components/BoardTileMenu.vue
 msgid "Unpin board"
 msgstr "Odepnij tablicę"
+
+#: src/App.vue
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Unpin project"
+msgstr "Odepnij projekt"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Until"

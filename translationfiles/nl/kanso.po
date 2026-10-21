@@ -976,7 +976,7 @@ msgstr "Geblokkeerd"
 msgid "Blocked by"
 msgstr "Geblokkeerd door"
 
-#: src/views/ProjectView.vue:159
+#: src/views/ProjectView.vue:253
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Geblokkeerd door {count} open kaart"
@@ -4663,6 +4663,11 @@ msgstr "Kies een kleur voor het nieuwe reviewtype"
 msgid "Pin board"
 msgstr "Bord vastzetten"
 
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Pin to sidebar"
+msgstr "Vastzetten in zijbalk"
+
 #: src/views/BoardList.vue
 msgid "Pinned"
 msgstr "Vastgezet"
@@ -5388,6 +5393,14 @@ msgstr "Reacties tonen (alleen-lezen)"
 msgid "Show formatting toolbar"
 msgstr "Opmaakbalk tonen"
 
+#: src/views/ProjectView.vue
+msgid "Show less"
+msgstr "Minder tonen"
+
+#: src/views/ProjectView.vue
+msgid "Show more"
+msgstr "Meer tonen"
+
 #: src/App.vue
 msgid "Show the discussion below the card"
 msgstr "De discussie onder de kaart tonen"
@@ -6018,6 +6031,12 @@ msgstr "Niet meer als sjabloon markeren"
 #: src/components/BoardTileMenu.vue
 msgid "Unpin board"
 msgstr "Bord losmaken"
+
+#: src/App.vue
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Unpin project"
+msgstr "Project losmaken"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Until"

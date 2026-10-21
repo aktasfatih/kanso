@@ -976,7 +976,7 @@ msgstr "Engellendi"
 msgid "Blocked by"
 msgstr "Engelleyen"
 
-#: src/views/ProjectView.vue:159
+#: src/views/ProjectView.vue:253
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "{count} açık kart tarafından engellendi"
@@ -4663,6 +4663,11 @@ msgstr "Yeni inceleme türü için renk seç"
 msgid "Pin board"
 msgstr "Panoyu sabitle"
 
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Pin to sidebar"
+msgstr "Kenar çubuğuna sabitle"
+
 #: src/views/BoardList.vue
 msgid "Pinned"
 msgstr "Sabitlendi"
@@ -5388,6 +5393,14 @@ msgstr "Yorumları göster (salt okunur)"
 msgid "Show formatting toolbar"
 msgstr "Biçimlendirme araç çubuğunu göster"
 
+#: src/views/ProjectView.vue
+msgid "Show less"
+msgstr "Daha az göster"
+
+#: src/views/ProjectView.vue
+msgid "Show more"
+msgstr "Daha fazla göster"
+
 #: src/App.vue
 msgid "Show the discussion below the card"
 msgstr "Tartışmayı kartın altında göster"
@@ -6018,6 +6031,12 @@ msgstr "Şablon işaretini kaldır"
 #: src/components/BoardTileMenu.vue
 msgid "Unpin board"
 msgstr "Pano sabitlemesini kaldır"
+
+#: src/App.vue
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Unpin project"
+msgstr "Proje sabitlemesini kaldır"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Until"

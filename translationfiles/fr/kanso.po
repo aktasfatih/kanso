@@ -976,7 +976,7 @@ msgstr "Bloquée"
 msgid "Blocked by"
 msgstr "Bloquée par"
 
-#: src/views/ProjectView.vue:159
+#: src/views/ProjectView.vue:253
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Bloquée par {count} carte ouverte"
@@ -4663,6 +4663,11 @@ msgstr "Choisir la couleur du nouveau type de revue"
 msgid "Pin board"
 msgstr "Épingler le tableau"
 
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Pin to sidebar"
+msgstr "Épingler dans la barre latérale"
+
 #: src/views/BoardList.vue
 msgid "Pinned"
 msgstr "Épinglés"
@@ -5388,6 +5393,14 @@ msgstr "Afficher les commentaires (lecture seule)"
 msgid "Show formatting toolbar"
 msgstr "Afficher la barre de mise en forme"
 
+#: src/views/ProjectView.vue
+msgid "Show less"
+msgstr "Afficher moins"
+
+#: src/views/ProjectView.vue
+msgid "Show more"
+msgstr "Afficher plus"
+
 #: src/App.vue
 msgid "Show the discussion below the card"
 msgstr "Afficher la discussion sous la carte"
@@ -6018,6 +6031,12 @@ msgstr "Ne plus marquer comme modèle"
 #: src/components/BoardTileMenu.vue
 msgid "Unpin board"
 msgstr "Ne plus épingler le tableau"
+
+#: src/App.vue
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Unpin project"
+msgstr "Ne plus épingler le projet"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Until"

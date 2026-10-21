@@ -976,7 +976,7 @@ msgstr "Blockiert"
 msgid "Blocked by"
 msgstr "Blockiert von"
 
-#: src/views/ProjectView.vue:159
+#: src/views/ProjectView.vue:253
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Blockiert durch {count} offene Karte"
@@ -4663,6 +4663,11 @@ msgstr "Farbe für neuen Review-Typ wählen"
 msgid "Pin board"
 msgstr "Board anheften"
 
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Pin to sidebar"
+msgstr "An Seitenleiste anheften"
+
 #: src/views/BoardList.vue
 msgid "Pinned"
 msgstr "Angeheftet"
@@ -5388,6 +5393,14 @@ msgstr "Kommentare anzeigen (schreibgeschützt)"
 msgid "Show formatting toolbar"
 msgstr "Formatierungsleiste anzeigen"
 
+#: src/views/ProjectView.vue
+msgid "Show less"
+msgstr "Weniger anzeigen"
+
+#: src/views/ProjectView.vue
+msgid "Show more"
+msgstr "Mehr anzeigen"
+
 #: src/App.vue
 msgid "Show the discussion below the card"
 msgstr "Diskussion unterhalb der Karte anzeigen"
@@ -6018,6 +6031,12 @@ msgstr "Als Vorlage aufheben"
 #: src/components/BoardTileMenu.vue
 msgid "Unpin board"
 msgstr "Board lösen"
+
+#: src/App.vue
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Unpin project"
+msgstr "Projekt lösen"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Until"
