@@ -37,9 +37,9 @@
             "{count} kaart",
             "{count} kaarten"
         ],
-        "_{count} card has no estimate and counts as {points} points._::_{count} cards have no estimate and count as {points} points each._": [
-            "{count} kaart heeft geen schatting en telt als {points} punten.",
-            "{count} kaarten hebben geen schatting en tellen elk als {points} punten."
+        "_{count} card has no estimate and counts as the typical estimate of {points}._::_{count} cards have no estimate and each count as the typical estimate of {points}._": [
+            "{count} kaart heeft geen schatting en telt als de typische schatting van {points}.",
+            "{count} kaarten hebben geen schatting en tellen elk als de typische schatting van {points}."
         ],
         "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone.": "{count} kaart(en) hebben een schatting die niet in de nieuwe schaal past; die wordt gewist. Dit kan niet ongedaan worden gemaakt.",
         "_{count} character left_::_{count} characters left_": [
@@ -60,18 +60,30 @@
         ],
         "{count} selected": "{count} geselecteerd",
         "{done} of {total} cards": "{done} van {total} kaarten",
-        "{done} of {total} points": "{done} van {total} punten",
+        "_{done} of {total} point_::_{done} of {total} points_": [
+            "{done} van {total} punt",
+            "{done} van {total} punten"
+        ],
         "{first}, +{n} more": "{first}, +{n} meer",
         "{from} at the earliest": "Op zijn vroegst {from}",
         "{n} blocked": "{n} geblokkeerd",
-        "{n} cards / week": "{n} kaarten / week",
+        "_{n} card / week_::_{n} cards / week_": [
+            "{n} kaart / week",
+            "{n} kaarten / week"
+        ],
         "{n} days ago": "{n} dagen geleden",
         "{n} hr ago": "{n} uur geleden",
         "{n} min ago": "{n} min geleden",
         "{n} over the WIP limit": "{n} boven de WIP-limiet",
         "{n} overdue": "{n} te laat",
-        "{n} points": "{n} punten",
-        "{n} points / week": "{n} punten / week",
+        "_{n} point_::_{n} points_": [
+            "{n} punt",
+            "{n} punten"
+        ],
+        "_{n} point / week_::_{n} points / week_": [
+            "{n} punt / week",
+            "{n} punten / week"
+        ],
         "{n}d": "{n}d",
         "{n}h": "{n}u",
         "{ok} cards updated": "{ok} kaarten bijgewerkt",

@@ -124,9 +124,9 @@ msgid_plural "{count} cards"
 msgstr[0] "{count} 张卡片"
 
 #: src/components/ProjectHealth.vue:178
-msgid "{count} card has no estimate and counts as {points} points."
-msgid_plural "{count} cards have no estimate and count as {points} points each."
-msgstr[0] "{count} 张卡片没有估算，每张按 {points} 点计算。"
+msgid "{count} card has no estimate and counts as the typical estimate of {points}."
+msgid_plural "{count} cards have no estimate and each count as the typical estimate of {points}."
+msgstr[0] "{count} 张卡片没有估算，每张按典型估算值 {points} 计算。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
@@ -161,9 +161,10 @@ msgstr "已选择 {count} 项"
 msgid "{done} of {total} cards"
 msgstr "{done}/{total} 张卡片"
 
-#: src/components/ProjectHealth.vue
-msgid "{done} of {total} points"
-msgstr "{done}/{total} 点"
+#: src/components/ProjectHealth.vue:25
+msgid "{done} of {total} point"
+msgid_plural "{done} of {total} points"
+msgstr[0] "{done}/{total} 点"
 
 #: src/components/BoardFilterBar.vue
 msgid "{first}, +{n} more"
@@ -177,9 +178,10 @@ msgstr "最早 {from}"
 msgid "{n} blocked"
 msgstr "{n} 张被阻塞"
 
-#: src/components/ProjectHealth.vue
-msgid "{n} cards / week"
-msgstr "{n} 张卡片/周"
+#: src/components/ProjectHealth.vue:136
+msgid "{n} card / week"
+msgid_plural "{n} cards / week"
+msgstr[0] "{n} 张卡片/周"
 
 #: src/components/BoardTileContent.vue
 #: src/components/CardDetail.vue
@@ -210,13 +212,15 @@ msgstr "超出 WIP 限制 {n} 张"
 msgid "{n} overdue"
 msgstr "{n} 张已逾期"
 
-#: src/components/ProjectHealth.vue
-msgid "{n} points"
-msgstr "{n} 点"
+#: src/components/ProjectHealth.vue:33
+msgid "{n} point"
+msgid_plural "{n} points"
+msgstr[0] "{n} 点"
 
-#: src/components/ProjectHealth.vue
-msgid "{n} points / week"
-msgstr "{n} 点/周"
+#: src/components/ProjectHealth.vue:135
+msgid "{n} point / week"
+msgid_plural "{n} points / week"
+msgstr[0] "{n} 点/周"
 
 #: src/components/CardTile.vue
 msgid "{n}d"

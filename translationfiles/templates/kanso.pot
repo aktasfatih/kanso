@@ -126,8 +126,8 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: src/components/ProjectHealth.vue:178
-msgid "{count} card has no estimate and counts as {points} points."
-msgid_plural "{count} cards have no estimate and count as {points} points each."
+msgid "{count} card has no estimate and counts as the typical estimate of {points}."
+msgid_plural "{count} cards have no estimate and each count as the typical estimate of {points}."
 msgstr[0] ""
 msgstr[1] ""
 
@@ -168,9 +168,11 @@ msgstr ""
 msgid "{done} of {total} cards"
 msgstr ""
 
-#: src/components/ProjectHealth.vue
-msgid "{done} of {total} points"
-msgstr ""
+#: src/components/ProjectHealth.vue:25
+msgid "{done} of {total} point"
+msgid_plural "{done} of {total} points"
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/components/BoardFilterBar.vue
 msgid "{first}, +{n} more"
@@ -184,9 +186,11 @@ msgstr ""
 msgid "{n} blocked"
 msgstr ""
 
-#: src/components/ProjectHealth.vue
-msgid "{n} cards / week"
-msgstr ""
+#: src/components/ProjectHealth.vue:136
+msgid "{n} card / week"
+msgid_plural "{n} cards / week"
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/components/BoardTileContent.vue
 #: src/components/CardDetail.vue
@@ -217,13 +221,17 @@ msgstr ""
 msgid "{n} overdue"
 msgstr ""
 
-#: src/components/ProjectHealth.vue
-msgid "{n} points"
-msgstr ""
+#: src/components/ProjectHealth.vue:33
+msgid "{n} point"
+msgid_plural "{n} points"
+msgstr[0] ""
+msgstr[1] ""
 
-#: src/components/ProjectHealth.vue
-msgid "{n} points / week"
-msgstr ""
+#: src/components/ProjectHealth.vue:135
+msgid "{n} point / week"
+msgid_plural "{n} points / week"
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/components/CardTile.vue
 msgid "{n}d"

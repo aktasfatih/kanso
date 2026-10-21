@@ -40,10 +40,10 @@
             "{count} karty",
             "{count} kart"
         ],
-        "_{count} card has no estimate and counts as {points} points._::_{count} cards have no estimate and count as {points} points each._": [
-            "{count} karta nie ma oszacowania i liczy się jako {points} pkt.",
-            "{count} karty nie mają oszacowania i każda liczy się jako {points} pkt.",
-            "{count} kart nie ma oszacowania i każda liczy się jako {points} pkt."
+        "_{count} card has no estimate and counts as the typical estimate of {points}._::_{count} cards have no estimate and each count as the typical estimate of {points}._": [
+            "{count} karta nie ma oszacowania i liczy się jako typowe oszacowanie: {points}.",
+            "{count} karty nie mają oszacowania i każda liczy się jako typowe oszacowanie: {points}.",
+            "{count} kart nie ma oszacowania i każda liczy się jako typowe oszacowanie: {points}."
         ],
         "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone.": "Oszacowanie na {count} kartach nie mieści się w nowej skali i zostanie wyczyszczone. Tej operacji nie można cofnąć.",
         "_{count} character left_::_{count} characters left_": [
@@ -68,18 +68,34 @@
         ],
         "{count} selected": "Zaznaczono: {count}",
         "{done} of {total} cards": "{done} z {total} kart",
-        "{done} of {total} points": "{done} z {total} pkt",
+        "_{done} of {total} point_::_{done} of {total} points_": [
+            "{done} z {total} pkt",
+            "{done} z {total} pkt",
+            "{done} z {total} pkt"
+        ],
         "{first}, +{n} more": "{first} i {n} więcej",
         "{from} at the earliest": "najwcześniej {from}",
         "{n} blocked": "{n} zablokowanych",
-        "{n} cards / week": "Karty / tydzień: {n}",
+        "_{n} card / week_::_{n} cards / week_": [
+            "Karty / tydzień: {n}",
+            "Karty / tydzień: {n}",
+            "Karty / tydzień: {n}"
+        ],
         "{n} days ago": "{n} dni temu",
         "{n} hr ago": "{n} godz. temu",
         "{n} min ago": "{n} min temu",
         "{n} over the WIP limit": "{n} ponad limit WIP",
         "{n} overdue": "{n} po terminie",
-        "{n} points": "{n} pkt",
-        "{n} points / week": "{n} pkt / tydzień",
+        "_{n} point_::_{n} points_": [
+            "{n} pkt",
+            "{n} pkt",
+            "{n} pkt"
+        ],
+        "_{n} point / week_::_{n} points / week_": [
+            "{n} pkt / tydzień",
+            "{n} pkt / tydzień",
+            "{n} pkt / tydzień"
+        ],
         "{n}d": "{n} d",
         "{n}h": "{n} h",
         "{ok} cards updated": "Zaktualizowano karty: {ok}",

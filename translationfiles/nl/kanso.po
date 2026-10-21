@@ -127,10 +127,10 @@ msgstr[0] "{count} kaart"
 msgstr[1] "{count} kaarten"
 
 #: src/components/ProjectHealth.vue:178
-msgid "{count} card has no estimate and counts as {points} points."
-msgid_plural "{count} cards have no estimate and count as {points} points each."
-msgstr[0] "{count} kaart heeft geen schatting en telt als {points} punten."
-msgstr[1] "{count} kaarten hebben geen schatting en tellen elk als {points} punten."
+msgid "{count} card has no estimate and counts as the typical estimate of {points}."
+msgid_plural "{count} cards have no estimate and each count as the typical estimate of {points}."
+msgstr[0] "{count} kaart heeft geen schatting en telt als de typische schatting van {points}."
+msgstr[1] "{count} kaarten hebben geen schatting en tellen elk als de typische schatting van {points}."
 
 #: src/components/BoardSettingsModal.vue
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
@@ -169,9 +169,11 @@ msgstr "{count} geselecteerd"
 msgid "{done} of {total} cards"
 msgstr "{done} van {total} kaarten"
 
-#: src/components/ProjectHealth.vue
-msgid "{done} of {total} points"
-msgstr "{done} van {total} punten"
+#: src/components/ProjectHealth.vue:25
+msgid "{done} of {total} point"
+msgid_plural "{done} of {total} points"
+msgstr[0] "{done} van {total} punt"
+msgstr[1] "{done} van {total} punten"
 
 #: src/components/BoardFilterBar.vue
 msgid "{first}, +{n} more"
@@ -185,9 +187,11 @@ msgstr "Op zijn vroegst {from}"
 msgid "{n} blocked"
 msgstr "{n} geblokkeerd"
 
-#: src/components/ProjectHealth.vue
-msgid "{n} cards / week"
-msgstr "{n} kaarten / week"
+#: src/components/ProjectHealth.vue:136
+msgid "{n} card / week"
+msgid_plural "{n} cards / week"
+msgstr[0] "{n} kaart / week"
+msgstr[1] "{n} kaarten / week"
 
 #: src/components/BoardTileContent.vue
 #: src/components/CardDetail.vue
@@ -218,13 +222,17 @@ msgstr "{n} boven de WIP-limiet"
 msgid "{n} overdue"
 msgstr "{n} te laat"
 
-#: src/components/ProjectHealth.vue
-msgid "{n} points"
-msgstr "{n} punten"
+#: src/components/ProjectHealth.vue:33
+msgid "{n} point"
+msgid_plural "{n} points"
+msgstr[0] "{n} punt"
+msgstr[1] "{n} punten"
 
-#: src/components/ProjectHealth.vue
-msgid "{n} points / week"
-msgstr "{n} punten / week"
+#: src/components/ProjectHealth.vue:135
+msgid "{n} point / week"
+msgid_plural "{n} points / week"
+msgstr[0] "{n} punt / week"
+msgstr[1] "{n} punten / week"
 
 #: src/components/CardTile.vue
 msgid "{n}d"

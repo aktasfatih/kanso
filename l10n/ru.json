@@ -40,10 +40,10 @@
             "{count} карточки",
             "{count} карточек"
         ],
-        "_{count} card has no estimate and counts as {points} points._::_{count} cards have no estimate and count as {points} points each._": [
-            "{count} карточка без оценки, для нее берется оценка {points}.",
-            "{count} карточки без оценки, для каждой берется оценка {points}.",
-            "{count} карточек без оценки, для каждой берется оценка {points}."
+        "_{count} card has no estimate and counts as the typical estimate of {points}._::_{count} cards have no estimate and each count as the typical estimate of {points}._": [
+            "{count} карточка без оценки, для нее берется типичная оценка {points}.",
+            "{count} карточки без оценки, для каждой берется типичная оценка {points}.",
+            "{count} карточек без оценки, для каждой берется типичная оценка {points}."
         ],
         "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone.": "Карточек с оценкой, не подходящей под новую шкалу: {count}. Их оценки будут очищены. Это действие нельзя отменить.",
         "_{count} character left_::_{count} characters left_": [
@@ -68,18 +68,34 @@
         ],
         "{count} selected": "Выбрано: {count}",
         "{done} of {total} cards": "{done} из {total} карточек",
-        "{done} of {total} points": "{done} из {total} баллов",
+        "_{done} of {total} point_::_{done} of {total} points_": [
+            "{done} из {total} балла",
+            "{done} из {total} баллов",
+            "{done} из {total} баллов"
+        ],
         "{first}, +{n} more": "{first} и еще {n}",
         "{from} at the earliest": "не раньше {from}",
         "{n} blocked": "Заблокировано: {n}",
-        "{n} cards / week": "Карточек в неделю: {n}",
+        "_{n} card / week_::_{n} cards / week_": [
+            "Карточек в неделю: {n}",
+            "Карточек в неделю: {n}",
+            "Карточек в неделю: {n}"
+        ],
         "{n} days ago": "{n} дн. назад",
         "{n} hr ago": "{n} ч. назад",
         "{n} min ago": "{n} мин. назад",
         "{n} over the WIP limit": "Превышение лимита WIP: {n}",
         "{n} overdue": "Просрочено: {n}",
-        "{n} points": "Баллов: {n}",
-        "{n} points / week": "Баллов в неделю: {n}",
+        "_{n} point_::_{n} points_": [
+            "{n} балл",
+            "{n} балла",
+            "{n} баллов"
+        ],
+        "_{n} point / week_::_{n} points / week_": [
+            "Баллов в неделю: {n}",
+            "Баллов в неделю: {n}",
+            "Баллов в неделю: {n}"
+        ],
         "{n}d": "{n}д",
         "{n}h": "{n}ч",
         "{ok} cards updated": "Обновлено карточек: {ok}",

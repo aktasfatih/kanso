@@ -22,7 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<div class="health__bar-fill" :style="{ width: percent + '%' }" />
 				</div>
 				<span v-if="plan.points" class="health__sub">
-					{{ t('kanso', '{done} of {total} points', { done: fmt(plan.points.done), total: fmt(plan.points.total) }) }}
+					{{ n('kanso', '{done} of {total} point', '{done} of {total} points', plan.points.total, { done: fmt(plan.points.done), total: fmt(plan.points.total) }) }}
 				</span>
 			</div>
 
@@ -30,7 +30,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<span class="health__label">{{ t('kanso', 'Remaining') }}</span>
 				<span class="health__value">{{ n('kanso', '{count} card', '{count} cards', plan.open, { count: plan.open }) }}</span>
 				<span v-if="plan.points" class="health__sub">
-					{{ t('kanso', '{n} points', { n: fmt(plan.points.remaining) }) }}
+					{{ n('kanso', '{n} point', '{n} points', plan.points.remaining, { n: fmt(plan.points.remaining) }) }}
 				</span>
 			</div>
 
@@ -132,8 +132,8 @@ const formatDate = (date) => formatPlanDate(date)
 const paceLabel = computed(() => {
 	const rate = fmt(props.plan.throughput.perWeek)
 	return props.plan.basis === 'points'
-		? t('kanso', '{n} points / week', { n: rate })
-		: t('kanso', '{n} cards / week', { n: rate })
+		? n('kanso', '{n} point / week', '{n} points / week', props.plan.throughput.perWeek, { n: rate })
+		: n('kanso', '{n} card / week', '{n} cards / week', props.plan.throughput.perWeek, { n: rate })
 })
 
 const forecastLabel = computed(() => {
@@ -177,8 +177,8 @@ const unestimatedNote = computed(() => {
 	if (!p || !p.unestimatedCount) return ''
 	return n(
 		'kanso',
-		'{count} card has no estimate and counts as {points} points.',
-		'{count} cards have no estimate and count as {points} points each.',
+		'{count} card has no estimate and counts as the typical estimate of {points}.',
+		'{count} cards have no estimate and each count as the typical estimate of {points}.',
 		p.unestimatedCount,
 		{ count: p.unestimatedCount, points: fmt(p.assumedPerCard) },
 	)

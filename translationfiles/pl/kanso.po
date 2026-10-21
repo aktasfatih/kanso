@@ -130,11 +130,11 @@ msgstr[1] "{count} karty"
 msgstr[2] "{count} kart"
 
 #: src/components/ProjectHealth.vue:178
-msgid "{count} card has no estimate and counts as {points} points."
-msgid_plural "{count} cards have no estimate and count as {points} points each."
-msgstr[0] "{count} karta nie ma oszacowania i liczy się jako {points} pkt."
-msgstr[1] "{count} karty nie mają oszacowania i każda liczy się jako {points} pkt."
-msgstr[2] "{count} kart nie ma oszacowania i każda liczy się jako {points} pkt."
+msgid "{count} card has no estimate and counts as the typical estimate of {points}."
+msgid_plural "{count} cards have no estimate and each count as the typical estimate of {points}."
+msgstr[0] "{count} karta nie ma oszacowania i liczy się jako typowe oszacowanie: {points}."
+msgstr[1] "{count} karty nie mają oszacowania i każda liczy się jako typowe oszacowanie: {points}."
+msgstr[2] "{count} kart nie ma oszacowania i każda liczy się jako typowe oszacowanie: {points}."
 
 #: src/components/BoardSettingsModal.vue
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
@@ -177,9 +177,12 @@ msgstr "Zaznaczono: {count}"
 msgid "{done} of {total} cards"
 msgstr "{done} z {total} kart"
 
-#: src/components/ProjectHealth.vue
-msgid "{done} of {total} points"
-msgstr "{done} z {total} pkt"
+#: src/components/ProjectHealth.vue:25
+msgid "{done} of {total} point"
+msgid_plural "{done} of {total} points"
+msgstr[0] "{done} z {total} pkt"
+msgstr[1] "{done} z {total} pkt"
+msgstr[2] "{done} z {total} pkt"
 
 #: src/components/BoardFilterBar.vue
 msgid "{first}, +{n} more"
@@ -193,9 +196,12 @@ msgstr "najwcześniej {from}"
 msgid "{n} blocked"
 msgstr "{n} zablokowanych"
 
-#: src/components/ProjectHealth.vue
-msgid "{n} cards / week"
-msgstr "Karty / tydzień: {n}"
+#: src/components/ProjectHealth.vue:136
+msgid "{n} card / week"
+msgid_plural "{n} cards / week"
+msgstr[0] "Karty / tydzień: {n}"
+msgstr[1] "Karty / tydzień: {n}"
+msgstr[2] "Karty / tydzień: {n}"
 
 #: src/components/BoardTileContent.vue
 #: src/components/CardDetail.vue
@@ -226,13 +232,19 @@ msgstr "{n} ponad limit WIP"
 msgid "{n} overdue"
 msgstr "{n} po terminie"
 
-#: src/components/ProjectHealth.vue
-msgid "{n} points"
-msgstr "{n} pkt"
+#: src/components/ProjectHealth.vue:33
+msgid "{n} point"
+msgid_plural "{n} points"
+msgstr[0] "{n} pkt"
+msgstr[1] "{n} pkt"
+msgstr[2] "{n} pkt"
 
-#: src/components/ProjectHealth.vue
-msgid "{n} points / week"
-msgstr "{n} pkt / tydzień"
+#: src/components/ProjectHealth.vue:135
+msgid "{n} point / week"
+msgid_plural "{n} points / week"
+msgstr[0] "{n} pkt / tydzień"
+msgstr[1] "{n} pkt / tydzień"
+msgstr[2] "{n} pkt / tydzień"
 
 #: src/components/CardTile.vue
 msgid "{n}d"

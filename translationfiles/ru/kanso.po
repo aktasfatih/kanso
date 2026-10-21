@@ -130,11 +130,11 @@ msgstr[1] "{count} карточки"
 msgstr[2] "{count} карточек"
 
 #: src/components/ProjectHealth.vue:178
-msgid "{count} card has no estimate and counts as {points} points."
-msgid_plural "{count} cards have no estimate and count as {points} points each."
-msgstr[0] "{count} карточка без оценки, для нее берется оценка {points}."
-msgstr[1] "{count} карточки без оценки, для каждой берется оценка {points}."
-msgstr[2] "{count} карточек без оценки, для каждой берется оценка {points}."
+msgid "{count} card has no estimate and counts as the typical estimate of {points}."
+msgid_plural "{count} cards have no estimate and each count as the typical estimate of {points}."
+msgstr[0] "{count} карточка без оценки, для нее берется типичная оценка {points}."
+msgstr[1] "{count} карточки без оценки, для каждой берется типичная оценка {points}."
+msgstr[2] "{count} карточек без оценки, для каждой берется типичная оценка {points}."
 
 #: src/components/BoardSettingsModal.vue
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
@@ -177,9 +177,12 @@ msgstr "Выбрано: {count}"
 msgid "{done} of {total} cards"
 msgstr "{done} из {total} карточек"
 
-#: src/components/ProjectHealth.vue
-msgid "{done} of {total} points"
-msgstr "{done} из {total} баллов"
+#: src/components/ProjectHealth.vue:25
+msgid "{done} of {total} point"
+msgid_plural "{done} of {total} points"
+msgstr[0] "{done} из {total} балла"
+msgstr[1] "{done} из {total} баллов"
+msgstr[2] "{done} из {total} баллов"
 
 #: src/components/BoardFilterBar.vue
 msgid "{first}, +{n} more"
@@ -193,9 +196,12 @@ msgstr "не раньше {from}"
 msgid "{n} blocked"
 msgstr "Заблокировано: {n}"
 
-#: src/components/ProjectHealth.vue
-msgid "{n} cards / week"
-msgstr "Карточек в неделю: {n}"
+#: src/components/ProjectHealth.vue:136
+msgid "{n} card / week"
+msgid_plural "{n} cards / week"
+msgstr[0] "Карточек в неделю: {n}"
+msgstr[1] "Карточек в неделю: {n}"
+msgstr[2] "Карточек в неделю: {n}"
 
 #: src/components/BoardTileContent.vue
 #: src/components/CardDetail.vue
@@ -226,13 +232,19 @@ msgstr "Превышение лимита WIP: {n}"
 msgid "{n} overdue"
 msgstr "Просрочено: {n}"
 
-#: src/components/ProjectHealth.vue
-msgid "{n} points"
-msgstr "Баллов: {n}"
+#: src/components/ProjectHealth.vue:33
+msgid "{n} point"
+msgid_plural "{n} points"
+msgstr[0] "{n} балл"
+msgstr[1] "{n} балла"
+msgstr[2] "{n} баллов"
 
-#: src/components/ProjectHealth.vue
-msgid "{n} points / week"
-msgstr "Баллов в неделю: {n}"
+#: src/components/ProjectHealth.vue:135
+msgid "{n} point / week"
+msgid_plural "{n} points / week"
+msgstr[0] "Баллов в неделю: {n}"
+msgstr[1] "Баллов в неделю: {n}"
+msgstr[2] "Баллов в неделю: {n}"
 
 #: src/components/CardTile.vue
 msgid "{n}d"
