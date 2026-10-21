@@ -370,7 +370,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             done: Mark the card done (true) or not done (false).
             archived: Archive (true) or unarchive (false) the card.
             priority: Integer priority.
-            estimate: Effort estimate token (per the board's estimate scale).
+            estimate: Effort estimate: one of the board's `estimateTokens`
+                labels, or any number up to 2 decimals when the board's
+                `estimateScale` is "number"; "" clears it.
             start_date: ISO-8601 start date/time (empty string clears it).
             status: Workflow status automation — one of "not_started",
                 "in_progress" or "done". DISTINCT from the `done` boolean: setting

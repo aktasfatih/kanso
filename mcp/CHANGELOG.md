@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Boards carry `estimateTokens`, the labels a card's `estimate` may take
+  (with the number each counts as), so assistants can pick a valid estimate on
+  any scale, including custom ones.
 - `kanso_get_project_plan` — a project's progress, pace, forecast date range
   and on-track status; `kanso_create_project` / `kanso_update_project` take a
   `start_date` and `target_date`, and project card rows now carry `estimate`,
