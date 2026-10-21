@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Db\EstimateScale;
 use OCA\Kanso\Service\ProjectForecast;
 use PHPUnit\Framework\TestCase;
 
@@ -35,6 +36,7 @@ class ProjectForecastTest extends TestCase {
 			'duedate' => null,
 			'estimate' => $estimate,
 			'estimateScale' => $scale,
+			'estimateValue' => EstimateScale::value($scale, $estimate),
 			'createdAt' => $this->created,
 			'addedAt' => 0,
 			'blockers' => 0,
@@ -166,11 +168,12 @@ class ProjectForecastTest extends TestCase {
 		], $plan['points']);
 	}
 
-	public function testUnreadableEstimateTokensAreIgnored(): void {
-		self::assertNull(ProjectForecast::normalize('XXL', 'tshirt'));
-		self::assertNull(ProjectForecast::normalize('3', 'none'));
-		self::assertNull(ProjectForecast::normalize('abc', 'fibonacci'));
-		self::assertSame(8.0, ProjectForecast::normalize('xl', 'tshirt'));
+	public function testTimeScalesUseTheRelativeLadderAndOthersTheirValue(): void {
+		self::assertSame(8.0, ProjectForecast::normalize('16', 'hours', 16.0));
+		self::assertSame(1.0, ProjectForecast::normalize('0.5', 'days', 0.5));
+		self::assertSame(3.0, ProjectForecast::normalize('III', 'roman', 3.0));
+		self::assertSame(2.5, ProjectForecast::normalize('2.5', 'number', 2.5));
+		self::assertNull(ProjectForecast::normalize('XXL', 'tshirt', null));
 	}
 
 	public function testCountsBlockedOverdueAndInProgress(): void {

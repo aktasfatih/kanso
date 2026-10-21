@@ -164,7 +164,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:participants="participantList"
 				:saved-filters="savedFilters"
 				:active-saved-name="activeSavedName"
-				:estimate-scale="visibleEstimateScale"
+				:estimate-tokens="visibleEstimateScale === 'none' ? [] : boardEstimateLabels(boardData?.board)"
 				:icon-only="isNarrow"
 				@save="handleSaveFilter"
 				@apply-saved="handleApplySavedFilter"
@@ -743,7 +743,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { apiAnswerStatus } from '../services/apiErrors.js'
 import { cssColor } from '../services/color.js'
 import { flattenMarkdown } from '../services/markdown.js'
-import { scaleTokens } from '../services/estimateScales.js'
+import { boardEstimateLabels, boardEstimateValue } from '../services/estimateScales.js'
 import { backgroundCss } from '../services/backgrounds.js'
 import { initial, between, after, before } from '../services/sortKey.js'
 import { updateCard as apiUpdateCard, moveStack as apiMoveStack, fetchCardTemplates as apiFetchCardTemplates, createCardFromTemplate as apiCreateCardFromTemplate, getSettings, updateSettings } from '../services/api.js'
@@ -963,14 +963,9 @@ function sortCards(cards) {
 		valueOf = (c) => String(c.title ?? '')
 		compare = (a, b) => a.localeCompare(b)
 	} else if (sortMode.value === 'estimate') {
-		// Rank by ordinal position in the board's scale (NOT string value: "13"
-		// vs "2" mis-orders, and XS…XL has no numeric value). Unestimated /
-		// off-scale tokens are "missing" → sorted last in both directions.
-		const tokens = scaleTokens(visibleEstimateScale.value)
-		valueOf = (c) => {
-			const i = c.estimate ? tokens.indexOf(c.estimate) : -1
-			return i === -1 ? null : i
-		}
+		// Rank by the token's value on the board's scale. Unestimated / off-scale
+		// tokens are "missing" → sorted last in both directions.
+		valueOf = (c) => boardEstimateValue(boardData.value?.board, c.estimate)
 		compare = (a, b) => a - b
 	} else {
 		return arr.sort(bySortKey)

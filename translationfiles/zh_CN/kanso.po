@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— 无 —"
 
-#: src/components/BoardSettingsModal.vue:4703
+#: src/components/BoardSettingsModal.vue:4827
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n 次"
@@ -125,7 +125,7 @@ msgstr[0] "{count} 张卡片"
 
 #: src/components/ProjectHealth.vue:178
 msgid "{count} card has no estimate and counts as the typical estimate of {points}."
-msgid_plural "{count} cards have no estimate and each count as the typical estimate of {points}."
+msgid_plural "{count} cards have no estimate and each counts as the typical estimate of {points}."
 msgstr[0] "{count} 张卡片没有估算，每张按典型估算值 {points} 计算。"
 
 #: src/components/BoardSettingsModal.vue
@@ -365,7 +365,7 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:4919
+#: src/components/CardDetail.vue:4949
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
@@ -375,12 +375,12 @@ msgid "%n file"
 msgid_plural "%n files"
 msgstr[0] "%n 个文件"
 
-#: src/components/CardDetail.vue:4917
+#: src/components/CardDetail.vue:4947
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
 
-#: src/views/BoardView.vue:2631
+#: src/views/BoardView.vue:2626
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "已复制 %n 个 ID。"
@@ -400,7 +400,7 @@ msgid "%n label was not created and is missing from the imported cards: only boa
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
 msgstr[0] "有 %n 个标签未能创建，导入的卡片中缺少它们：只有看板管理者才能添加新标签。请让管理者添加，然后在卡片上设置它们。"
 
-#: src/components/CardDetail.vue:4915
+#: src/components/CardDetail.vue:4945
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -420,12 +420,12 @@ msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n 点"
 
-#: src/components/CardDetail.vue:1209
+#: src/components/CardDetail.vue:1231
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
 
-#: src/components/CardDetail.vue:2265
+#: src/components/CardDetail.vue:2287
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n 条回复"
@@ -559,6 +559,10 @@ msgid "Add custom field"
 msgstr "添加自定义字段"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Add estimate"
+msgstr "添加估算值"
+
+#: src/components/BoardSettingsModal.vue
 msgid "Add label"
 msgstr "添加标签"
 
@@ -674,6 +678,10 @@ msgstr "任意"
 #: src/components/ManageTemplatesModal.vue
 msgid "Any card can be saved as a template from its ⋯ menu (\"Mark as template\"). Templates are hidden from the board and reused from a column's \"＋ From template\" menu."
 msgstr "任何卡片都可以从它的 ⋯ 菜单保存为模板（“标记为模板”）。模板不会显示在看板上，可从列的“＋ 从模板创建”菜单中重复使用。"
+
+#: src/services/estimateScales.js
+msgid "Any number"
+msgstr "任意数字"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Anyone who knows the address can create cards. A sender address is easy to forge, so treat the allowlist as a filter rather than proof of who sent something — turn on \"Require verified senders\" if your mail server checks DMARC."
@@ -1399,7 +1407,7 @@ msgstr "清单进度 {total} 中的 {done}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:489
+#: src/components/CardTile.vue:491
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "清单进度 {total} 中的 {done}，%n 个步骤已逾期"
@@ -1919,6 +1927,10 @@ msgstr "自定义计划 — 请在“看板设置 → 自动化”中编辑。"
 msgid "Custom schedule — it is kept exactly as it is. The settings below can still be changed."
 msgstr "自定义计划 — 会原样保留。下面的设置仍然可以修改。"
 
+#: src/services/estimateScales.js
+msgid "Custom…"
+msgstr "自定义…"
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Cycle time — creation to done ({days}d)"
@@ -1940,8 +1952,8 @@ msgstr "危险区域"
 msgid "Date"
 msgstr "日期"
 
-#: src/components/BoardSettingsModal.vue:2209
-#: src/components/CardDetail.vue:5108
+#: src/components/BoardSettingsModal.vue:2266
+#: src/components/CardDetail.vue:5138
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -1953,6 +1965,10 @@ msgstr "日"
 #: src/components/BoardSettingsModal.vue
 msgid "Days"
 msgstr "天"
+
+#: src/services/estimateScales.js
+msgid "Days (½–10)"
+msgstr "天数（½–10）"
 
 #: src/views/ViewPage.vue
 msgid "Default"
@@ -2491,22 +2507,26 @@ msgstr "每"
 msgid "Every card in this project is done."
 msgstr "此项目中的所有卡片均已完成。"
 
-#: src/components/BoardSettingsModal.vue:4683
+#: src/components/BoardSettingsModal.vue:4807
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "每 %n 天"
 
-#: src/components/BoardSettingsModal.vue:4693
+#: src/components/BoardSettingsModal.vue
+msgid "Every estimate needs a label."
+msgstr "每个估算值都需要一个标签。"
+
+#: src/components/BoardSettingsModal.vue:4817
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "每 %n 个月"
 
-#: src/components/BoardSettingsModal.vue:4685
+#: src/components/BoardSettingsModal.vue:4809
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "每 %n 周"
 
-#: src/components/BoardSettingsModal.vue:4695
+#: src/components/BoardSettingsModal.vue:4819
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "每 %n 年"
@@ -3473,7 +3493,7 @@ msgstr "看板的用途、范围或协作约定。看板中的所有人都可以
 msgid "Jump to the discussion"
 msgstr "跳转到讨论"
 
-#: src/components/CardDetail.vue:6929
+#: src/components/CardDetail.vue:6959
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "跳转到讨论（%n 条评论）"
@@ -3580,6 +3600,10 @@ msgstr "已添加标签 {label}"
 msgid "Label {label} removed"
 msgstr "已移除标签 {label}"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Label {position}"
+msgstr "标签 {position}"
+
 #: src/components/CardDetail.vue
 msgid "Label created, but could not assign it to this card."
 msgstr "标签已创建，但无法添加到此卡片。"
@@ -3601,6 +3625,10 @@ msgstr "标签（用逗号分隔）"
 #: src/components/CardDetail.vue
 msgid "Labels are board-specific: only labels that also exist (same name and color) on the target board are kept."
 msgstr "标签是看板专属的：只有在目标看板上同样存在（名称和颜色相同）的标签才会保留。"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Labels must be unique."
+msgstr "标签不能重复。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Last checked: {when}"
@@ -3704,6 +3732,10 @@ msgstr "正在关联…"
 #: src/views/ViewPage.vue
 msgid "List"
 msgstr "列表"
+
+#: src/components/BoardSettingsModal.vue
+msgid "List your estimates from smallest to largest. The number is what each one counts as in totals and project points."
+msgstr "请按从小到大的顺序列出估算值。数字表示每个估算值在合计和项目点数中计为多少。"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Load more files"
@@ -3831,8 +3863,8 @@ msgstr "模式"
 msgid "Mon"
 msgstr "周一"
 
-#: src/components/BoardSettingsModal.vue:2211
-#: src/components/CardDetail.vue:5110
+#: src/components/BoardSettingsModal.vue:2268
+#: src/components/CardDetail.vue:5140
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -4631,6 +4663,10 @@ msgstr "置顶到侧边栏"
 msgid "Pinned"
 msgstr "已置顶"
 
+#: src/services/estimateScales.js
+msgid "Planning poker (0, ½, 1, 2, 3, 5 … 100)"
+msgstr "计划扑克（0, ½, 1, 2, 3, 5 … 100）"
+
 #: templates/admin-backup.php
 msgid "Point this at a separate account nobody signs in to, and they land in its feed instead of yours."
 msgstr "把它指向一个无人登录的单独账号，这些记录就会出现在该账号的动态中，而不是你的动态中。"
@@ -4656,6 +4692,10 @@ msgstr "发布"
 #: src/views/ProjectView.vue
 msgid "Post reply"
 msgstr "发布回复"
+
+#: src/services/estimateScales.js
+msgid "Powers of 2 (1, 2, 4, 8, 16, 32)"
+msgstr "2 的幂（1, 2, 4, 8, 16, 32）"
 
 #: src/views/BoardList.vue
 msgid "Press \"?\" to see keyboard shortcuts"
@@ -4846,6 +4886,10 @@ msgstr "移除"
 #: src/components/BoardSettingsModal.vue
 msgid "Remove \"{name}\" from board?"
 msgstr "把“{name}”从看板中移除？"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Remove {label}"
+msgstr "移除 {label}"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Remove {name} from board"
@@ -5097,6 +5141,10 @@ msgstr "评审"
 msgid "Role"
 msgstr "角色"
 
+#: src/services/estimateScales.js
+msgid "Roman numerals (I–X)"
+msgstr "罗马数字（I–X）"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Rotate feed URL"
 msgstr "更换订阅 URL"
@@ -5149,6 +5197,10 @@ msgstr "保存选项"
 #: src/components/BoardSettingsModal.vue
 msgid "Save rule"
 msgstr "保存规则"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Save scale"
+msgstr "保存刻度"
 
 #: src/components/CardDetail.vue
 msgid "Saved as a template. Add a card from it with the \"+ From template\" button on any column."
@@ -5274,6 +5326,10 @@ msgstr "选择列…"
 msgid "Select multiple cards"
 msgstr "选择多张卡片"
 
+#: src/components/CardDetail.vue
+msgid "Set"
+msgstr "设置"
+
 #: src/services/projectStatus.js
 msgid "Set a target date to see whether you are on track."
 msgstr "设置目标日期以查看进度是否正常。"
@@ -5366,7 +5422,7 @@ msgstr "在卡片下方显示讨论"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:6935
+#: src/components/CardDetail.vue:6965
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -6065,6 +6121,14 @@ msgstr "使用上方的“添加卡片”按钮，从任意看板中收集卡片
 msgid "User"
 msgstr "用户"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Value of {label}"
+msgstr "{label} 的值"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Values must be 0 or more."
+msgstr "数值必须大于或等于 0。"
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Velocity — completed per week"
@@ -6142,8 +6206,8 @@ msgstr "Webhook 已启用"
 msgid "Wed"
 msgstr "周三"
 
-#: src/components/BoardSettingsModal.vue:2210
-#: src/components/CardDetail.vue:5109
+#: src/components/BoardSettingsModal.vue:2267
+#: src/components/CardDetail.vue:5139
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -6242,8 +6306,8 @@ msgstr "写入时间"
 msgid "wrote"
 msgstr "写道"
 
-#: src/components/BoardSettingsModal.vue:2212
-#: src/components/CardDetail.vue:5111
+#: src/components/BoardSettingsModal.vue:2269
+#: src/components/CardDetail.vue:5141
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"

@@ -244,6 +244,37 @@ class BoardServiceTest extends TestCase {
 		$this->service->update(1, null, null, null, 'alice', 'tshirt');
 	}
 
+	public function testEditingCustomLabelsClearsOnlyEstimatesWhoseLabelWentAway(): void {
+		$board = $this->board();
+		$board->setEstimateScale('custom');
+		$board->setEstimateCustom('[{"label":"Tiny","value":1},{"label":"Epic","value":13}]');
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+		$this->cardMapper->method('findEstimatedCards')->with(1)->willReturn([
+			['id' => 7, 'estimate' => 'Tiny'],
+			['id' => 8, 'estimate' => 'Epic'],
+		]);
+		$this->cardMapper->expects(self::once())->method('clearEstimatesByIds')->with([8]);
+
+		$updated = $this->service->update(1, null, null, null, 'alice', null, null, null, null, null, null, null, [
+			['label' => 'Tiny', 'value' => 1],
+			['label' => 'Huge', 'value' => 8],
+		]);
+
+		self::assertSame(['Tiny', 'Huge'], array_column($updated->estimateTokens(), 'label'));
+	}
+
+	public function testSwitchingToCustomWithoutLabelsIsRejected(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->boardMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(1, null, null, null, 'alice', 'custom');
+	}
+
 	public function testUpdateNormalizesPrefix(): void {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);

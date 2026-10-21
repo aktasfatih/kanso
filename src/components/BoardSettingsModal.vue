@@ -1245,7 +1245,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:key="`estimate-scale-${scaleSelectKey}`"
 							class="workflow__select"
 							:disabled="!canManage || estimateScaleSaving"
-							:value="currentEstimateScale"
+							:value="pendingCustom ? 'custom' : currentEstimateScale"
 							@change="onEstimateScaleChange($event.target.value)">
 							<option
 								v-for="opt in ESTIMATE_SCALE_OPTIONS"
@@ -1261,6 +1261,63 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<span v-if="estimateScaleError" class="label-settings__error">
 						{{ estimateScaleError }}
 					</span>
+				</div>
+
+				<div v-if="showCustomEditor" class="estimate-custom" data-test="estimate-custom-editor">
+					<p class="estimate-custom__hint">
+						{{ t('kanso', 'List your estimates from smallest to largest. The number is what each one counts as in totals and project points.') }}
+					</p>
+					<ol class="estimate-custom__list">
+						<li v-for="(row, index) in customRows" :key="row.key" class="estimate-custom__row">
+							<input
+								v-model="row.label"
+								class="estimate-custom__label"
+								type="text"
+								maxlength="24"
+								:placeholder="t('kanso', 'Label')"
+								:aria-label="t('kanso', 'Label {position}', { position: index + 1 })"
+								:disabled="!canManage || estimateScaleSaving"
+								data-test="estimate-custom-label">
+							<input
+								v-model="row.value"
+								class="estimate-custom__value"
+								type="number"
+								min="0"
+								max="100000"
+								step="any"
+								:aria-label="t('kanso', 'Value of {label}', { label: row.label || index + 1 })"
+								:disabled="!canManage || estimateScaleSaving"
+								data-test="estimate-custom-value">
+							<NcButton
+								type="tertiary"
+								:aria-label="t('kanso', 'Remove {label}', { label: row.label || index + 1 })"
+								:disabled="!canManage || estimateScaleSaving || customRows.length <= 1"
+								@click="customRows.splice(index, 1)">
+								<template #icon>
+									<CloseIcon :size="18" />
+								</template>
+							</NcButton>
+						</li>
+					</ol>
+					<div class="estimate-custom__actions">
+						<NcButton
+							:disabled="!canManage || estimateScaleSaving || customRows.length >= MAX_CUSTOM_ESTIMATES"
+							data-test="estimate-custom-add"
+							@click="addCustomRow">
+							{{ t('kanso', 'Add estimate') }}
+						</NcButton>
+						<NcButton
+							type="primary"
+							:disabled="!canManage || estimateScaleSaving || !!customRowsError"
+							data-test="estimate-custom-save"
+							@click="saveCustomScale">
+							{{ t('kanso', 'Save scale') }}
+						</NcButton>
+						<NcButton v-if="pendingCustom" @click="cancelCustomScale">
+							{{ t('kanso', 'Cancel') }}
+						</NcButton>
+					</div>
+					<span v-if="customRowsError" class="estimate-custom__error">{{ customRowsError }}</span>
 				</div>
 
 				<ul v-if="sortedStacks.length > 0" class="workflow__list" role="list">
@@ -2588,7 +2645,7 @@ import { exactTimeTitle, expiryHasPassed, expiryInputValue, expiryTimestampFromI
 import { cssColor, LABEL_COLOR_PRESETS } from '../services/color.js'
 import { BACKGROUND_PRESETS } from '../services/backgrounds.js'
 import { normalizeCardFeatures } from '../services/cardFeatures.js'
-import { getScaleOptions, scaleTokens } from '../services/estimateScales.js'
+import { getScaleOptions, isValidNumberEstimate, scaleTokens } from '../services/estimateScales.js'
 import {
 	fetchWebhookConfig,
 	fetchMailIntakeConfig,
@@ -3535,36 +3592,103 @@ const scaleSelectKey = ref(0)
  * @param {string} newScale
  * @return {number}
  */
-function countOffScaleEstimates(newScale) {
-	const allowed = new Set(scaleTokens(newScale))
+function countOffScaleEstimates(newScale, customLabels = []) {
+	const allowed = newScale === 'number'
+		? isValidNumberEstimate
+		: (estimate) => (newScale === 'custom' ? customLabels : scaleTokens(newScale)).includes(estimate)
 	return props.cards.filter(
-		(c) => c && !c.archived && c.estimate && !allowed.has(c.estimate),
+		(c) => c && !c.archived && c.estimate && !allowed(c.estimate),
 	).length
+}
+
+async function confirmClearedEstimates(affected) {
+	if (affected === 0) return true
+	return showConfirmation({
+		name: t('kanso', 'Change estimation scale?'),
+		text: t(
+			'kanso',
+			'{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone.',
+			{ count: affected },
+		),
+		labelConfirm: t('kanso', 'Change and clear'),
+		labelReject: t('kanso', 'Cancel'),
+		severity: 'warning',
+	})
+}
+
+// ── Custom estimate scale ─────────────────────────────────────────────────────
+const MAX_CUSTOM_ESTIMATES = 20
+const STARTER_CUSTOM_SCALE = [
+	{ label: 'S', value: 1 },
+	{ label: 'M', value: 3 },
+	{ label: 'L', value: 5 },
+]
+let customRowKey = 0
+const customRows = ref([])
+const pendingCustom = ref(false)
+const showCustomEditor = computed(() => currentEstimateScale.value === 'custom' || pendingCustom.value)
+
+function resetCustomRows() {
+	const saved = boardQueryData.value?.board?.estimateCustom ?? []
+	customRows.value = (saved.length ? saved : STARTER_CUSTOM_SCALE)
+		.map((entry) => ({ key: customRowKey++, label: entry.label, value: entry.value }))
+}
+
+watch(() => boardQueryData.value?.board?.estimateCustom, () => {
+	if (!pendingCustom.value) resetCustomRows()
+}, { immediate: true })
+
+function addCustomRow() {
+	const last = customRows.value[customRows.value.length - 1]
+	customRows.value.push({ key: customRowKey++, label: '', value: last ? Number(last.value) * 2 || 1 : 1 })
+}
+
+const customRowsError = computed(() => {
+	const labels = customRows.value.map((row) => String(row.label).trim())
+	if (labels.some((label) => label === '')) return t('kanso', 'Every estimate needs a label.')
+	if (new Set(labels.map((label) => label.toLowerCase())).size !== labels.length) return t('kanso', 'Labels must be unique.')
+	if (customRows.value.some((row) => row.value === '' || !(Number(row.value) >= 0))) return t('kanso', 'Values must be 0 or more.')
+	return ''
+})
+
+function cancelCustomScale() {
+	pendingCustom.value = false
+	resetCustomRows()
+	scaleSelectKey.value++
+}
+
+async function saveCustomScale() {
+	if (customRowsError.value) return
+	const entries = customRows.value.map((row) => ({ label: String(row.label).trim(), value: Number(row.value) }))
+	const ok = await confirmClearedEstimates(countOffScaleEstimates('custom', entries.map((e) => e.label)))
+	if (!ok) return
+	estimateScaleError.value = ''
+	estimateScaleSaving.value = true
+	try {
+		await updateBoard.mutateAsync({ estimateScale: 'custom', estimateCustom: entries })
+		pendingCustom.value = false
+	} catch (err) {
+		estimateScaleError.value = err?.response?.data?.error || t('kanso', 'Failed to update estimation scale.')
+	} finally {
+		estimateScaleSaving.value = false
+	}
 }
 
 async function onEstimateScaleChange(newScale) {
 	estimateScaleError.value = ''
+	if (newScale === 'custom') {
+		// Saved together with its labels from the editor.
+		pendingCustom.value = currentEstimateScale.value !== 'custom'
+		resetCustomRows()
+		return
+	}
+	pendingCustom.value = false
 	if (newScale === currentEstimateScale.value) return
 
-	// Warn before a scale change that would strand existing estimates: the
-	// backend clears them, so make the data loss explicit and reversible.
-	const affected = countOffScaleEstimates(newScale)
-	if (affected > 0) {
-		const ok = await showConfirmation({
-			name: t('kanso', 'Change estimation scale?'),
-			text: t(
-				'kanso',
-				'{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone.',
-				{ count: affected },
-			),
-			labelConfirm: t('kanso', 'Change and clear'),
-			labelReject: t('kanso', 'Cancel'),
-			severity: 'warning',
-		})
-		if (!ok) {
-			scaleSelectKey.value++ // revert the <select> to the persisted scale
-			return
-		}
+	// The backend clears estimates that don't fit the new scale; confirm first.
+	if (!await confirmClearedEstimates(countOffScaleEstimates(newScale))) {
+		scaleSelectKey.value++ // revert the <select> to the persisted scale
+		return
 	}
 
 	estimateScaleSaving.value = true
@@ -6885,5 +7009,58 @@ async function doDeleteAutoRule(rule) {
 	font-size: 0.8rem;
 	color: var(--color-text-maxcontrast);
 	margin-bottom: 4px;
+}
+.estimate-custom {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 4px 0 16px;
+	padding: 12px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large, 8px);
+}
+
+.estimate-custom__hint {
+	margin: 0;
+	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.estimate-custom__list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.estimate-custom__row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.estimate-custom__label {
+	flex: 1;
+	min-width: 0;
+	max-width: 240px;
+	margin: 0;
+}
+
+.estimate-custom__value {
+	width: 96px;
+	margin: 0;
+}
+
+.estimate-custom__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.estimate-custom__error {
+	font-size: 0.85rem;
+	color: var(--color-error-text, var(--color-error));
 }
 </style>

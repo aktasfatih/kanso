@@ -458,6 +458,7 @@ class PublicShareService {
 		// whole card object in `cards` - zero extra queries, zero new exposure.
 		/** @var array<int, list<int>> $childIdsByParent */
 		$childIdsByParent = [];
+		$estimateShown = CardFeatures::decode($board->getDisabledCardFeatures())[CardFeatures::ESTIMATE];
 		foreach ($this->cardMapper->findPublicByBoard($boardId) as $card) {
 			/** @var Card $card */
 			if ($card->getArchived()) {
@@ -509,7 +510,7 @@ class PublicShareService {
 				// person identifiers - no assignees/comments/members/activity here.
 				'coverColor' => $card->getCoverColor(),
 				'startDate' => $card->getStartDate()?->format(\DateTimeInterface::ATOM),
-				'estimate' => $card->getEstimate(),
+				'estimate' => $estimateShown ? $card->getEstimate() : null,
 				'allDay' => $card->getAllDay() ?? false,
 				'priority' => $card->getPriority() ?? 0,
 				'type' => $card->getType() ?? '',

@@ -687,7 +687,7 @@ class CardService {
 		$card->setAllDay($source->getAllDay());
 		$card->setCoverColor($source->getCoverColor());
 		$estimate = $source->getEstimate();
-		if ($estimate !== null && EstimateScale::allows($targetBoard->getEstimateScale(), $estimate)) {
+		if ($estimate !== null && EstimateScale::allows($targetBoard->getEstimateScale(), $estimate, $targetBoard->customEstimates())) {
 			$card->setEstimate($estimate);
 		}
 		$card->setArchived($source->getArchived());
@@ -828,7 +828,7 @@ class CardService {
 		// always sees what they just made.
 		$target->setVisibility($source->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC);
 		$estimate = $source->getEstimate();
-		if ($estimate !== null && EstimateScale::allows($targetBoard->getEstimateScale(), $estimate)) {
+		if ($estimate !== null && EstimateScale::allows($targetBoard->getEstimateScale(), $estimate, $targetBoard->customEstimates())) {
 			$target->setEstimate($estimate);
 		}
 		$target->setLastModified(time());
@@ -1063,8 +1063,8 @@ class CardService {
 			// scale (which rejects everything when the scale is 'none').
 			if ($estimate === '') {
 				$card->setEstimate(null);
-			} elseif (EstimateScale::allows($board->getEstimateScale(), $estimate)) {
-				$card->setEstimate($estimate);
+			} elseif (EstimateScale::allows($board->getEstimateScale(), $estimate, $board->customEstimates())) {
+				$card->setEstimate($board->getEstimateScale() === EstimateScale::NUMBER ? EstimateScale::normalizeNumber($estimate) : $estimate);
 			} else {
 				throw new InvalidInputException('Estimate is not valid for this board\'s scale');
 			}

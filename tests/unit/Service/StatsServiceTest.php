@@ -128,14 +128,19 @@ class StatsServiceTest extends TestCase {
 		self::assertSame([['uid' => 'alice', 'total' => 8.0]], $dto['estimateByAssignee']);
 	}
 
-	public function testEstimatePanelsNullForTextualScale(): void {
+	public function testEstimatePanelsSumTextualScalesByTheirValue(): void {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board('tshirt'));
 		$this->stubCommonAggregates();
 		$this->cardMapper->method('doneTimeline')->willReturn([]);
-		$this->cardMapper->expects(self::never())->method('estimateByStack');
+		$this->cardMapper->method('estimateByStack')->willReturn([
+			['stackId' => 5, 'estimate' => 'M'],
+			['stackId' => 5, 'estimate' => 'XL'],
+			['stackId' => 6, 'estimate' => 'XXL'],
+		]);
 
 		$dto = $this->service->boardStats(1, $this->viewer);
-		self::assertNull($dto['estimateByStack']);
+
+		self::assertSame([['stackId' => 5, 'total' => 11.0]], $dto['estimateByStack']);
 	}
 
 	public function testTimelineBucketsTimestampsByUtcDay(): void {

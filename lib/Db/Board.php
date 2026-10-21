@@ -44,6 +44,8 @@ use OCP\DB\Types;
  * @method void setForgejoIntakeLabel(?string $forgejoIntakeLabel)
  * @method string getEstimateScale()
  * @method void setEstimateScale(string $estimateScale)
+ * @method string|null getEstimateCustom()
+ * @method void setEstimateCustom(?string $estimateCustom)
  * @method bool|null getNewCardsOnTop()
  * @method void setNewCardsOnTop(?bool $newCardsOnTop)
  * @method string|null getPrefix()
@@ -93,6 +95,7 @@ class Board extends Entity implements \JsonSerializable {
 	protected ?int $forgejoIntakeStackId = null;
 	protected ?string $forgejoIntakeLabel = null;
 	protected ?string $estimateScale = null;
+	protected ?string $estimateCustom = null;
 	protected ?bool $newCardsOnTop = null;
 	// The per-board human-id prefix (e.g. "KAN"); a card's reference is
 	// prefix + '-' + board_seq. Derived from the title, editable in settings.
@@ -153,6 +156,7 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('forgejoIntakeStackId', Types::INTEGER);
 		$this->addType('forgejoIntakeLabel', Types::STRING);
 		$this->addType('estimateScale', Types::STRING);
+		$this->addType('estimateCustom', Types::TEXT);
 		$this->addType('newCardsOnTop', Types::BOOLEAN);
 		$this->addType('prefix', Types::STRING);
 		$this->addType('publicShareToken', Types::STRING);
@@ -165,7 +169,7 @@ class Board extends Entity implements \JsonSerializable {
 	}
 
 	/**
-	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, background: ?string, archived: bool, lastModified: int, estimateScale: string, newCardsOnTop: bool, prefix: string, chatUrl: ?string, description: ?string, cardFeatures: array<string, bool>}
+	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, background: ?string, archived: bool, lastModified: int, estimateScale: string, estimateTokens: list<array{label: string, value: float}>, estimateCustom: list<array{label: string, value: float}>, newCardsOnTop: bool, prefix: string, chatUrl: ?string, description: ?string, cardFeatures: array<string, bool>}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -178,6 +182,8 @@ class Board extends Entity implements \JsonSerializable {
 			'archived' => $this->archived ?? false,
 			'lastModified' => $this->lastModified ?? 0,
 			'estimateScale' => $this->estimateScale ?? EstimateScale::NONE,
+			'estimateTokens' => $this->estimateTokens(),
+			'estimateCustom' => EstimateScale::decodeCustom($this->estimateCustom),
 			'newCardsOnTop' => $this->newCardsOnTop ?? false,
 			// The human-id prefix; falls back to the shared default for boards
 			// that predate the column and haven't been backfilled yet.
@@ -196,5 +202,25 @@ class Board extends Entity implements \JsonSerializable {
 			// parses the raw storage and a NULL column reads as all-enabled.
 			'cardFeatures' => CardFeatures::decode($this->disabledCardFeatures),
 		];
+	}
+
+	/**
+	 * The board's estimate scale as ordered {label, value} pairs; empty for
+	 * `none` and the free-form `number` scale.
+	 *
+	 * @return list<array{label: string, value: float}>
+	 */
+	public function estimateTokens(): array {
+		$tokens = [];
+		$scale = $this->estimateScale ?? EstimateScale::NONE;
+		foreach (EstimateScale::tokens($scale, EstimateScale::decodeCustom($this->estimateCustom)) as $label => $value) {
+			$tokens[] = ['label' => (string)$label, 'value' => $value];
+		}
+		return $tokens;
+	}
+
+	/** @return list<array{label: string, value: float}> */
+	public function customEstimates(): array {
+		return EstimateScale::decodeCustom($this->estimateCustom);
 	}
 }

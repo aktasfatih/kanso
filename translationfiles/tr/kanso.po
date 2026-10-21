@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— yok —"
 
-#: src/components/BoardSettingsModal.vue:4703
+#: src/components/BoardSettingsModal.vue:4827
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n kez"
@@ -128,7 +128,7 @@ msgstr[1] "{count} kart"
 
 #: src/components/ProjectHealth.vue:178
 msgid "{count} card has no estimate and counts as the typical estimate of {points}."
-msgid_plural "{count} cards have no estimate and each count as the typical estimate of {points}."
+msgid_plural "{count} cards have no estimate and each counts as the typical estimate of {points}."
 msgstr[0] "{count} kartın tahmini yok ve tipik tahmin olan {points} sayılıyor."
 msgstr[1] "{count} kartın tahmini yok ve her biri tipik tahmin olan {points} sayılıyor."
 
@@ -385,7 +385,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n veri satırı bulundu"
 msgstr[1] "%n veri satırı bulundu"
 
-#: src/components/CardDetail.vue:4919
+#: src/components/CardDetail.vue:4949
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n gün önce"
@@ -397,13 +397,13 @@ msgid_plural "%n files"
 msgstr[0] "%n dosya"
 msgstr[1] "%n dosya"
 
-#: src/components/CardDetail.vue:4917
+#: src/components/CardDetail.vue:4947
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
 msgstr[1] "%n saat önce"
 
-#: src/views/BoardView.vue:2631
+#: src/views/BoardView.vue:2626
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n kimlik kopyalandı."
@@ -427,7 +427,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 msgstr[1] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 
-#: src/components/CardDetail.vue:4915
+#: src/components/CardDetail.vue:4945
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n dakika önce"
@@ -451,13 +451,13 @@ msgid_plural "%n points"
 msgstr[0] "%n puan"
 msgstr[1] "%n puan"
 
-#: src/components/CardDetail.vue:1209
+#: src/components/CardDetail.vue:1231
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n proje"
 msgstr[1] "%n proje"
 
-#: src/components/CardDetail.vue:2265
+#: src/components/CardDetail.vue:2287
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n yanıt"
@@ -595,6 +595,10 @@ msgid "Add custom field"
 msgstr "Özel alan ekle"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Add estimate"
+msgstr "Tahmin ekle"
+
+#: src/components/BoardSettingsModal.vue
 msgid "Add label"
 msgstr "Etiket ekle"
 
@@ -710,6 +714,10 @@ msgstr "Herhangi"
 #: src/components/ManageTemplatesModal.vue
 msgid "Any card can be saved as a template from its ⋯ menu (\"Mark as template\"). Templates are hidden from the board and reused from a column's \"＋ From template\" menu."
 msgstr "Her kart, ⋯ menüsünden şablon olarak kaydedilebilir (\"Şablon olarak işaretle\"). Şablonlar panoda görünmez ve bir sütunun \"＋ Şablondan\" menüsünden yeniden kullanılır."
+
+#: src/services/estimateScales.js
+msgid "Any number"
+msgstr "Herhangi bir sayı"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Anyone who knows the address can create cards. A sender address is easy to forge, so treat the allowlist as a filter rather than proof of who sent something — turn on \"Require verified senders\" if your mail server checks DMARC."
@@ -1439,7 +1447,7 @@ msgstr "Kontrol listesi ilerlemesi: {total} adımdan {done} tanesi"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:489
+#: src/components/CardTile.vue:491
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Kontrol listesi ilerlemesi: {total} adımdan {done} tanesi, %n adım gecikmiş"
@@ -1960,6 +1968,10 @@ msgstr "Özel zamanlama — Pano ayarları → Otomasyon bölümünden düzenle.
 msgid "Custom schedule — it is kept exactly as it is. The settings below can still be changed."
 msgstr "Özel zamanlama — olduğu gibi korunur. Aşağıdaki ayarlar yine de değiştirilebilir."
 
+#: src/services/estimateScales.js
+msgid "Custom…"
+msgstr "Özel…"
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Cycle time — creation to done ({days}d)"
@@ -1981,8 +1993,8 @@ msgstr "Tehlikeli bölge"
 msgid "Date"
 msgstr "Tarih"
 
-#: src/components/BoardSettingsModal.vue:2209
-#: src/components/CardDetail.vue:5108
+#: src/components/BoardSettingsModal.vue:2266
+#: src/components/CardDetail.vue:5138
 msgid "day"
 msgid_plural "days"
 msgstr[0] "gün"
@@ -1995,6 +2007,10 @@ msgstr "Gün"
 #: src/components/BoardSettingsModal.vue
 msgid "Days"
 msgstr "Gün"
+
+#: src/services/estimateScales.js
+msgid "Days (½–10)"
+msgstr "Gün (½–10)"
 
 #: src/views/ViewPage.vue
 msgid "Default"
@@ -2533,25 +2549,29 @@ msgstr "Her"
 msgid "Every card in this project is done."
 msgstr "Bu projedeki tüm kartlar tamamlandı."
 
-#: src/components/BoardSettingsModal.vue:4683
+#: src/components/BoardSettingsModal.vue:4807
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Her gün"
 msgstr[1] "Her %n günde bir"
 
-#: src/components/BoardSettingsModal.vue:4693
+#: src/components/BoardSettingsModal.vue
+msgid "Every estimate needs a label."
+msgstr "Her tahminin bir etiketi olmalı."
+
+#: src/components/BoardSettingsModal.vue:4817
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Her ay"
 msgstr[1] "Her %n ayda bir"
 
-#: src/components/BoardSettingsModal.vue:4685
+#: src/components/BoardSettingsModal.vue:4809
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Her hafta"
 msgstr[1] "Her %n haftada bir"
 
-#: src/components/BoardSettingsModal.vue:4695
+#: src/components/BoardSettingsModal.vue:4819
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Her yıl"
@@ -3520,7 +3540,7 @@ msgstr "Amacı, kapsamı veya kuralları. Panodaki herkes pano adının yanında
 msgid "Jump to the discussion"
 msgstr "Tartışmaya atla"
 
-#: src/components/CardDetail.vue:6929
+#: src/components/CardDetail.vue:6959
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Tartışmaya atla (%n yorum)"
@@ -3628,6 +3648,10 @@ msgstr "{label} etiketi eklendi"
 msgid "Label {label} removed"
 msgstr "{label} etiketi kaldırıldı"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Label {position}"
+msgstr "Etiket {position}"
+
 #: src/components/CardDetail.vue
 msgid "Label created, but could not assign it to this card."
 msgstr "Etiket oluşturuldu ama bu karta atanamadı."
@@ -3649,6 +3673,10 @@ msgstr "Etiketler (virgülle ayrılmış)"
 #: src/components/CardDetail.vue
 msgid "Labels are board-specific: only labels that also exist (same name and color) on the target board are kept."
 msgstr "Etiketler panoya özeldir: yalnızca hedef panoda da bulunan (aynı ad ve renkte) etiketler korunur."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Labels must be unique."
+msgstr "Etiketler benzersiz olmalı."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Last checked: {when}"
@@ -3752,6 +3780,10 @@ msgstr "Bağlanıyor…"
 #: src/views/ViewPage.vue
 msgid "List"
 msgstr "Liste"
+
+#: src/components/BoardSettingsModal.vue
+msgid "List your estimates from smallest to largest. The number is what each one counts as in totals and project points."
+msgstr "Tahminlerini küçükten büyüğe doğru sırala. Sayı, her birinin toplamlarda ve proje puanlarında kaç sayıldığını belirler."
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Load more files"
@@ -3879,8 +3911,8 @@ msgstr "Mod"
 msgid "Mon"
 msgstr "Pzt"
 
-#: src/components/BoardSettingsModal.vue:2211
-#: src/components/CardDetail.vue:5110
+#: src/components/BoardSettingsModal.vue:2268
+#: src/components/CardDetail.vue:5140
 msgid "month"
 msgid_plural "months"
 msgstr[0] "ay"
@@ -4680,6 +4712,10 @@ msgstr "Kenar çubuğuna sabitle"
 msgid "Pinned"
 msgstr "Sabitlendi"
 
+#: src/services/estimateScales.js
+msgid "Planning poker (0, ½, 1, 2, 3, 5 … 100)"
+msgstr "Planlama pokeri (0, ½, 1, 2, 3, 5 … 100)"
+
 #: templates/admin-backup.php
 msgid "Point this at a separate account nobody signs in to, and they land in its feed instead of yours."
 msgstr "Bunu kimsenin oturum açmadığı ayrı bir hesaba yönlendirirsen, kayıtlar seninki yerine o hesabın akışına düşer."
@@ -4705,6 +4741,10 @@ msgstr "Gönder"
 #: src/views/ProjectView.vue
 msgid "Post reply"
 msgstr "Yanıt gönder"
+
+#: src/services/estimateScales.js
+msgid "Powers of 2 (1, 2, 4, 8, 16, 32)"
+msgstr "2'nin kuvvetleri (1, 2, 4, 8, 16, 32)"
 
 #: src/views/BoardList.vue
 msgid "Press \"?\" to see keyboard shortcuts"
@@ -4895,6 +4935,10 @@ msgstr "Kaldır"
 #: src/components/BoardSettingsModal.vue
 msgid "Remove \"{name}\" from board?"
 msgstr "\"{name}\" panodan çıkarılsın mı?"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Remove {label}"
+msgstr "{label} öğesini kaldır"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Remove {name} from board"
@@ -5146,6 +5190,10 @@ msgstr "İncelemeler"
 msgid "Role"
 msgstr "Rol"
 
+#: src/services/estimateScales.js
+msgid "Roman numerals (I–X)"
+msgstr "Roma rakamları (I–X)"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Rotate feed URL"
 msgstr "Akış URL'sini yenile"
@@ -5198,6 +5246,10 @@ msgstr "Seçenekleri kaydet"
 #: src/components/BoardSettingsModal.vue
 msgid "Save rule"
 msgstr "Kuralı kaydet"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Save scale"
+msgstr "Ölçeği kaydet"
 
 #: src/components/CardDetail.vue
 msgid "Saved as a template. Add a card from it with the \"+ From template\" button on any column."
@@ -5325,6 +5377,10 @@ msgstr "Bir sütun seç…"
 msgid "Select multiple cards"
 msgstr "Birden çok kart seç"
 
+#: src/components/CardDetail.vue
+msgid "Set"
+msgstr "Ayarla"
+
 #: src/services/projectStatus.js
 msgid "Set a target date to see whether you are on track."
 msgstr "Yolunda olup olmadığını görmek için bir hedef tarih belirle."
@@ -5417,7 +5473,7 @@ msgstr "Tartışmayı kartın altında göster"
 msgid "Show the discussion panel"
 msgstr "Tartışma panelini göster"
 
-#: src/components/CardDetail.vue:6935
+#: src/components/CardDetail.vue:6965
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Tartışma panelini göster (%n yorum)"
@@ -6117,6 +6173,14 @@ msgstr "Herhangi bir panodan kart toplamak için yukarıdaki Kart ekle düğmesi
 msgid "User"
 msgstr "Kullanıcı"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Value of {label}"
+msgstr "{label} değeri"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Values must be 0 or more."
+msgstr "Değerler 0 veya daha büyük olmalı."
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Velocity — completed per week"
@@ -6194,8 +6258,8 @@ msgstr "Webhook etkin"
 msgid "Wed"
 msgstr "Çar"
 
-#: src/components/BoardSettingsModal.vue:2210
-#: src/components/CardDetail.vue:5109
+#: src/components/BoardSettingsModal.vue:2267
+#: src/components/CardDetail.vue:5139
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "hafta"
@@ -6295,8 +6359,8 @@ msgstr "Yazıldı"
 msgid "wrote"
 msgstr "yazdı"
 
-#: src/components/BoardSettingsModal.vue:2212
-#: src/components/CardDetail.vue:5111
+#: src/components/BoardSettingsModal.vue:2269
+#: src/components/CardDetail.vue:5141
 msgid "year"
 msgid_plural "years"
 msgstr[0] "yıl"

@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Db\EstimateScale;
+
 /**
  * Progress, forecast, health and burn-up for one project, computed from the
  * already visibility-scoped card rows {@see ProjectService::plan()} resolves.
@@ -27,10 +29,9 @@ final class ProjectForecast {
 	private const DAY = 86400;
 	private const WEEK = 604800;
 
-	private const TSHIRT_POINTS = ['XS' => 1.0, 'S' => 2.0, 'M' => 3.0, 'L' => 5.0, 'XL' => 8.0];
-	// Hours map onto the fibonacci ladder by position, so a board estimating in
-	// hours and one in points can share a project total.
-	private const HOURS_POINTS = [1 => 1.0, 2 => 2.0, 4 => 3.0, 8 => 5.0, 16 => 8.0, 24 => 13.0, 40 => 21.0];
+	// Time scales map onto this ladder by position, so a board estimating in
+	// hours and one estimating in points can share a project total.
+	private const RELATIVE_LADDER = [1.0, 2.0, 3.0, 5.0, 8.0, 13.0, 21.0];
 
 	/**
 	 * @param list<array<string, mixed>> $cards
@@ -99,22 +100,19 @@ final class ProjectForecast {
 		];
 	}
 
-	/** Normalized points for one estimate token, or null when it can't be read. */
-	public static function normalize(?string $estimate, string $scale): ?float {
-		if ($estimate === null || $estimate === '') {
+	/**
+	 * Project points for one card: its value on the board's scale, except time
+	 * scales, which use their position on the relative ladder.
+	 */
+	public static function normalize(?string $estimate, string $scale, ?float $value): ?float {
+		if ($estimate === null || $estimate === '' || $value === null) {
 			return null;
 		}
-		switch ($scale) {
-			case 'fibonacci':
-			case 'linear':
-				return is_numeric($estimate) ? (float)$estimate : null;
-			case 'tshirt':
-				return self::TSHIRT_POINTS[strtoupper($estimate)] ?? null;
-			case 'hours':
-				return ctype_digit($estimate) ? (self::HOURS_POINTS[(int)$estimate] ?? null) : null;
-			default:
-				return null;
+		if (in_array($scale, EstimateScale::TIME_SCALES, true)) {
+			$position = array_search($estimate, array_map('strval', array_keys(EstimateScale::PRESETS[$scale])), true);
+			return $position === false ? null : (self::RELATIVE_LADDER[$position] ?? null);
 		}
+		return $value;
 	}
 
 	/**
@@ -127,7 +125,11 @@ final class ProjectForecast {
 	private function points(array $cards): ?array {
 		$known = [];
 		foreach ($cards as $card) {
-			$value = self::normalize(isset($card['estimate']) ? (string)$card['estimate'] : null, (string)($card['estimateScale'] ?? 'none'));
+			$value = self::normalize(
+				isset($card['estimate']) ? (string)$card['estimate'] : null,
+				(string)($card['estimateScale'] ?? EstimateScale::NONE),
+				isset($card['estimateValue']) ? (float)$card['estimateValue'] : null,
+			);
 			if ($value !== null) {
 				$known[(int)$card['id']] = $value;
 			}

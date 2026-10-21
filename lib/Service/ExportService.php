@@ -212,6 +212,7 @@ class ExportService {
 				'description' => $board->getDescription(),
 				'archived' => $board->getArchived(),
 				'estimateScale' => $board->getEstimateScale(),
+				'estimateCustom' => $board->customEstimates(),
 				'newCardsOnTop' => $board->getNewCardsOnTop() ?? false,
 				'stacks' => $stacks,
 				'labels' => $labels,

@@ -137,8 +137,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<span
 					v-if="cardFeatures.estimate && card.estimate"
 					class="card-tile__estimate"
-					:aria-label="t('kanso', 'Estimate: {value}', { value: card.estimate })">
-					{{ card.estimate }}
+					:title="card.estimate"
+					:aria-label="t('kanso', 'Estimate: {value}', { value: displayEstimate(card.estimate) })">
+					{{ displayEstimate(card.estimate) }}
 				</span>
 				<!-- Due date chip - suppress overdue/soon when done -->
 				<span
@@ -278,6 +279,7 @@ import { formatCardDate } from '../utils/dateDisplay.js'
 import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { buildCardDragData, buildCardDropData, NEST_ENABLED } from '../services/cardNesting.js'
 import { useCardFeatures } from '../services/cardFeatures.js'
+import { displayEstimate } from '../services/estimateScales.js'
 import { useBoardCanEdit } from '../services/boardPermissions.js'
 
 const props = defineProps({
@@ -1042,9 +1044,7 @@ const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.
 
 /* Estimate chip */
 .card-tile__estimate {
-	display: inline-flex;
-	align-items: center;
-	gap: 3px;
+	display: inline-block;
 	font-size: 0.7rem;
 	font-weight: 600;
 	border-radius: 10px;
@@ -1052,6 +1052,10 @@ const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.
 	color: var(--color-text-maxcontrast);
 	background: var(--color-background-dark);
 	border: 1px solid var(--color-border);
+	max-width: 10em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 /* Assignee avatar stack (AssigneeAvatars) - inside .card-tile__meta, pushed to

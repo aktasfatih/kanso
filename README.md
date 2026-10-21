@@ -148,6 +148,10 @@ your work, on your own Nextcloud, laid out plainly.
   overdue work grouped up top, and the project's cards on a timeline.
 
 ### 📈 Analytics
+- **Estimates** on any scale, chosen per board: Fibonacci, planning poker,
+  powers of 2, T-shirt sizes, 1–5, Roman numerals, hours, days, any number, or
+  your own custom labels with weights. Every scale sums into totals and
+  velocity.
 - Per-board (and per-project) stats: **velocity** (cards/points per week with
   trend), **cycle time** (median/average days to done), **throughput** (done
   per day), plus breakdowns by stack, priority, assignee and label, and

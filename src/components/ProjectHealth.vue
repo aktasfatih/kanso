@@ -178,7 +178,7 @@ const unestimatedNote = computed(() => {
 	return n(
 		'kanso',
 		'{count} card has no estimate and counts as the typical estimate of {points}.',
-		'{count} cards have no estimate and each count as the typical estimate of {points}.',
+		'{count} cards have no estimate and each counts as the typical estimate of {points}.',
 		p.unestimatedCount,
 		{ count: p.unestimatedCount, points: fmt(p.assumedPerCard) },
 	)

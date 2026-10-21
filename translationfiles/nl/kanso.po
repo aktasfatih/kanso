@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— geen —"
 
-#: src/components/BoardSettingsModal.vue:4703
+#: src/components/BoardSettingsModal.vue:4827
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n keer"
@@ -128,7 +128,7 @@ msgstr[1] "{count} kaarten"
 
 #: src/components/ProjectHealth.vue:178
 msgid "{count} card has no estimate and counts as the typical estimate of {points}."
-msgid_plural "{count} cards have no estimate and each count as the typical estimate of {points}."
+msgid_plural "{count} cards have no estimate and each counts as the typical estimate of {points}."
 msgstr[0] "{count} kaart heeft geen schatting en telt als de typische schatting van {points}."
 msgstr[1] "{count} kaarten hebben geen schatting en tellen elk als de typische schatting van {points}."
 
@@ -385,7 +385,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n gegevensrij gevonden"
 msgstr[1] "%n gegevensrijen gevonden"
 
-#: src/components/CardDetail.vue:4919
+#: src/components/CardDetail.vue:4949
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dag geleden"
@@ -397,13 +397,13 @@ msgid_plural "%n files"
 msgstr[0] "%n bestand"
 msgstr[1] "%n bestanden"
 
-#: src/components/CardDetail.vue:4917
+#: src/components/CardDetail.vue:4947
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n uur geleden"
 msgstr[1] "%n uur geleden"
 
-#: src/views/BoardView.vue:2631
+#: src/views/BoardView.vue:2626
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n ID gekopieerd."
@@ -427,7 +427,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n label is niet aangemaakt en ontbreekt op de geïmporteerde kaarten: alleen bordbeheerders kunnen nieuwe labels toevoegen. Vraag een beheerder om het toe te voegen en stel het daarna in op de kaarten."
 msgstr[1] "%n labels zijn niet aangemaakt en ontbreken op de geïmporteerde kaarten: alleen bordbeheerders kunnen nieuwe labels toevoegen. Vraag een beheerder om ze toe te voegen en stel ze daarna in op de kaarten."
 
-#: src/components/CardDetail.vue:4915
+#: src/components/CardDetail.vue:4945
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuut geleden"
@@ -451,13 +451,13 @@ msgid_plural "%n points"
 msgstr[0] "%n punt"
 msgstr[1] "%n punten"
 
-#: src/components/CardDetail.vue:1209
+#: src/components/CardDetail.vue:1231
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n project"
 msgstr[1] "%n projecten"
 
-#: src/components/CardDetail.vue:2265
+#: src/components/CardDetail.vue:2287
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n antwoord"
@@ -595,6 +595,10 @@ msgid "Add custom field"
 msgstr "Aangepast veld toevoegen"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Add estimate"
+msgstr "Schatting toevoegen"
+
+#: src/components/BoardSettingsModal.vue
 msgid "Add label"
 msgstr "Label toevoegen"
 
@@ -710,6 +714,10 @@ msgstr "Alle"
 #: src/components/ManageTemplatesModal.vue
 msgid "Any card can be saved as a template from its ⋯ menu (\"Mark as template\"). Templates are hidden from the board and reused from a column's \"＋ From template\" menu."
 msgstr "Elke kaart kun je via het ⋯-menu als sjabloon opslaan (\"Markeren als sjabloon\"). Sjablonen zijn verborgen op het bord en gebruik je opnieuw via het menu \"＋ Van sjabloon\" van een kolom."
+
+#: src/services/estimateScales.js
+msgid "Any number"
+msgstr "Vrij getal"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Anyone who knows the address can create cards. A sender address is easy to forge, so treat the allowlist as a filter rather than proof of who sent something — turn on \"Require verified senders\" if your mail server checks DMARC."
@@ -1439,7 +1447,7 @@ msgstr "Voortgang van de checklist {done} van {total}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:489
+#: src/components/CardTile.vue:491
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Voortgang van de checklist {done} van {total}, %n stap te laat"
@@ -1960,6 +1968,10 @@ msgstr "Aangepast schema — bewerk het bij Bordinstellingen → Automatisering.
 msgid "Custom schedule — it is kept exactly as it is. The settings below can still be changed."
 msgstr "Aangepast schema — dat blijft precies zoals het is. De onderstaande instellingen kun je nog wel wijzigen."
 
+#: src/services/estimateScales.js
+msgid "Custom…"
+msgstr "Aangepast…"
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Cycle time — creation to done ({days}d)"
@@ -1981,8 +1993,8 @@ msgstr "Gevarenzone"
 msgid "Date"
 msgstr "Datum"
 
-#: src/components/BoardSettingsModal.vue:2209
-#: src/components/CardDetail.vue:5108
+#: src/components/BoardSettingsModal.vue:2266
+#: src/components/CardDetail.vue:5138
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dag"
@@ -1995,6 +2007,10 @@ msgstr "Dag"
 #: src/components/BoardSettingsModal.vue
 msgid "Days"
 msgstr "Dagen"
+
+#: src/services/estimateScales.js
+msgid "Days (½–10)"
+msgstr "Dagen (½–10)"
 
 #: src/views/ViewPage.vue
 msgid "Default"
@@ -2533,25 +2549,29 @@ msgstr "Elke"
 msgid "Every card in this project is done."
 msgstr "Alle kaarten in dit project zijn klaar."
 
-#: src/components/BoardSettingsModal.vue:4683
+#: src/components/BoardSettingsModal.vue:4807
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Elke dag"
 msgstr[1] "Elke %n dagen"
 
-#: src/components/BoardSettingsModal.vue:4693
+#: src/components/BoardSettingsModal.vue
+msgid "Every estimate needs a label."
+msgstr "Elke schatting heeft een label nodig."
+
+#: src/components/BoardSettingsModal.vue:4817
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Elke maand"
 msgstr[1] "Elke %n maanden"
 
-#: src/components/BoardSettingsModal.vue:4685
+#: src/components/BoardSettingsModal.vue:4809
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Elke week"
 msgstr[1] "Elke %n weken"
 
-#: src/components/BoardSettingsModal.vue:4695
+#: src/components/BoardSettingsModal.vue:4819
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Elk jaar"
@@ -3520,7 +3540,7 @@ msgstr "Het doel, de afbakening of de afspraken. Iedereen op dit bord kan het le
 msgid "Jump to the discussion"
 msgstr "Naar de discussie springen"
 
-#: src/components/CardDetail.vue:6929
+#: src/components/CardDetail.vue:6959
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Naar de discussie springen (%n reactie)"
@@ -3628,6 +3648,10 @@ msgstr "Label {label} toegevoegd"
 msgid "Label {label} removed"
 msgstr "Label {label} verwijderd"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Label {position}"
+msgstr "Label {position}"
+
 #: src/components/CardDetail.vue
 msgid "Label created, but could not assign it to this card."
 msgstr "Label aangemaakt, maar kon niet aan deze kaart worden toegewezen."
@@ -3649,6 +3673,10 @@ msgstr "Labels (komma-gescheiden)"
 #: src/components/CardDetail.vue
 msgid "Labels are board-specific: only labels that also exist (same name and color) on the target board are kept."
 msgstr "Labels horen bij één bord: alleen labels die ook op het doelbord bestaan (zelfde naam en kleur) blijven behouden."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Labels must be unique."
+msgstr "Labels moeten uniek zijn."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Last checked: {when}"
@@ -3752,6 +3780,10 @@ msgstr "Koppelen…"
 #: src/views/ViewPage.vue
 msgid "List"
 msgstr "Lijst"
+
+#: src/components/BoardSettingsModal.vue
+msgid "List your estimates from smallest to largest. The number is what each one counts as in totals and project points."
+msgstr "Zet je schattingen op volgorde van klein naar groot. Het getal bepaalt hoeveel elke schatting telt in totalen en projectpunten."
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Load more files"
@@ -3879,8 +3911,8 @@ msgstr "Modus"
 msgid "Mon"
 msgstr "ma"
 
-#: src/components/BoardSettingsModal.vue:2211
-#: src/components/CardDetail.vue:5110
+#: src/components/BoardSettingsModal.vue:2268
+#: src/components/CardDetail.vue:5140
 msgid "month"
 msgid_plural "months"
 msgstr[0] "maand"
@@ -4680,6 +4712,10 @@ msgstr "Vastzetten in zijbalk"
 msgid "Pinned"
 msgstr "Vastgezet"
 
+#: src/services/estimateScales.js
+msgid "Planning poker (0, ½, 1, 2, 3, 5 … 100)"
+msgstr "Planning poker (0, ½, 1, 2, 3, 5 … 100)"
+
 #: templates/admin-backup.php
 msgid "Point this at a separate account nobody signs in to, and they land in its feed instead of yours."
 msgstr "Wijs dit aan een apart account toe waar niemand op aanmeldt, dan komen ze in die feed terecht in plaats van in die van jou."
@@ -4705,6 +4741,10 @@ msgstr "Plaatsen"
 #: src/views/ProjectView.vue
 msgid "Post reply"
 msgstr "Antwoord plaatsen"
+
+#: src/services/estimateScales.js
+msgid "Powers of 2 (1, 2, 4, 8, 16, 32)"
+msgstr "Machten van 2 (1, 2, 4, 8, 16, 32)"
 
 #: src/views/BoardList.vue
 msgid "Press \"?\" to see keyboard shortcuts"
@@ -4895,6 +4935,10 @@ msgstr "Verwijderen"
 #: src/components/BoardSettingsModal.vue
 msgid "Remove \"{name}\" from board?"
 msgstr "\"{name}\" van het bord verwijderen?"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Remove {label}"
+msgstr "{label} verwijderen"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Remove {name} from board"
@@ -5146,6 +5190,10 @@ msgstr "Reviews"
 msgid "Role"
 msgstr "Rol"
 
+#: src/services/estimateScales.js
+msgid "Roman numerals (I–X)"
+msgstr "Romeinse cijfers (I–X)"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Rotate feed URL"
 msgstr "Feed-URL vernieuwen"
@@ -5198,6 +5246,10 @@ msgstr "Opties opslaan"
 #: src/components/BoardSettingsModal.vue
 msgid "Save rule"
 msgstr "Regel opslaan"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Save scale"
+msgstr "Schaal opslaan"
 
 #: src/components/CardDetail.vue
 msgid "Saved as a template. Add a card from it with the \"+ From template\" button on any column."
@@ -5325,6 +5377,10 @@ msgstr "Kies een kolom…"
 msgid "Select multiple cards"
 msgstr "Meerdere kaarten selecteren"
 
+#: src/components/CardDetail.vue
+msgid "Set"
+msgstr "Instellen"
+
 #: src/services/projectStatus.js
 msgid "Set a target date to see whether you are on track."
 msgstr "Stel een streefdatum in om te zien of je op schema ligt."
@@ -5417,7 +5473,7 @@ msgstr "De discussie onder de kaart tonen"
 msgid "Show the discussion panel"
 msgstr "Het discussiepaneel tonen"
 
-#: src/components/CardDetail.vue:6935
+#: src/components/CardDetail.vue:6965
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Het discussiepaneel tonen (%n reactie)"
@@ -6117,6 +6173,14 @@ msgstr "Gebruik de knop Kaart toevoegen hierboven om kaarten van elk bord te ver
 msgid "User"
 msgstr "Gebruiker"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Value of {label}"
+msgstr "Waarde van {label}"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Values must be 0 or more."
+msgstr "Waarden moeten 0 of hoger zijn."
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Velocity — completed per week"
@@ -6194,8 +6258,8 @@ msgstr "Webhook actief"
 msgid "Wed"
 msgstr "wo"
 
-#: src/components/BoardSettingsModal.vue:2210
-#: src/components/CardDetail.vue:5109
+#: src/components/BoardSettingsModal.vue:2267
+#: src/components/CardDetail.vue:5139
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "week"
@@ -6295,8 +6359,8 @@ msgstr "Geschreven op"
 msgid "wrote"
 msgstr "schreef"
 
-#: src/components/BoardSettingsModal.vue:2212
-#: src/components/CardDetail.vue:5111
+#: src/components/BoardSettingsModal.vue:2269
+#: src/components/CardDetail.vue:5141
 msgid "year"
 msgid_plural "years"
 msgstr[0] "jaar"

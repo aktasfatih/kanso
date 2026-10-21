@@ -153,6 +153,7 @@ class ProjectCardMapper extends QBMapper {
 			->selectAlias('b.prefix', 'board_prefix')
 			->selectAlias('b.estimate_scale', 'estimate_scale')
 			->selectAlias('b.disabled_card_features', 'disabled_card_features')
+			->selectAlias('b.estimate_custom', 'estimate_custom')
 			->selectAlias('s.title', 'stack_title')
 			->from($this->getTableName(), 'pc')
 			->innerJoin('pc', 'kanso_cards', 'c', $qb->expr()->eq('pc.card_id', 'c.id'))
@@ -173,6 +174,8 @@ class ProjectCardMapper extends QBMapper {
 		while (($row = $result->fetch()) !== false) {
 			$due = $row['duedate'] !== null ? (new \DateTime((string)$row['duedate']))->format(\DateTimeInterface::ATOM) : null;
 			$estimateShown = CardFeatures::decode($row['disabled_card_features'] !== null ? (string)$row['disabled_card_features'] : null)[CardFeatures::ESTIMATE];
+			$estimate = $estimateShown && $row['estimate'] !== null && $row['estimate'] !== '' ? (string)$row['estimate'] : null;
+			$scale = (string)($row['estimate_scale'] ?? EstimateScale::NONE);
 			$start = $row['start_date'] !== null ? (new \DateTime((string)$row['start_date']))->format(\DateTimeInterface::ATOM) : null;
 			$rows[] = [
 				'id' => (int)$row['id'],
@@ -186,8 +189,9 @@ class ProjectCardMapper extends QBMapper {
 				'startedAt' => (int)$row['started_at'],
 				'parentCardId' => ((int)($row['parent_card_id'] ?? 0)) ?: null,
 				'startDate' => $start,
-				'estimate' => $estimateShown && $row['estimate'] !== null && $row['estimate'] !== '' ? (string)$row['estimate'] : null,
-				'estimateScale' => (string)($row['estimate_scale'] ?? 'none'),
+				'estimate' => $estimate,
+				'estimateScale' => $scale,
+				'estimateValue' => EstimateScale::value($scale, $estimate, EstimateScale::decodeCustom($row['estimate_custom'] !== null ? (string)$row['estimate_custom'] : null)),
 				'boardSeq' => $row['board_seq'] !== null ? (int)$row['board_seq'] : null,
 				'boardPrefix' => (string)($row['board_prefix'] ?? ''),
 				'createdAt' => (int)$row['created_at'],
