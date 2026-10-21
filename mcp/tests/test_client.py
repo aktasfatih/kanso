@@ -1215,6 +1215,32 @@ async def test_project_stats_passes_the_dto_through():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_project_plan_passes_the_dto_through():
+    plan = {"status": "at_risk", "forecast": {"date": "2026-11-04"}, "open": 4}
+    respx.get(f"{BASE}/projects/4/plan").mock(
+        return_value=httpx.Response(200, json=plan)
+    )
+    async with _client() as c:
+        assert await c.project_plan(4) == plan
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_project_sends_and_clears_dates():
+    route = respx.patch(f"{BASE}/projects/4").mock(
+        return_value=httpx.Response(200, json={**PROJECT, "targetDate": "2026-11-15"})
+    )
+    async with _client() as c:
+        project = await c.update_project(4, start_date="", target_date="2026-11-15")
+    assert json.loads(route.calls.last.request.content) == {
+        "startDate": "",
+        "targetDate": "2026-11-15",
+    }
+    assert project.targetDate == "2026-11-15"
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_project_card_membership_paths():
     add = respx.put(f"{BASE}/projects/4/cards/100").mock(
         return_value=httpx.Response(200, json=[])

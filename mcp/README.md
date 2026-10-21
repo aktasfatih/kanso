@@ -219,13 +219,14 @@ boards. Projects are private to their owner (no sharing), so every tool acts on
 the authenticated user's own projects only: someone else's project id answers
 403, and an id that does not exist answers 404.
 
-- `kanso_list_projects` — your projects (`id`, `title`, `description`, `color`, `owner`, `createdAt`)
+- `kanso_list_projects` — your projects (`id`, `title`, `description`, `color`, `owner`, `createdAt`, `startDate`, `targetDate`)
 - `kanso_get_project` — one project's record plus its member cards
-- `kanso_create_project` / `kanso_update_project` (title, description, color) / `kanso_delete_project`
+- `kanso_create_project` / `kanso_update_project` (title, description, color, start and target date) / `kanso_delete_project`
   (memberships go, the cards stay)
 - `kanso_list_project_cards` — the member cards, with `boardTitle` + `stackTitle`; archived cards and
   cards on boards you can no longer read are left out
 - `kanso_get_project_stats` — the board analytics panels over the project's cards
+- `kanso_get_project_plan` — progress, pace, forecast date range and on-track status against the target date
 - `kanso_add_card_to_project` / `kanso_remove_card_from_project` — idempotent membership changes
 - `kanso_list_project_comments` / `kanso_add_project_comment` — the project's discussion thread
   (replies one level deep)

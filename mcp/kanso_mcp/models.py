@@ -271,8 +271,8 @@ class BoardDetail(_Base):
 
 class Project(_Base):
     """A project from ``/api/projects``: an owner-only, cross-board collection
-    of cards. ``owner`` is the uid, ``color`` a bare 6-hex string (no '#') and
-    ``createdAt`` unix seconds. There is no sharing: only the owner ever sees it.
+    of cards. ``owner`` is the uid, ``color`` a bare 6-hex string (no '#'),
+    ``createdAt`` unix seconds and ``startDate``/``targetDate`` YYYY-MM-DD. There is no sharing: only the owner ever sees it.
     """
 
     id: int
@@ -281,6 +281,8 @@ class Project(_Base):
     color: Optional[str] = None
     owner: Optional[str] = None
     createdAt: int = 0
+    startDate: Optional[str] = None
+    targetDate: Optional[str] = None
 
 
 class ProjectCard(_Base):
@@ -299,6 +301,11 @@ class ProjectCard(_Base):
     doneAt: int = 0
     startedAt: int = 0
     parentCardId: Optional[int] = None
+    startDate: Optional[str] = None
+    estimate: Optional[str] = None
+    estimateScale: Optional[str] = None
+    blockers: int = 0
+    assigneeIds: List[str] = []
 
 
 class ProjectComment(_Base):
