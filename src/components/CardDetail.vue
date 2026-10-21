@@ -800,7 +800,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 
 					<!-- Estimate. Same read-only treatment as Priority above (#10732). -->
-					<div v-if="boardEstimateScale !== 'none' && (canEdit || currentEstimate)" class="card-modal__attr">
+					<div v-if="cardFeatures.estimate && boardEstimateScale !== 'none' && (canEdit || currentEstimate)" class="card-modal__attr">
 						<component
 							:is="canEdit ? 'button' : 'span'"
 							class="card-modal__pill"

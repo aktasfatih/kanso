@@ -60,6 +60,7 @@ final class CardFeatures {
 	public const TIME_TRACKING = 'timeTracking';
 	public const COVER_COLOR = 'coverColor';
 	public const CHECKLIST = 'checklist';
+	public const ESTIMATE = 'estimate';
 
 	/**
 	 * Every toggleable key, in the order the board settings UI lists them.
@@ -77,6 +78,7 @@ final class CardFeatures {
 		self::TIME_TRACKING,
 		self::COVER_COLOR,
 		self::CHECKLIST,
+		self::ESTIMATE,
 	];
 
 	/**

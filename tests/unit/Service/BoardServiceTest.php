@@ -416,6 +416,7 @@ class BoardServiceTest extends TestCase {
 			CardFeatures::TIME_TRACKING => false,
 			CardFeatures::COVER_COLOR => true,
 			CardFeatures::CHECKLIST => true,
+			CardFeatures::ESTIMATE => true,
 		], $payload['cardFeatures']);
 	}
 

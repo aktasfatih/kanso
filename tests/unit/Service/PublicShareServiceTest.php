@@ -484,7 +484,7 @@ class PublicShareServiceTest extends TestCase {
 		// A board that never touched the switches reads as all-enabled - the public
 		// link looks exactly as it did before the feature landed.
 		self::assertSame(
-			['contacts' => true, 'attachments' => true, 'github' => true, 'timeTracking' => true, 'coverColor' => true, 'checklist' => true],
+			['contacts' => true, 'attachments' => true, 'github' => true, 'timeTracking' => true, 'coverColor' => true, 'checklist' => true, 'estimate' => true],
 			$payload['board']['cardFeatures']
 		);
 

@@ -3594,6 +3594,7 @@ const builtinCardFeatures = [
 	{ key: 'timeTracking', label: t('kanso', 'Time tracking') },
 	{ key: 'coverColor', label: t('kanso', 'Cover colour') },
 	{ key: 'checklist', label: t('kanso', 'Checklist') },
+	{ key: 'estimate', label: t('kanso', 'Estimate') },
 ]
 // Reads straight off the board payload, so a change another manager makes
 // arrives through the normal delta/realtime path with no reload.

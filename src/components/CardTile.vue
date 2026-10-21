@@ -49,7 +49,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
-				v-if="card.parentCardId || isInProgress || card.blocked || card.blocking || card.waitingOnExternal || card.recurring || (card.timerRunning && cardFeatures.timeTracking) || card.duedate || (cardFeatures.checklist && card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || card.estimate || isRestricted"
+				v-if="card.parentCardId || isInProgress || card.blocked || card.blocking || card.waitingOnExternal || card.recurring || (card.timerRunning && cardFeatures.timeTracking) || card.duedate || (cardFeatures.checklist && card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || (cardFeatures.estimate && card.estimate) || isRestricted"
 				class="card-tile__meta">
 				<!-- Sub-card marker: this card hangs under another one. The board draws
 				     no indent (columns are flat), so without this a sub-card is
@@ -135,7 +135,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</span>
 				<!-- Estimate chip - shown only when card.estimate is truthy -->
 				<span
-					v-if="card.estimate"
+					v-if="cardFeatures.estimate && card.estimate"
 					class="card-tile__estimate"
 					:aria-label="t('kanso', 'Estimate: {value}', { value: card.estimate })">
 					{{ card.estimate }}

@@ -107,7 +107,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ t('kanso', 'Title') }}
 				</NcActionRadio>
 				<NcActionRadio
-					v-if="boardData?.board?.estimateScale && boardData.board.estimateScale !== 'none'"
+					v-if="visibleEstimateScale !== 'none'"
 					:model-value="sortMode"
 					value="estimate"
 					name="kanso-sort"
@@ -164,7 +164,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:participants="participantList"
 				:saved-filters="savedFilters"
 				:active-saved-name="activeSavedName"
-				:estimate-scale="boardData?.board?.estimateScale ?? 'none'"
+				:estimate-scale="visibleEstimateScale"
 				:icon-only="isNarrow"
 				@save="handleSaveFilter"
 				@apply-saved="handleApplySavedFilter"
@@ -1075,7 +1075,9 @@ provide(NEST_ENABLED, computed(() => sortMode.value === 'manual'))
 // manager's change propagates through the normal delta/realtime path - no
 // reload. A cross-board View has no provider and gets all-enabled, since its
 // rows mix boards with different settings.
-provide(CARD_FEATURES, computed(() => normalizeCardFeatures(boardData.value?.board?.cardFeatures)))
+const boardCardFeatures = computed(() => normalizeCardFeatures(boardData.value?.board?.cardFeatures))
+provide(CARD_FEATURES, boardCardFeatures)
+const visibleEstimateScale = computed(() => (boardCardFeatures.value.estimate ? boardData.value?.board?.estimateScale ?? 'none' : 'none'))
 
 // Screen-reader announcer (aria-live="polite"). Provided here so descendants
 // (CardModal via router-view) can announce their own actions through one region.
