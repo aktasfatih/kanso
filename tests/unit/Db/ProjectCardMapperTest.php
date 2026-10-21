@@ -314,4 +314,29 @@ class ProjectCardMapperTest extends TestCase {
 		$mapper = new ProjectCardMapper($db, new CardVisibilityScope());
 		self::assertSame([], $mapper->findCardsInProjectAndBoards(4, [], 'alice', []));
 	}
+
+	public function testOpenBlockerCountsOnlyCountsOpenBlockersTheViewerCanSee(): void {
+		$predicates = $this->recordQuery(
+			fn (ProjectCardMapper $m) => $m->openBlockerCounts([11, 12], [7], 'alice', [7 => ViewerContext::ROLE_INTERNAL])
+		);
+
+		self::assertSame(
+			[
+				CardVisibilityScope::VISIBILITY_PUBLIC,
+				CardVisibilityScope::VISIBILITY_INTERNAL,
+				CardVisibilityScope::VISIBILITY_PRIVATE,
+			],
+			self::boundValues($predicates, 'eq', 'src.visibility'),
+		);
+		self::assertSame(['alice'], self::boundValues($predicates, 'eq', 'src.owner'));
+		self::assertSame([0], self::boundValues($predicates, 'eq', 'src.done_at'));
+		self::assertSame([[11, 12]], self::boundValues($predicates, 'in', 'r.other_card_id'));
+		self::assertSame([7], self::boundValues($predicates, 'in', 'src.board_id')[0] ?? null);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->expects(self::never())->method('getQueryBuilder');
+		$mapper = new ProjectCardMapper($db, new CardVisibilityScope());
+		self::assertSame([], $mapper->openBlockerCounts([], [7], 'alice', []));
+		self::assertSame([], $mapper->openBlockerCounts([11], [], 'alice', []));
+	}
 }

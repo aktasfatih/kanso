@@ -215,6 +215,7 @@ return [
 		['name' => 'project#destroy', 'url' => '/api/projects/{id}', 'verb' => 'DELETE'],
 		['name' => 'project#cards', 'url' => '/api/projects/{id}/cards', 'verb' => 'GET'],
 		['name' => 'project#stats', 'url' => '/api/projects/{id}/stats', 'verb' => 'GET'],
+		['name' => 'project#plan', 'url' => '/api/projects/{id}/plan', 'verb' => 'GET'],
 		['name' => 'project#addCard', 'url' => '/api/projects/{id}/cards/{cardId}', 'verb' => 'PUT'],
 		['name' => 'project#removeCard', 'url' => '/api/projects/{id}/cards/{cardId}', 'verb' => 'DELETE'],
 

@@ -11,6 +11,7 @@ use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Project;
 use OCA\Kanso\Db\ProjectCardMapper;
@@ -20,6 +21,7 @@ use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
+use OCA\Kanso\Service\ProjectForecast;
 use OCA\Kanso\Service\ProjectService;
 use OCA\Kanso\Service\StatsService;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -35,6 +37,7 @@ class ProjectServiceTest extends TestCase {
 	private StatsService&MockObject $statsService;
 	private BoardAccess&MockObject $boardAccess;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
+	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
 	private ProjectService $service;
 
 	protected function setUp(): void {
@@ -49,6 +52,7 @@ class ProjectServiceTest extends TestCase {
 		$this->boardAccess = $this->createMock(BoardAccess::class);
 		// Default: every card is visible to the actor (assertVisible passes).
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
+		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 		$this->service = new ProjectService(
 			$this->projectMapper,
 			$this->projectCardMapper,
@@ -59,6 +63,8 @@ class ProjectServiceTest extends TestCase {
 			$this->statsService,
 			$this->boardAccess,
 			$this->visibilityGuard,
+			$this->cardAssigneeMapper,
+			new ProjectForecast(),
 		);
 	}
 
@@ -112,6 +118,40 @@ class ProjectServiceTest extends TestCase {
 			->with(self::callback(fn (Project $p): bool => $p->getOwner() === 'alice' && $p->getTitle() === 'New'))
 			->willReturnArgument(0);
 		$this->service->create('alice', 'New', null, 'ff0000');
+	}
+
+	public function testCreateStoresStartAndTargetDates(): void {
+		$this->projectMapper->expects(self::once())
+			->method('insert')
+			->with(self::callback(fn (Project $p): bool => $p->getStartDate() === '2026-10-01' && $p->getTargetDate() === '2026-11-15'))
+			->willReturnArgument(0);
+		$this->service->create('alice', 'Dated', null, null, '2026-10-01', '2026-11-15');
+	}
+
+	public function testCreateRejectsImpossibleDate(): void {
+		$this->projectMapper->expects(self::never())->method('insert');
+		$this->expectException(InvalidInputException::class);
+		$this->service->create('alice', 'Dated', null, null, null, '2026-02-30');
+	}
+
+	public function testUpdateRejectsTargetBeforeStart(): void {
+		$project = $this->project('alice');
+		$project->setStartDate('2026-10-10');
+		$this->projectMapper->method('find')->with(5)->willReturn($project);
+		$this->projectMapper->expects(self::never())->method('update');
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(5, 'alice', null, null, null, null, '2026-10-01');
+	}
+
+	public function testUpdateClearsTargetDateWithEmptyString(): void {
+		$project = $this->project('alice');
+		$project->setTargetDate('2026-11-15');
+		$this->projectMapper->method('find')->with(5)->willReturn($project);
+		$this->projectMapper->expects(self::once())
+			->method('update')
+			->with(self::callback(fn (Project $p): bool => $p->getTargetDate() === null))
+			->willReturnArgument(0);
+		$this->service->update(5, 'alice', null, null, null, null, '');
 	}
 
 	public function testUpdateRejectsNonOwner(): void {
@@ -199,6 +239,46 @@ class ProjectServiceTest extends TestCase {
 		$result = $this->service->listCards(5, 'alice');
 		self::assertSame([9], array_column($result, 'id'));
 		self::assertSame(1, $this->service->stats(5, 'alice')['cardCount']);
+	}
+
+	public function testListCardsCarriesBlockersAndAssignees(): void {
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
+		$this->projectCardMapper->method('findCardsInProjectAndBoards')->willReturn([['id' => 9, 'boardId' => 1], ['id' => 10, 'boardId' => 1]]);
+		$this->projectCardMapper->expects(self::once())
+			->method('openBlockerCounts')
+			->with([9, 10], [1], 'alice')
+			->willReturn([10 => 2]);
+		$this->cardAssigneeMapper->method('findUserIdsByCards')->with([9, 10])->willReturn([9 => ['bob']]);
+
+		$result = $this->service->listCards(5, 'alice');
+
+		self::assertSame([0, 2], array_column($result, 'blockers'));
+		self::assertSame([['bob'], []], array_column($result, 'assigneeIds'));
+	}
+
+	public function testPlanForecastsOverTheResolvedCards(): void {
+		$project = $this->project('alice');
+		$project->setTargetDate('2099-01-01');
+		$this->projectMapper->method('find')->with(5)->willReturn($project);
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
+		$card = ['id' => 9, 'boardId' => 1, 'doneAt' => 0, 'startedAt' => 0, 'duedate' => null, 'estimate' => null, 'estimateScale' => 'none', 'createdAt' => 100, 'addedAt' => 0];
+		$this->projectCardMapper->method('findCardsInProjectAndBoards')->willReturn([$card]);
+		$this->projectCardMapper->method('openBlockerCounts')->willReturn([9 => 1]);
+
+		$plan = $this->service->plan(5, 'alice');
+
+		self::assertSame(1, $plan['open']);
+		self::assertSame(1, $plan['blocked']);
+		self::assertSame('2099-01-01', $plan['targetDate']);
+		self::assertSame(ProjectForecast::STATUS_NOT_ENOUGH_DATA, $plan['status']);
+	}
+
+	public function testPlanRejectsNonOwner(): void {
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$this->projectCardMapper->expects(self::never())->method('findCardsInProjectAndBoards');
+		$this->expectException(NotPermittedException::class);
+		$this->service->plan(5, 'mallory');
 	}
 
 	public function testListCardsRejectsNonOwner(): void {

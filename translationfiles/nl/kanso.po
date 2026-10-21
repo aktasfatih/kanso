@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— geen —"
 
-#: src/components/BoardSettingsModal.vue:4702
+#: src/components/BoardSettingsModal.vue:4703
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n keer"
@@ -114,6 +114,24 @@ msgstr "{card} is nu een subkaart van {parent}"
 msgid "{card} moved to {stack}"
 msgstr "{card} verplaatst naar {stack}"
 
+#: src/components/ProjectHealth.vue:167
+msgid "{count} blocked"
+msgid_plural "{count} blocked"
+msgstr[0] "{count} geblokkeerd"
+msgstr[1] "{count} geblokkeerd"
+
+#: src/components/ProjectHealth.vue:31
+msgid "{count} card"
+msgid_plural "{count} cards"
+msgstr[0] "{count} kaart"
+msgstr[1] "{count} kaarten"
+
+#: src/components/ProjectHealth.vue:178
+msgid "{count} card has no estimate and counts as {points} points."
+msgid_plural "{count} cards have no estimate and count as {points} points each."
+msgstr[0] "{count} kaart heeft geen schatting en telt als {points} punten."
+msgstr[1] "{count} kaarten hebben geen schatting en tellen elk als {points} punten."
+
 #: src/components/BoardSettingsModal.vue
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "{count} kaart(en) hebben een schatting die niet in de nieuwe schaal past; die wordt gewist. Dit kan niet ongedaan worden gemaakt."
@@ -124,17 +142,52 @@ msgid_plural "{count} characters left"
 msgstr[0] "{count} teken over"
 msgstr[1] "{count} tekens over"
 
+#: src/components/ProjectHealth.vue:158
+msgid "{count} day ago"
+msgid_plural "{count} days ago"
+msgstr[0] "{count} dag geleden"
+msgstr[1] "{count} dagen geleden"
+
+#: src/components/ProjectHealth.vue:170
+msgid "{count} in progress"
+msgid_plural "{count} in progress"
+msgstr[0] "{count} bezig"
+msgstr[1] "{count} bezig"
+
+#: src/components/ProjectHealth.vue:164
+msgid "{count} overdue"
+msgid_plural "{count} overdue"
+msgstr[0] "{count} te laat"
+msgstr[1] "{count} te laat"
+
 #: src/components/BulkSelectionBar.vue
 msgid "{count} selected"
 msgstr "{count} geselecteerd"
+
+#: src/components/ProjectHealth.vue
+#: src/views/ProjectsView.vue
+msgid "{done} of {total} cards"
+msgstr "{done} van {total} kaarten"
+
+#: src/components/ProjectHealth.vue
+msgid "{done} of {total} points"
+msgstr "{done} van {total} punten"
 
 #: src/components/BoardFilterBar.vue
 msgid "{first}, +{n} more"
 msgstr "{first}, +{n} meer"
 
+#: src/components/ProjectHealth.vue
+msgid "{from} at the earliest"
+msgstr "Op zijn vroegst {from}"
+
 #: src/components/BoardListView.vue
 msgid "{n} blocked"
 msgstr "{n} geblokkeerd"
+
+#: src/components/ProjectHealth.vue
+msgid "{n} cards / week"
+msgstr "{n} kaarten / week"
 
 #: src/components/BoardTileContent.vue
 #: src/components/CardDetail.vue
@@ -164,6 +217,14 @@ msgstr "{n} boven de WIP-limiet"
 #: src/components/BoardListView.vue
 msgid "{n} overdue"
 msgstr "{n} te laat"
+
+#: src/components/ProjectHealth.vue
+msgid "{n} points"
+msgstr "{n} punten"
+
+#: src/components/ProjectHealth.vue
+msgid "{n} points / week"
+msgstr "{n} punten / week"
 
 #: src/components/CardTile.vue
 msgid "{n}d"
@@ -334,7 +395,7 @@ msgid_plural "%n hours ago"
 msgstr[0] "%n uur geleden"
 msgstr[1] "%n uur geleden"
 
-#: src/views/BoardView.vue:2625
+#: src/views/BoardView.vue:2627
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n ID gekopieerd."
@@ -777,6 +838,10 @@ msgstr "In één oogopslag"
 msgid "At occurrence"
 msgstr "Bij herhaling"
 
+#: src/services/projectStatus.js
+msgid "At risk"
+msgstr "Risico"
+
 #: src/components/CardDetail.vue
 msgid "Attach"
 msgstr "Bijvoegen"
@@ -822,6 +887,12 @@ msgstr "Automatisering"
 #: src/views/ProjectStats.vue
 msgid "Average days"
 msgstr "Gemiddeld aantal dagen"
+
+#: src/components/ProjectHealth.vue:41
+msgid "average of the last week"
+msgid_plural "average of the last {count} weeks"
+msgstr[0] "gemiddelde van de afgelopen week"
+msgstr[1] "gemiddelde van de afgelopen {count} weken"
 
 #: src/components/CsvImportModal.vue
 msgid "Back"
@@ -890,15 +961,26 @@ msgstr "Back-ups op de andere locatie blijven waar ze zijn; schakel terug om ze 
 msgid "Backups to keep per board"
 msgstr "Aantal te bewaren back-ups per bord"
 
+#: src/components/ProjectHealth.vue
+msgid "between {from} and {to}"
+msgstr "tussen {from} en {to}"
+
 #: src/components/BoardFilterBar.vue
 #: src/components/CardTile.vue
 #: src/composables/useBoardFilters.js
+#: src/views/ProjectView.vue
 msgid "Blocked"
 msgstr "Geblokkeerd"
 
 #: src/components/CardDetail.vue
 msgid "Blocked by"
 msgstr "Geblokkeerd door"
+
+#: src/views/ProjectView.vue:159
+msgid "Blocked by {count} open card"
+msgid_plural "Blocked by {count} open cards"
+msgstr[0] "Geblokkeerd door {count} open kaart"
+msgstr[1] "Geblokkeerd door {count} open kaarten"
 
 #: src/components/CardTile.vue
 msgid "Blocked by another card"
@@ -931,6 +1013,7 @@ msgstr "Blauw"
 #: src/views/BoardStats.vue
 #: src/views/BoardView.vue
 #: src/views/CardPage.vue
+#: src/views/ProjectView.vue
 #: src/views/PublicBoard.vue
 #: src/views/TrashView.vue
 #: src/views/ViewPage.vue
@@ -1037,6 +1120,14 @@ msgstr "Opsommingslijst"
 msgid "Bulleted list"
 msgstr "Opsommingslijst"
 
+#: src/components/ProjectBurnup.vue
+msgid "Burn-up"
+msgstr "Burn-up"
+
+#: src/components/ProjectBurnup.vue
+msgid "Burn-up chart: {done} of {scope} done"
+msgstr "Burn-upgrafiek: {done} van {scope} klaar"
+
 #: src/components/ReviewRow.vue
 msgid "by {user}"
 msgstr "door {user}"
@@ -1111,6 +1202,10 @@ msgstr "Kaartvelden"
 #: src/components/BoardSettingsModal.vue
 msgid "Card ID prefix"
 msgstr "Voorvoegsel voor kaart-ID's"
+
+#: src/views/ProjectView.vue
+msgid "Card layout"
+msgstr "Kaartindeling"
 
 #: src/components/CardDetail.vue
 msgid "Card moved."
@@ -2138,10 +2233,13 @@ msgstr "Bezig"
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTimelineView.vue
 #: src/components/CardDetail.vue
+#: src/components/ProjectBurnup.vue
 #: src/components/StackColumn.vue
 #: src/composables/useBoardFilters.js
 #: src/composables/useSwimlanes.js
+#: src/services/projectStatus.js
 #: src/views/BoardList.vue
+#: src/views/ProjectView.vue
 msgid "Done"
 msgstr "Klaar"
 
@@ -2156,6 +2254,10 @@ msgstr "≥ N dagen klaar"
 #: src/components/CardDetail.vue
 msgid "Done-gated columns block Done until every review is approved."
 msgstr "In kolommen met een reviewvergrendeling kan een kaart pas naar Klaar als elke review is goedgekeurd."
+
+#: src/components/ProjectBurnup.vue
+msgid "Done: {n}"
+msgstr "Klaar: {n}"
 
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
@@ -2379,6 +2481,7 @@ msgid "Esc cancel · Ctrl+Enter save"
 msgstr "Esc annuleert · Ctrl+Enter slaat op"
 
 #: src/components/BoardFilterBar.vue
+#: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
 #: src/views/PublicBoard.vue
@@ -2402,6 +2505,14 @@ msgstr "Schatting: {value}"
 msgid "Estimation"
 msgstr "Schatten"
 
+#: src/services/projectStatus.js
+msgid "Even your best weeks would miss the target date."
+msgstr "Zelfs met je beste weken haal je de streefdatum niet."
+
+#: src/services/projectStatus.js
+msgid "Even your slower weeks would finish before the target date."
+msgstr "Zelfs met je tragere weken ben je voor de streefdatum klaar."
+
 #: src/components/CardDetail.vue
 msgid "every"
 msgstr "elke"
@@ -2410,25 +2521,29 @@ msgstr "elke"
 msgid "Every"
 msgstr "Elke"
 
-#: src/components/BoardSettingsModal.vue:4682
+#: src/services/projectStatus.js
+msgid "Every card in this project is done."
+msgstr "Alle kaarten in dit project zijn klaar."
+
+#: src/components/BoardSettingsModal.vue:4683
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Elke dag"
 msgstr[1] "Elke %n dagen"
 
-#: src/components/BoardSettingsModal.vue:4692
+#: src/components/BoardSettingsModal.vue:4693
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Elke maand"
 msgstr[1] "Elke %n maanden"
 
-#: src/components/BoardSettingsModal.vue:4684
+#: src/components/BoardSettingsModal.vue:4685
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Elke week"
 msgstr[1] "Elke %n weken"
 
-#: src/components/BoardSettingsModal.vue:4694
+#: src/components/BoardSettingsModal.vue:4695
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Elk jaar"
@@ -2905,6 +3020,10 @@ msgstr "Kan het contact niet bijwerken."
 msgid "Failed to update cover."
 msgstr "Kan de omslag niet bijwerken."
 
+#: src/views/ProjectView.vue
+msgid "Failed to update dates."
+msgstr "Kan de datums niet bijwerken."
+
 #: src/components/BoardSettingsModal.vue
 #: src/views/ProjectView.vue
 msgid "Failed to update description."
@@ -3094,6 +3213,14 @@ msgstr "Prullenbak filteren…"
 msgid "Find the card on board"
 msgstr "Kaart op het bord zoeken"
 
+#: src/services/projectStatus.js
+msgid "Finish a couple of cards to get a forecast."
+msgstr "Rond een paar kaarten af om een prognose te krijgen."
+
+#: src/components/ProjectHealth.vue
+msgid "Finished"
+msgstr "Afgerond"
+
 #: src/components/BoardTimelineView.vue
 msgid "Fit"
 msgstr "Passend"
@@ -3118,6 +3245,15 @@ msgstr "Map en doelkolom"
 #: templates/admin-backup.php
 msgid "Folder in that account"
 msgstr "Map in dat account"
+
+#: src/components/ProjectBurnup.vue
+#: src/components/ProjectHealth.vue
+msgid "Forecast"
+msgstr "Prognose"
+
+#: src/views/ProjectsView.vue
+msgid "Forecast {date}"
+msgstr "Prognose {date}"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Forever"
@@ -3288,6 +3424,12 @@ msgstr "Geïmporteerd in een nieuw Kanso-bord:"
 msgid "Importing…"
 msgstr "Importeren…"
 
+#: src/components/ProjectHealth.vue:157
+msgid "in {count} day"
+msgid_plural "in {count} days"
+msgstr[0] "over {count} dag"
+msgstr[1] "over {count} dagen"
+
 #: templates/admin-backup.php
 msgid "In a Files folder"
 msgstr "In een map in Bestanden"
@@ -3303,6 +3445,7 @@ msgstr "In een map in Bestanden gaat een opgeruimde back-up naar de prullenbak v
 #: src/components/CardTile.vue
 #: src/components/StackColumn.vue
 #: src/composables/useSwimlanes.js
+#: src/views/ProjectView.vue
 msgid "In progress"
 msgstr "Bezig"
 
@@ -3514,6 +3657,10 @@ msgstr "Laatste keer: {when}"
 #: templates/admin-backup.php
 msgid "Last run: %1$s"
 msgstr "Laatste keer: %1$s"
+
+#: src/services/projectStatus.js
+msgid "Late"
+msgstr "Te laat"
 
 #: src/composables/useSwimlanes.js
 msgid "Later"
@@ -4159,6 +4306,10 @@ msgstr "Nog geen kolommen."
 msgid "No start date"
 msgstr "Geen startdatum"
 
+#: src/services/projectStatus.js
+msgid "No target date"
+msgstr "Geen streefdatum"
+
 #: src/views/MyCardsView.vue
 msgid "No tasks assigned to you"
 msgstr "Geen taken aan jou toegewezen"
@@ -4212,6 +4363,10 @@ msgstr "Niet geblokkeerd"
 msgid "Not done"
 msgstr "Niet klaar"
 
+#: src/services/projectStatus.js
+msgid "Not enough data yet"
+msgstr "Nog niet genoeg gegevens"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Not shared with anyone yet."
 msgstr "Nog met niemand gedeeld."
@@ -4219,6 +4374,7 @@ msgstr "Nog met niemand gedeeld."
 #: src/components/BoardListView.vue
 #: src/components/BoardTimelineView.vue
 #: src/components/CardDetail.vue
+#: src/views/ProjectView.vue
 msgid "Not started"
 msgstr "Niet gestart"
 
@@ -4255,6 +4411,10 @@ msgstr "Getal"
 msgid "Off — do not create cards"
 msgstr "Uit — geen kaarten aanmaken"
 
+#: src/services/projectStatus.js
+msgid "Off track"
+msgstr "Niet op schema"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Offset"
 msgstr "Verschuiving"
@@ -4270,6 +4430,10 @@ msgstr "Verschuiving erna (dagen)"
 #: src/components/BoardSettingsModal.vue
 msgid "On days"
 msgstr "Op dagen"
+
+#: src/services/projectStatus.js
+msgid "On track"
+msgstr "Op schema"
 
 #: templates/admin-backup.php
 msgid "Once a day, Kanso saves a copy of every board as a zip file."
@@ -4406,6 +4570,7 @@ msgstr "Buiten het zichtbare bereik — klik op Passend om het te tonen"
 #: src/views/BoardStats.vue
 #: src/views/MyCardsView.vue
 #: src/views/ProjectStats.vue
+#: src/views/ProjectView.vue
 msgid "Overdue"
 msgstr "Te laat"
 
@@ -4413,6 +4578,10 @@ msgstr "Te laat"
 #: src/views/ViewPage.vue
 msgid "Owner"
 msgstr "Eigenaar"
+
+#: src/components/ProjectHealth.vue
+msgid "Pace"
+msgstr "Tempo"
 
 #: src/components/CardDetail.vue
 #: src/composables/useBoardFilters.js
@@ -4560,6 +4729,10 @@ msgstr "Privé — alleen jij"
 msgid "Private card"
 msgstr "Privékaart"
 
+#: src/components/ProjectHealth.vue
+msgid "Progress"
+msgstr "Voortgang"
+
 #: src/components/CardDetail.vue
 #: src/views/ProjectStats.vue
 #: src/views/ProjectView.vue
@@ -4577,6 +4750,10 @@ msgstr "Projectchat"
 #: src/components/BoardSettingsModal.vue
 msgid "Project chat link"
 msgstr "Link naar de projectchat"
+
+#: src/components/ProjectHealth.vue
+msgid "Project health"
+msgstr "Projectstatus"
 
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
@@ -4649,6 +4826,10 @@ msgstr "Heeft betrekking op"
 #: src/components/CardDetail.vue
 msgid "Relations"
 msgstr "Relaties"
+
+#: src/components/ProjectHealth.vue
+msgid "Remaining"
+msgstr "Resterend"
 
 #: src/components/CardDetail.vue
 msgid "Remind me about this comment at"
@@ -5022,8 +5203,13 @@ msgid "Scale"
 msgstr "Schaal"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectBurnup.vue
 msgid "Scope"
 msgstr "Bereik"
+
+#: src/components/ProjectBurnup.vue
+msgid "Scope: {n}"
+msgstr "Omvang: {n}"
 
 #: src/views/BoardList.vue
 msgid "Search boards"
@@ -5125,6 +5311,10 @@ msgstr "Kies een kolom…"
 #: src/views/BoardView.vue
 msgid "Select multiple cards"
 msgstr "Meerdere kaarten selecteren"
+
+#: src/services/projectStatus.js
+msgid "Set a target date to see whether you are on track."
+msgstr "Stel een streefdatum in om te zien of je op schema ligt."
 
 #: src/components/BulkActionBar.vue
 msgid "Set due date"
@@ -5344,6 +5534,7 @@ msgstr "Begin met het toevoegen van een kolom, bijvoorbeeld “Te doen”."
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/components/ProjectHealth.vue
 msgid "Start date"
 msgstr "Startdatum"
 
@@ -5373,6 +5564,7 @@ msgstr "STARTTLS (143)"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/views/ProjectView.vue
 #: src/views/ViewPage.vue
 msgid "Status"
 msgstr "Status"
@@ -5435,6 +5627,19 @@ msgstr "Systeem"
 #: src/services/estimateScales.js
 msgid "T-shirt (XS–XL)"
 msgstr "T-shirtmaten (XS–XL)"
+
+#: src/components/ProjectBurnup.vue
+msgid "Target"
+msgstr "Doel"
+
+#: src/views/ProjectsView.vue
+msgid "Target {date}"
+msgstr "Doel {date}"
+
+#: src/components/ProjectHealth.vue
+#: src/views/ProjectsView.vue
+msgid "Target date"
+msgstr "Streefdatum"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Target stack"
@@ -5541,6 +5746,10 @@ msgstr "De link werkt tot het einde van de gekozen dag, in de tijdzone waarin hi
 msgid "The only way to get one back is the list at the bottom of this page."
 msgstr "De enige manier om er een terug te krijgen is de lijst onderaan deze pagina."
 
+#: src/services/projectStatus.js
+msgid "The target date has passed and work is still open."
+msgstr "De streefdatum is verstreken en er staat nog werk open."
+
 #: src/components/CardDetail.vue
 msgid "There is no other board you can move this card to."
 msgstr "Er is geen ander bord waar je deze kaart naartoe kunt verplaatsen."
@@ -5637,6 +5846,7 @@ msgid "Time tracking"
 msgstr "Tijdsregistratie"
 
 #: src/views/BoardView.vue
+#: src/views/ProjectView.vue
 #: src/views/ViewPage.vue
 msgid "Timeline"
 msgstr "Tijdlijn"
@@ -5678,6 +5888,10 @@ msgstr "Te doen"
 #: templates/admin-backup.php
 msgid "To put a board back, download its backup and import it from the Import menu on the boards list."
 msgstr "Om een bord terug te zetten, download je de back-up en importeer je die via het menu Importeren in de bordenlijst."
+
+#: src/components/ProjectHealth.vue
+msgid "today"
+msgstr "vandaag"
 
 #: src/views/MyCardsView.vue
 msgid "Today"
@@ -6141,6 +6355,10 @@ msgstr "Je {type}-review wordt gevraagd"
 #: src/components/CardDetail.vue
 msgid "Your review is requested on this card"
 msgstr "Je review op deze kaart wordt gevraagd"
+
+#: src/services/projectStatus.js
+msgid "Your slower weeks would miss the target date."
+msgstr "Met je tragere weken haal je de streefdatum niet."
 
 #: src/components/BoardTimelineView.vue
 msgid "Zoom"

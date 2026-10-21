@@ -47,8 +47,9 @@ export function useProjects() {
 				queryClient.setQueryData(['projects'], context.previous)
 			}
 		},
-		onSettled: () => {
+		onSettled: (_data, _err, { id }) => {
 			queryClient.invalidateQueries({ queryKey: ['projects'] })
+			queryClient.invalidateQueries({ queryKey: ['project', String(id), 'plan'] })
 		},
 	})
 
@@ -138,7 +139,7 @@ export function useCardProjects() {
 			// necessarily the one open now.
 			queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })
 			// ...the project's own card feed...
-			queryClient.invalidateQueries({ queryKey: ['project', String(projectId), 'cards'] })
+			queryClient.invalidateQueries({ queryKey: ['project', String(projectId)] })
 			// ...and the projects list, whose rows show a card count.
 			queryClient.invalidateQueries({ queryKey: ['projects'] })
 		},

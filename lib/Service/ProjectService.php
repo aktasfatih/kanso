@@ -11,6 +11,7 @@ use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Project;
 use OCA\Kanso\Db\ProjectCardMapper;
@@ -44,6 +45,8 @@ class ProjectService {
 		private StatsService $statsService,
 		private BoardAccess $boardAccess,
 		private CardVisibilityGuard $visibilityGuard,
+		private CardAssigneeMapper $cardAssigneeMapper,
+		private ProjectForecast $forecast,
 	) {
 	}
 
@@ -62,9 +65,9 @@ class ProjectService {
 	/**
 	 * Creates a project owned by $uid.
 	 *
-	 * @throws InvalidInputException on an empty or over-long title
+	 * @throws InvalidInputException on an empty or over-long title, or a malformed date
 	 */
-	public function create(string $uid, string $title, ?string $description, ?string $color): Project {
+	public function create(string $uid, string $title, ?string $description, ?string $color, ?string $startDate = null, ?string $targetDate = null): Project {
 		$title = trim($title);
 		if ($title === '') {
 			throw new InvalidInputException('Project title must not be empty');
@@ -77,6 +80,9 @@ class ProjectService {
 		$project->setTitle($title);
 		$project->setDescription($description);
 		$project->setColor(ColorValidator::assertValid($color));
+		$project->setStartDate($this->parseDate($startDate));
+		$project->setTargetDate($this->parseDate($targetDate));
+		$this->assertDateOrder($project);
 		$project->setOwner($uid);
 		$project->setCreatedAt(time());
 
@@ -88,9 +94,9 @@ class ProjectService {
 	 *
 	 * @throws DoesNotExistException if the project does not exist
 	 * @throws NotPermittedException if the actor is not the owner
-	 * @throws InvalidInputException on an empty or over-long title
+	 * @throws InvalidInputException on an empty or over-long title, or a malformed date
 	 */
-	public function update(int $id, string $uid, ?string $title, ?string $description, ?string $color): Project {
+	public function update(int $id, string $uid, ?string $title, ?string $description, ?string $color, ?string $startDate = null, ?string $targetDate = null): Project {
 		$project = $this->loadOwnedProject($id, $uid);
 
 		if ($title !== null) {
@@ -110,6 +116,14 @@ class ProjectService {
 			// An empty string clears the color (matches BoardService/StackService).
 			$project->setColor(ColorValidator::assertValid($color));
 		}
+		// An empty string clears a date; null leaves it untouched.
+		if ($startDate !== null) {
+			$project->setStartDate($this->parseDate($startDate));
+		}
+		if ($targetDate !== null) {
+			$project->setTargetDate($this->parseDate($targetDate));
+		}
+		$this->assertDateOrder($project);
 
 		return $this->projectMapper->update($project);
 	}
@@ -172,16 +186,55 @@ class ProjectService {
 	 */
 	public function listCards(int $projectId, string $uid): array {
 		$project = $this->loadOwnedProject($projectId, $uid);
+		$cards = $this->resolveCards($project, $uid);
+		$assignees = $this->cardAssigneeMapper->findUserIdsByCards(array_column($cards, 'id'));
+
+		return array_map(static function (array $card) use ($assignees): array {
+			$card['assigneeIds'] = $assignees[(int)$card['id']] ?? [];
+			return $card;
+		}, $cards);
+	}
+
+	/**
+	 * Progress, forecast, health and burn-up for the project - see
+	 * {@see ProjectForecast}. Same card set as {@see self::listCards()}.
+	 *
+	 * @return array<string, mixed>
+	 * @throws DoesNotExistException if the project does not exist
+	 * @throws NotPermittedException if the actor is not the owner
+	 */
+	public function plan(int $projectId, string $uid): array {
+		$project = $this->loadOwnedProject($projectId, $uid);
+
+		return $this->forecast->compute(
+			$this->resolveCards($project, $uid),
+			(int)$project->getCreatedAt(),
+			$project->getStartDate(),
+			$project->getTargetDate(),
+			time(),
+		);
+	}
+
+	/**
+	 * The project's cards on the owner's active, readable boards, each with its
+	 * count of open (visible) blockers.
+	 *
+	 * @return list<array<string, mixed>>
+	 */
+	private function resolveCards(Project $project, string $uid): array {
 		// Active boards only (#10126): an archived board is shelved, so its
 		// cards leave the project's card set (and its metrics with them).
 		$boards = $this->boardService->findAllActive($uid);
+		$boardIds = array_map(static fn (Board $board): int => $board->getId(), $boards);
+		$roles = $this->boardAccess->rolesFor($boards, $uid);
 
-		return $this->projectCardMapper->findCardsInProjectAndBoards(
-			$project->getId(),
-			array_map(static fn (Board $board): int => $board->getId(), $boards),
-			$uid,
-			$this->boardAccess->rolesFor($boards, $uid),
-		);
+		$cards = $this->projectCardMapper->findCardsInProjectAndBoards($project->getId(), $boardIds, $uid, $roles);
+		$blockers = $this->projectCardMapper->openBlockerCounts(array_column($cards, 'id'), $boardIds, $uid, $roles);
+
+		return array_map(static function (array $card) use ($blockers): array {
+			$card['blockers'] = $blockers[(int)$card['id']] ?? 0;
+			return $card;
+		}, $cards);
 	}
 
 	/**
@@ -215,6 +268,31 @@ class ProjectService {
 		$cardIds = array_map(static fn (array $card): int => (int)$card['id'], $cards);
 
 		return $this->statsService->projectStats($cardIds);
+	}
+
+	/**
+	 * @throws InvalidInputException unless empty (→ null) or a real YYYY-MM-DD date
+	 */
+	private function parseDate(?string $date): ?string {
+		$date = trim((string)$date);
+		if ($date === '') {
+			return null;
+		}
+		if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $m) !== 1 || !checkdate((int)$m[2], (int)$m[3], (int)$m[1])) {
+			throw new InvalidInputException('Dates must be YYYY-MM-DD');
+		}
+		return $date;
+	}
+
+	/**
+	 * @throws InvalidInputException if the target date is before the start date
+	 */
+	private function assertDateOrder(Project $project): void {
+		$start = $project->getStartDate();
+		$target = $project->getTargetDate();
+		if ($start !== null && $target !== null && $target < $start) {
+			throw new InvalidInputException('The target date must not be before the start date');
+		}
 	}
 
 	/**

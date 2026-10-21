@@ -77,6 +77,32 @@ class CardAssigneeMapper extends QBMapper {
 	}
 
 	/**
+	 * @param int[] $cardIds
+	 * @return array<int, string[]> map of cardId => uids in assignment order
+	 * @throws Exception
+	 */
+	public function findUserIdsByCards(array $cardIds): array {
+		if ($cardIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('card_id', 'participant')
+			->from($this->getTableName())
+			->where($qb->expr()->in('card_id', $qb->createNamedParameter(array_values($cardIds), IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('type', $qb->createNamedParameter(CardAssignee::TYPE_USER, IQueryBuilder::PARAM_INT)))
+			->orderBy('id', 'ASC');
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['card_id']][] = (string)$row['participant'];
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
+	/**
 	 * Open (non-deleted) card counts grouped by assignee for a board - the
 	 * "cards per assignee" board-stats aggregate. Joins through `kanso_cards`,
 	 * user assignees only (TYPE_USER), grouped by participant.

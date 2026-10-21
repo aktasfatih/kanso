@@ -44,19 +44,19 @@ class ProjectController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function create(string $title = '', ?string $description = null, ?string $color = null): JSONResponse {
-		return $this->respond(function () use ($title, $description, $color): JSONResponse {
+	public function create(string $title = '', ?string $description = null, ?string $color = null, ?string $startDate = null, ?string $targetDate = null): JSONResponse {
+		return $this->respond(function () use ($title, $description, $color, $startDate, $targetDate): JSONResponse {
 			return new JSONResponse(
-				$this->projectService->create($this->currentUserId(), $title, $description, $color)->jsonSerialize()
+				$this->projectService->create($this->currentUserId(), $title, $description, $color, $startDate, $targetDate)->jsonSerialize()
 			);
 		});
 	}
 
 	#[NoAdminRequired]
-	public function update(int $id, ?string $title = null, ?string $description = null, ?string $color = null): JSONResponse {
-		return $this->respond(function () use ($id, $title, $description, $color): JSONResponse {
+	public function update(int $id, ?string $title = null, ?string $description = null, ?string $color = null, ?string $startDate = null, ?string $targetDate = null): JSONResponse {
+		return $this->respond(function () use ($id, $title, $description, $color, $startDate, $targetDate): JSONResponse {
 			return new JSONResponse(
-				$this->projectService->update($id, $this->currentUserId(), $title, $description, $color)->jsonSerialize()
+				$this->projectService->update($id, $this->currentUserId(), $title, $description, $color, $startDate, $targetDate)->jsonSerialize()
 			);
 		});
 	}
@@ -89,6 +89,16 @@ class ProjectController extends Controller {
 	public function stats(int $id): JSONResponse {
 		return $this->respond(function () use ($id): JSONResponse {
 			return new JSONResponse($this->projectService->stats($id, $this->currentUserId()));
+		});
+	}
+
+	/**
+	 * Progress, forecast, health and burn-up for the project.
+	 */
+	#[NoAdminRequired]
+	public function plan(int $id): JSONResponse {
+		return $this->respond(function () use ($id): JSONResponse {
+			return new JSONResponse($this->projectService->plan($id, $this->currentUserId()));
 		});
 	}
 

@@ -35,7 +35,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</template>
 		</NcEmptyContent>
 
-		<!-- Project list -->
 		<ul v-else class="projects-view__list">
 			<li
 				v-for="project in projects"
@@ -43,17 +42,40 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				class="projects-view__row"
 				tabindex="0"
 				role="button"
+				:data-test="'project-tile-' + project.id"
 				@click="openProject(project)"
 				@keydown.enter="openProject(project)">
-				<span
-					class="projects-view__dot"
-					:style="project.color ? { background: '#' + project.color } : {}"
-					:class="{ 'projects-view__dot--default': !project.color }" />
-				<div class="projects-view__row-main">
+				<div class="projects-view__tile-head">
+					<span
+						class="projects-view__dot"
+						:style="project.color ? { background: '#' + project.color } : {}"
+						:class="{ 'projects-view__dot--default': !project.color }" />
 					<span class="projects-view__project-title">{{ project.title }}</span>
-					<span v-if="project.description" class="projects-view__project-desc">{{ project.description }}</span>
+					<ChevronRightIcon :size="18" class="projects-view__row-chevron" />
 				</div>
-				<ChevronRightIcon :size="18" class="projects-view__row-chevron" />
+				<span v-if="project.description" class="projects-view__project-desc">{{ project.description }}</span>
+
+				<template v-if="plans[project.id]">
+					<span
+						class="projects-view__pill"
+						:class="'projects-view__pill--' + statusOf(project).tone">
+						<component :is="statusOf(project).icon" :size="14" />
+						{{ statusOf(project).label }}
+					</span>
+					<div class="projects-view__progress">
+						<div class="projects-view__bar">
+							<div class="projects-view__bar-fill" :style="{ width: percent(project) + '%' }" />
+						</div>
+						<span class="projects-view__meta">
+							{{ t('kanso', '{done} of {total} cards', { done: plans[project.id].done, total: plans[project.id].total }) }}
+						</span>
+					</div>
+					<span class="projects-view__meta">
+						<template v-if="project.targetDate">{{ t('kanso', 'Target {date}', { date: formatPlanDate(project.targetDate) }) }}</template>
+						<template v-if="project.targetDate && plans[project.id].forecast"> · </template>
+						<template v-if="plans[project.id].forecast">{{ t('kanso', 'Forecast {date}', { date: formatPlanDate(plans[project.id].forecast.date) }) }}</template>
+					</span>
+				</template>
 			</li>
 		</ul>
 
@@ -88,6 +110,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					class="projects-view__form-input"
 					type="text"
 					:placeholder="t('kanso', 'Optional description')"
+					:disabled="create.isPending.value">
+
+				<label class="projects-view__form-label" for="project-target">
+					{{ t('kanso', 'Target date') }}
+				</label>
+				<input
+					id="project-target"
+					v-model="newTargetDate"
+					class="projects-view__form-input"
+					type="date"
 					:disabled="create.isPending.value">
 
 				<label class="projects-view__form-label">{{ t('kanso', 'Color') }}</label>
@@ -138,7 +170,10 @@ import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
+import { useQueries } from '@tanstack/vue-query'
 import { useProjects } from '../composables/useProjects.js'
+import { getProjectPlan } from '../services/api.js'
+import { projectStatus, formatPlanDate } from '../services/projectStatus.js'
 import { usePageTitle } from '../composables/usePageTitle.js'
 
 // Browser tab title (#125).
@@ -154,11 +189,37 @@ const { data, isLoading, isError, create } = useProjects()
 
 const projects = computed(() => data.value ?? [])
 
+const planQueries = useQueries({
+	queries: computed(() => projects.value.map((project) => ({
+		queryKey: ['project', String(project.id), 'plan'],
+		queryFn: () => getProjectPlan(project.id),
+	}))),
+})
+
+const plans = computed(() => {
+	const byId = {}
+	projects.value.forEach((project, i) => {
+		const plan = planQueries.value[i]?.data
+		if (plan) byId[project.id] = plan
+	})
+	return byId
+})
+
+function statusOf(project) {
+	return projectStatus(plans.value[project.id]?.status)
+}
+
+function percent(project) {
+	const plan = plans.value[project.id]
+	return plan?.total ? Math.round((plan.done / plan.total) * 100) : 0
+}
+
 // Create dialog state
 const showCreateDialog = ref(false)
 const newTitle = ref('')
 const newDescription = ref('')
 const newColor = ref('')
+const newTargetDate = ref('')
 const createError = ref('')
 const titleInputRef = ref(null)
 
@@ -166,6 +227,7 @@ function openCreateDialog() {
 	newTitle.value = ''
 	newDescription.value = ''
 	newColor.value = ''
+	newTargetDate.value = ''
 	createError.value = ''
 	showCreateDialog.value = true
 	nextTick(() => titleInputRef.value?.focus())
@@ -184,6 +246,7 @@ async function submitCreate() {
 			title,
 			description: newDescription.value.trim() || undefined,
 			color: newColor.value || undefined,
+			targetDate: newTargetDate.value || undefined,
 		})
 		closeCreateDialog()
 		router.push({ name: 'project', params: { id: String(project.id) } })
@@ -199,8 +262,15 @@ function openProject(project) {
 
 <style scoped>
 .projects-view {
-	padding: 24px 32px;
-	max-width: 860px;
+	padding: 20px 32px 32px 52px;
+	max-width: 1600px;
+	box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+	.projects-view {
+		padding: 16px;
+	}
 }
 
 .projects-view__header {
@@ -247,26 +317,80 @@ function openProject(project) {
 	list-style: none;
 	margin: 0;
 	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	gap: 16px;
 }
 
 .projects-view__row {
 	display: flex;
-	align-items: center;
-	gap: 12px;
-	padding: 12px 14px;
+	flex-direction: column;
+	gap: 10px;
+	min-width: 0;
+	padding: 16px;
+	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large, 8px);
-	background: var(--color-background-hover);
+	background: var(--color-main-background);
 	cursor: pointer;
-	transition: background 0.15s;
+	transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .projects-view__row:hover,
 .projects-view__row:focus-visible {
-	background: var(--color-border-dark);
+	border-color: var(--color-border-dark);
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
 	outline: none;
+}
+
+.projects-view__tile-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+.projects-view__tile-head .projects-view__project-title {
+	flex: 1;
+}
+
+.projects-view__pill {
+	align-self: flex-start;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	border-radius: var(--border-radius-pill, 999px);
+	font-size: 0.8rem;
+	font-weight: 600;
+}
+
+.projects-view__pill--success { color: var(--kanso-success-legible); background: var(--kanso-success-tint); }
+.projects-view__pill--warning { color: var(--kanso-warning-legible); background: var(--kanso-warning-tint); }
+.projects-view__pill--error { color: var(--kanso-error-legible); background: var(--kanso-error-tint); }
+.projects-view__pill--neutral { color: var(--kanso-neutral-legible); background: var(--color-background-hover); }
+
+.projects-view__progress {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.projects-view__bar {
+	height: 6px;
+	border-radius: 3px;
+	background: var(--color-background-dark);
+	overflow: hidden;
+}
+
+.projects-view__bar-fill {
+	height: 100%;
+	border-radius: 3px;
+	background: var(--color-primary-element);
+}
+
+.projects-view__meta {
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
 }
 
 .projects-view__dot {
@@ -281,27 +405,22 @@ function openProject(project) {
 	background: var(--color-primary-element);
 }
 
-.projects-view__row-main {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	flex: 1;
-	min-width: 0;
-}
-
 .projects-view__project-title {
-	font-weight: 500;
+	font-weight: 600;
+	font-size: 1rem;
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
 .projects-view__project-desc {
-	font-size: 0.8rem;
+	font-size: 0.85rem;
 	color: var(--color-text-maxcontrast);
 	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
 }
 
 .projects-view__row-chevron {

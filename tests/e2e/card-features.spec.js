@@ -13,7 +13,7 @@
 // but the attachment, time entry, cover colour and checklist items behind it
 // stay in the database and come back intact the moment the switch goes on again.
 
-import { test, expect, api, ncLogin, BASE, currentAuth } from './helpers.js'
+import { test, expect, api, ncLogin, BASE, currentAuth, gotoBoard } from './helpers.js'
 
 const API = BASE + '/index.php/apps/kanso/api'
 const ROLE_IN_PROGRESS = 3
@@ -103,6 +103,7 @@ test.describe('Built-in card sections (#5894)', () => {
 			timeTracking: true,
 			coverColor: true,
 			checklist: true,
+			estimate: true,
 		})
 		// Sanity: the fixture data really is there.
 		expect(board.cards.find((c) => c.id === state.cardId).timerRunning).toBe(true)
@@ -276,6 +277,31 @@ test.describe('Built-in card sections (#5894)', () => {
 		await expect(modal.getByText('Code', { exact: true })).toBeVisible()
 		// The file that was uploaded before anything was switched off is still listed.
 		await expect(modal.getByText(FILE_NAME)).toBeVisible()
+	})
+
+	test('hiding estimates removes the chip and drops them from project points', async ({ page }) => {
+		await api.patch(`/boards/${state.boardId}`, { estimateScale: 'tshirt' })
+		await api.patch(`/cards/${state.cardId}`, { estimate: 'M' })
+		const project = await api.post('/projects', { title: 'Estimate switch ' + Date.now() })
+		try {
+			await api.put(`/projects/${project.id}/cards/${state.cardId}`)
+			expect((await api.get(`/projects/${project.id}/plan`)).points.total).toBe(3)
+
+			await ncLogin(page)
+			await gotoBoard(page, state.boardId)
+			const tile = page.locator('.card-tile', { hasText: 'Loaded card' })
+			await expect(tile.locator('.card-tile__estimate')).toHaveText('M')
+
+			await api.patch(`/boards/${state.boardId}`, { cardFeatures: { estimate: false } })
+			await page.reload()
+			await expect(tile).toBeVisible()
+			await expect(tile.locator('.card-tile__estimate')).toHaveCount(0)
+			expect((await api.get(`/projects/${project.id}/plan`)).points).toBeNull()
+			expect((await api.get(`/projects/${project.id}/cards`))[0].estimate).toBeNull()
+		} finally {
+			await api.patch(`/boards/${state.boardId}`, { cardFeatures: { estimate: true } })
+			await api.delete(`/projects/${project.id}`).catch(() => {})
+		}
 	})
 
 	test('the switches are per board — a sibling board is unaffected', async () => {
