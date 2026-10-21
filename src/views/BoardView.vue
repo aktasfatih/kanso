@@ -802,20 +802,24 @@ const SORT_MODES = ['manual', 'priority', 'due', 'title', 'estimate']
 // biggest-first. Selecting a mode resets to its natural direction; the user can
 // then flip it. 'manual' has no direction (it IS the persisted fractional order).
 const NATURAL_SORT_DIR = { priority: 'desc', due: 'asc', title: 'asc', estimate: 'desc' }
-const sortMode = ref('manual')
+const storedSortMode = ref('manual')
+// A saved estimate sort falls back to manual while the board hides estimates.
+const sortMode = computed(() => (storedSortMode.value === 'estimate' && visibleEstimateScale.value === 'none'
+	? 'manual'
+	: storedSortMode.value))
 const sortDir = ref('asc')
 try {
 	const saved = localStorage.getItem(`kanso.sortMode.${props.id}`)
-	if (saved && SORT_MODES.includes(saved)) sortMode.value = saved
+	if (saved && SORT_MODES.includes(saved)) storedSortMode.value = saved
 } catch (e) { /* default to manual */ }
 try {
 	const savedDir = localStorage.getItem(`kanso.sortDir.${props.id}`)
 	sortDir.value = (savedDir === 'asc' || savedDir === 'desc')
 		? savedDir
-		: (NATURAL_SORT_DIR[sortMode.value] ?? 'asc')
-} catch (e) { sortDir.value = NATURAL_SORT_DIR[sortMode.value] ?? 'asc' }
+		: (NATURAL_SORT_DIR[storedSortMode.value] ?? 'asc')
+} catch (e) { sortDir.value = NATURAL_SORT_DIR[storedSortMode.value] ?? 'asc' }
 function setSortMode(mode) {
-	sortMode.value = mode
+	storedSortMode.value = mode
 	try {
 		localStorage.setItem(`kanso.sortMode.${props.id}`, mode)
 	} catch (e) { /* ignore persistence failure */ }
@@ -962,7 +966,7 @@ function sortCards(cards) {
 		// Rank by ordinal position in the board's scale (NOT string value: "13"
 		// vs "2" mis-orders, and XS…XL has no numeric value). Unestimated /
 		// off-scale tokens are "missing" → sorted last in both directions.
-		const tokens = scaleTokens(boardData.value?.board?.estimateScale ?? 'none')
+		const tokens = scaleTokens(visibleEstimateScale.value)
 		valueOf = (c) => {
 			const i = c.estimate ? tokens.indexOf(c.estimate) : -1
 			return i === -1 ? null : i

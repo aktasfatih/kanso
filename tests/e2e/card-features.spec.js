@@ -298,7 +298,19 @@ test.describe('Built-in card sections (#5894)', () => {
 			await expect(tile.locator('.card-tile__estimate')).toHaveCount(0)
 			expect((await api.get(`/projects/${project.id}/plan`)).points).toBeNull()
 			expect((await api.get(`/projects/${project.id}/cards`))[0].estimate).toBeNull()
+
+			// A saved estimate sort falls back to manual, so list rows stay draggable.
+			await page.evaluate((id) => {
+				localStorage.setItem(`kanso.viewMode.${id}`, 'list')
+				localStorage.setItem(`kanso.sortMode.${id}`, 'estimate')
+			}, state.boardId)
+			await page.reload()
+			await expect(page.locator('.board-list-row', { hasText: 'Loaded card' })).toHaveClass(/board-list-row--draggable/)
 		} finally {
+			await page.evaluate((id) => {
+				localStorage.removeItem(`kanso.viewMode.${id}`)
+				localStorage.removeItem(`kanso.sortMode.${id}`)
+			}, state.boardId).catch(() => {})
 			await api.patch(`/boards/${state.boardId}`, { cardFeatures: { estimate: true } })
 			await api.delete(`/projects/${project.id}`).catch(() => {})
 		}
