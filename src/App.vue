@@ -107,9 +107,35 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					v-if="isNavVisible('projects')"
 					:name="t('kanso', 'Projects')"
 					:to="{ name: 'projects' }"
-					:active="isProjectsActive">
+					:active="isProjectsActive"
+					:allow-collapse="pinnedProjects.length > 0"
+					:open="projectsSectionOpen"
+					@update:open="projectsSectionOpen = $event">
 					<template #icon>
 						<FolderMultipleOutlineIcon :size="20" />
+					</template>
+					<template #default>
+						<NcAppNavigationItem
+							v-for="project in pinnedProjects"
+							:key="project.id"
+							:name="project.title"
+							:to="{ name: 'project', params: { id: String(project.id) } }"
+							:active="route.name === 'project' && String(route.params.id) === String(project.id)"
+							data-test="nav-pinned-project">
+							<template #icon>
+								<span
+									class="app-nav__board-dot"
+									:style="{ background: project.color ? '#' + project.color : 'var(--color-primary-element)' }" />
+							</template>
+							<template #actions>
+								<NcActionButton close-after-click @click="toggleProjectPin(project)">
+									<template #icon>
+										<StarIcon :size="20" />
+									</template>
+									{{ t('kanso', 'Unpin project') }}
+								</NcActionButton>
+							</template>
+						</NcAppNavigationItem>
 					</template>
 				</NcAppNavigationItem>
 				<NcAppNavigationItem
@@ -325,6 +351,7 @@ import BugOutlineIcon from 'vue-material-design-icons/BugOutline.vue'
 import ConnectionIcon from 'vue-material-design-icons/Connection.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import { useBoards } from './composables/useBoards.js'
+import { useProjects } from './composables/useProjects.js'
 import { useBoardGroups } from './composables/useBoardGroups.js'
 import { useMyWorkBadges } from './composables/useMyWorkBadges.js'
 import { useViews } from './composables/useViews.js'
@@ -377,6 +404,9 @@ onMounted(async () => {
 })
 
 const { data: boardsData, togglePin } = useBoards()
+const { data: projectsData, togglePin: toggleProjectPin } = useProjects()
+const pinnedProjects = computed(() => (projectsData.value ?? []).filter((p) => p.pinned))
+const projectsSectionOpen = ref(true)
 // Non-archived boards, listed under the Boards nav entry so the user can jump
 // between them. Reactive to the shared boards query (create/rename/delete reflect).
 const boards = computed(() => (boardsData.value ?? []).filter((b) => !b.archived))
@@ -498,7 +528,9 @@ function isBoardActive(boardId) {
 const isMyTasksActive = computed(() => route.name === 'my-cards')
 const isMyReviewsActive = computed(() => route.name === 'my-reviews')
 const isInboxActive = computed(() => route.name === 'inbox')
-const isProjectsActive = computed(() => route.name === 'projects' || route.name === 'project')
+// A pinned project highlights its own nav entry instead of the Projects parent.
+const isProjectsActive = computed(() => route.name === 'projects'
+	|| (route.name === 'project' && !pinnedProjects.value.some((p) => String(p.id) === String(route.params.id))))
 
 // Cross-board saved "Views" (#3815). The nav section lists the user's views and
 // offers rename/delete; each item opens /views/:id. Kept mounted so the list

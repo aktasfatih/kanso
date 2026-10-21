@@ -51,7 +51,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:style="project.color ? { background: '#' + project.color } : {}"
 						:class="{ 'projects-view__dot--default': !project.color }" />
 					<span class="projects-view__project-title">{{ project.title }}</span>
-					<ChevronRightIcon :size="18" class="projects-view__row-chevron" />
+					<button
+						type="button"
+						class="projects-view__pin"
+						:class="{ 'projects-view__pin--on': project.pinned }"
+						:aria-pressed="!!project.pinned"
+						:aria-label="project.pinned ? t('kanso', 'Unpin project') : t('kanso', 'Pin to sidebar')"
+						:title="project.pinned ? t('kanso', 'Unpin project') : t('kanso', 'Pin to sidebar')"
+						data-test="project-tile-pin"
+						@click.stop="togglePin(project)"
+						@keydown.enter.stop>
+						<StarIcon v-if="project.pinned" :size="18" />
+						<StarOutlineIcon v-else :size="18" />
+					</button>
 				</div>
 				<span v-if="project.description" class="projects-view__project-desc">{{ project.description }}</span>
 
@@ -168,7 +180,8 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
-import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
+import StarIcon from 'vue-material-design-icons/Star.vue'
+import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import { useQueries } from '@tanstack/vue-query'
 import { useProjects } from '../composables/useProjects.js'
@@ -185,7 +198,7 @@ const COLOR_PRESETS = [
 ]
 
 const router = useRouter()
-const { data, isLoading, isError, create } = useProjects()
+const { data, isLoading, isError, create, togglePin } = useProjects()
 
 const projects = computed(() => data.value ?? [])
 
@@ -423,9 +436,30 @@ function openProject(project) {
 	-webkit-box-orient: vertical;
 }
 
-.projects-view__row-chevron {
+.projects-view__pin {
 	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	min-height: 34px;
+	margin: -8px -8px -8px 0;
+	padding: 0;
+	border: none;
+	border-radius: 50%;
+	background: none;
 	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+}
+
+.projects-view__pin:hover,
+.projects-view__pin:focus-visible {
+	background: var(--color-background-hover);
+}
+
+.projects-view__pin--on {
+	color: var(--color-warning-text, var(--color-warning));
 }
 
 .projects-view__form {

@@ -16,6 +16,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Project;
 use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\ProjectMapper;
+use OCA\Kanso\Db\ProjectPinMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
@@ -47,6 +48,7 @@ class ProjectService {
 		private CardVisibilityGuard $visibilityGuard,
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private ProjectForecast $forecast,
+		private ProjectPinMapper $projectPinMapper,
 	) {
 	}
 
@@ -56,10 +58,27 @@ class ProjectService {
 	 * @return list<array<string, mixed>>
 	 */
 	public function findMine(string $uid): array {
+		$pinned = $this->projectPinMapper->pinnedMap($uid);
 		return array_values(array_map(
-			static fn (Project $project): array => $project->jsonSerialize(),
+			static fn (Project $project): array => $project->jsonSerialize() + ['pinned' => isset($pinned[$project->getId()])],
 			$this->projectMapper->findByOwner($uid)
 		));
+	}
+
+	/**
+	 * @throws DoesNotExistException if the project does not exist
+	 * @throws NotPermittedException if the actor is not the owner
+	 */
+	public function pin(int $id, string $uid): void {
+		$project = $this->loadOwnedProject($id, $uid);
+		$this->projectPinMapper->pin($uid, $project->getId());
+	}
+
+	/**
+	 * Idempotent; removing one's own pin needs no ownership check.
+	 */
+	public function unpin(int $id, string $uid): void {
+		$this->projectPinMapper->unpin($uid, $id);
 	}
 
 	/**
@@ -138,6 +157,7 @@ class ProjectService {
 	public function delete(int $id, string $uid): void {
 		$project = $this->loadOwnedProject($id, $uid);
 		$this->projectCardMapper->deleteByProject($project->getId());
+		$this->projectPinMapper->deleteByProject($project->getId());
 		$this->projectMapper->delete($project);
 	}
 

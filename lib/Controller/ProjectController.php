@@ -92,6 +92,22 @@ class ProjectController extends Controller {
 		});
 	}
 
+	#[NoAdminRequired]
+	public function pin(int $id): JSONResponse {
+		return $this->respond(function () use ($id): JSONResponse {
+			$this->projectService->pin($id, $this->currentUserId());
+			return new JSONResponse(['pinned' => true]);
+		});
+	}
+
+	#[NoAdminRequired]
+	public function unpin(int $id): JSONResponse {
+		return $this->respond(function () use ($id): JSONResponse {
+			$this->projectService->unpin($id, $this->currentUserId());
+			return new JSONResponse(['pinned' => false]);
+		});
+	}
+
 	/**
 	 * Progress, forecast, health and burn-up for the project.
 	 */

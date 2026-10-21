@@ -16,6 +16,7 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Project;
 use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\ProjectMapper;
+use OCA\Kanso\Db\ProjectPinMapper;
 use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\InvalidInputException;
@@ -38,6 +39,7 @@ class ProjectServiceTest extends TestCase {
 	private BoardAccess&MockObject $boardAccess;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private CardAssigneeMapper&MockObject $cardAssigneeMapper;
+	private ProjectPinMapper&MockObject $projectPinMapper;
 	private ProjectService $service;
 
 	protected function setUp(): void {
@@ -53,6 +55,7 @@ class ProjectServiceTest extends TestCase {
 		// Default: every card is visible to the actor (assertVisible passes).
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
+		$this->projectPinMapper = $this->createMock(ProjectPinMapper::class);
 		$this->service = new ProjectService(
 			$this->projectMapper,
 			$this->projectCardMapper,
@@ -65,6 +68,7 @@ class ProjectServiceTest extends TestCase {
 			$this->visibilityGuard,
 			$this->cardAssigneeMapper,
 			new ProjectForecast(),
+			$this->projectPinMapper,
 		);
 	}
 
@@ -98,6 +102,28 @@ class ProjectServiceTest extends TestCase {
 		self::assertCount(1, $result);
 		self::assertSame(5, $result[0]['id']);
 		self::assertSame('alice', $result[0]['owner']);
+	}
+
+	public function testFindMineMarksPinnedProjects(): void {
+		$other = $this->project();
+		$other->setId(6);
+		$this->projectMapper->method('findByOwner')->with('alice')->willReturn([$this->project(), $other]);
+		$this->projectPinMapper->method('pinnedMap')->with('alice')->willReturn([6 => true]);
+
+		self::assertSame([false, true], array_column($this->service->findMine('alice'), 'pinned'));
+	}
+
+	public function testPinRequiresOwnership(): void {
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$this->projectPinMapper->expects(self::never())->method('pin');
+		$this->expectException(NotPermittedException::class);
+		$this->service->pin(5, 'mallory');
+	}
+
+	public function testPinPinsForTheOwner(): void {
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$this->projectPinMapper->expects(self::once())->method('pin')->with('alice', 5);
+		$this->service->pin(5, 'alice');
 	}
 
 	public function testCreateRejectsEmptyTitle(): void {
@@ -164,6 +190,7 @@ class ProjectServiceTest extends TestCase {
 	public function testDeleteCascadesMembershipsForOwner(): void {
 		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
 		$this->projectCardMapper->expects(self::once())->method('deleteByProject')->with(5);
+		$this->projectPinMapper->expects(self::once())->method('deleteByProject')->with(5);
 		$this->projectMapper->expects(self::once())->method('delete');
 		$this->service->delete(5, 'alice');
 	}
