@@ -1018,7 +1018,7 @@ OC.L10N.register(
     "now" : "agora",
     "Number" : "Número",
     "Off — do not create cards" : "Desligado — não criar cartões",
-    "Off track" : "Fora do prazo",
+    "Off track" : "Fora do plano",
     "Offset" : "Deslocamento",
     "Offset (days)" : "Deslocamento (dias)",
     "Offset after (days)" : "Deslocamento depois (dias)",

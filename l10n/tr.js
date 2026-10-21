@@ -565,8 +565,8 @@ OC.L10N.register(
     "Estimate by stack" : "Sütuna göre tahmin",
     "Estimate: {value}" : "Tahmin: {value}",
     "Estimation" : "Tahminleme",
-    "Even your best weeks would miss the target date." : "En iyi haftaların bile hedef tarihi kaçırır.",
-    "Even your slower weeks would finish before the target date." : "Yavaş haftaların bile hedef tarihten önce bitirir.",
+    "Even your best weeks would miss the target date." : "En iyi haftalarındaki hızla bile hedef tarih kaçırılır.",
+    "Even your slower weeks would finish before the target date." : "Yavaş haftalarındaki hızla bile hedef tarihten önce tamamlanır.",
     "every" : "her",
     "Every" : "Her",
     "Every card in this project is done." : "Bu projedeki tüm kartlar tamamlandı.",
@@ -1482,7 +1482,7 @@ OC.L10N.register(
     "You're all caught up" : "Her şeyi hallettin",
     "Your {type} review is requested" : "{type} incelemen istendi",
     "Your review is requested on this card" : "Bu kartta incelemen istendi",
-    "Your slower weeks would miss the target date." : "Yavaş haftaların hedef tarihi kaçırır.",
+    "Your slower weeks would miss the target date." : "Yavaş haftalarındaki hızla hedef tarih kaçırılır.",
     "Zoom" : "Yakınlaştırma"
 },
 "nplurals=2; plural=(n != 1);");

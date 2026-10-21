@@ -395,7 +395,7 @@ msgid_plural "%n hours ago"
 msgstr[0] "há %n hora"
 msgstr[1] "há %n horas"
 
-#: src/views/BoardView.vue:2627
+#: src/views/BoardView.vue:2631
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n ID copiado."
@@ -4413,7 +4413,7 @@ msgstr "Desligado — não criar cartões"
 
 #: src/services/projectStatus.js
 msgid "Off track"
-msgstr "Fora do prazo"
+msgstr "Fora do plano"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Offset"

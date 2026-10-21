@@ -192,7 +192,7 @@ OC.L10N.register(
     "Auto-archive" : "自动归档",
     "Automation" : "自动化",
     "Average days" : "平均天数",
-    "_average of the last week_::_average of the last {count} weeks_" : ["最近一周的平均值"],
+    "_average of the last week_::_average of the last {count} weeks_" : ["最近 {count} 周的平均值"],
     "Back" : "上一步",
     "Back to board" : "返回看板",
     "Back to filters" : "返回筛选器",

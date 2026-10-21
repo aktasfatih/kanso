@@ -376,7 +376,7 @@ msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
 
-#: src/views/BoardView.vue:2627
+#: src/views/BoardView.vue:2631
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "已复制 %n 个 ID。"
@@ -857,7 +857,7 @@ msgstr "平均天数"
 #: src/components/ProjectHealth.vue:41
 msgid "average of the last week"
 msgid_plural "average of the last {count} weeks"
-msgstr[0] "最近一周的平均值"
+msgstr[0] "最近 {count} 周的平均值"
 
 #: src/components/CsvImportModal.vue
 msgid "Back"

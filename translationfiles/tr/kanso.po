@@ -395,7 +395,7 @@ msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
 msgstr[1] "%n saat önce"
 
-#: src/views/BoardView.vue:2627
+#: src/views/BoardView.vue:2631
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n kimlik kopyalandı."
@@ -2507,11 +2507,11 @@ msgstr "Tahminleme"
 
 #: src/services/projectStatus.js
 msgid "Even your best weeks would miss the target date."
-msgstr "En iyi haftaların bile hedef tarihi kaçırır."
+msgstr "En iyi haftalarındaki hızla bile hedef tarih kaçırılır."
 
 #: src/services/projectStatus.js
 msgid "Even your slower weeks would finish before the target date."
-msgstr "Yavaş haftaların bile hedef tarihten önce bitirir."
+msgstr "Yavaş haftalarındaki hızla bile hedef tarihten önce tamamlanır."
 
 #: src/components/CardDetail.vue
 msgid "every"
@@ -6377,7 +6377,7 @@ msgstr "Bu kartta incelemen istendi"
 
 #: src/services/projectStatus.js
 msgid "Your slower weeks would miss the target date."
-msgstr "Yavaş haftaların hedef tarihi kaçırır."
+msgstr "Yavaş haftalarındaki hızla hedef tarih kaçırılır."
 
 #: src/components/BoardTimelineView.vue
 msgid "Zoom"
