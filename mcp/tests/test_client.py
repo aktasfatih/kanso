@@ -1091,3 +1091,213 @@ async def test_view_cards_defaults_the_sort_and_sends_no_filter():
     assert params.get("sortDir") == "asc"
     # An unfiltered View sends no filter keys at all.
     assert [k for k in params.keys() if k.startswith("f")] == []
+
+
+PROJECT = {
+    "id": 4,
+    "title": "Launch",
+    "description": "Q4 launch",
+    "color": "0082c9",
+    "owner": "admin",
+    "createdAt": 1700000000,
+}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_projects_parses():
+    route = respx.get(f"{BASE}/projects").mock(
+        return_value=httpx.Response(200, json=[PROJECT])
+    )
+    async with _client() as c:
+        projects = await c.list_projects()
+    _assert_api_headers(route.calls.last.request)
+    assert projects[0].id == 4
+    assert projects[0].title == "Launch"
+    assert projects[0].color == "0082c9"
+    assert projects[0].createdAt == 1700000000
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_create_project_body():
+    route = respx.post(f"{BASE}/projects").mock(
+        return_value=httpx.Response(200, json=PROJECT)
+    )
+    async with _client() as c:
+        project = await c.create_project("Launch", description="Q4 launch", color="0082c9")
+    req = route.calls.last.request
+    _assert_api_headers(req)
+    assert json.loads(req.content) == {
+        "title": "Launch",
+        "description": "Q4 launch",
+        "color": "0082c9",
+    }
+    assert project.id == 4
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_create_project_drops_unset_fields():
+    route = respx.post(f"{BASE}/projects").mock(
+        return_value=httpx.Response(200, json=PROJECT)
+    )
+    async with _client() as c:
+        await c.create_project("Launch")
+    assert json.loads(route.calls.last.request.content) == {"title": "Launch"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_project_patches_only_what_changed():
+    route = respx.patch(f"{BASE}/projects/4").mock(
+        return_value=httpx.Response(200, json={**PROJECT, "color": None})
+    )
+    async with _client() as c:
+        project = await c.update_project(4, color="")
+    # "" is how the caller CLEARS the colour, so it must survive the None-filter.
+    assert json.loads(route.calls.last.request.content) == {"color": ""}
+    assert project.color is None
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_delete_project_path():
+    route = respx.delete(f"{BASE}/projects/4").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    async with _client() as c:
+        await c.delete_project(4)
+    assert route.called
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_project_cards_keeps_board_and_stack_titles():
+    route = respx.get(f"{BASE}/projects/4/cards").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "id": 100,
+                    "boardId": 7,
+                    "boardTitle": "Board",
+                    "stackTitle": "To Do",
+                    "title": "Card",
+                    "duedate": None,
+                    "priority": 2,
+                    "doneAt": 0,
+                    "startedAt": 0,
+                    "parentCardId": None,
+                }
+            ],
+        )
+    )
+    async with _client() as c:
+        cards = await c.list_project_cards(4)
+    assert route.called
+    assert cards[0].id == 100
+    assert cards[0].boardTitle == "Board"
+    assert cards[0].stackTitle == "To Do"
+    assert cards[0].priority == 2
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_project_stats_passes_the_dto_through():
+    stats = {"cardCount": 3, "byPriority": [{"priority": 0, "count": 3}], "overdue": 1}
+    respx.get(f"{BASE}/projects/4/stats").mock(
+        return_value=httpx.Response(200, json=stats)
+    )
+    async with _client() as c:
+        assert await c.project_stats(4) == stats
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_project_card_membership_paths():
+    add = respx.put(f"{BASE}/projects/4/cards/100").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    remove = respx.delete(f"{BASE}/projects/4/cards/100").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    async with _client() as c:
+        await c.add_card_to_project(4, 100)
+        await c.remove_card_from_project(4, 100)
+    assert add.called
+    assert remove.called
+    _assert_api_headers(add.calls.last.request)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_project_comments_parses():
+    route = respx.get(f"{BASE}/projects/4/comments").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "id": 1,
+                    "projectId": 4,
+                    "parentCommentId": None,
+                    "author": "admin",
+                    "authorDisplayName": "Admin",
+                    "body": "kickoff",
+                    "createdAt": 1700000000,
+                    "editedAt": 0,
+                }
+            ],
+        )
+    )
+    async with _client() as c:
+        comments = await c.list_project_comments(4)
+    assert route.called
+    assert comments[0].projectId == 4
+    assert comments[0].authorDisplayName == "Admin"
+    assert comments[0].body == "kickoff"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_add_project_comment_body_and_parent():
+    route = respx.post(f"{BASE}/projects/4/comments").mock(
+        return_value=httpx.Response(200, json={"id": 2, "projectId": 4, "body": "re"})
+    )
+    async with _client() as c:
+        await c.add_project_comment(4, "top")
+        first = json.loads(route.calls.last.request.content)
+        comment = await c.add_project_comment(4, "re", parent_comment_id=1)
+        second = json.loads(route.calls.last.request.content)
+    assert first == {"body": "top"}
+    assert second == {"body": "re", "parentCommentId": 1}
+    assert comment.id == 2
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_project_comment_edit_and_delete_target_the_comment_path():
+    edit = respx.patch(f"{BASE}/project-comments/2").mock(
+        return_value=httpx.Response(200, json={"id": 2, "body": "fixed", "editedAt": 5})
+    )
+    delete = respx.delete(f"{BASE}/project-comments/2").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    async with _client() as c:
+        comment = await c.update_project_comment(2, "fixed")
+        await c.delete_project_comment(2)
+    assert json.loads(edit.calls.last.request.content) == {"body": "fixed"}
+    assert comment.editedAt == 5
+    assert delete.called
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_project_owner_gate_surfaces_as_kanso_api_error():
+    respx.get(f"{BASE}/projects/9/cards").mock(
+        return_value=httpx.Response(403, json={"message": "Only the owner may act"})
+    )
+    async with _client() as c:
+        with pytest.raises(KansoApiError) as excinfo:
+            await c.list_project_cards(9)
+    assert excinfo.value.status_code == 403

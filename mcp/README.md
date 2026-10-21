@@ -212,6 +212,25 @@ starts.
 - `kanso_delete_recur_rule` — drop the schedule (template + spawned cards stay)
 - `kanso_recur_rule_create_now` — fire once now without touching the schedule
 
+**Projects** (your personal cross-board card collections)
+
+A project holds no cards of its own: it points at cards that stay on their
+boards. Projects are private to their owner (no sharing), so every tool acts on
+the authenticated user's own projects only, and any other id answers 403.
+
+- `kanso_list_projects` — your projects (`id`, `title`, `description`, `color`, `owner`, `createdAt`)
+- `kanso_get_project` — one project's record plus its member cards
+- `kanso_create_project` / `kanso_update_project` (title, description, color) / `kanso_delete_project`
+  (memberships go, the cards stay)
+- `kanso_list_project_cards` — the member cards, with `boardTitle` + `stackTitle`; archived cards and
+  cards on boards you can no longer read are left out
+- `kanso_get_project_stats` — the board analytics panels over the project's cards
+- `kanso_add_card_to_project` / `kanso_remove_card_from_project` — idempotent membership changes
+- `kanso_list_project_comments` / `kanso_add_project_comment` — the project's discussion thread
+  (replies one level deep)
+- `kanso_update_project_comment` / `kanso_delete_project_comment` — edit or delete by **comment** id
+  (deleting a top-level comment takes its replies with it)
+
 **Search**
 
 - `kanso_search_cards` — find cards by text across every board you can read

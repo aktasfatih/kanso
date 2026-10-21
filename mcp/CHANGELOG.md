@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Project tools — work with your personal cross-board card collections over
+  MCP: `kanso_list_projects`, `kanso_get_project`, `kanso_create_project`,
+  `kanso_update_project`, `kanso_delete_project`, `kanso_list_project_cards`,
+  `kanso_get_project_stats`, `kanso_add_card_to_project`,
+  `kanso_remove_card_from_project`, plus the project discussion thread through
+  `kanso_list_project_comments`, `kanso_add_project_comment`,
+  `kanso_update_project_comment` and `kanso_delete_project_comment`. Until now
+  an agent could see a card's `projectIds` but had no way to read, build or
+  report on a project. Projects stay owner-only: the tools act as you and only
+  ever reach your own projects, and the card list and stats are limited to live
+  cards on boards you can still read.
 - `kanso_move_card_to_board` — move a card to a column on a different board.
   Until now an agent could only move a card within its own board, so the only
   way across was to recreate it by hand on the target and delete the original.
