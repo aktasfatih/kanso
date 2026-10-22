@@ -1054,7 +1054,7 @@ function statusOf(row) {
 }
 
 function cardHumanId(card) {
-	return humanId(props.boardPrefix, card.boardSeq)
+	return humanId(card.boardPrefix ?? props.boardPrefix, card.boardSeq)
 }
 
 function openCard(cardId) {

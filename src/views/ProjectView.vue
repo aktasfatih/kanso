@@ -39,6 +39,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</button>
 
 					<NcActions :force-menu="true">
+						<NcActionButton
+							v-if="project"
+							:close-after-click="true"
+							data-test="project-pin-toggle"
+							@click="togglePin(project)">
+							<template #icon>
+								<StarIcon v-if="project.pinned" :size="20" />
+								<StarOutlineIcon v-else :size="20" />
+							</template>
+							{{ project.pinned ? t('kanso', 'Unpin project') : t('kanso', 'Pin to sidebar') }}
+						</NcActionButton>
 						<NcActionButton :close-after-click="true" @click="openEditDialog">
 							<template #icon>
 								<PencilIcon :size="20" />
@@ -55,6 +66,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</NcActions>
 				</div>
 			</div>
+
+			<span v-if="actionError" class="project-view__action-error">{{ actionError }}</span>
 
 			<!-- Prominent, in-place editable description directly under the title.
 			     Reuses the shipped markdown editor (#3562): useMarkdownToolbar +
@@ -108,17 +121,30 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 
 				<template v-else>
-					<div
-						v-if="project?.description"
-						class="project-view__desc-view"
-						tabindex="0"
-						role="button"
-						:title="t('kanso', 'Click to edit the description')"
-						@click="startDescriptionEdit"
-						@keydown.enter="startDescriptionEdit">
-						<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
-						<div class="project-view__desc-rendered kanso-md" v-html="renderMarkdown(project.description)" />
-					</div>
+					<template v-if="project?.description">
+						<div
+							class="project-view__desc-view"
+							:class="{ 'project-view__desc-view--collapsed': !descExpanded, 'project-view__desc-view--overflowing': descOverflows && !descExpanded }"
+							tabindex="0"
+							role="button"
+							data-test="project-description"
+							:title="t('kanso', 'Click to edit the description')"
+							@click="startDescriptionEdit"
+							@keydown.enter="startDescriptionEdit">
+							<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
+							<div ref="descContentRef" class="project-view__desc-rendered kanso-md" v-html="renderMarkdown(project.description)" />
+						</div>
+						<button
+							v-if="descOverflows || descExpanded"
+							type="button"
+							class="project-view__desc-toggle"
+							data-test="project-description-toggle"
+							:aria-expanded="descExpanded"
+							@click="descExpanded = !descExpanded">
+							<ChevronDownIcon :size="18" :class="{ 'project-view__desc-toggle-icon--up': descExpanded }" />
+							{{ descExpanded ? t('kanso', 'Show less') : t('kanso', 'Show more') }}
+						</button>
+					</template>
 					<button
 						v-else
 						type="button"
@@ -129,25 +155,48 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 			</section>
 
-			<span v-if="actionError" class="project-view__action-error">{{ actionError }}</span>
+			<div v-if="plan" class="project-view__plan">
+				<ProjectHealth
+					:plan="plan"
+					:project-id="id"
+					:error="datesError"
+					@update-dates="saveDates" />
+				<ProjectBurnup v-if="plan && plan.total" class="project-view__burnup" :plan="plan" />
+			</div>
 
-			<!-- Add card control -->
-			<div class="project-view__add-row">
-				<button
-					class="project-view__add-btn"
-					:aria-expanded="showPicker"
-					@click="togglePicker">
-					<PlusIcon :size="16" />
-					{{ t('kanso', 'Add card') }}
-				</button>
+			<div class="project-view__toolbar">
+				<div v-if="cards.length" class="project-view__modes" role="tablist" :aria-label="t('kanso', 'Card layout')">
+					<button
+						v-for="m in modes"
+						:key="m.key"
+						role="tab"
+						class="project-view__mode"
+						:class="{ 'project-view__mode--active': mode === m.key }"
+						:aria-selected="mode === m.key"
+						:data-test="'project-mode-' + m.key"
+						@click="setMode(m.key)">
+						<component :is="m.icon" :size="16" />
+						{{ m.label }}
+					</button>
+				</div>
+				<!-- Add card control -->
+				<div class="project-view__add-row">
+					<button
+						class="project-view__add-btn"
+						:aria-expanded="showPicker"
+						@click="togglePicker">
+						<PlusIcon :size="16" />
+						{{ t('kanso', 'Add card') }}
+					</button>
 
-				<CardSearchPicker
-					v-if="showPicker"
-					class="project-view__picker"
-					:disabled-card-ids="cardIdsInProject"
-					:error="addError"
-					@pick="handlePickCard"
-					@close="closePicker" />
+					<CardSearchPicker
+						v-if="showPicker"
+						class="project-view__picker"
+						:disabled-card-ids="cardIdsInProject"
+						:error="addError"
+						@pick="handlePickCard"
+						@close="closePicker" />
+				</div>
 			</div>
 
 			<!-- Empty state -->
@@ -160,46 +209,71 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 			</NcEmptyContent>
 
-			<!-- Cards grouped by board -->
 			<template v-else>
-				<section
-					v-for="group in groups"
-					:key="group.boardId"
-					class="project-view__section">
-					<h2 class="project-view__section-title">{{ group.boardTitle }}</h2>
-					<ul class="project-view__list">
-						<li
-							v-for="card in group.cards"
-							:key="card.id"
-							class="project-view__row"
-							tabindex="0"
-							role="button"
-							@click="openCard(card)"
-							@keydown.enter="openCard(card)">
-							<div class="project-view__row-main">
-								<span class="project-view__card-title">{{ card.title }}</span>
-								<span class="project-view__meta">
-									<span class="project-view__stack">{{ card.stackTitle }}</span>
+
+				<BoardTimelineView
+					v-if="mode === 'timeline'"
+					class="project-view__timeline"
+					:cards="cards"
+					:groups="boardGroups.map((g) => ({ key: g.boardId, title: g.boardTitle, cards: g.cards }))"
+					:can-edit="false"
+					:board-id="null"
+					@open="openCard" />
+
+				<template v-else>
+					<component
+						:is="group.collapsible ? 'details' : 'section'"
+						v-for="group in listGroups"
+						:key="group.key"
+						class="project-view__section"
+						:data-test="'project-group-' + group.key">
+						<component :is="group.collapsible ? 'summary' : 'h2'" class="project-view__section-title">
+							{{ group.title }} <span class="project-view__count">{{ group.cards.length }}</span>
+						</component>
+						<ul class="project-view__list">
+							<li
+								v-for="card in group.cards"
+								:key="card.id"
+								class="project-view__row"
+								:class="{ 'project-view__row--done': card.doneAt > 0 }"
+								tabindex="0"
+								role="button"
+								@click="openCard(card)"
+								@keydown.enter="openCard(card)">
+								<div class="project-view__row-main">
+									<span class="project-view__card-title">{{ card.title }}</span>
+									<span class="project-view__meta">
+										<span v-if="mode === 'status'">{{ card.boardTitle }} · </span>
+										<span class="project-view__stack">{{ card.stackTitle }}</span>
+									</span>
+								</div>
+								<span
+									v-if="card.blockers > 0 && !card.doneAt"
+									class="project-view__badge project-view__badge--warning"
+									:title="n('kanso', 'Blocked by {count} open card', 'Blocked by {count} open cards', card.blockers, { count: card.blockers })">
+									<BlockHelperIcon :size="14" />
 								</span>
-							</div>
-							<span
-								v-if="card.duedate"
-								class="project-view__due">
-								{{ formatDue(card.duedate) }}
-							</span>
-							<NcActions :force-menu="false">
-								<NcActionButton
-									:close-after-click="true"
-									@click.stop="handleRemoveCard(card.id)">
-									<template #icon>
-										<CloseIcon :size="20" />
-									</template>
-									{{ t('kanso', 'Remove from project') }}
-								</NcActionButton>
-							</NcActions>
-						</li>
-					</ul>
-				</section>
+								<span v-if="card.estimate" class="project-view__badge">{{ card.estimate }}</span>
+								<span
+									v-if="card.duedate"
+									class="project-view__due"
+									:class="{ 'project-view__due--overdue': isOverdue(card) }">
+									{{ formatDue(card.duedate) }}
+								</span>
+								<NcActions :force-menu="false">
+									<NcActionButton
+										:close-after-click="true"
+										@click.stop="handleRemoveCard(card.id)">
+										<template #icon>
+											<CloseIcon :size="20" />
+										</template>
+										{{ t('kanso', 'Remove from project') }}
+									</NcActionButton>
+								</NcActions>
+							</li>
+						</ul>
+					</component>
+				</template>
 			</template>
 
 			<!-- Discussion log — an owner-only personal thread on the project (#3563).
@@ -449,13 +523,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</NcButton>
 			</template>
 		</NcDialog>
+		<CardModal
+			v-if="selectedCardId"
+			:key="selectedCardId"
+			:card-id="selectedCardId"
+			:board-id="selectedBoardId"
+			controlled
+			@navigate="navigateCard"
+			@close="closeCard" />
 	</div>
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { translate as t } from '@nextcloud/l10n'
+import { useQueryClient } from '@tanstack/vue-query'
+import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
@@ -467,6 +550,7 @@ import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import TrashCanIcon from 'vue-material-design-icons/TrashCan.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
+import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChartBarIcon from 'vue-material-design-icons/ChartBar.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import FormatBoldIcon from 'vue-material-design-icons/FormatBold.vue'
@@ -477,12 +561,22 @@ import FormatQuoteCloseIcon from 'vue-material-design-icons/FormatQuoteClose.vue
 import CodeTagsIcon from 'vue-material-design-icons/CodeTags.vue'
 import LinkVariantIcon from 'vue-material-design-icons/LinkVariant.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
+import BlockHelperIcon from 'vue-material-design-icons/BlockHelper.vue'
+import StarIcon from 'vue-material-design-icons/Star.vue'
+import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
+import FormatListGroupIcon from 'vue-material-design-icons/FormatListGroup.vue'
+import ViewDashboardOutlineIcon from 'vue-material-design-icons/ViewDashboardOutline.vue'
+import ChartGanttIcon from 'vue-material-design-icons/ChartGantt.vue'
 import { useProjects } from '../composables/useProjects.js'
 import { usePageTitle } from '../composables/usePageTitle.js'
-import { useProjectCards } from '../composables/useProject.js'
+import { useProjectCards, useProjectPlan } from '../composables/useProject.js'
 import { useProjectComments } from '../composables/useProjectComments.js'
 import { buildCommentTree } from '../composables/useComments.js'
 import CardSearchPicker from '../components/CardSearchPicker.vue'
+import CardModal from '../components/CardModal.vue'
+import ProjectHealth from '../components/ProjectHealth.vue'
+import ProjectBurnup from '../components/ProjectBurnup.vue'
+import BoardTimelineView from '../components/BoardTimelineView.vue'
 import { renderMarkdown } from '../services/markdown.js'
 import { useMarkdownToolbar } from '../composables/useMarkdownToolbar.js'
 
@@ -499,9 +593,10 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const queryClient = useQueryClient()
 
 // Resolve the project from the list query (already in cache)
-const { data: projectsData, update: updateMutation, remove: removeMutation } = useProjects()
+const { data: projectsData, update: updateMutation, remove: removeMutation, togglePin } = useProjects()
 const project = computed(() => (projectsData.value ?? []).find((p) => String(p.id) === String(props.id)) ?? null)
 
 // Browser tab title (#125). Empty until the (cached) projects list resolves.
@@ -517,8 +612,11 @@ const {
 
 const cards = computed(() => cardsData.value ?? [])
 
+const { data: planData } = useProjectPlan(computed(() => props.id))
+const plan = computed(() => planData.value ?? null)
+
 // Group cards by boardTitle, preserving server order within each group
-const groups = computed(() => {
+const boardGroups = computed(() => {
 	const map = new Map()
 	for (const card of cards.value) {
 		const key = card.boardId
@@ -530,6 +628,77 @@ const groups = computed(() => {
 	return Array.from(map.values())
 })
 
+function isOverdue(card) {
+	return !card.doneAt && !!card.duedate && new Date(card.duedate).getTime() < Date.now()
+}
+
+function statusOf(card) {
+	if (card.doneAt > 0) return 'done'
+	if (card.blockers > 0) return 'blocked'
+	if (isOverdue(card)) return 'overdue'
+	if (card.startedAt > 0) return 'in-progress'
+	return 'not-started'
+}
+
+const statusGroups = computed(() => {
+	const order = [
+		{ key: 'blocked', title: t('kanso', 'Blocked') },
+		{ key: 'overdue', title: t('kanso', 'Overdue') },
+		{ key: 'in-progress', title: t('kanso', 'In progress') },
+		{ key: 'not-started', title: t('kanso', 'Not started') },
+		{ key: 'done', title: t('kanso', 'Done'), collapsible: true },
+	]
+	const byStatus = new Map(order.map((g) => [g.key, []]))
+	for (const card of cards.value) {
+		byStatus.get(statusOf(card)).push(card)
+	}
+	return order
+		.map((g) => ({ ...g, cards: byStatus.get(g.key) }))
+		.filter((g) => g.cards.length)
+})
+
+const MODE_KEY = 'kanso.projectView.mode'
+const modes = [
+	{ key: 'status', label: t('kanso', 'Status'), icon: FormatListGroupIcon },
+	{ key: 'board', label: t('kanso', 'Board'), icon: ViewDashboardOutlineIcon },
+	{ key: 'timeline', label: t('kanso', 'Timeline'), icon: ChartGanttIcon },
+]
+
+function readMode() {
+	try {
+		const stored = localStorage.getItem(MODE_KEY)
+		return modes.some((m) => m.key === stored) ? stored : 'status'
+	} catch {
+		return 'status'
+	}
+}
+
+const mode = ref(readMode())
+
+function setMode(next) {
+	mode.value = next
+	try {
+		localStorage.setItem(MODE_KEY, next)
+	} catch {
+		// Storage unavailable (private mode): the choice just isn't remembered.
+	}
+}
+
+const listGroups = computed(() => (mode.value === 'board'
+	? boardGroups.value.map((g) => ({ key: 'board-' + g.boardId, title: g.boardTitle, cards: g.cards }))
+	: statusGroups.value))
+
+const datesError = ref('')
+
+async function saveDates(dates) {
+	datesError.value = ''
+	try {
+		await updateMutation.mutateAsync({ id: Number(props.id), ...dates })
+	} catch (err) {
+		datesError.value = err?.response?.data?.error || t('kanso', 'Failed to update dates.')
+	}
+}
+
 function formatDue(iso) {
 	try {
 		return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -538,8 +707,24 @@ function formatDue(iso) {
 	}
 }
 
+// Cards open as an overlay on the project, so closing returns here.
+const selectedCardId = ref(null)
+const selectedBoardId = ref(null)
+
 function openCard(card) {
-	router.push({ name: 'card-modal', params: { id: String(card.boardId), cardId: String(card.id) } })
+	selectedCardId.value = String(card.id)
+	selectedBoardId.value = card.boardId != null ? String(card.boardId) : null
+}
+
+function navigateCard(cardId) {
+	selectedBoardId.value = null
+	selectedCardId.value = String(cardId)
+}
+
+function closeCard() {
+	selectedCardId.value = null
+	selectedBoardId.value = null
+	queryClient.invalidateQueries({ queryKey: ['project', String(props.id)] })
 }
 
 function goToStats() {
@@ -603,6 +788,30 @@ async function handleDelete() {
 // renderMarkdown + updateProject path as the dialog, but inline under the title
 // so the description can be edited where it's read. No backend change.
 const editingDescription = ref(false)
+const descContentRef = ref(null)
+const descExpanded = ref(false)
+const descOverflows = ref(false)
+
+// Keep in sync with the collapsed max-height in the styles below.
+const COLLAPSED_DESC_PX = 240
+
+function measureDescription() {
+	descOverflows.value = (descContentRef.value?.scrollHeight ?? 0) > COLLAPSED_DESC_PX
+}
+
+let descObserver = null
+
+watch(descContentRef, (el) => {
+	descObserver?.disconnect()
+	descObserver = null
+	if (!el || typeof ResizeObserver === 'undefined') return
+	descObserver = new ResizeObserver(() => measureDescription())
+	descObserver.observe(el)
+})
+
+watch([() => project.value?.description, descExpanded], () => nextTick(measureDescription))
+
+onBeforeUnmount(() => descObserver?.disconnect())
 const draftDescription = ref('')
 const descError = ref('')
 const inlineDescRef = ref(null)
@@ -839,8 +1048,45 @@ async function handleDeleteComment(comment) {
 
 <style scoped>
 .project-view {
-	padding: 24px 32px;
-	max-width: 860px;
+	padding: 20px 32px 32px 52px;
+	max-width: 1600px;
+	box-sizing: border-box;
+}
+
+.project-view__plan {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 24px;
+	align-items: stretch;
+	margin-bottom: 28px;
+}
+
+.project-view__plan .health {
+	margin-bottom: 0;
+}
+
+.project-view__plan .project-view__burnup {
+	margin: 0;
+	padding: 16px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large, 8px);
+}
+
+@media (max-width: 1100px) {
+	.project-view__plan {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* Prose stays at a readable measure; media and code may use the full width. */
+.project-view :deep(.kanso-md) > :not(img, table, pre, figure, p:has(> img)) {
+	max-width: 90ch;
+}
+
+@media (max-width: 600px) {
+	.project-view {
+		padding: 16px;
+	}
 }
 
 .project-view__header {
@@ -920,19 +1166,55 @@ async function handleDeleteComment(comment) {
 
 /* ── Prominent, in-place editable description ──────────────────────────────── */
 .project-view__description {
-	margin: -8px 0 20px;
+	margin: -4px 0 24px;
 }
 
 /* Read mode: comfortable typography + reading width. Long, multi-paragraph
    markdown scrolls inside a capped region instead of being clipped mid-block. */
 .project-view__desc-view {
+	position: relative;
 	cursor: text;
 	border-radius: var(--border-radius-large, 8px);
 	padding: 8px 10px;
 	margin: 0 -10px;
 	transition: background 0.15s;
-	max-height: 420px;
-	overflow-y: auto;
+}
+
+.project-view__desc-view--collapsed {
+	max-height: 240px;
+	overflow: hidden;
+}
+
+.project-view__desc-view--overflowing::after {
+	content: '';
+	position: absolute;
+	inset: auto 0 0;
+	height: 64px;
+	background: linear-gradient(to bottom, transparent, var(--color-main-background));
+	pointer-events: none;
+}
+
+.project-view__desc-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 32px;
+	margin: 4px 0 0;
+	padding: 2px 10px 2px 4px;
+	border: none;
+	border-radius: var(--border-radius);
+	background: none;
+	color: var(--color-primary-element);
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.project-view__desc-toggle:hover {
+	background: var(--color-background-hover);
+}
+
+.project-view__desc-toggle-icon--up {
+	transform: rotate(180deg);
 }
 
 .project-view__desc-view:hover,
@@ -1169,6 +1451,106 @@ async function handleDeleteComment(comment) {
 	white-space: nowrap;
 }
 
+.project-view__due--overdue {
+	color: var(--kanso-error-legible);
+	font-weight: 600;
+}
+
+.project-view__row--done .project-view__card-title {
+	color: var(--color-text-maxcontrast);
+	text-decoration: line-through;
+}
+
+.project-view__badge {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	padding: 1px 6px;
+	border-radius: var(--border-radius);
+	background: var(--color-background-dark);
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.project-view__badge--warning {
+	color: var(--kanso-warning-legible);
+	background: var(--kanso-warning-tint);
+}
+
+.project-view__count {
+	margin-left: 4px;
+	font-weight: 400;
+}
+
+details.project-view__section > summary {
+	cursor: pointer;
+}
+
+.project-view__burnup {
+	margin-bottom: 24px;
+}
+
+.project-view__toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 16px;
+}
+
+.project-view__toolbar .project-view__add-row {
+	margin: 0 0 0 auto;
+}
+
+.project-view__toolbar .project-view__picker {
+	left: auto;
+	right: 0;
+}
+
+.project-view__modes {
+	display: inline-flex;
+	gap: 2px;
+	padding: 2px;
+	border-radius: var(--border-radius-large, 8px);
+	background: var(--color-background-hover);
+}
+
+.project-view__mode {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 32px;
+	margin: 0;
+	padding: 4px 12px;
+	border: none;
+	border-radius: var(--border-radius);
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+	font-weight: 500;
+}
+
+.project-view__mode--active {
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.project-view .project-view__timeline {
+	margin-bottom: 32px;
+	padding: 0;
+	overflow: visible;
+}
+
+/* Fit the rows: a short project doesn't sit in an empty frame, a long one
+   scrolls inside the chart instead of stretching the page. */
+.project-view .project-view__timeline :deep(.timeline__body) {
+	flex: none;
+	min-height: 200px;
+	max-height: min(72vh, 960px);
+}
+
 .project-view__form {
 	display: flex;
 	flex-direction: column;
@@ -1314,7 +1696,7 @@ async function handleDeleteComment(comment) {
 
 /* ── Discussion log ─────────────────────────────────────────────────────────── */
 .project-view__discussion {
-	margin-top: 12px;
+	margin-top: 8px;
 	padding-top: 20px;
 	border-top: 1px solid var(--color-border);
 }

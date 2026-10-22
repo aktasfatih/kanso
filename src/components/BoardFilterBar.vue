@@ -251,7 +251,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:aria-checked="state.estimates.has(token) ? 'true' : 'false'"
 								class="board-filter-bar__opt"
 								@click="toggleSet('estimates', token)">
-								<span class="board-filter-bar__opt-text">{{ token }}</span>
+								<span class="board-filter-bar__opt-text">{{ displayEstimate(token) }}</span>
 								<CheckIcon v-if="state.estimates.has(token)" class="board-filter-bar__opt-check" :size="20" />
 							</button>
 						</li>
@@ -338,7 +338,7 @@ import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { CARD_TYPES } from '../composables/useCardType.js'
-import { scaleTokens } from '../services/estimateScales.js'
+import { displayEstimate } from '../services/estimateScales.js'
 import {
 	UNASSIGNED,
 	UNESTIMATED,
@@ -367,7 +367,8 @@ const props = defineProps({
 	/** Name of the saved view the current filter equals, or '' if none. */
 	activeSavedName: { type: String, default: '' },
 	/** The board's estimation scale key (e.g. 'fibonacci'); 'none' hides the facet. */
-	estimateScale: { type: String, default: 'none' },
+	/** The board's estimate labels in scale order (empty ⇒ facet hidden). */
+	estimateTokens: { type: Array, default: () => [] },
 	/** Icon-only trigger (narrow header) — the label text is dropped, the menu is
 	    identical. */
 	iconOnly: { type: Boolean, default: false },
@@ -394,8 +395,7 @@ const priorityLevels = computed(() => PRIORITY_LEVELS.filter((l) => l.value > 0)
 // Built-in card types facet (#3402). "None" = leaving the dimension unfiltered.
 const cardTypes = CARD_TYPES
 
-// Estimate facet tokens for the board's scale (empty ⇒ facet hidden).
-const estimateTokens = computed(() => scaleTokens(props.estimateScale))
+const estimateTokens = computed(() => props.estimateTokens)
 
 // Review-state facet options (multi-select), fixed order. The 'none' sentinel
 // (REVIEW_NONE) matches cards with no review requested.
@@ -502,7 +502,7 @@ const dimensions = computed(() => {
 			label: t('kanso', 'Estimate'),
 			available: estimateTokens.value.length > 0,
 			count: s.estimates.size,
-			summary: setSummary(s.estimates, (tok) => tok === UNESTIMATED ? t('kanso', 'Unestimated') : tok),
+			summary: setSummary(s.estimates, (tok) => tok === UNESTIMATED ? t('kanso', 'Unestimated') : displayEstimate(tok)),
 		},
 		{
 			key: 'owners',

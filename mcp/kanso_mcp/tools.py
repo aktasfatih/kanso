@@ -370,7 +370,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             done: Mark the card done (true) or not done (false).
             archived: Archive (true) or unarchive (false) the card.
             priority: Integer priority.
-            estimate: Effort estimate token (per the board's estimate scale).
+            estimate: Effort estimate: one of the board's `estimateTokens`
+                labels, or any number up to 2 decimals when the board's
+                `estimateScale` is "number"; "" clears it.
             start_date: ISO-8601 start date/time (empty string clears it).
             status: Workflow status automation — one of "not_started",
                 "in_progress" or "done". DISTINCT from the `done` boolean: setting
@@ -1019,7 +1021,8 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         cards of its own, it points at cards that stay on their boards. Projects
         are private to their owner — there is no sharing, so this only ever
         returns the authenticated user's own. Each carries `id`, `title`,
-        `description`, `color` (6-hex, no '#'), `owner` and `createdAt`.
+        `description`, `color` (6-hex, no '#'), `owner`, `createdAt` and the
+        optional `startDate` / `targetDate` (YYYY-MM-DD).
         """
         projects = await client.list_projects()
         return [p.model_dump() for p in projects]
@@ -1032,8 +1035,10 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         """Read one of your projects: its record plus its member cards.
 
         `cards` are slim rows (`id`, `boardId`, `boardTitle`, `stackTitle`,
-        `title`, `duedate`, `priority`, `doneAt`, `startedAt`, `parentCardId`),
-        ordered by board then board position. Open one with `kanso_get_card` for
+        `title`, `duedate`, `startDate`, `priority`, `estimate`, `doneAt`,
+        `startedAt`, `blockers` (open cards blocking it), `assigneeIds`,
+        `parentCardId`), ordered by board then board position. For progress and
+        the forecast use `kanso_get_project_plan`. Open one with `kanso_get_card` for
         the full card.
 
         Args:
@@ -1052,7 +1057,11 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
 
     @mcp.tool(title="Create a Kanso project")
     async def kanso_create_project(
-        title: str, description: Optional[str] = None, color: Optional[str] = None
+        title: str,
+        description: Optional[str] = None,
+        color: Optional[str] = None,
+        start_date: Optional[str] = None,
+        target_date: Optional[str] = None,
     ) -> dict:
         """Create a project owned by you. Add cards to it afterwards with
         `kanso_add_card_to_project`.
@@ -1061,8 +1070,13 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             title: The project title (non-empty, max 255 characters).
             description: Optional free-text description.
             color: Optional colour (6-hex, no '#'), e.g. "0082c9".
+            start_date: Optional start date, YYYY-MM-DD.
+            target_date: Optional target (deadline) date, YYYY-MM-DD; must not
+                be before the start date.
         """
-        return (await client.create_project(title, description, color)).model_dump()
+        return (
+            await client.create_project(title, description, color, start_date, target_date)
+        ).model_dump()
 
     @mcp.tool(title="Update a Kanso project")
     async def kanso_update_project(
@@ -1070,6 +1084,8 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         title: Optional[str] = None,
         description: Optional[str] = None,
         color: Optional[str] = None,
+        start_date: Optional[str] = None,
+        target_date: Optional[str] = None,
     ) -> dict:
         """Update one of your projects. Only the fields you pass are changed.
 
@@ -1078,10 +1094,17 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             title: New title (non-empty, max 255 characters).
             description: New description ("" empties it).
             color: New colour (6-hex, no '#'); "" clears it.
+            start_date: New start date (YYYY-MM-DD); "" clears it.
+            target_date: New target date (YYYY-MM-DD); "" clears it.
         """
         return (
             await client.update_project(
-                project_id, title=title, description=description, color=color
+                project_id,
+                title=title,
+                description=description,
+                color=color,
+                start_date=start_date,
+                target_date=target_date,
             )
         ).model_dump()
 
@@ -1136,6 +1159,29 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             project_id: The numeric project id.
         """
         return await client.project_stats(project_id)
+
+    @mcp.tool(
+        title="Get a Kanso project's plan",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_get_project_plan(project_id: int) -> dict:
+        """Whether one of your projects will finish on time: progress, pace,
+        forecast and health.
+
+        Returns `total` / `done` / `open` / `overdue` / `blocked` / `inProgress`
+        card counts; `points` (normalized estimates across boards, or null when
+        nothing is estimated; unestimated cards count as the median); `basis`
+        ("points" or "cards", what the forecast runs on); `throughput` (weekly
+        completions over up to 6 weeks); `forecast` (`date`, `earliest`,
+        `latest`, YYYY-MM-DD, or null without enough history); `startDate`,
+        `targetDate`, `daysLeft`; `status` — one of on_track, at_risk,
+        off_track, late, done, no_target, not_enough_data; and `burnup`
+        (scope vs done over time).
+
+        Args:
+            project_id: The numeric project id.
+        """
+        return await client.project_plan(project_id)
 
     @mcp.tool(title="Add a card to a Kanso project")
     async def kanso_add_card_to_project(project_id: int, card_id: int) -> dict:

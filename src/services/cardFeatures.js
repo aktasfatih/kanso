@@ -19,7 +19,7 @@ import { computed, inject } from 'vue'
  * upload or a timer start on a board whose switch is off. See the class
  * docblock on `lib/Db/CardFeatures.php` for why.
  */
-export const CARD_FEATURE_KEYS = ['contacts', 'attachments', 'github', 'timeTracking', 'coverColor', 'checklist']
+export const CARD_FEATURE_KEYS = ['contacts', 'attachments', 'github', 'timeTracking', 'coverColor', 'checklist', 'estimate']
 
 /** Every feature on — the shape used whenever a board hasn't said otherwise. */
 export const ALL_CARD_FEATURES_ENABLED = Object.freeze(

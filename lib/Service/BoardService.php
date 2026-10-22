@@ -231,7 +231,7 @@ class BoardService {
 	 *
 	 * @param array<array-key, mixed>|null $cardFeatures partial enabled-map patch, e.g. `['attachments' => false]`
 	 */
-	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null, ?array $cardFeatures = null, ?string $description = null): Board {
+	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null, ?array $cardFeatures = null, ?string $description = null, ?array $estimateCustom = null): Board {
 		$board = $this->loadBoard($id);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
@@ -259,6 +259,16 @@ class BoardService {
 				$scaleChangedTo = $estimateScale;
 			}
 			$board->setEstimateScale($estimateScale);
+		}
+		if ($estimateCustom !== null) {
+			$encoded = EstimateScale::encodeCustom($estimateCustom);
+			if ($encoded !== $board->getEstimateCustom()) {
+				$board->setEstimateCustom($encoded);
+				$scaleChangedTo ??= $board->getEstimateScale();
+			}
+		}
+		if (($scaleChangedTo ?? $board->getEstimateScale()) === EstimateScale::CUSTOM && $board->customEstimates() === []) {
+			throw new InvalidInputException('A custom estimate scale needs at least one label');
 		}
 		if ($newCardsOnTop !== null) {
 			$board->setNewCardsOnTop($newCardsOnTop);
@@ -321,7 +331,7 @@ class BoardService {
 		if ($scaleChangedTo !== null) {
 			$staleIds = [];
 			foreach ($this->cardMapper->findEstimatedCards($id) as $row) {
-				if (!EstimateScale::allows($scaleChangedTo, $row['estimate'])) {
+				if (!EstimateScale::allows($scaleChangedTo, $row['estimate'], $board->customEstimates())) {
 					$staleIds[] = $row['id'];
 				}
 			}

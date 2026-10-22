@@ -5,6 +5,7 @@ import { computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import {
 	getProjectCards as apiGetProjectCards,
+	getProjectPlan as apiGetProjectPlan,
 	addCardToProject as apiAddCardToProject,
 	removeCardFromProject as apiRemoveCardFromProject,
 } from '../services/api.js'
@@ -28,7 +29,7 @@ export function useProjectCards(projectId) {
 	const addCard = useMutation({
 		mutationFn: (cardId) => apiAddCardToProject(id.value, cardId),
 		onSettled: () => {
-			queryClient.invalidateQueries({ queryKey: ['project', String(id.value), 'cards'] })
+			queryClient.invalidateQueries({ queryKey: ['project', String(id.value)] })
 			queryClient.invalidateQueries({ queryKey: ['projects'] })
 		},
 	})
@@ -51,7 +52,7 @@ export function useProjectCards(projectId) {
 			}
 		},
 		onSettled: () => {
-			queryClient.invalidateQueries({ queryKey: ['project', String(id.value), 'cards'] })
+			queryClient.invalidateQueries({ queryKey: ['project', String(id.value)] })
 			queryClient.invalidateQueries({ queryKey: ['projects'] })
 		},
 	})
@@ -61,4 +62,19 @@ export function useProjectCards(projectId) {
 		addCard,
 		removeCard,
 	}
+}
+
+/**
+ * A project's progress, forecast, health and burn-up (server-computed).
+ *
+ * @param {import('vue').Ref<string|number>} projectId - reactive project id
+ */
+export function useProjectPlan(projectId) {
+	const id = computed(() => (typeof projectId === 'object' ? projectId.value : projectId))
+
+	return useQuery({
+		queryKey: computed(() => ['project', String(id.value), 'plan']),
+		queryFn: () => apiGetProjectPlan(id.value),
+		enabled: computed(() => id.value != null),
+	})
 }

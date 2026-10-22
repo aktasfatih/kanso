@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— brak —"
 
-#: src/components/BoardSettingsModal.vue:4702
+#: src/components/BoardSettingsModal.vue:4827
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n raz"
@@ -115,6 +115,27 @@ msgstr "{card} jest teraz podkartą {parent}"
 msgid "{card} moved to {stack}"
 msgstr "Przeniesiono {card} do {stack}"
 
+#: src/components/ProjectHealth.vue:167
+msgid "{count} blocked"
+msgid_plural "{count} blocked"
+msgstr[0] "{count} zablokowana"
+msgstr[1] "{count} zablokowane"
+msgstr[2] "{count} zablokowanych"
+
+#: src/components/ProjectHealth.vue:31
+msgid "{count} card"
+msgid_plural "{count} cards"
+msgstr[0] "{count} karta"
+msgstr[1] "{count} karty"
+msgstr[2] "{count} kart"
+
+#: src/components/ProjectHealth.vue:178
+msgid "{count} card has no estimate and counts as the typical estimate of {points}."
+msgid_plural "{count} cards have no estimate and each counts as the typical estimate of {points}."
+msgstr[0] "{count} karta nie ma oszacowania i liczy się jako typowe oszacowanie: {points}."
+msgstr[1] "{count} karty nie mają oszacowania i każda liczy się jako typowe oszacowanie: {points}."
+msgstr[2] "{count} kart nie ma oszacowania i każda liczy się jako typowe oszacowanie: {points}."
+
 #: src/components/BoardSettingsModal.vue
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "Oszacowanie na {count} kartach nie mieści się w nowej skali i zostanie wyczyszczone. Tej operacji nie można cofnąć."
@@ -126,17 +147,61 @@ msgstr[0] "Pozostał {count} znak"
 msgstr[1] "Pozostały {count} znaki"
 msgstr[2] "Pozostało {count} znaków"
 
+#: src/components/ProjectHealth.vue:158
+msgid "{count} day ago"
+msgid_plural "{count} days ago"
+msgstr[0] "{count} dzień temu"
+msgstr[1] "{count} dni temu"
+msgstr[2] "{count} dni temu"
+
+#: src/components/ProjectHealth.vue:170
+msgid "{count} in progress"
+msgid_plural "{count} in progress"
+msgstr[0] "{count} w realizacji"
+msgstr[1] "{count} w realizacji"
+msgstr[2] "{count} w realizacji"
+
+#: src/components/ProjectHealth.vue:164
+msgid "{count} overdue"
+msgid_plural "{count} overdue"
+msgstr[0] "{count} po terminie"
+msgstr[1] "{count} po terminie"
+msgstr[2] "{count} po terminie"
+
 #: src/components/BulkSelectionBar.vue
 msgid "{count} selected"
 msgstr "Zaznaczono: {count}"
+
+#: src/components/ProjectHealth.vue
+#: src/views/ProjectsView.vue
+msgid "{done} of {total} cards"
+msgstr "{done} z {total} kart"
+
+#: src/components/ProjectHealth.vue:25
+msgid "{done} of {total} point"
+msgid_plural "{done} of {total} points"
+msgstr[0] "{done} z {total} pkt"
+msgstr[1] "{done} z {total} pkt"
+msgstr[2] "{done} z {total} pkt"
 
 #: src/components/BoardFilterBar.vue
 msgid "{first}, +{n} more"
 msgstr "{first} i {n} więcej"
 
+#: src/components/ProjectHealth.vue
+msgid "{from} at the earliest"
+msgstr "najwcześniej {from}"
+
 #: src/components/BoardListView.vue
 msgid "{n} blocked"
 msgstr "{n} zablokowanych"
+
+#: src/components/ProjectHealth.vue:136
+msgid "{n} card / week"
+msgid_plural "{n} cards / week"
+msgstr[0] "Karty / tydzień: {n}"
+msgstr[1] "Karty / tydzień: {n}"
+msgstr[2] "Karty / tydzień: {n}"
 
 #: src/components/BoardTileContent.vue
 #: src/components/CardDetail.vue
@@ -166,6 +231,20 @@ msgstr "{n} ponad limit WIP"
 #: src/components/BoardListView.vue
 msgid "{n} overdue"
 msgstr "{n} po terminie"
+
+#: src/components/ProjectHealth.vue:33
+msgid "{n} point"
+msgid_plural "{n} points"
+msgstr[0] "{n} pkt"
+msgstr[1] "{n} pkt"
+msgstr[2] "{n} pkt"
+
+#: src/components/ProjectHealth.vue:135
+msgid "{n} point / week"
+msgid_plural "{n} points / week"
+msgstr[0] "{n} pkt / tydzień"
+msgstr[1] "{n} pkt / tydzień"
+msgstr[2] "{n} pkt / tydzień"
 
 #: src/components/CardTile.vue
 msgid "{n}d"
@@ -326,7 +405,7 @@ msgstr[0] "Wykryto %n wiersz danych"
 msgstr[1] "Wykryto %n wiersze danych"
 msgstr[2] "Wykryto %n wierszy danych"
 
-#: src/components/CardDetail.vue:4919
+#: src/components/CardDetail.vue:4949
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dzień temu"
@@ -340,14 +419,14 @@ msgstr[0] "%n plik"
 msgstr[1] "%n pliki"
 msgstr[2] "%n plików"
 
-#: src/components/CardDetail.vue:4917
+#: src/components/CardDetail.vue:4947
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n godzinę temu"
 msgstr[1] "%n godziny temu"
 msgstr[2] "%n godzin temu"
 
-#: src/views/BoardView.vue:2625
+#: src/views/BoardView.vue:2626
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "Skopiowano %n identyfikator."
@@ -375,7 +454,7 @@ msgstr[0] "%n etykieta nie została utworzona i brakuje jej na zaimportowanych k
 msgstr[1] "%n etykiety nie zostały utworzone i brakuje ich na zaimportowanych kartach: tylko osoby zarządzające tablicą mogą dodawać nowe etykiety. Poproś taką osobę, aby je dodała, a potem ustaw je na kartach."
 msgstr[2] "%n etykiet nie zostało utworzonych i brakuje ich na zaimportowanych kartach: tylko osoby zarządzające tablicą mogą dodawać nowe etykiety. Poproś taką osobę, aby je dodała, a potem ustaw je na kartach."
 
-#: src/components/CardDetail.vue:4915
+#: src/components/CardDetail.vue:4945
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minutę temu"
@@ -403,14 +482,14 @@ msgstr[0] "%n punkt"
 msgstr[1] "%n punkty"
 msgstr[2] "%n punktów"
 
-#: src/components/CardDetail.vue:1209
+#: src/components/CardDetail.vue:1231
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n projekt"
 msgstr[1] "%n projekty"
 msgstr[2] "%n projektów"
 
-#: src/components/CardDetail.vue:2265
+#: src/components/CardDetail.vue:2287
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n odpowiedź"
@@ -552,6 +631,10 @@ msgid "Add custom field"
 msgstr "Dodaj pole niestandardowe"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Add estimate"
+msgstr "Dodaj oszacowanie"
+
+#: src/components/BoardSettingsModal.vue
 msgid "Add label"
 msgstr "Dodaj etykietę"
 
@@ -667,6 +750,10 @@ msgstr "Dowolne"
 #: src/components/ManageTemplatesModal.vue
 msgid "Any card can be saved as a template from its ⋯ menu (\"Mark as template\"). Templates are hidden from the board and reused from a column's \"＋ From template\" menu."
 msgstr "Każdą kartę można zapisać jako szablon z jej menu ⋯ („Oznacz jako szablon”). Szablony są ukryte na tablicy i używa się ich ponownie z menu „＋ Z szablonu” w kolumnie."
+
+#: src/services/estimateScales.js
+msgid "Any number"
+msgstr "Dowolna liczba"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Anyone who knows the address can create cards. A sender address is easy to forge, so treat the allowlist as a filter rather than proof of who sent something — turn on \"Require verified senders\" if your mail server checks DMARC."
@@ -805,6 +892,10 @@ msgstr "W skrócie"
 msgid "At occurrence"
 msgstr "Przy wystąpieniu"
 
+#: src/services/projectStatus.js
+msgid "At risk"
+msgstr "Zagrożony"
+
 #: src/components/CardDetail.vue
 msgid "Attach"
 msgstr "Załącz"
@@ -850,6 +941,13 @@ msgstr "Automatyzacja"
 #: src/views/ProjectStats.vue
 msgid "Average days"
 msgstr "Średnia liczba dni"
+
+#: src/components/ProjectHealth.vue:41
+msgid "average of the last week"
+msgid_plural "average of the last {count} weeks"
+msgstr[0] "średnia z ostatniego tygodnia"
+msgstr[1] "średnia z ostatnich {count} tygodni"
+msgstr[2] "średnia z ostatnich {count} tygodni"
 
 #: src/components/CsvImportModal.vue
 msgid "Back"
@@ -918,15 +1016,27 @@ msgstr "Kopie zapasowe w drugiej lokalizacji pozostają tam, gdzie są; przełą
 msgid "Backups to keep per board"
 msgstr "Liczba kopii zapasowych na tablicę"
 
+#: src/components/ProjectHealth.vue
+msgid "between {from} and {to}"
+msgstr "między {from} a {to}"
+
 #: src/components/BoardFilterBar.vue
 #: src/components/CardTile.vue
 #: src/composables/useBoardFilters.js
+#: src/views/ProjectView.vue
 msgid "Blocked"
 msgstr "Zablokowana"
 
 #: src/components/CardDetail.vue
 msgid "Blocked by"
 msgstr "Zablokowana przez"
+
+#: src/views/ProjectView.vue:253
+msgid "Blocked by {count} open card"
+msgid_plural "Blocked by {count} open cards"
+msgstr[0] "Zablokowana przez {count} otwartą kartę"
+msgstr[1] "Zablokowana przez {count} otwarte karty"
+msgstr[2] "Zablokowana przez {count} otwartych kart"
 
 #: src/components/CardTile.vue
 msgid "Blocked by another card"
@@ -959,6 +1069,7 @@ msgstr "Niebieski"
 #: src/views/BoardStats.vue
 #: src/views/BoardView.vue
 #: src/views/CardPage.vue
+#: src/views/ProjectView.vue
 #: src/views/PublicBoard.vue
 #: src/views/TrashView.vue
 #: src/views/ViewPage.vue
@@ -1065,6 +1176,14 @@ msgstr "Lista wypunktowana"
 msgid "Bulleted list"
 msgstr "Lista wypunktowana"
 
+#: src/components/ProjectBurnup.vue
+msgid "Burn-up"
+msgstr "Wykres burn-up"
+
+#: src/components/ProjectBurnup.vue
+msgid "Burn-up chart: {done} of {scope} done"
+msgstr "Wykres burn-up: ukończono {done} z {scope}"
+
 #: src/components/ReviewRow.vue
 msgid "by {user}"
 msgstr "przez {user}"
@@ -1139,6 +1258,10 @@ msgstr "Pola karty"
 #: src/components/BoardSettingsModal.vue
 msgid "Card ID prefix"
 msgstr "Prefiks identyfikatora karty"
+
+#: src/views/ProjectView.vue
+msgid "Card layout"
+msgstr "Układ kart"
 
 #: src/components/CardDetail.vue
 msgid "Card moved."
@@ -1364,7 +1487,7 @@ msgstr "Postęp listy kontrolnej: {done} z {total}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:489
+#: src/components/CardTile.vue:491
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Postęp listy kontrolnej: {done} z {total}, %n krok po terminie"
@@ -1886,6 +2009,10 @@ msgstr "Harmonogram niestandardowy — edytuj go w Ustawieniach tablicy → Auto
 msgid "Custom schedule — it is kept exactly as it is. The settings below can still be changed."
 msgstr "Niestandardowy harmonogram — zostanie zachowany dokładnie w tej postaci. Poniższe ustawienia można nadal zmieniać."
 
+#: src/services/estimateScales.js
+msgid "Custom…"
+msgstr "Własna…"
+
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
 msgid "Cycle time — creation to done ({days}d)"
@@ -1907,8 +2034,8 @@ msgstr "Strefa niebezpieczna"
 msgid "Date"
 msgstr "Data"
 
-#: src/components/BoardSettingsModal.vue:2209
-#: src/components/CardDetail.vue:5108
+#: src/components/BoardSettingsModal.vue:2266
+#: src/components/CardDetail.vue:5138
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dzień"
@@ -1922,6 +2049,10 @@ msgstr "Dzień"
 #: src/components/BoardSettingsModal.vue
 msgid "Days"
 msgstr "Dni"
+
+#: src/services/estimateScales.js
+msgid "Days (½–10)"
+msgstr "Dni (½–10)"
 
 #: src/views/ViewPage.vue
 msgid "Default"
@@ -2168,10 +2299,13 @@ msgstr "W trakcie"
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTimelineView.vue
 #: src/components/CardDetail.vue
+#: src/components/ProjectBurnup.vue
 #: src/components/StackColumn.vue
 #: src/composables/useBoardFilters.js
 #: src/composables/useSwimlanes.js
+#: src/services/projectStatus.js
 #: src/views/BoardList.vue
+#: src/views/ProjectView.vue
 msgid "Done"
 msgstr "Ukończone"
 
@@ -2186,6 +2320,10 @@ msgstr "Ukończone od ≥ N dni"
 #: src/components/CardDetail.vue
 msgid "Done-gated columns block Done until every review is approved."
 msgstr "Kolumny z bramką ukończenia blokują ukończenie, dopóki wszystkie recenzje nie zostaną zatwierdzone."
+
+#: src/components/ProjectBurnup.vue
+msgid "Done: {n}"
+msgstr "Ukończone: {n}"
 
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
@@ -2409,6 +2547,7 @@ msgid "Esc cancel · Ctrl+Enter save"
 msgstr "Esc anuluje · Ctrl+Enter zapisuje"
 
 #: src/components/BoardFilterBar.vue
+#: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
 #: src/views/PublicBoard.vue
@@ -2432,6 +2571,14 @@ msgstr "Oszacowanie: {value}"
 msgid "Estimation"
 msgstr "Szacowanie"
 
+#: src/services/projectStatus.js
+msgid "Even your best weeks would miss the target date."
+msgstr "Nawet w najlepszym tempie termin docelowy nie zostanie dotrzymany."
+
+#: src/services/projectStatus.js
+msgid "Even your slower weeks would finish before the target date."
+msgstr "Nawet w wolniejszym tempie zdążysz przed terminem docelowym."
+
 #: src/components/CardDetail.vue
 msgid "every"
 msgstr "co"
@@ -2440,28 +2587,36 @@ msgstr "co"
 msgid "Every"
 msgstr "Co"
 
-#: src/components/BoardSettingsModal.vue:4682
+#: src/services/projectStatus.js
+msgid "Every card in this project is done."
+msgstr "Wszystkie karty w tym projekcie są ukończone."
+
+#: src/components/BoardSettingsModal.vue:4807
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Codziennie"
 msgstr[1] "Co %n dni"
 msgstr[2] "Co %n dni"
 
-#: src/components/BoardSettingsModal.vue:4692
+#: src/components/BoardSettingsModal.vue
+msgid "Every estimate needs a label."
+msgstr "Każde oszacowanie musi mieć etykietę."
+
+#: src/components/BoardSettingsModal.vue:4817
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Co miesiąc"
 msgstr[1] "Co %n miesiące"
 msgstr[2] "Co %n miesięcy"
 
-#: src/components/BoardSettingsModal.vue:4684
+#: src/components/BoardSettingsModal.vue:4809
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Co tydzień"
 msgstr[1] "Co %n tygodnie"
 msgstr[2] "Co %n tygodni"
 
-#: src/components/BoardSettingsModal.vue:4694
+#: src/components/BoardSettingsModal.vue:4819
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Co rok"
@@ -2939,6 +3094,10 @@ msgstr "Nie udało się zaktualizować kontaktu."
 msgid "Failed to update cover."
 msgstr "Nie udało się zaktualizować okładki."
 
+#: src/views/ProjectView.vue
+msgid "Failed to update dates."
+msgstr "Nie udało się zaktualizować dat."
+
 #: src/components/BoardSettingsModal.vue
 #: src/views/ProjectView.vue
 msgid "Failed to update description."
@@ -3128,6 +3287,14 @@ msgstr "Filtruj kosz…"
 msgid "Find the card on board"
 msgstr "Znajdź kartę na tablicy"
 
+#: src/services/projectStatus.js
+msgid "Finish a couple of cards to get a forecast."
+msgstr "Ukończ kilka kart, aby zobaczyć prognozę."
+
+#: src/components/ProjectHealth.vue
+msgid "Finished"
+msgstr "Zakończony"
+
 #: src/components/BoardTimelineView.vue
 msgid "Fit"
 msgstr "Dopasuj"
@@ -3152,6 +3319,15 @@ msgstr "Folder i kolumna docelowa"
 #: templates/admin-backup.php
 msgid "Folder in that account"
 msgstr "Folder na tym koncie"
+
+#: src/components/ProjectBurnup.vue
+#: src/components/ProjectHealth.vue
+msgid "Forecast"
+msgstr "Prognoza"
+
+#: src/views/ProjectsView.vue
+msgid "Forecast {date}"
+msgstr "Prognoza {date}"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Forever"
@@ -3322,6 +3498,13 @@ msgstr "Zaimportowano do nowej tablicy Kanso:"
 msgid "Importing…"
 msgstr "Importowanie…"
 
+#: src/components/ProjectHealth.vue:157
+msgid "in {count} day"
+msgid_plural "in {count} days"
+msgstr[0] "za {count} dzień"
+msgstr[1] "za {count} dni"
+msgstr[2] "za {count} dni"
+
 #: templates/admin-backup.php
 msgid "In a Files folder"
 msgstr "W folderze w Plikach"
@@ -3337,6 +3520,7 @@ msgstr "W folderze w Plikach kopia zapasowa usunięta przez rotację trafia do k
 #: src/components/CardTile.vue
 #: src/components/StackColumn.vue
 #: src/composables/useSwimlanes.js
+#: src/views/ProjectView.vue
 msgid "In progress"
 msgstr "W realizacji"
 
@@ -3403,7 +3587,7 @@ msgstr "Cel, zakres lub zasady. Każdy użytkownik tej tablicy może je przeczyt
 msgid "Jump to the discussion"
 msgstr "Przejdź do dyskusji"
 
-#: src/components/CardDetail.vue:6929
+#: src/components/CardDetail.vue:6959
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Przejdź do dyskusji (%n komentarz)"
@@ -3512,6 +3696,10 @@ msgstr "Dodano etykietę {label}"
 msgid "Label {label} removed"
 msgstr "Usunięto etykietę {label}"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Label {position}"
+msgstr "Etykieta {position}"
+
 #: src/components/CardDetail.vue
 msgid "Label created, but could not assign it to this card."
 msgstr "Etykieta została utworzona, ale nie udało się przypisać jej do tej karty."
@@ -3535,6 +3723,10 @@ msgid "Labels are board-specific: only labels that also exist (same name and col
 msgstr "Etykiety są przypisane do tablicy: zachowywane są tylko te, które istnieją także na tablicy docelowej (ta sama nazwa i kolor)."
 
 #: src/components/BoardSettingsModal.vue
+msgid "Labels must be unique."
+msgstr "Etykiety muszą być unikalne."
+
+#: src/components/BoardSettingsModal.vue
 msgid "Last checked: {when}"
 msgstr "Ostatnie sprawdzenie: {when}"
 
@@ -3549,6 +3741,10 @@ msgstr "Ostatnie uruchomienie: {when}"
 #: templates/admin-backup.php
 msgid "Last run: %1$s"
 msgstr "Ostatnie uruchomienie: %1$s"
+
+#: src/services/projectStatus.js
+msgid "Late"
+msgstr "Opóźniony"
 
 #: src/composables/useSwimlanes.js
 msgid "Later"
@@ -3632,6 +3828,10 @@ msgstr "Wiązanie…"
 #: src/views/ViewPage.vue
 msgid "List"
 msgstr "Lista"
+
+#: src/components/BoardSettingsModal.vue
+msgid "List your estimates from smallest to largest. The number is what each one counts as in totals and project points."
+msgstr "Wypisz oszacowania od najmniejszego do największego. Liczba określa, ile każde z nich jest warte w sumach i punktach projektu."
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "Load more files"
@@ -3759,8 +3959,8 @@ msgstr "Tryb"
 msgid "Mon"
 msgstr "Pn"
 
-#: src/components/BoardSettingsModal.vue:2211
-#: src/components/CardDetail.vue:5110
+#: src/components/BoardSettingsModal.vue:2268
+#: src/components/CardDetail.vue:5140
 msgid "month"
 msgid_plural "months"
 msgstr[0] "miesiąc"
@@ -4195,6 +4395,10 @@ msgstr "Brak kolumn."
 msgid "No start date"
 msgstr "Brak daty rozpoczęcia"
 
+#: src/services/projectStatus.js
+msgid "No target date"
+msgstr "Brak terminu docelowego"
+
 #: src/views/MyCardsView.vue
 msgid "No tasks assigned to you"
 msgstr "Nie przypisano Ci żadnych zadań"
@@ -4248,6 +4452,10 @@ msgstr "Niezablokowana"
 msgid "Not done"
 msgstr "Nieukończone"
 
+#: src/services/projectStatus.js
+msgid "Not enough data yet"
+msgstr "Za mało danych"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Not shared with anyone yet."
 msgstr "Jeszcze nikomu nie udostępniono."
@@ -4255,6 +4463,7 @@ msgstr "Jeszcze nikomu nie udostępniono."
 #: src/components/BoardListView.vue
 #: src/components/BoardTimelineView.vue
 #: src/components/CardDetail.vue
+#: src/views/ProjectView.vue
 msgid "Not started"
 msgstr "Nierozpoczęta"
 
@@ -4291,6 +4500,10 @@ msgstr "Liczba"
 msgid "Off — do not create cards"
 msgstr "Wyłączone — nie twórz kart"
 
+#: src/services/projectStatus.js
+msgid "Off track"
+msgstr "Niezgodny z planem"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Offset"
 msgstr "Przesunięcie"
@@ -4306,6 +4519,10 @@ msgstr "Przesunięcie po (dni)"
 #: src/components/BoardSettingsModal.vue
 msgid "On days"
 msgstr "W dni"
+
+#: src/services/projectStatus.js
+msgid "On track"
+msgstr "Zgodny z planem"
 
 #: templates/admin-backup.php
 msgid "Once a day, Kanso saves a copy of every board as a zip file."
@@ -4442,6 +4659,7 @@ msgstr "Poza widocznym zakresem — kliknij „Dopasuj”, aby pokazać"
 #: src/views/BoardStats.vue
 #: src/views/MyCardsView.vue
 #: src/views/ProjectStats.vue
+#: src/views/ProjectView.vue
 msgid "Overdue"
 msgstr "Po terminie"
 
@@ -4449,6 +4667,10 @@ msgstr "Po terminie"
 #: src/views/ViewPage.vue
 msgid "Owner"
 msgstr "Właściciel"
+
+#: src/components/ProjectHealth.vue
+msgid "Pace"
+msgstr "Tempo"
 
 #: src/components/CardDetail.vue
 #: src/composables/useBoardFilters.js
@@ -4530,9 +4752,18 @@ msgstr "Wybierz kolor nowego typu recenzji"
 msgid "Pin board"
 msgstr "Przypnij tablicę"
 
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Pin to sidebar"
+msgstr "Przypnij do paska bocznego"
+
 #: src/views/BoardList.vue
 msgid "Pinned"
 msgstr "Przypięte"
+
+#: src/services/estimateScales.js
+msgid "Planning poker (0, ½, 1, 2, 3, 5 … 100)"
+msgstr "Planning poker (0, ½, 1, 2, 3, 5 … 100)"
 
 #: templates/admin-backup.php
 msgid "Point this at a separate account nobody signs in to, and they land in its feed instead of yours."
@@ -4559,6 +4790,10 @@ msgstr "Opublikuj"
 #: src/views/ProjectView.vue
 msgid "Post reply"
 msgstr "Opublikuj odpowiedź"
+
+#: src/services/estimateScales.js
+msgid "Powers of 2 (1, 2, 4, 8, 16, 32)"
+msgstr "Potęgi 2 (1, 2, 4, 8, 16, 32)"
 
 #: src/views/BoardList.vue
 msgid "Press \"?\" to see keyboard shortcuts"
@@ -4596,6 +4831,10 @@ msgstr "Prywatna — tylko Ty"
 msgid "Private card"
 msgstr "Karta prywatna"
 
+#: src/components/ProjectHealth.vue
+msgid "Progress"
+msgstr "Postęp"
+
 #: src/components/CardDetail.vue
 #: src/views/ProjectStats.vue
 #: src/views/ProjectView.vue
@@ -4613,6 +4852,10 @@ msgstr "Czat projektu"
 #: src/components/BoardSettingsModal.vue
 msgid "Project chat link"
 msgstr "Odnośnik do czatu projektu"
+
+#: src/components/ProjectHealth.vue
+msgid "Project health"
+msgstr "Kondycja projektu"
 
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
@@ -4686,6 +4929,10 @@ msgstr "Powiązana z"
 msgid "Relations"
 msgstr "Powiązania"
 
+#: src/components/ProjectHealth.vue
+msgid "Remaining"
+msgstr "Pozostało"
+
 #: src/components/CardDetail.vue
 msgid "Remind me about this comment at"
 msgstr "Przypomnij mi o tym komentarzu o"
@@ -4737,6 +4984,10 @@ msgstr "Usuń"
 #: src/components/BoardSettingsModal.vue
 msgid "Remove \"{name}\" from board?"
 msgstr "Usunąć „{name}” z tablicy?"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Remove {label}"
+msgstr "Usuń {label}"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Remove {name} from board"
@@ -4988,6 +5239,10 @@ msgstr "Recenzje"
 msgid "Role"
 msgstr "Rola"
 
+#: src/services/estimateScales.js
+msgid "Roman numerals (I–X)"
+msgstr "Liczby rzymskie (I–X)"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Rotate feed URL"
 msgstr "Zmień adres URL kanału"
@@ -5041,6 +5296,10 @@ msgstr "Zapisz opcje"
 msgid "Save rule"
 msgstr "Zapisz regułę"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Save scale"
+msgstr "Zapisz skalę"
+
 #: src/components/CardDetail.vue
 msgid "Saved as a template. Add a card from it with the \"+ From template\" button on any column."
 msgstr "Zapisano jako szablon. Dodaj z niego kartę przyciskiem „+ Z szablonu” w dowolnej kolumnie."
@@ -5058,8 +5317,13 @@ msgid "Scale"
 msgstr "Skala"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectBurnup.vue
 msgid "Scope"
 msgstr "Zakres"
+
+#: src/components/ProjectBurnup.vue
+msgid "Scope: {n}"
+msgstr "Zakres: {n}"
 
 #: src/views/BoardList.vue
 msgid "Search boards"
@@ -5164,6 +5428,14 @@ msgstr "Wybierz kolumnę…"
 msgid "Select multiple cards"
 msgstr "Zaznacz wiele kart"
 
+#: src/components/CardDetail.vue
+msgid "Set"
+msgstr "Ustaw"
+
+#: src/services/projectStatus.js
+msgid "Set a target date to see whether you are on track."
+msgstr "Ustaw termin docelowy, aby sprawdzić, czy wszystko idzie zgodnie z planem."
+
 #: src/components/BulkActionBar.vue
 msgid "Set due date"
 msgstr "Ustaw termin"
@@ -5236,6 +5508,14 @@ msgstr "Pokaż komentarze (tylko do odczytu)"
 msgid "Show formatting toolbar"
 msgstr "Pokaż pasek formatowania"
 
+#: src/views/ProjectView.vue
+msgid "Show less"
+msgstr "Pokaż mniej"
+
+#: src/views/ProjectView.vue
+msgid "Show more"
+msgstr "Pokaż więcej"
+
 #: src/App.vue
 msgid "Show the discussion below the card"
 msgstr "Pokaż dyskusję pod kartą"
@@ -5244,7 +5524,7 @@ msgstr "Pokaż dyskusję pod kartą"
 msgid "Show the discussion panel"
 msgstr "Pokaż panel dyskusji"
 
-#: src/components/CardDetail.vue:6935
+#: src/components/CardDetail.vue:6965
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Pokaż panel dyskusji (%n komentarz)"
@@ -5383,6 +5663,7 @@ msgstr "Zacznij od dodania kolumny, np. „Do zrobienia”."
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/components/ProjectHealth.vue
 msgid "Start date"
 msgstr "Data rozpoczęcia"
 
@@ -5412,6 +5693,7 @@ msgstr "STARTTLS (143)"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/views/ProjectView.vue
 #: src/views/ViewPage.vue
 msgid "Status"
 msgstr "Status"
@@ -5474,6 +5756,19 @@ msgstr "System"
 #: src/services/estimateScales.js
 msgid "T-shirt (XS–XL)"
 msgstr "Rozmiary koszulek (XS–XL)"
+
+#: src/components/ProjectBurnup.vue
+msgid "Target"
+msgstr "Cel"
+
+#: src/views/ProjectsView.vue
+msgid "Target {date}"
+msgstr "Termin docelowy {date}"
+
+#: src/components/ProjectHealth.vue
+#: src/views/ProjectsView.vue
+msgid "Target date"
+msgstr "Termin docelowy"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Target stack"
@@ -5580,6 +5875,10 @@ msgstr "Odnośnik przestaje działać z końcem wybranego dnia, w strefie czasow
 msgid "The only way to get one back is the list at the bottom of this page."
 msgstr "Jedynym sposobem na odzyskanie takiego pliku jest lista na dole tej strony."
 
+#: src/services/projectStatus.js
+msgid "The target date has passed and work is still open."
+msgstr "Termin docelowy minął, a praca nie została zakończona."
+
 #: src/components/CardDetail.vue
 msgid "There is no other board you can move this card to."
 msgstr "Nie ma innej tablicy, na którą można przenieść tę kartę."
@@ -5676,6 +5975,7 @@ msgid "Time tracking"
 msgstr "Śledzenie czasu"
 
 #: src/views/BoardView.vue
+#: src/views/ProjectView.vue
 #: src/views/ViewPage.vue
 msgid "Timeline"
 msgstr "Oś czasu"
@@ -5717,6 +6017,10 @@ msgstr "Do zrobienia"
 #: templates/admin-backup.php
 msgid "To put a board back, download its backup and import it from the Import menu on the boards list."
 msgstr "Aby przywrócić tablicę, pobierz jej kopię zapasową i zaimportuj ją z menu Importuj na liście tablic."
+
+#: src/components/ProjectHealth.vue
+msgid "today"
+msgstr "dzisiaj"
 
 #: src/views/MyCardsView.vue
 msgid "Today"
@@ -5844,6 +6148,12 @@ msgstr "Cofnij oznaczenie jako szablon"
 msgid "Unpin board"
 msgstr "Odepnij tablicę"
 
+#: src/App.vue
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Unpin project"
+msgstr "Odepnij projekt"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Until"
 msgstr "Do"
@@ -5914,6 +6224,14 @@ msgstr "Użyj przycisku „Dodaj kartę” powyżej, aby zebrać karty z dowolne
 #: src/components/BoardSettingsModal.vue
 msgid "User"
 msgstr "Użytkownik"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Value of {label}"
+msgstr "Wartość {label}"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Values must be 0 or more."
+msgstr "Wartości muszą wynosić 0 lub więcej."
 
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
@@ -5992,8 +6310,8 @@ msgstr "Webhook aktywny"
 msgid "Wed"
 msgstr "Śr"
 
-#: src/components/BoardSettingsModal.vue:2210
-#: src/components/CardDetail.vue:5109
+#: src/components/BoardSettingsModal.vue:2267
+#: src/components/CardDetail.vue:5139
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "tydzień"
@@ -6094,8 +6412,8 @@ msgstr "Zapisano"
 msgid "wrote"
 msgstr "napisał"
 
-#: src/components/BoardSettingsModal.vue:2212
-#: src/components/CardDetail.vue:5111
+#: src/components/BoardSettingsModal.vue:2269
+#: src/components/CardDetail.vue:5141
 msgid "year"
 msgid_plural "years"
 msgstr[0] "rok"
@@ -6182,6 +6500,10 @@ msgstr "Poproszono Cię o recenzję: {type}"
 #: src/components/CardDetail.vue
 msgid "Your review is requested on this card"
 msgstr "Poproszono Cię o recenzję tej karty"
+
+#: src/services/projectStatus.js
+msgid "Your slower weeks would miss the target date."
+msgstr "W wolniejszym tempie termin docelowy nie zostanie dotrzymany."
 
 #: src/components/BoardTimelineView.vue
 msgid "Zoom"

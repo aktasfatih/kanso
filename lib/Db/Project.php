@@ -13,7 +13,8 @@ use OCP\DB\Types;
 /**
  * A project (table `kanso_projects`): an owner-only, cross-board collection of
  * cards. `owner` is the uid; there is no sharing in v1. `color` is a bare hex
- * string (no '#'), `created_at` is unix seconds.
+ * string (no '#'), `created_at` is unix seconds, `start_date` / `target_date`
+ * are optional YYYY-MM-DD calendar dates.
  *
  * @method string getTitle()
  * @method void setTitle(string $title)
@@ -25,6 +26,10 @@ use OCP\DB\Types;
  * @method void setOwner(string $owner)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
+ * @method string|null getStartDate()
+ * @method void setStartDate(?string $startDate)
+ * @method string|null getTargetDate()
+ * @method void setTargetDate(?string $targetDate)
  */
 class Project extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -35,13 +40,15 @@ class Project extends Entity implements \JsonSerializable {
 	protected ?string $color = null;
 	protected ?string $owner = null;
 	protected ?int $createdAt = null;
+	protected ?string $startDate = null;
+	protected ?string $targetDate = null;
 
 	public function __construct() {
 		$this->addType('createdAt', Types::INTEGER);
 	}
 
 	/**
-	 * @return array{id: int, title: string, description: ?string, color: ?string, owner: string, createdAt: int}
+	 * @return array{id: int, title: string, description: ?string, color: ?string, owner: string, createdAt: int, startDate: ?string, targetDate: ?string}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -52,6 +59,8 @@ class Project extends Entity implements \JsonSerializable {
 			'color' => $this->getColor(),
 			'owner' => (string)$this->getOwner(),
 			'createdAt' => (int)$this->getCreatedAt(),
+			'startDate' => $this->getStartDate(),
+			'targetDate' => $this->getTargetDate(),
 		];
 	}
 }

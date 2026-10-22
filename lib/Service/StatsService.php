@@ -109,7 +109,7 @@ class StatsService {
 		$flowFetchStart = $now - 2 * self::FLOW_WEEKS * self::WEEK_SECONDS;
 
 		$board = $this->boardMapper->find($boardId);
-		$numericScale = $this->isNumericScale($board);
+		$valueOf = $this->estimateValuer($board);
 
 		$completions = $this->cardMapper->doneCycleTimes($boardId, $flowFetchStart, $now, $viewer);
 
@@ -123,13 +123,13 @@ class StatsService {
 			'byLabel' => $this->cardLabelMapper->countByLabelForBoard($boardId, $viewer),
 			'throughput' => $this->bucketByDay($this->cardMapper->doneTimeline($boardId, $windowStart, $now, $viewer)),
 			'created' => $this->bucketByDay($this->cardMapper->createdTimeline($boardId, $windowStart, $now, $viewer)),
-			'estimateByStack' => $this->estimateByStack($board, $boardId, $viewer),
-			'estimateByAssignee' => $this->estimateByAssignee($board, $boardId, $viewer),
+			'estimateByStack' => $this->estimateByStack($valueOf, $boardId, $viewer),
+			'estimateByAssignee' => $this->estimateByAssignee($valueOf, $boardId, $viewer),
 			'aging' => ['days' => self::AGING_DAYS, 'count' => $this->cardMapper->agingCount($boardId, $agingCutoff, $viewer)],
 			'overdue' => $this->cardMapper->overdueCount($boardId, new \DateTime('@' . $now), $viewer),
 			'checklist' => $this->checklistTotals($boardId, $viewer),
 			'commentActivity' => $this->commentMapper->countRecentForBoard($boardId, $windowStart, $viewer),
-			'velocity' => $this->velocity($completions, $numericScale, $now),
+			'velocity' => $this->velocity($completions, $valueOf, $now),
 			'cycleTime' => $this->cycleTime($completions, $flowWindowStart),
 		];
 	}
@@ -202,9 +202,8 @@ class StatsService {
 			'overdue' => $this->cardMapper->overdueCountForCards($cardIds, new \DateTime('@' . $now)),
 			'checklist' => $this->checklistTotalsForCards($cardIds),
 			'commentActivity' => $this->commentMapper->countRecentForCards($cardIds, $windowStart),
-			// Mixed estimate scales across boards ⇒ points are never summed: pass
-			// $numericScale = false so velocity reports cards only (points null).
-			'velocity' => $this->velocity($completions, false, $now),
+			// Mixed estimate scales across boards: velocity reports cards only.
+			'velocity' => $this->velocity($completions, null, $now),
 			'cycleTime' => $this->cycleTime($completions, $flowWindowStart),
 			'cardCount' => count($cardIds),
 		];
@@ -242,18 +241,18 @@ class StatsService {
 	 *   - cardsPerWeek:  the current window's rolling average cards/week;
 	 *   - cardsTrend:    up / down / flat vs the prior window's total;
 	 *   - pointsPerWeek / pointsTrend: same for estimate points, or null when
-	 *                    the board scale is not numeric.
+	 *                    no single estimate scale applies ($valueOf null).
 	 *
 	 * Bucketing is by elapsed weeks from $now (age // 7d), so the buckets are
 	 * stable regardless of calendar week boundaries and need no date SQL. The
 	 * window is whole weeks (FLOW_WEEKS), so it aligns exactly with the buckets
 	 * and with the fetch span (2 * FLOW_WEEKS) - no completion in range is
-	 * dropped. Only numeric estimate tokens contribute points (same guard as the
-	 * estimate panels); a card with a non-numeric/absent token still counts
-	 * toward cards.
+	 * dropped. A card whose token isn't on the scale adds no points but still
+	 * counts toward cards.
 	 *
 	 * @param list<array{createdAt: int, doneAt: int, estimate: ?string}> $completions
 	 *                                                                                 done cards over the doubled flow look-back (2 * FLOW_WEEKS)
+	 * @param null|\Closure(?string): ?float $valueOf
 	 * @return array{
 	 *     weeks: int,
 	 *     windowDays: int,
@@ -264,7 +263,8 @@ class StatsService {
 	 *     weekly: list<array{week: string, cards: int, points: null|float}>
 	 * }
 	 */
-	private function velocity(array $completions, bool $numericScale, int $now): array {
+	private function velocity(array $completions, ?\Closure $valueOf, int $now): array {
+		$numericScale = $valueOf !== null;
 		$weeksPerWindow = self::FLOW_WEEKS;
 		$totalWeeks = 2 * $weeksPerWindow;
 
@@ -284,8 +284,8 @@ class StatsService {
 				continue;
 			}
 			$cardsByWeek[$bucket]++;
-			if ($numericScale && $c['estimate'] !== null && is_numeric($c['estimate'])) {
-				$pointsByWeek[$bucket] += (float)$c['estimate'];
+			if ($valueOf !== null) {
+				$pointsByWeek[$bucket] += $valueOf($c['estimate']) ?? 0.0;
 			}
 		}
 
@@ -394,18 +394,19 @@ class StatsService {
 	 * @return null|list<array{stackId: int, total: float}>
 	 * @throws \OCP\DB\Exception
 	 */
-	private function estimateByStack(Board $board, int $boardId, ViewerContext $viewer): ?array {
-		if (!$this->isNumericScale($board)) {
+	private function estimateByStack(?\Closure $valueOf, int $boardId, ViewerContext $viewer): ?array {
+		if ($valueOf === null) {
 			return null;
 		}
 
 		$totals = [];
 		foreach ($this->cardMapper->estimateByStack($boardId, $viewer) as $row) {
-			if (!is_numeric($row['estimate'])) {
+			$value = $valueOf($row['estimate']);
+			if ($value === null) {
 				continue;
 			}
 			$stackId = $row['stackId'];
-			$totals[$stackId] = ($totals[$stackId] ?? 0.0) + (float)$row['estimate'];
+			$totals[$stackId] = ($totals[$stackId] ?? 0.0) + $value;
 		}
 
 		$rows = [];
@@ -423,18 +424,19 @@ class StatsService {
 	 * @return null|list<array{uid: string, total: float}>
 	 * @throws \OCP\DB\Exception
 	 */
-	private function estimateByAssignee(Board $board, int $boardId, ViewerContext $viewer): ?array {
-		if (!$this->isNumericScale($board)) {
+	private function estimateByAssignee(?\Closure $valueOf, int $boardId, ViewerContext $viewer): ?array {
+		if ($valueOf === null) {
 			return null;
 		}
 
 		$totals = [];
 		foreach ($this->cardAssigneeMapper->estimateByAssigneeForBoard($boardId, $viewer) as $row) {
-			if (!is_numeric($row['estimate'])) {
+			$value = $valueOf($row['estimate']);
+			if ($value === null) {
 				continue;
 			}
 			$uid = $row['uid'];
-			$totals[$uid] = ($totals[$uid] ?? 0.0) + (float)$row['estimate'];
+			$totals[$uid] = ($totals[$uid] ?? 0.0) + $value;
 		}
 
 		$rows = [];
@@ -445,25 +447,18 @@ class StatsService {
 	}
 
 	/**
-	 * A board scale is "numeric" when it is not `none` and every token of the
-	 * scale is a numeric string (fibonacci / linear / hours). The t-shirt scale
-	 * is textual, so its estimate panels stay null.
+	 * Maps an estimate token to its numeric value on the board's scale, or null
+	 * when the board doesn't estimate.
+	 *
+	 * @return null|\Closure(?string): ?float
 	 */
-	private function isNumericScale(Board $board): bool {
+	private function estimateValuer(Board $board): ?\Closure {
 		$scale = $board->getEstimateScale() ?? EstimateScale::NONE;
 		if ($scale === EstimateScale::NONE) {
-			return false;
+			return null;
 		}
-		$tokens = EstimateScale::SCALES[$scale] ?? [];
-		if ($tokens === []) {
-			return false;
-		}
-		foreach ($tokens as $token) {
-			if (!is_numeric($token)) {
-				return false;
-			}
-		}
-		return true;
+		$custom = $board->customEstimates();
+		return static fn (?string $token): ?float => EstimateScale::value($scale, $token, $custom);
 	}
 
 	/**

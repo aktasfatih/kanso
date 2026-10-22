@@ -107,7 +107,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ t('kanso', 'Title') }}
 				</NcActionRadio>
 				<NcActionRadio
-					v-if="boardData?.board?.estimateScale && boardData.board.estimateScale !== 'none'"
+					v-if="visibleEstimateScale !== 'none'"
 					:model-value="sortMode"
 					value="estimate"
 					name="kanso-sort"
@@ -164,7 +164,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:participants="participantList"
 				:saved-filters="savedFilters"
 				:active-saved-name="activeSavedName"
-				:estimate-scale="boardData?.board?.estimateScale ?? 'none'"
+				:estimate-tokens="visibleEstimateScale === 'none' ? [] : boardEstimateLabels(boardData?.board)"
 				:icon-only="isNarrow"
 				@save="handleSaveFilter"
 				@apply-saved="handleApplySavedFilter"
@@ -743,7 +743,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { apiAnswerStatus } from '../services/apiErrors.js'
 import { cssColor } from '../services/color.js'
 import { flattenMarkdown } from '../services/markdown.js'
-import { scaleTokens } from '../services/estimateScales.js'
+import { boardEstimateLabels, boardEstimateValue } from '../services/estimateScales.js'
 import { backgroundCss } from '../services/backgrounds.js'
 import { initial, between, after, before } from '../services/sortKey.js'
 import { updateCard as apiUpdateCard, moveStack as apiMoveStack, fetchCardTemplates as apiFetchCardTemplates, createCardFromTemplate as apiCreateCardFromTemplate, getSettings, updateSettings } from '../services/api.js'
@@ -802,20 +802,24 @@ const SORT_MODES = ['manual', 'priority', 'due', 'title', 'estimate']
 // biggest-first. Selecting a mode resets to its natural direction; the user can
 // then flip it. 'manual' has no direction (it IS the persisted fractional order).
 const NATURAL_SORT_DIR = { priority: 'desc', due: 'asc', title: 'asc', estimate: 'desc' }
-const sortMode = ref('manual')
+const storedSortMode = ref('manual')
+// A saved estimate sort falls back to manual while the board hides estimates.
+const sortMode = computed(() => (storedSortMode.value === 'estimate' && visibleEstimateScale.value === 'none'
+	? 'manual'
+	: storedSortMode.value))
 const sortDir = ref('asc')
 try {
 	const saved = localStorage.getItem(`kanso.sortMode.${props.id}`)
-	if (saved && SORT_MODES.includes(saved)) sortMode.value = saved
+	if (saved && SORT_MODES.includes(saved)) storedSortMode.value = saved
 } catch (e) { /* default to manual */ }
 try {
 	const savedDir = localStorage.getItem(`kanso.sortDir.${props.id}`)
 	sortDir.value = (savedDir === 'asc' || savedDir === 'desc')
 		? savedDir
-		: (NATURAL_SORT_DIR[sortMode.value] ?? 'asc')
-} catch (e) { sortDir.value = NATURAL_SORT_DIR[sortMode.value] ?? 'asc' }
+		: (NATURAL_SORT_DIR[storedSortMode.value] ?? 'asc')
+} catch (e) { sortDir.value = NATURAL_SORT_DIR[storedSortMode.value] ?? 'asc' }
 function setSortMode(mode) {
-	sortMode.value = mode
+	storedSortMode.value = mode
 	try {
 		localStorage.setItem(`kanso.sortMode.${props.id}`, mode)
 	} catch (e) { /* ignore persistence failure */ }
@@ -959,14 +963,9 @@ function sortCards(cards) {
 		valueOf = (c) => String(c.title ?? '')
 		compare = (a, b) => a.localeCompare(b)
 	} else if (sortMode.value === 'estimate') {
-		// Rank by ordinal position in the board's scale (NOT string value: "13"
-		// vs "2" mis-orders, and XS…XL has no numeric value). Unestimated /
-		// off-scale tokens are "missing" → sorted last in both directions.
-		const tokens = scaleTokens(boardData.value?.board?.estimateScale ?? 'none')
-		valueOf = (c) => {
-			const i = c.estimate ? tokens.indexOf(c.estimate) : -1
-			return i === -1 ? null : i
-		}
+		// Rank by the token's value on the board's scale. Unestimated / off-scale
+		// tokens are "missing" → sorted last in both directions.
+		valueOf = (c) => boardEstimateValue(boardData.value?.board, c.estimate)
 		compare = (a, b) => a - b
 	} else {
 		return arr.sort(bySortKey)
@@ -1075,7 +1074,9 @@ provide(NEST_ENABLED, computed(() => sortMode.value === 'manual'))
 // manager's change propagates through the normal delta/realtime path - no
 // reload. A cross-board View has no provider and gets all-enabled, since its
 // rows mix boards with different settings.
-provide(CARD_FEATURES, computed(() => normalizeCardFeatures(boardData.value?.board?.cardFeatures)))
+const boardCardFeatures = computed(() => normalizeCardFeatures(boardData.value?.board?.cardFeatures))
+provide(CARD_FEATURES, boardCardFeatures)
+const visibleEstimateScale = computed(() => (boardCardFeatures.value.estimate ? boardData.value?.board?.estimateScale ?? 'none' : 'none'))
 
 // Screen-reader announcer (aria-live="polite"). Provided here so descendants
 // (CardModal via router-view) can announce their own actions through one region.

@@ -47,6 +47,7 @@ test.describe('Projects — cross-board card collections', () => {
 		await expect(view).toContainText('Alpha cross-board task')
 		await expect(view).toContainText('Beta cross-board task')
 
+		await page.locator('[data-test=project-mode-board]').click()
 		// Grouped by board: both board headers render as section titles.
 		const sectionTitles = page.locator('.project-view__section .project-view__section-title')
 		await expect(sectionTitles).toHaveCount(2)

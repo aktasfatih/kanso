@@ -114,7 +114,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						{{ t('kanso', 'Due') }}: {{ formatDate(selectedCard.duedate) }}
 					</span>
 					<span v-if="selectedCard.estimate" class="public-detail__field">
-						{{ t('kanso', 'Estimate') }}: {{ selectedCard.estimate }}
+						{{ t('kanso', 'Estimate') }}: {{ displayEstimate(selectedCard.estimate) }}
 					</span>
 					<span v-if="checklistEnabled && selectedCard.checklist.total > 0" class="public-detail__field">
 						{{ selectedCard.checklist.done }}/{{ selectedCard.checklist.total }}
@@ -215,6 +215,7 @@ import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { translate as t } from '@nextcloud/l10n'
 import { renderMarkdown, flattenMarkdown } from '../services/markdown.js'
+import { displayEstimate } from '../services/estimateScales.js'
 
 export default {
 	name: 'PublicBoard',
@@ -362,6 +363,7 @@ export default {
 		document.removeEventListener('keydown', this.onKeydown)
 	},
 	methods: {
+		displayEstimate,
 		t,
 		openCard(card) {
 			this.selectedCard = card

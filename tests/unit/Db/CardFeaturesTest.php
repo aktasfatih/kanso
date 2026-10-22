@@ -26,6 +26,7 @@ class CardFeaturesTest extends TestCase {
 		'timeTracking' => true,
 		'coverColor' => true,
 		'checklist' => true,
+		'estimate' => true,
 	];
 
 	public function testNullColumnMeansEveryFeatureIsEnabled(): void {
@@ -49,7 +50,7 @@ class CardFeaturesTest extends TestCase {
 
 	public function testDecodeMarksOnlyTheStoredKeysDisabled(): void {
 		self::assertSame(
-			['contacts' => true, 'attachments' => false, 'github' => false, 'timeTracking' => true, 'coverColor' => true, 'checklist' => true],
+			['contacts' => true, 'attachments' => false, 'github' => false, 'timeTracking' => true, 'coverColor' => true, 'checklist' => true, 'estimate' => true],
 			CardFeatures::decode('["attachments","github"]')
 		);
 	}

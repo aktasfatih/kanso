@@ -9,6 +9,8 @@ import {
 	deleteProject as apiDeleteProject,
 	addCardToProject as apiAddCardToProject,
 	removeCardFromProject as apiRemoveCardFromProject,
+	pinProject as apiPinProject,
+	unpinProject as apiUnpinProject,
 } from '../services/api.js'
 import { createToggleQueue } from './useToggleQueue.js'
 
@@ -47,8 +49,9 @@ export function useProjects() {
 				queryClient.setQueryData(['projects'], context.previous)
 			}
 		},
-		onSettled: () => {
+		onSettled: (_data, _err, { id }) => {
 			queryClient.invalidateQueries({ queryKey: ['projects'] })
+			queryClient.invalidateQueries({ queryKey: ['project', String(id), 'plan'] })
 		},
 	})
 
@@ -73,11 +76,34 @@ export function useProjects() {
 		},
 	})
 
+	const setPinned = useMutation({
+		mutationFn: ({ id, pinned }) => (pinned ? apiPinProject(id) : apiUnpinProject(id)),
+		onMutate: async ({ id, pinned }) => {
+			await queryClient.cancelQueries({ queryKey: ['projects'] })
+			const previous = queryClient.getQueryData(['projects'])
+			queryClient.setQueryData(['projects'], (old) => (Array.isArray(old)
+				? old.map((p) => (p.id === id ? { ...p, pinned } : p))
+				: old))
+			return { previous }
+		},
+		onError: (_err, _vars, context) => {
+			if (context?.previous !== undefined) {
+				queryClient.setQueryData(['projects'], context.previous)
+			}
+		},
+		onSettled: () => {
+			queryClient.invalidateQueries({ queryKey: ['projects'] })
+		},
+	})
+
+	const togglePin = (project) => setPinned.mutate({ id: project.id, pinned: !project.pinned })
+
 	return {
 		...query,
 		create,
 		update,
 		remove,
+		togglePin,
 	}
 }
 
@@ -138,7 +164,7 @@ export function useCardProjects() {
 			// necessarily the one open now.
 			queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })
 			// ...the project's own card feed...
-			queryClient.invalidateQueries({ queryKey: ['project', String(projectId), 'cards'] })
+			queryClient.invalidateQueries({ queryKey: ['project', String(projectId)] })
 			// ...and the projects list, whose rows show a card count.
 			queryClient.invalidateQueries({ queryKey: ['projects'] })
 		},

@@ -142,10 +142,16 @@ your work, on your own Nextcloud, laid out plainly.
 - **My Work** hub gathers, across every board: **My tasks** (cards assigned to
   you), **Reviews** (waiting on you), and an **Inbox** of mentions and activity
   on cards you watch — filterable to a single board.
-- **Projects**: cross-board card collections with markdown descriptions and
-  per-project analytics.
+- **Projects**: cross-board card collections with a start and target date, a
+  forecast finish date from your recent pace, an on-track / at-risk / late
+  status, a burn-up chart, estimates normalized across boards, blocked and
+  overdue work grouped up top, and the project's cards on a timeline.
 
 ### 📈 Analytics
+- **Estimates** on any scale, chosen per board: Fibonacci, planning poker,
+  powers of 2, T-shirt sizes, 1–5, Roman numerals, hours, days, any number, or
+  your own custom labels with weights. Every scale sums into totals and
+  velocity.
 - Per-board (and per-project) stats: **velocity** (cards/points per week with
   trend), **cycle time** (median/average days to done), **throughput** (done
   per day), plus breakdowns by stack, priority, assignee and label, and

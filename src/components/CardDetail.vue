@@ -800,7 +800,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 
 					<!-- Estimate. Same read-only treatment as Priority above (#10732). -->
-					<div v-if="boardEstimateScale !== 'none' && (canEdit || currentEstimate)" class="card-modal__attr">
+					<div v-if="cardFeatures.estimate && boardEstimateScale !== 'none' && (canEdit || currentEstimate)" class="card-modal__attr">
 						<component
 							:is="canEdit ? 'button' : 'span'"
 							class="card-modal__pill"
@@ -812,9 +812,31 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:aria-expanded="canEdit ? openPicker === 'estimate' : undefined"
 							@click="canEdit && togglePicker('estimate')">
 							<TimerSandIcon :size="14" />
-							{{ currentEstimate ? t('kanso', 'Estimate: {value}', { value: currentEstimate }) : t('kanso', 'Estimate') }}
+							{{ currentEstimate ? t('kanso', 'Estimate: {value}', { value: displayEstimate(currentEstimate) }) : t('kanso', 'Estimate') }}
 						</component>
 						<div v-if="openPicker === 'estimate'" class="card-modal__popover">
+							<form
+								v-if="boardEstimateScale === 'number'"
+								class="card-modal__estimate-number"
+								@submit.prevent="submitNumberEstimate">
+								<input
+									v-model="numberEstimateDraft"
+									class="card-modal__estimate-input"
+									type="number"
+									min="0"
+									max="100000"
+									step="0.01"
+									inputmode="decimal"
+									data-test="estimate-number-input"
+									:aria-label="t('kanso', 'Estimate')"
+									:disabled="updateCard.isPending.value">
+								<button
+									type="submit"
+									class="card-modal__popover-opt card-modal__popover-opt--active"
+									:disabled="updateCard.isPending.value || !isValidNumberEstimate(String(numberEstimateDraft))">
+									{{ t('kanso', 'Set') }}
+								</button>
+							</form>
 							<div class="card-modal__popover-tokens">
 								<button
 									v-for="token in estimateTokens"
@@ -823,7 +845,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:class="{ 'card-modal__popover-opt--active': currentEstimate === token }"
 									:disabled="updateCard.isPending.value"
 									@click="handleSetEstimate(token); openPicker = null">
-									{{ token }}
+									{{ displayEstimate(token) }}
 								</button>
 								<button
 									v-if="currentEstimate"
@@ -2753,7 +2775,7 @@ import { useProjects, useCardProjects } from '../composables/useProjects.js'
 import { usePriority, PRIORITY_LEVELS } from '../composables/usePriority.js'
 import { useCardType, CARD_TYPES } from '../composables/useCardType.js'
 import { useBoard } from '../composables/useBoard.js'
-import { scaleTokens } from '../services/estimateScales.js'
+import { boardEstimateLabels, displayEstimate, isValidNumberEstimate } from '../services/estimateScales.js'
 import { useLabels } from '../composables/useLabels.js'
 import { useAssignees } from '../composables/useAssignees.js'
 import { TOGGLE_ALREADY_PENDING } from '../composables/useToggleQueue.js'
@@ -3948,9 +3970,17 @@ async function handleSetType(type) {
 
 // ── Estimate ─────────────────────────────────────────────────────────────────
 const boardEstimateScale = computed(() => boardData.value?.board?.estimateScale ?? 'none')
-const estimateTokens = computed(() => scaleTokens(boardEstimateScale.value))
+const estimateTokens = computed(() => boardEstimateLabels(boardData.value?.board))
 const currentEstimate = computed(() => cardData.value?.estimate ?? '')
 const estimateError = ref('')
+const numberEstimateDraft = ref('')
+
+async function submitNumberEstimate() {
+	const value = String(numberEstimateDraft.value).trim()
+	if (!isValidNumberEstimate(value)) return
+	await handleSetEstimate(value)
+	if (!estimateError.value) openPicker.value = null
+}
 
 async function handleSetEstimate(token) {
 	// Toggle: clicking the active token clears it; clicking a new one sets it.
@@ -7081,6 +7111,10 @@ const statusChipLabel = computed(() =>
 // One attribute-bar popover open at a time:
 // 'priority' | 'due' | 'estimate' | 'assign' | 'label' | 'review' | null
 const openPicker = ref(null)
+
+watch(() => openPicker.value === 'estimate', (open) => {
+	if (open) numberEstimateDraft.value = currentEstimate.value
+})
 function togglePicker(name) {
 	openPicker.value = openPicker.value === name ? null : name
 }
@@ -7874,6 +7908,16 @@ async function handleToggleProject(projectId) {
 	width: 300px;
 	max-width: calc(100vw - 32px);
 	max-height: min(70vh, 540px);
+}
+.card-modal__estimate-number {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 6px;
+}
+.card-modal__estimate-input {
+	width: 110px;
+	min-height: 34px;
+	margin: 0;
 }
 .card-modal__popover-tokens {
 	display: flex;

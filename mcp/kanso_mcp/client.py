@@ -538,11 +538,19 @@ class KansoClient:
         title: str,
         description: Optional[str] = None,
         color: Optional[str] = None,
+        start_date: Optional[str] = None,
+        target_date: Optional[str] = None,
     ) -> Project:
         data = await self._request(
             "POST",
             "/projects",
-            json={"title": title, "description": description, "color": color},
+            json={
+                "title": title,
+                "description": description,
+                "color": color,
+                "startDate": start_date,
+                "targetDate": target_date,
+            },
         )
         return Project.model_validate(data)
 
@@ -553,12 +561,20 @@ class KansoClient:
         title: Optional[str] = None,
         description: Optional[str] = None,
         color: Optional[str] = None,
+        start_date: Optional[str] = None,
+        target_date: Optional[str] = None,
     ) -> Project:
-        # None fields are dropped => left unchanged. An empty color clears it.
+        # None fields are dropped => left unchanged. An empty color or date clears it.
         data = await self._request(
             "PATCH",
             f"/projects/{project_id}",
-            json={"title": title, "description": description, "color": color},
+            json={
+                "title": title,
+                "description": description,
+                "color": color,
+                "startDate": start_date,
+                "targetDate": target_date,
+            },
         )
         return Project.model_validate(data)
 
@@ -574,6 +590,10 @@ class KansoClient:
         # (byPriority, byAssignee, throughput, cycleTime, …) and only exists to
         # be read, so modelling it would just shadow StatsService::projectStats.
         data = await self._request("GET", f"/projects/{project_id}/stats")
+        return data if isinstance(data, dict) else {}
+
+    async def project_plan(self, project_id: int) -> Dict[str, Any]:
+        data = await self._request("GET", f"/projects/{project_id}/plan")
         return data if isinstance(data, dict) else {}
 
     async def add_card_to_project(self, project_id: int, card_id: int) -> Any:

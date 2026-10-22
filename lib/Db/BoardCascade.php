@@ -146,11 +146,13 @@ class BoardCascade {
 	 *  - kanso_projects: cross-board project records owned by a user; a project
 	 *    spans boards, so only its card links (kanso_project_cards) go.
 	 *  - kanso_project_comments: hang off a project, not off a board.
+	 *  - kanso_project_pins: a user's pins on projects.
 	 */
 	public const NOT_BOARD_SCOPED = [
 		'kanso_board_groups',
 		'kanso_projects',
 		'kanso_project_comments',
+		'kanso_project_pins',
 	];
 
 	public function __construct(

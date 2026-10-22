@@ -1025,6 +1025,7 @@ async def test_project_tools_schema_and_hints():
         "kanso_delete_project",
         "kanso_list_project_cards",
         "kanso_get_project_stats",
+        "kanso_get_project_plan",
         "kanso_add_card_to_project",
         "kanso_remove_card_from_project",
         "kanso_list_project_comments",
@@ -1037,6 +1038,7 @@ async def test_project_tools_schema_and_hints():
         "kanso_get_project",
         "kanso_list_project_cards",
         "kanso_get_project_stats",
+        "kanso_get_project_plan",
         "kanso_list_project_comments",
     ):
         assert tools[name].annotations.readOnlyHint is True, name

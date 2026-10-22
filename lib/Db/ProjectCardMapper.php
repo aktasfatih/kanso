@@ -37,6 +37,7 @@ class ProjectCardMapper extends QBMapper {
 		$row = new ProjectCard();
 		$row->setProjectId($projectId);
 		$row->setCardId($cardId);
+		$row->setAddedAt(time());
 
 		try {
 			$this->insert($row);
@@ -118,8 +119,9 @@ class ProjectCardMapper extends QBMapper {
 	 * list. One query joining through `kanso_cards` and `kanso_boards`; the
 	 * caller supplies the readable board id set (see the readable-boards
 	 * discipline in {@see \OCA\Kanso\Service\ReviewService}), so a card on a
-	 * board the viewer cannot read is silently dropped. Rows are shaped exactly
-	 * like {@see CardMapper::findAssignedInBoards}.
+	 * board the viewer cannot read is silently dropped. Rows extend the shape of
+	 * {@see CardMapper::findAssignedInBoards} with the planning fields the
+	 * project forecast and timeline read.
 	 *
 	 * Scope: deleted, ARCHIVED and TEMPLATE cards are all excluded - the same
 	 * open scope every board-side card query applies
@@ -146,8 +148,12 @@ class ProjectCardMapper extends QBMapper {
 
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('c.id')
-			->addSelect('c.board_id', 'c.title', 'c.duedate', 'c.priority', 'c.done_at', 'c.started_at', 'c.stack_id', 'c.parent_card_id', 'c.sort_key')
+			->addSelect('c.board_id', 'c.title', 'c.duedate', 'c.start_date', 'c.priority', 'c.done_at', 'c.started_at', 'c.stack_id', 'c.parent_card_id', 'c.sort_key', 'c.estimate', 'c.board_seq', 'c.created_at', 'pc.added_at')
 			->selectAlias('b.title', 'board_title')
+			->selectAlias('b.prefix', 'board_prefix')
+			->selectAlias('b.estimate_scale', 'estimate_scale')
+			->selectAlias('b.disabled_card_features', 'disabled_card_features')
+			->selectAlias('b.estimate_custom', 'estimate_custom')
 			->selectAlias('s.title', 'stack_title')
 			->from($this->getTableName(), 'pc')
 			->innerJoin('pc', 'kanso_cards', 'c', $qb->expr()->eq('pc.card_id', 'c.id'))
@@ -167,6 +173,10 @@ class ProjectCardMapper extends QBMapper {
 		$rows = [];
 		while (($row = $result->fetch()) !== false) {
 			$due = $row['duedate'] !== null ? (new \DateTime((string)$row['duedate']))->format(\DateTimeInterface::ATOM) : null;
+			$estimateShown = CardFeatures::decode($row['disabled_card_features'] !== null ? (string)$row['disabled_card_features'] : null)[CardFeatures::ESTIMATE];
+			$estimate = $estimateShown && $row['estimate'] !== null && $row['estimate'] !== '' ? (string)$row['estimate'] : null;
+			$scale = (string)($row['estimate_scale'] ?? EstimateScale::NONE);
+			$start = $row['start_date'] !== null ? (new \DateTime((string)$row['start_date']))->format(\DateTimeInterface::ATOM) : null;
 			$rows[] = [
 				'id' => (int)$row['id'],
 				'boardId' => (int)$row['board_id'],
@@ -178,10 +188,57 @@ class ProjectCardMapper extends QBMapper {
 				'doneAt' => (int)$row['done_at'],
 				'startedAt' => (int)$row['started_at'],
 				'parentCardId' => ((int)($row['parent_card_id'] ?? 0)) ?: null,
+				'startDate' => $start,
+				'estimate' => $estimate,
+				'estimateScale' => $scale,
+				'estimateValue' => EstimateScale::value($scale, $estimate, EstimateScale::decodeCustom($row['estimate_custom'] !== null ? (string)$row['estimate_custom'] : null)),
+				'boardSeq' => $row['board_seq'] !== null ? (int)$row['board_seq'] : null,
+				'boardPrefix' => (string)($row['board_prefix'] ?? ''),
+				'createdAt' => (int)$row['created_at'],
+				'addedAt' => (int)$row['added_at'],
 			];
 		}
 		$result->closeCursor();
 
 		return $rows;
+	}
+
+	/**
+	 * How many open blockers each of $cardIds has, counting only blockers the
+	 * viewer can see - an invisible blocker must not leak through a count.
+	 *
+	 * @param int[] $cardIds
+	 * @param int[] $boardIds the viewer's readable board ids
+	 * @param array<int, string> $rolesByBoard the viewer's role per board id
+	 * @return array<int, int> blocked card id => open blocker count (absent = 0)
+	 * @throws Exception
+	 */
+	public function openBlockerCounts(array $cardIds, array $boardIds, string $uid, array $rolesByBoard): array {
+		if ($cardIds === [] || $boardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('r.other_card_id')
+			->selectAlias($qb->func()->count('r.id'), 'blockers')
+			->from('kanso_card_relations', 'r')
+			->innerJoin('r', 'kanso_cards', 'src', $qb->expr()->eq('r.card_id', 'src.id'))
+			->where($qb->expr()->eq('r.type', $qb->createNamedParameter(CardRelation::TYPE_BLOCKS)))
+			->andWhere($qb->expr()->in('r.other_card_id', $qb->createNamedParameter(array_values($cardIds), IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->in('src.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('src.done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('src.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('src.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->groupBy('r.other_card_id');
+		$this->visibilityScope->apply($qb, 'src', $uid, null, $rolesByBoard);
+
+		$result = $qb->executeQuery();
+		$counts = [];
+		while (($row = $result->fetch()) !== false) {
+			$counts[(int)$row['other_card_id']] = (int)$row['blockers'];
+		}
+		$result->closeCursor();
+
+		return $counts;
 	}
 }

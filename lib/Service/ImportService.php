@@ -26,6 +26,7 @@ use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\Comment;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Db\EstimateScale;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\RecurRule;
@@ -388,6 +389,8 @@ class ImportService {
 		// Board-level settings the create() call does not take.
 		$estimateScale = isset($board['estimateScale']) && is_string($board['estimateScale'])
 			? $board['estimateScale'] : null;
+		$estimateCustom = isset($board['estimateCustom']) && is_array($board['estimateCustom']) && $board['estimateCustom'] !== []
+			? $board['estimateCustom'] : null;
 		$newCardsOnTop = isset($board['newCardsOnTop']) ? (bool)$board['newCardsOnTop'] : null;
 		// Same normalisation rule as a write (blank → null), then the cap: the
 		// board description rides the board payload, so an untrusted document
@@ -401,10 +404,18 @@ class ImportService {
 			);
 		}
 		if ($estimateScale !== null || $newCardsOnTop !== null || $description !== null) {
-			$this->boardService->update(
-				$boardId, null, null, null, $actorUid, $estimateScale, $newCardsOnTop,
-				null, null, null, null, $description
-			);
+			try {
+				$this->boardService->update(
+					$boardId, null, null, null, $actorUid, $estimateScale, $newCardsOnTop,
+					null, null, null, null, $description, $estimateCustom
+				);
+			} catch (InvalidInputException) {
+				// A malformed custom scale in the document must not fail the import.
+				$this->boardService->update(
+					$boardId, null, null, null, $actorUid, EstimateScale::NONE, $newCardsOnTop,
+					null, null, null, null, $description
+				);
+			}
 		}
 
 		$labelIdMap = $this->importLabels($board, $boardId);
