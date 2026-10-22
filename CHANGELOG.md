@@ -11,6 +11,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.40.0](https://github.com/aktasfatih/kanso/compare/v0.39.0...v0.40.0) (2026-10-22)
+
+
+### Bug Fixes
+
+* **boards:** ignore a saved estimate sort while the board hides estimates ([591544e](https://github.com/aktasfatih/kanso/commit/591544e21a3b66e7786bb8430a1f60d20ec2ff38))
+* **deps:** bump the npm-production group with 12 updates ([87ff5da](https://github.com/aktasfatih/kanso/commit/87ff5da36f560475aaa5834292cba406be7df3b5))
+* **projects:** use singular units for one point or one card in the project health panel ([dc6aa1a](https://github.com/aktasfatih/kanso/commit/dc6aa1a33f26c925e1800ee0ef30e8587ab2c414))
+
+
+### Features
+
+* **boards:** estimate on any scale, including your own custom labels ([a2449e4](https://github.com/aktasfatih/kanso/commit/a2449e44d0849f4e7ac099428d46ca61e877bef9))
+* **boards:** hide card estimates with the Card fields setting ([4550f68](https://github.com/aktasfatih/kanso/commit/4550f68182e2877b6f9cb56a71ff6d284a71dcb7))
+* **mcp:** manage your projects from an AI assistant ([d8c621c](https://github.com/aktasfatih/kanso/commit/d8c621c5d3f049e8b4b3bc6bd35f548c4cf7abbc))
+* **mcp:** read a project's forecast and set its start and target dates ([7007bce](https://github.com/aktasfatih/kanso/commit/7007bce49212853a4d0fd8893d411e25e9fc2979))
+* **mcp:** show each board's valid estimate labels ([40cdea6](https://github.com/aktasfatih/kanso/commit/40cdea6497f22eec1f932fe85b2058095015e411))
+* **projects:** give descriptions, discussions and the timeline the full page width ([c5d61ab](https://github.com/aktasfatih/kanso/commit/c5d61ab8211f37feec511bd4229e9c1dc97a11d4))
+* **projects:** pin projects to the sidebar ([335a2ee](https://github.com/aktasfatih/kanso/commit/335a2ee4b7a00a16204478307c3fecec526f3a66))
+* **projects:** see when a project will finish and whether it is on track ([8f2e854](https://github.com/aktasfatih/kanso/commit/8f2e8544394a0b75be05a07ad7870bd9c7473c1c))
+
 # [0.39.0](https://github.com/aktasfatih/kanso/compare/v0.38.3...v0.39.0) (2026-10-19)
 
 
