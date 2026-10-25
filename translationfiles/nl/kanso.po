@@ -242,6 +242,14 @@ msgstr "{n}d"
 msgid "{n}h"
 msgstr "{n}u"
 
+#: src/views/TrashView.vue
+msgid "{ok} cards restored"
+msgstr ""
+
+#: src/views/TrashView.vue
+msgid "{ok} cards restored before the action failed"
+msgstr ""
+
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} cards updated"
@@ -251,6 +259,10 @@ msgstr "{ok} kaarten bijgewerkt"
 #: src/views/BoardView.vue
 msgid "{ok} cards updated before the action failed"
 msgstr "{ok} kaarten bijgewerkt voordat de actie mislukte"
+
+#: src/views/TrashView.vue
+msgid "{ok} restored, {skipped} skipped"
+msgstr ""
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
@@ -355,7 +367,7 @@ msgid_plural "%n cards"
 msgstr[0] "%n kaart"
 msgstr[1] "%n kaarten"
 
-#: src/components/StackColumn.vue:1060
+#: src/components/StackColumn.vue:1066
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "%n kaart gearchiveerd"
@@ -403,7 +415,7 @@ msgid_plural "%n hours ago"
 msgstr[0] "%n uur geleden"
 msgstr[1] "%n uur geleden"
 
-#: src/views/BoardView.vue:2626
+#: src/views/BoardView.vue:2640
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n ID gekopieerd."
@@ -1121,6 +1133,7 @@ msgstr "Ingebouwde secties"
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
+#: src/views/TrashView.vue
 msgid "Bulk action failed."
 msgstr "Bulkactie mislukt."
 
@@ -1447,7 +1460,7 @@ msgstr "Voortgang van de checklist {done} van {total}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:491
+#: src/components/CardTile.vue:515
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Voortgang van de checklist {done} van {total}, %n stap te laat"
@@ -2587,6 +2600,7 @@ msgstr "Iedereen die hier wordt getoond is al aan deze kaart toegewezen."
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
+#: src/views/TrashView.vue
 msgid "Exit multi-select"
 msgstr "Multiselectie verlaten"
 
@@ -4814,6 +4828,7 @@ msgid "Project title"
 msgstr "Projecttitel"
 
 #: src/App.vue
+#: src/components/CardTile.vue
 #: src/views/ProjectsView.vue
 msgid "Projects"
 msgstr "Projecten"
@@ -5142,6 +5157,7 @@ msgid "Restore panel size"
 msgstr "Paneelgrootte herstellen"
 
 #: src/views/ArchivedView.vue
+#: src/views/TrashView.vue
 msgid "Restore selected"
 msgstr "Selectie herstellen"
 
@@ -5374,6 +5390,7 @@ msgstr "Kies een kolom…"
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
+#: src/views/TrashView.vue
 msgid "Select multiple cards"
 msgstr "Meerdere kaarten selecteren"
 

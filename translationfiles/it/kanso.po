@@ -242,6 +242,14 @@ msgstr "{n}g"
 msgid "{n}h"
 msgstr "{n}h"
 
+#: src/views/TrashView.vue
+msgid "{ok} cards restored"
+msgstr ""
+
+#: src/views/TrashView.vue
+msgid "{ok} cards restored before the action failed"
+msgstr ""
+
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} cards updated"
@@ -251,6 +259,10 @@ msgstr "{ok} schede aggiornate"
 #: src/views/BoardView.vue
 msgid "{ok} cards updated before the action failed"
 msgstr "{ok} schede aggiornate prima che l'azione fallisse"
+
+#: src/views/TrashView.vue
+msgid "{ok} restored, {skipped} skipped"
+msgstr ""
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
@@ -355,7 +367,7 @@ msgid_plural "%n cards"
 msgstr[0] "%n scheda"
 msgstr[1] "%n schede"
 
-#: src/components/StackColumn.vue:1060
+#: src/components/StackColumn.vue:1066
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "%n scheda archiviata"
@@ -403,7 +415,7 @@ msgid_plural "%n hours ago"
 msgstr[0] "%n ora fa"
 msgstr[1] "%n ore fa"
 
-#: src/views/BoardView.vue:2626
+#: src/views/BoardView.vue:2640
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n ID copiato."
@@ -1121,6 +1133,7 @@ msgstr "Sezioni predefinite"
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
+#: src/views/TrashView.vue
 msgid "Bulk action failed."
 msgstr "Azione multipla non riuscita."
 
@@ -1447,7 +1460,7 @@ msgstr "Avanzamento della lista di controllo: {done} di {total}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:491
+#: src/components/CardTile.vue:515
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Avanzamento della lista di controllo: {done} di {total}, %n elemento in ritardo"
@@ -2587,6 +2600,7 @@ msgstr "Tutte le persone mostrate qui sono già assegnate a questa scheda."
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
+#: src/views/TrashView.vue
 msgid "Exit multi-select"
 msgstr "Esci dalla selezione multipla"
 
@@ -4814,6 +4828,7 @@ msgid "Project title"
 msgstr "Titolo del progetto"
 
 #: src/App.vue
+#: src/components/CardTile.vue
 #: src/views/ProjectsView.vue
 msgid "Projects"
 msgstr "Progetti"
@@ -5142,6 +5157,7 @@ msgid "Restore panel size"
 msgstr "Ripristina la dimensione del pannello"
 
 #: src/views/ArchivedView.vue
+#: src/views/TrashView.vue
 msgid "Restore selected"
 msgstr "Ripristina le selezionate"
 
@@ -5374,6 +5390,7 @@ msgstr "Seleziona una colonna…"
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
+#: src/views/TrashView.vue
 msgid "Select multiple cards"
 msgstr "Seleziona più schede"
 

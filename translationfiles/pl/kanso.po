@@ -254,6 +254,14 @@ msgstr "{n} d"
 msgid "{n}h"
 msgstr "{n} h"
 
+#: src/views/TrashView.vue
+msgid "{ok} cards restored"
+msgstr ""
+
+#: src/views/TrashView.vue
+msgid "{ok} cards restored before the action failed"
+msgstr ""
+
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} cards updated"
@@ -263,6 +271,10 @@ msgstr "Zaktualizowano karty: {ok}"
 #: src/views/BoardView.vue
 msgid "{ok} cards updated before the action failed"
 msgstr "Zaktualizowano kart: {ok}, zanim działanie zakończyło się niepowodzeniem"
+
+#: src/views/TrashView.vue
+msgid "{ok} restored, {skipped} skipped"
+msgstr ""
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
@@ -370,7 +382,7 @@ msgstr[0] "%n karta"
 msgstr[1] "%n karty"
 msgstr[2] "%n kart"
 
-#: src/components/StackColumn.vue:1060
+#: src/components/StackColumn.vue:1066
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "Zarchiwizowano %n kartę"
@@ -426,7 +438,7 @@ msgstr[0] "%n godzinę temu"
 msgstr[1] "%n godziny temu"
 msgstr[2] "%n godzin temu"
 
-#: src/views/BoardView.vue:2626
+#: src/views/BoardView.vue:2640
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "Skopiowano %n identyfikator."
@@ -1161,6 +1173,7 @@ msgstr "Sekcje wbudowane"
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
+#: src/views/TrashView.vue
 msgid "Bulk action failed."
 msgstr "Operacja zbiorcza nie powiodła się."
 
@@ -1487,7 +1500,7 @@ msgstr "Postęp listy kontrolnej: {done} z {total}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:491
+#: src/components/CardTile.vue:515
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Postęp listy kontrolnej: {done} z {total}, %n krok po terminie"
@@ -2633,6 +2646,7 @@ msgstr "Wszystkie pokazane tu osoby są już przypisane do tej karty."
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
+#: src/views/TrashView.vue
 msgid "Exit multi-select"
 msgstr "Wyjdź z zaznaczania wielokrotnego"
 
@@ -4863,6 +4877,7 @@ msgid "Project title"
 msgstr "Tytuł projektu"
 
 #: src/App.vue
+#: src/components/CardTile.vue
 #: src/views/ProjectsView.vue
 msgid "Projects"
 msgstr "Projekty"
@@ -5191,6 +5206,7 @@ msgid "Restore panel size"
 msgstr "Przywróć rozmiar panelu"
 
 #: src/views/ArchivedView.vue
+#: src/views/TrashView.vue
 msgid "Restore selected"
 msgstr "Przywróć zaznaczone"
 
@@ -5425,6 +5441,7 @@ msgstr "Wybierz kolumnę…"
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
+#: src/views/TrashView.vue
 msgid "Select multiple cards"
 msgstr "Zaznacz wiele kart"
 
