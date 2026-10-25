@@ -43,6 +43,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ label.title }}
 				</span>
 			</div>
+			<!-- Project dots row - only rendered when the card belongs to a coloured
+			     project. A small dot per project, the project title on hover, so the
+			     tile stays clean even when a card sits in several projects. -->
+			<div v-if="cardProjects.length" class="card-tile__projects" :aria-label="t('kanso', 'Projects')">
+				<span
+					v-for="project in cardProjects"
+					:key="project.id"
+					class="card-tile__project-dot"
+					:style="{ background: cssColor(project.color) }"
+					:title="project.title" />
+			</div>
 			<!-- Human-readable reference id (e.g. KAN-123) - a stable display id -->
 			<span v-if="cardHumanId" class="card-tile__ref">{{ cardHumanId }}</span>
 			<!-- Card title - max 2 lines with ellipsis overflow -->
@@ -291,6 +302,11 @@ const props = defineProps({
 		type: Map,
 		default: () => new Map(),
 	},
+	/** Map<projectId, project> from the board payload - passed down from BoardView. */
+	projectsById: {
+		type: Map,
+		default: () => new Map(),
+	},
 	/** Board human-id prefix (e.g. "KAN") - composed with card.boardSeq for the ref badge. */
 	boardPrefix: {
 		type: String,
@@ -445,6 +461,14 @@ onUnmounted(() => {
 const cardLabels = computed(() => {
 	const ids = Array.isArray(props.card.labelIds) ? props.card.labelIds : []
 	return ids.map((id) => props.labelsById.get(id)).filter(Boolean)
+})
+
+// Resolve project objects from the projectsById map for the card's projectIds.
+// Only projects that carry a colour are rendered — an uncoloured project has
+// nothing to show, and the tile must not grow an affordance for it.
+const cardProjects = computed(() => {
+	const ids = Array.isArray(props.card.projectIds) ? props.card.projectIds : []
+	return ids.map((id) => props.projectsById.get(id)).filter((p) => p && p.color)
 })
 
 // Done: doneAt > 0
@@ -779,6 +803,23 @@ const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.
 	background: var(--color-background-dark);
 	color: var(--color-main-text);
 	border: 1px solid var(--color-border);
+}
+
+/* Project dots — one per coloured project the card belongs to. A small, quiet
+ * affordance: the dot carries the project's colour, the title is on hover. */
+.card-tile__projects {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-bottom: 2px;
+}
+
+.card-tile__project-dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	border: 1px solid var(--color-border);
+	flex-shrink: 0;
 }
 
 /* Done state

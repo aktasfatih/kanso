@@ -18,6 +18,7 @@ use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\CardRunningTimerMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\RecurRuleMapper;
 
 /**
@@ -56,6 +57,7 @@ class CardSummaryService {
 		private CardRelationMapper $cardRelationMapper,
 		private RecurRuleMapper $recurRuleMapper,
 		private CardRunningTimerMapper $runningTimerMapper,
+		private ProjectCardMapper $projectCardMapper,
 		private CardVisibilityScope $visibilityScope,
 	) {
 	}
@@ -95,6 +97,10 @@ class CardSummaryService {
 			// Card ids with an active running timer (#73) - drives the tile
 			// "timer running" badge. One boolean per card; the timer row stays out.
 			'timerRunning' => array_flip($this->runningTimerMapper->findCardIdsByBoard($boardId)),
+			// The viewer's OWN project ids per card - drives the tile's project
+			// colour. Owner-scoped (projects are private collections), so a card
+			// filed into someone else's project shows nothing to this viewer.
+			'projectIds' => $this->projectCardMapper->findProjectIdsByBoard($boardId, $viewer->userId),
 		]);
 	}
 
@@ -137,6 +143,7 @@ class CardSummaryService {
 			'blocking' => $blocks['blocking'],
 			'recurring' => array_flip($this->recurRuleMapper->findTemplateCardIdsByBoards($boardIds)),
 			'timerRunning' => array_flip($this->runningTimerMapper->findCardIdsByBoards($boardIds)),
+			'projectIds' => $this->projectCardMapper->findProjectIdsByBoards($boardIds, $uid),
 		]);
 	}
 
@@ -185,6 +192,7 @@ class CardSummaryService {
 	 *     blocking: array<int, int>,
 	 *     recurring: array<int, int>,
 	 *     timerRunning: array<int, int>,
+	 *     projectIds: array<int, int[]>,
 	 * } $maps
 	 * @return list<array<string, mixed>>
 	 */
@@ -209,7 +217,8 @@ class CardSummaryService {
 				+ ['blocked' => isset($maps['blocked'][$card->getId()])]
 				+ ['blocking' => isset($maps['blocking'][$card->getId()])]
 				+ ['recurring' => isset($maps['recurring'][$card->getId()])]
-				+ ['timerRunning' => isset($maps['timerRunning'][$card->getId()])],
+				+ ['timerRunning' => isset($maps['timerRunning'][$card->getId()])]
+				+ ['projectIds' => $maps['projectIds'][$card->getId()] ?? []],
 			$cards
 		));
 	}

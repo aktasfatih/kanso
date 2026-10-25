@@ -51,6 +51,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:stack="stack"
 				:cards="cardsForStack(stack.id)"
 				:labels-by-id="labelsById"
+				:projects-by-id="projectsById"
 				:board-prefix="boardPrefix"
 				:lane-key="lane.key"
 				:compact="compact"
@@ -85,6 +86,10 @@ const props = defineProps({
 		default: () => [],
 	},
 	labelsById: {
+		type: Map,
+		default: () => new Map(),
+	},
+	projectsById: {
 		type: Map,
 		default: () => new Map(),
 	},

@@ -18,6 +18,7 @@ use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\CardRunningTimerMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
+use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\RecurRuleMapper;
 use OCA\Kanso\Service\CardSummaryService;
 use OCA\Kanso\Service\CardVisibilityScope;
@@ -35,6 +36,7 @@ class CardSummaryServiceTest extends TestCase {
 	private CardRelationMapper&MockObject $cardRelationMapper;
 	private RecurRuleMapper&MockObject $recurRuleMapper;
 	private CardRunningTimerMapper&MockObject $runningTimerMapper;
+	private ProjectCardMapper&MockObject $projectCardMapper;
 	private CardSummaryService $service;
 
 	protected function setUp(): void {
@@ -49,6 +51,7 @@ class CardSummaryServiceTest extends TestCase {
 		$this->cardRelationMapper = $this->createMock(CardRelationMapper::class);
 		$this->recurRuleMapper = $this->createMock(RecurRuleMapper::class);
 		$this->runningTimerMapper = $this->createMock(CardRunningTimerMapper::class);
+		$this->projectCardMapper = $this->createMock(ProjectCardMapper::class);
 		$this->service = new CardSummaryService(
 			$this->cardLabelMapper,
 			$this->cardAssigneeMapper,
@@ -60,6 +63,7 @@ class CardSummaryServiceTest extends TestCase {
 			$this->cardRelationMapper,
 			$this->recurRuleMapper,
 			$this->runningTimerMapper,
+			$this->projectCardMapper,
 			new CardVisibilityScope(),
 		);
 	}
@@ -353,15 +357,15 @@ class CardSummaryServiceTest extends TestCase {
 	 * connection is a mock), so every executeQuery() they issue is counted - an
 	 * N+1 re-introduced anywhere under serialize() moves this number and fails.
 	 *
-	 * 14 as of #10696: 13 before, plus the one grouped overdue-step query the
-	 * tile's new tint is derived from. Bump this deliberately, never to make a
-	 * red test green.
+	 * 15 as of the project-colour indicator: 14 before, plus the one
+	 * owner-scoped project-membership query the tile's project dot is derived
+	 * from. Bump this deliberately, never to make a red test green.
 	 */
 	public function testSerializeIssuesAFixedNumberOfQueriesRegardlessOfCardCount(): void {
 		$one = $this->countSerializeQueries(1);
 		$many = $this->countSerializeQueries(50);
 
-		self::assertSame(14, $one, 'the board summary must cost exactly 14 statements');
+		self::assertSame(15, $one, 'the board summary must cost exactly 15 statements');
 		self::assertSame(
 			$one,
 			$many,
@@ -420,6 +424,7 @@ class CardSummaryServiceTest extends TestCase {
 			new CardRelationMapper($db),
 			new RecurRuleMapper($db),
 			new CardRunningTimerMapper($db),
+			new ProjectCardMapper($db, $scope),
 			$scope,
 		);
 

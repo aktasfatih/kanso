@@ -14,6 +14,8 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\LabelMapper;
+use OCA\Kanso\Db\Project;
+use OCA\Kanso\Db\ProjectMapper;
 use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
@@ -56,6 +58,7 @@ class BoardController extends Controller {
 		private StackMapper $stackMapper,
 		private CardMapper $cardMapper,
 		private LabelMapper $labelMapper,
+		private ProjectMapper $projectMapper,
 		private ReviewTypeMapper $reviewTypeMapper,
 		private CardFieldMapper $cardFieldMapper,
 		private AclMapper $aclMapper,
@@ -143,11 +146,33 @@ class BoardController extends Controller {
 				return $response;
 			}
 
+			$cards = $this->cardSummaryService->serialize($id, $this->cardMapper->findSummariesByBoard($id, $viewer), $viewer);
+			// The viewer's OWN projects referenced by the visible cards - the
+			// board-level project list (id/title/color) the tile resolves its
+			// `projectIds` against. Bounded by the cards in play (one lookup
+			// query, not one per card) and owner-scoped, so a project the viewer
+			// does not own contributes nothing - its title and color stay private.
+			$projectIds = [];
+			foreach ($cards as $card) {
+				foreach ($card['projectIds'] as $pid) {
+					$projectIds[$pid] = true;
+				}
+			}
+			// Skip the lookup entirely when no visible card is collected into a
+			// project - an empty `IN ()` is invalid SQL and the query is wasted.
+			$projects = $projectIds === [] ? [] : array_values(array_map(
+				static fn (Project $project): array => $project->jsonSerialize(),
+				$this->projectMapper->findByIdsForOwner(array_keys($projectIds), $uid)
+			));
+
 			$response = new JSONResponse([
 				'board' => $board,
 				'stacks' => $this->stackMapper->findByBoard($id),
-				'cards' => $this->cardSummaryService->serialize($id, $this->cardMapper->findSummariesByBoard($id, $viewer), $viewer),
+				'cards' => $cards,
 				'labels' => $this->labelMapper->findByBoard($id),
+				// The viewer's OWN projects the visible cards belong to - the
+				// board-level lookup the tile maps `projectIds` to a colour.
+				'projects' => $projects,
 				'reviewTypes' => $this->reviewTypeMapper->findByBoard($id),
 				// Custom-field DEFINITIONS ride the board payload (#3537); their
 				// per-card VALUES live only in the card detail payload.

@@ -114,6 +114,60 @@ class ProjectCardMapper extends QBMapper {
 	}
 
 	/**
+	 * The viewer's OWN project ids for every non-deleted card on a board, as
+	 * one query joining through `kanso_cards` and `kanso_projects` - the board
+	 * payload stays a fixed number of queries no matter how many cards are
+	 * collected into projects.
+	 *
+	 * Scoped by owner, exactly like {@see self::findProjectIdsByCard()}:
+	 * projects are private, owner-only collections, and a card is readable by
+	 * anyone on the board - an unscoped list would leak that OTHER people filed
+	 * the card into their private collections. "The projects the viewer may see"
+	 * is exactly "the projects the viewer owns".
+	 *
+	 * @return array<int, int[]> map of cardId => projectIds in membership order
+	 * @throws Exception
+	 */
+	public function findProjectIdsByBoard(int $boardId, string $uid): array {
+		return $this->findProjectIdsByBoards([$boardId], $uid);
+	}
+
+	/**
+	 * The BOARD-SET twin of {@see self::findProjectIdsByBoard()}: the same map
+	 * over MANY boards in ONE query, for the cross-board feed whose enrichment
+	 * must not scale with how many boards the user can read. Card ids are
+	 * globally unique, so the union needs no per-board nesting.
+	 *
+	 * @param int[] $boardIds
+	 * @return array<int, int[]> map of cardId => projectIds in membership order
+	 * @throws Exception
+	 */
+	public function findProjectIdsByBoards(array $boardIds, string $uid): array {
+		if ($boardIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('c.id', 'pc.project_id')
+			->from($this->getTableName(), 'pc')
+			->innerJoin('pc', 'kanso_projects', 'p', $qb->expr()->eq('pc.project_id', 'p.id'))
+			->innerJoin('pc', 'kanso_cards', 'c', $qb->expr()->eq('pc.card_id', 'c.id'))
+			->where($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('p.owner', $qb->createNamedParameter($uid)))
+			->orderBy('pc.id', 'ASC');
+
+		$result = $qb->executeQuery();
+		$map = [];
+		while (($row = $result->fetch()) !== false) {
+			$map[(int)$row['id']][] = (int)$row['project_id'];
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
+	/**
 	 * The cards of a project that live on one of the given (readable) boards,
 	 * enriched with their board + stack context - the ACL-filtered project card
 	 * list. One query joining through `kanso_cards` and `kanso_boards`; the
