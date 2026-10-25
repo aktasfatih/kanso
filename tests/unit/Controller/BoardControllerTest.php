@@ -1033,6 +1033,95 @@ class BoardControllerTest extends TestCase {
 		self::assertArrayNotHasKey('blocksEdges', $data);
 	}
 
+	// ---- projects: the board-level project list the tile resolves projectIds --
+
+	public function testChangesCarriesProjectDetailsForACardThatReferencesOne(): void {
+		// A card whose project membership changed in the window must render with
+		// the right project colour WITHOUT a full show() refetch: the delta carries
+		// the viewer's OWN projects referenced by its upserted cards, like show().
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(8);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([
+			$this->change(8, Change::ENTITY_CARD, 42, Change::ACTION_UPDATE),
+		]);
+		$this->stubEnrichmentEmpty();
+		// Card 42 is collected into the viewer's own project 10.
+		$this->projectCardMapper->method('findProjectIdsByBoard')->with(1, 'alice')->willReturn([42 => [10]]);
+
+		$card = new Card();
+		$card->setId(42);
+		$card->setBoardId(1);
+		$card->setStackId(3);
+		$card->setTitle('Collected into a project');
+		$this->cardMapper->method('findSummariesByIds')->with(1, [42])->willReturn([$card]);
+		$this->stackMapper->method('findByIds')->willReturn([]);
+
+		$project = new Project();
+		$project->setId(10);
+		$project->setTitle('Q3 Initiative');
+		$project->setColor('e53935');
+		$project->setOwner('alice');
+		$project->setCreatedAt(1700000000);
+		$this->projectMapper->expects(self::once())
+			->method('findByIdsForOwner')->with([10], 'alice')->willReturn([$project]);
+
+		$data = $this->controller->changes(1, 5)->getData();
+		self::assertFalse($data['resync']);
+		self::assertSame([10], $data['cards']['upsert'][0]['projectIds']);
+		// The delta carries the project's colour for the tile to resolve, like show().
+		self::assertCount(1, $data['projects']);
+		self::assertSame(10, $data['projects'][0]['id']);
+		self::assertSame('Q3 Initiative', $data['projects'][0]['title']);
+		self::assertSame('e53935', $data['projects'][0]['color']);
+	}
+
+	public function testChangesDoesNotLeakAProjectTheViewerDoesNotOwn(): void {
+		// Card 42 references project 10, but that project is owned by someone else.
+		// The owner-scoped lookup returns nothing, so the project's title and colour
+		// must not leak into the delta payload.
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(8);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([
+			$this->change(8, Change::ENTITY_CARD, 42, Change::ACTION_UPDATE),
+		]);
+		$this->stubEnrichmentEmpty();
+		$this->projectCardMapper->method('findProjectIdsByBoard')->with(1, 'alice')->willReturn([42 => [10]]);
+
+		$card = new Card();
+		$card->setId(42);
+		$card->setBoardId(1);
+		$card->setStackId(3);
+		$card->setTitle('References a foreign project');
+		$this->cardMapper->method('findSummariesByIds')->with(1, [42])->willReturn([$card]);
+		$this->stackMapper->method('findByIds')->willReturn([]);
+		$this->projectMapper->method('findByIdsForOwner')->with([10], 'alice')->willReturn([]);
+
+		$data = $this->controller->changes(1, 5)->getData();
+		self::assertSame([], $data['projects'], 'a project the viewer does not own must not leak');
+		self::assertSame([10], $data['cards']['upsert'][0]['projectIds']);
+	}
+
+	public function testChangesOmitsProjectsOnEmptyWindow(): void {
+		// The idle poll: nothing changed, so the projects lookup must not even run
+		// (an empty `IN ()` is invalid SQL and the query is wasted) and the key is
+		// omitted entirely - the client keeps its current list.
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(5);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([]);
+		$this->stubEnrichmentEmpty();
+		$this->cardMapper->method('findSummariesByIds')->willReturn([]);
+		$this->stackMapper->method('findByIds')->willReturn([]);
+
+		$this->projectMapper->expects(self::never())->method('findByIdsForOwner');
+
+		$data = $this->controller->changes(1, 5)->getData();
+		self::assertFalse($data['resync']);
+		self::assertArrayNotHasKey('projects', $data);
+	}
+
 	public function testUpdateReturnsUpdatedBoard(): void {
 		$board = $this->board();
 		$this->boardService->method('update')

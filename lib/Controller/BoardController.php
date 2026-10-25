@@ -355,6 +355,31 @@ class BoardController extends Controller {
 				$payload['blocksEdges'] = $this->cardRelationService->blocksEdgesForBoard($board, $uid);
 			}
 
+			// The viewer's OWN projects referenced by the upserted cards - the
+			// board-level project list (id/title/color) the tile resolves its
+			// `projectIds` against, exactly as show() ships it. Without this a card
+			// whose project membership changed in the window would render with no
+			// project colour until a full show() refetch. Same gate as blocksEdges:
+			// only for a NON-empty window (an empty delta must not run the query)
+			// and only when the upserted cards actually reference a project (an
+			// empty `IN ()` is invalid SQL and the query is wasted). One bounded,
+			// owner-scoped lookup - a project the viewer does not own contributes
+			// nothing, so its title and colour stay private.
+			if ($rows !== []) {
+				$projectIds = [];
+				foreach ($liveCards as $card) {
+					foreach ($card['projectIds'] as $pid) {
+						$projectIds[$pid] = true;
+					}
+				}
+				if ($projectIds !== []) {
+					$payload['projects'] = array_values(array_map(
+						static fn (Project $project): array => $project->jsonSerialize(),
+						$this->projectMapper->findByIdsForOwner(array_keys($projectIds), $uid)
+					));
+				}
+			}
+
 			return new JSONResponse($payload);
 		});
 	}

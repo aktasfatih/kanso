@@ -201,6 +201,26 @@ export function dropAllCursors() {
 }
 
 /**
+ * Immutably merge a list of entities into an existing list keyed by `id`:
+ * replace-by-id-or-append. The board's `projects` list is a board-level lookup
+ * the tile maps `projectIds` to a colour, and a delta window only carries the
+ * projects its upserted cards reference - so the cache must ACCUMULATE project
+ * entries over time. A full replacement would drop projects not referenced by
+ * this window's cards, which the next render would resolve to nothing.
+ *
+ * @param {Array<object>} list the current cached entities
+ * @param {Array<object>} incoming the delta's entities
+ * @return {Array<object>} a new array (never mutated in place)
+ */
+function upsertById(list, incoming) {
+	const byId = new Map((Array.isArray(list) ? list : []).map((e) => [e.id, e]))
+	for (const entity of incoming) {
+		byId.set(entity.id, entity)
+	}
+	return [...byId.values()]
+}
+
+/**
  * Immutably apply a `{upsert, remove}` delta to an array of entities keyed by
  * `id`: upsert replaces-by-id-or-appends, remove filters out the given ids.
  *
@@ -301,14 +321,15 @@ export async function syncBoardDelta(queryClient, boardId) {
 	]
 	// An empty delta (most poll ticks) is not a change event - don't spam
 	// listeners with it, and (see the setQueryData below) don't write the cache
-	// for it either. `blocksEdges` is in the condition because the server sends
-	// that key only for a NON-empty window; it can never be the sole content of
-	// one, but reading the flag off the payload rather than off an invariant
-	// keeps "did this window carry anything" true by construction.
+	// for it either. `blocksEdges` and `projects` are in the condition because
+	// the server sends those keys only for a NON-empty window; reading the flag
+	// off the payload rather than off an invariant keeps "did this window carry
+	// anything" true by construction.
 	const hasChanges = touchedCardIds.length > 0
 		|| (delta.stacks?.upsert?.length ?? 0) > 0
 		|| (delta.stacks?.remove?.length ?? 0) > 0
 		|| Array.isArray(delta.blocksEdges)
+		|| Array.isArray(delta.projects)
 
 	const existing = queryClient.getQueryData(boardKey)
 	if (!existing) {
@@ -353,6 +374,11 @@ export async function syncBoardDelta(queryClient, boardId) {
 				// add/remove always puts ENTITY_CARD rows in it). Absent key = no
 				// relation change rode this window, so keep what we have.
 				...(Array.isArray(delta.blocksEdges) ? { blocksEdges: delta.blocksEdges } : {}),
+				// Project details are MERGED by id (replace-by-id-or-append), never
+				// replaced: the window only carries the projects its upserted cards
+				// reference, so a full replacement would drop the projects other
+				// cards still resolve their colour from.
+				...(Array.isArray(delta.projects) ? { projects: upsertById(old.projects, delta.projects) } : {}),
 			}
 		})
 	}

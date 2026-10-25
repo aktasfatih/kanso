@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
@@ -62,6 +63,7 @@ class BulkCardService {
 		private LabelService $labelService,
 		private AssigneeService $assigneeService,
 		private CardMapper $cardMapper,
+		private StackMapper $stackMapper,
 		private TrashService $trashService,
 	) {
 	}
@@ -296,6 +298,17 @@ class BulkCardService {
 				// that the caller may not edit, or that no longer exists is a per-card
 				// skip, like every other action here.
 				return function (int $cardId) use ($uid): bool {
+					// A trashed card whose stack was deleted afterwards would be
+					// restored with a dangling stackId and never render (BoardView
+					// groups cards by stackId and renders only existing stacks) - so
+					// it is skipped, not restored. One bounded, board-scoped check:
+					// the card's stack must still be a live stack on its board.
+					// Thrown BEFORE the single-card path so the skip reason is the
+					// existing `not_found`, with no new user-facing message.
+					$card = $this->cardMapper->find($cardId);
+					if ($this->stackMapper->findByIds($card->getBoardId(), [$card->getStackId()]) === []) {
+						throw new DoesNotExistException('Stack ' . $card->getStackId() . ' is gone');
+					}
 					$this->trashService->restore($cardId, $uid);
 					return true;
 				};
