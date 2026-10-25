@@ -719,7 +719,7 @@ test.describe('Cross-board Views (#3815)', () => {
 			// (the NcAvatar tooltip), not the raw uid — proof the resolved name is
 			// plumbed into NcAvatar with no extra request.
 			const avatar = page.locator('.assignee-stack__avatar').first()
-			await expect(avatar).toBeVisible({ timeout: 10_000 })
+			await expect(avatar).toBeVisible()
 			await expect(avatar).toHaveAttribute('title', displayName)
 		} finally {
 			await cleanup()
