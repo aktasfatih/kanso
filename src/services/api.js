@@ -725,7 +725,12 @@ export const getViewCards = ({ sortMode = 'default', sortDir = 'asc', filter = {
 			// shipped separately from the rows on purpose: it is accumulated before
 			// the filter, so narrowing to one person never collapses the facet to the
 			// survivors — you can always add a second person, even at zero matches.
-			participants: Array.isArray(d.participants) ? d.participants.filter((u) => typeof u === 'string') : [],
+			// Each entry is {uid, displayName}; the display name is resolved
+			// server-side (one directory lookup per uid), falling back to the uid
+			// for a deleted account.
+			participants: Array.isArray(d.participants)
+				? d.participants.filter((p) => p && typeof p.uid === 'string')
+				: [],
 			capped: !!d.capped,
 			total: Number.isFinite(d.total) ? d.total : (Array.isArray(d.cards) ? d.cards.length : 0),
 			limit: Number.isFinite(d.limit) ? d.limit : 0,

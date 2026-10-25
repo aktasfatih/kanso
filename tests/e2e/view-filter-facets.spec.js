@@ -85,11 +85,12 @@ test.describe('View filter facets survive a narrow server-side filter (#9862)', 
 		expect(narrowed.total).toBeLessThan(all.total)
 
 		// The facet vocabulary is NOT narrowed with the rows — it still carries both
-		// identities even when the filter matches nothing at all.
+		// identities even when the filter matches nothing at all. Each entry is
+		// {uid, displayName}; the uid is the stable identity the facet keys on.
 		const none = await api.get(`/views/cards?fl=${label}&fa=${encodeURIComponent(peer.user)}&fp=4`)
 		expect(none.cards).toEqual([])
 		expect(none.total).toBe(0)
-		expect(none.participants).toEqual(expect.arrayContaining([me, peer.user]))
+		expect(none.participants.map((p) => p.uid)).toEqual(expect.arrayContaining([me, peer.user]))
 
 		// An unknown key and an unrecognised value are ignored, never rejected and
 		// never a reason to drop a row (an older or newer client must still work).

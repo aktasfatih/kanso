@@ -659,4 +659,70 @@ test.describe('Cross-board Views (#3815)', () => {
 		// Cleanup the UI-created view.
 		await api.delete(`/views/${uiViewId}`).catch(() => {})
 	})
+
+	test('the Views feed shows assignee display names, not raw uids (#10801)', async ({ page }) => {
+		await page.setViewportSize({ width: 1280, height: 900 })
+
+		// A second identity whose display name DELIBERATELY differs from its uid.
+		// Without that distinction the assertion below could pass vacuously (uid and
+		// name coincide), so we pin the stored display name first.
+		const stamp = Math.floor(Date.now() / 1000)
+		const uid = `viewnames_${stamp}`
+		const displayName = 'View Names Person'
+		const { provisionUser, deleteUser } = await import('./helpers.js')
+		await provisionUser(uid, 'Kanso-viewnames!1', { displayName })
+		// Confirm the display name actually landed AND differs from the uid.
+		const info = await fetch(`${BASE}/ocs/v2.php/cloud/users/${encodeURIComponent(uid)}?format=json`, {
+			headers: { 'OCS-APIREQUEST': 'true', Authorization: `Basic ${Buffer.from(`admin:admin`).toString('base64')}` },
+		}).then((r) => r.json())
+		expect(info.ocs.data.displayname).toBe(displayName)
+		expect(displayName).not.toBe(uid)
+
+		let boardId = 0
+		const cleanup = async () => {
+			if (boardId) await api.delete(`/boards/${boardId}`).catch(() => {})
+			await deleteUser(uid).catch(() => {})
+		}
+
+		try {
+			// A board shared with the assignee (READ|EDIT) so they can be assigned,
+			// one card assigned to them, and a View grouped by assignee so the group
+			// header is the surface under test.
+			boardId = (await api.post('/boards', { title: 'ViewNames ' + stamp })).id
+			await api.post(`/boards/${boardId}/acl`, {
+				participant: uid,
+				participantType: 'user',
+				permission: 3,
+				role: 'internal',
+			})
+			const stack = (await api.post('/stacks', { boardId, title: 'To do' })).id
+			const card = await api.post('/cards', { stackId: stack, title: 'ViewNames card ' + stamp })
+			await api.put(`/cards/${card.id}/assignees/${uid}`)
+
+			const created = await api.put('/views', {
+				name: 'ViewNames ' + stamp,
+				filter: {},
+				groupBy: 'assignee',
+				display: 'list',
+			})
+			const view = created.views[created.views.length - 1]
+
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/views/${view.id}`)
+
+			// The assignee group header renders the DISPLAY NAME, not the raw uid.
+			await expect(page.locator('.board-list-group__title', { hasText: displayName })).toBeVisible({ timeout: 20_000 })
+			// …and the raw uid is NOT used as the group title.
+			await expect(page.locator('.board-list-group__title', { hasText: new RegExp(`^${uid}$`) })).toHaveCount(0)
+
+			// The assignee avatar's root carries the display name in its `title`
+			// (the NcAvatar tooltip), not the raw uid — proof the resolved name is
+			// plumbed into NcAvatar with no extra request.
+			const avatar = page.locator('.assignee-stack__avatar').first()
+			await expect(avatar).toBeVisible({ timeout: 10_000 })
+			await expect(avatar).toHaveAttribute('title', displayName)
+		} finally {
+			await cleanup()
+		}
+	})
 })

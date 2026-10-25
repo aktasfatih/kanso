@@ -32,6 +32,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			v-for="uid in visibleIds"
 			:key="uid"
 			:user="uid"
+			:display-name="nameOf(uid)"
 			:size="size"
 			:hide-status="true"
 			:disable-tooltip="false"
@@ -49,6 +50,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import { computed } from 'vue'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import { translate as t } from '@nextcloud/l10n'
+import { useAssigneeNames } from '../services/assigneeNames.js'
 
 const props = defineProps({
 	/** Assignee uids, in board order. */
@@ -58,6 +60,13 @@ const props = defineProps({
 	/** How many avatars render before the rest collapse into "+N". */
 	max: { type: Number, default: 3 },
 })
+
+// Resolve each uid to its display name from the surface-provided map (the
+// cross-board View provides the feed's server-resolved names, #10801), falling
+// back to the uid itself for a deleted account or a surface that provides none
+// (a board) - so the avatar's initials + tooltip stop showing a bare uid where a
+// name is known, with no extra request.
+const nameOf = useAssigneeNames()
 
 const ids = computed(() => (Array.isArray(props.assigneeIds) ? props.assigneeIds : []))
 

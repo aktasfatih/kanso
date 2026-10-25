@@ -18,6 +18,8 @@ use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\CardSummaryService;
 use OCA\Kanso\Service\ViewFilter;
 use OCA\Kanso\Service\ViewService;
+use OCP\IUser;
+use OCP\IUserManager;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -27,6 +29,7 @@ class ViewServiceTest extends TestCase {
 	private CardSummaryService&MockObject $cardSummaryService;
 	private BoardAccess&MockObject $boardAccess;
 	private LabelMapper&MockObject $labelMapper;
+	private IUserManager&MockObject $userManager;
 	private ViewService $service;
 
 	protected function setUp(): void {
@@ -36,14 +39,19 @@ class ViewServiceTest extends TestCase {
 		$this->cardSummaryService = $this->createMock(CardSummaryService::class);
 		$this->boardAccess = $this->createMock(BoardAccess::class);
 		$this->labelMapper = $this->createMock(LabelMapper::class);
+		$this->userManager = $this->createMock(IUserManager::class);
 		// Default: no labels on any board unless a test says otherwise.
 		$this->labelMapper->method('findByBoards')->willReturn([]);
+		// The directory mock returns null for get() by default (its return type is
+		// ?IUser), so every uid falls back to itself as its own display name - the
+		// deleted-account case - unless a test resolves a specific uid.
 		$this->service = new ViewService(
 			$this->boardService,
 			$this->cardMapper,
 			$this->cardSummaryService,
 			$this->boardAccess,
 			$this->labelMapper,
+			$this->userManager,
 		);
 	}
 
@@ -187,7 +195,7 @@ class ViewServiceTest extends TestCase {
 		$labelMapper = $this->createMock(LabelMapper::class);
 		$labelMapper->expects(self::once())->method('findByBoards')->with([3, 9, 12])->willReturn([]);
 		$labelMapper->expects(self::never())->method('findByBoard');
-		$service = new ViewService($this->boardService, $this->cardMapper, $this->cardSummaryService, $this->boardAccess, $labelMapper);
+		$service = new ViewService($this->boardService, $this->cardMapper, $this->cardSummaryService, $this->boardAccess, $labelMapper, $this->userManager);
 
 		self::assertSame([11, 22, 33], $this->idsOf($service->findMine('alice')));
 	}
@@ -265,7 +273,7 @@ class ViewServiceTest extends TestCase {
 			9 => [$this->label(1, 'Bug', '#ff0000'), $this->label(2, 'Chore', null)],
 			3 => [$this->label(5, 'Idea', '#00ff00')],
 		]);
-		$service = new ViewService($this->boardService, $this->cardMapper, $this->cardSummaryService, $this->boardAccess, $labelMapper);
+		$service = new ViewService($this->boardService, $this->cardMapper, $this->cardSummaryService, $this->boardAccess, $labelMapper, $this->userManager);
 
 		$result = $service->findMine('alice');
 
@@ -372,8 +380,9 @@ class ViewServiceTest extends TestCase {
 
 		self::assertSame([11], $this->idsOf($result));
 		self::assertSame(1, $result['total']);
-		// …and its people never enter the facet vocabulary either.
-		self::assertSame(['alice'], $result['participants']);
+		// …and its people never enter the facet vocabulary either. The directory
+		// knows nobody here, so 'alice' falls back to itself as its own name.
+		self::assertSame([['uid' => 'alice', 'displayName' => 'alice']], $result['participants']);
 	}
 
 	/**
@@ -584,8 +593,16 @@ class ViewServiceTest extends TestCase {
 
 		self::assertSame([], $result['cards']);
 		self::assertSame(0, $result['total']);
-		// The facet vocabulary survives the wipe-out, sorted and de-duplicated.
-		self::assertSame(['alice', 'bob', 'carol'], $result['participants']);
+		// The facet vocabulary survives the wipe-out, sorted and de-duplicated. The
+		// directory knows nobody here, so every uid falls back to itself as its name.
+		self::assertSame(
+			[
+				['uid' => 'alice', 'displayName' => 'alice'],
+				['uid' => 'bob', 'displayName' => 'bob'],
+				['uid' => 'carol', 'displayName' => 'carol'],
+			],
+			$result['participants'],
+		);
 	}
 
 	/** Unfiltered, the same vocabulary is the union across every readable board. */
@@ -595,7 +612,52 @@ class ViewServiceTest extends TestCase {
 			9 => ['rows' => [['id' => 22, 'owner' => 'bob', 'assigneeIds' => ['alice']]]],
 		]);
 
-		self::assertSame(['alice', 'bob', 'dave'], $this->service->findMine('alice')['participants']);
+		self::assertSame(
+			[
+				['uid' => 'alice', 'displayName' => 'alice'],
+				['uid' => 'bob', 'displayName' => 'bob'],
+				['uid' => 'dave', 'displayName' => 'dave'],
+			],
+			$this->service->findMine('alice')['participants'],
+		);
+	}
+
+	/**
+	 * THE bug this fix exists for (#10801): the feed used to ship bare uids, so the
+	 * facets, chips and group headers all read the raw uid. Now each distinct uid's
+	 * display name is resolved from the directory - ONE lookup per distinct uid, not
+	 * per row - and the vocabulary stays bounded by the cards in play, not board
+	 * membership. A uid the directory no longer knows (a deleted account) falls back
+	 * to itself, so the facet keeps offering it instead of dropping it.
+	 */
+	public function testFindMineResolvesParticipantDisplayNamesFromTheDirectory(): void {
+		$this->seedFeed([
+			3 => ['rows' => [['id' => 11, 'owner' => 'alice', 'assigneeIds' => ['bob']]]],
+			9 => ['rows' => [['id' => 22, 'owner' => 'bob', 'assigneeIds' => ['alice', 'ghost']]]],
+		]);
+
+		$alice = $this->createMock(IUser::class);
+		$alice->method('getDisplayName')->willReturn('Alice Doe');
+		$bob = $this->createMock(IUser::class);
+		$bob->method('getDisplayName')->willReturn('Bob Smith');
+		// 'ghost' is a deleted account: the directory returns null for it, so its
+		// display name falls back to the uid itself.
+		$this->userManager->method('get')->willReturnMap([
+			['alice', $alice],
+			['bob', $bob],
+			['ghost', null],
+		]);
+
+		$participants = $this->service->findMine('alice')['participants'];
+
+		self::assertSame(
+			[
+				['uid' => 'alice', 'displayName' => 'Alice Doe'],
+				['uid' => 'bob', 'displayName' => 'Bob Smith'],
+				['uid' => 'ghost', 'displayName' => 'ghost'],
+			],
+			$participants,
+		);
 	}
 
 	/**
@@ -617,10 +679,18 @@ class ViewServiceTest extends TestCase {
 
 		$participants = $this->service->findMine('alice')['participants'];
 
-		// assertSame is strict: int(12345) would NOT satisfy '12345'.
-		self::assertSame(['12345', '67890', 'alice'], $participants);
-		foreach ($participants as $uid) {
-			self::assertIsString($uid, 'every participant uid must ship as a string');
+		// assertSame is strict: int(12345) would NOT satisfy '12345'. The directory
+		// knows nobody here, so every uid falls back to itself as its own name.
+		self::assertSame(
+			[
+				['uid' => '12345', 'displayName' => '12345'],
+				['uid' => '67890', 'displayName' => '67890'],
+				['uid' => 'alice', 'displayName' => 'alice'],
+			],
+			$participants,
+		);
+		foreach ($participants as $entry) {
+			self::assertIsString($entry['uid'], 'every participant uid must ship as a string');
 		}
 	}
 
@@ -656,8 +726,10 @@ class ViewServiceTest extends TestCase {
 		self::assertSame([3], array_values(array_unique($boardIds)));
 		self::assertNotContains(7, $boardIds, 'a filter must never surface a card from an unreadable board');
 		// The vocabulary is scoped to the readable set too - it cannot become a
-		// side channel for uids seen only on boards alice cannot read.
-		self::assertSame(['mallory'], $result['participants']);
+		// side channel for uids seen only on boards alice cannot read. 'mallory'
+		// appears only because the (mocked) readable board 3 names her; the
+		// directory knows nobody, so she falls back to herself as her own name.
+		self::assertSame([['uid' => 'mallory', 'displayName' => 'mallory']], $result['participants']);
 	}
 
 	/**
@@ -782,9 +854,15 @@ class ViewServiceTest extends TestCase {
 			['id' => 2, 'owner' => 'zoe', 'assigneeIds' => ['zoe'], 'archived' => true],
 		]]]);
 
-		self::assertSame(['alice'], $this->service->findMine('alice')['participants']);
 		self::assertSame(
-			['alice', 'zoe'],
+			[['uid' => 'alice', 'displayName' => 'alice']],
+			$this->service->findMine('alice')['participants'],
+		);
+		self::assertSame(
+			[
+				['uid' => 'alice', 'displayName' => 'alice'],
+				['uid' => 'zoe', 'displayName' => 'zoe'],
+			],
 			$this->service->findMine('alice', 'default', 'asc', ViewFilter::fromQuery(['far' => 'include']))['participants'],
 		);
 	}
