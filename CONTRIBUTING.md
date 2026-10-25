@@ -31,8 +31,9 @@ php-cs-fixer). Before opening a PR:
 
 `main` is a protected branch: every change lands through a pull request and can
 only be merged once **all** required CI checks pass — `cs-check`, `psalm`,
-`unit-php` (on PHP 8.2, 8.3, 8.4 and 8.5), `build-frontend`, and the full `e2e` suite.
-Open your PR against `main`; CI runs automatically on push.
+`unit-php (8.2)`, `unit-php (8.3)`, `build-frontend`, the full `e2e` suite, and
+`upgrade (last release → this branch, with data)`. Open your PR against `main`;
+CI runs automatically on push.
 
 `unit-mcp` (the `mcp/` Python server's pytest suite) also runs on every PR, but
 it is **advisory for now** — it is not yet in the branch-protection required
@@ -40,8 +41,10 @@ list, so a red `unit-mcp` will not block a merge. Adding it there is a
 maintainer action in the repository settings that has not happened yet. Please
 treat it as required anyway: don't merge on a red `unit-mcp`.
 
-The same applies to `upgrade` — see below. It is new, and not in the required
-list yet.
+The same applies to the `unit-php (8.4)` and `unit-php (8.5)` legs: they run on
+every PR but are not in the required list, so a red one will not block a merge.
+Treat them as required anyway: don't merge on a red `unit-php (8.4)` or
+`unit-php (8.5)`.
 
 ## Writing a migration
 
