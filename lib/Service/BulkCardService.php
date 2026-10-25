@@ -298,14 +298,17 @@ class BulkCardService {
 				// that the caller may not edit, or that no longer exists is a per-card
 				// skip, like every other action here.
 				return function (int $cardId) use ($uid): bool {
+					// Access is validated FIRST (EDIT on the board + card visibility)
+					// so a caller who may not see the card gets `forbidden` before any
+					// card-state is revealed - checking the stack ahead of the guards
+					// would let them probe whether its stack still exists.
+					$card = $this->trashService->assertAccess($cardId, $uid);
 					// A trashed card whose stack was deleted afterwards would be
 					// restored with a dangling stackId and never render (BoardView
 					// groups cards by stackId and renders only existing stacks) - so
 					// it is skipped, not restored. One bounded, board-scoped check:
 					// the card's stack must still be a live stack on its board.
-					// Thrown BEFORE the single-card path so the skip reason is the
-					// existing `not_found`, with no new user-facing message.
-					$card = $this->cardMapper->find($cardId);
+					// Thrown as the existing `not_found`, with no new user-facing message.
 					if ($this->stackMapper->findByIds($card->getBoardId(), [$card->getStackId()]) === []) {
 						throw new DoesNotExistException('Stack ' . $card->getStackId() . ' is gone');
 					}

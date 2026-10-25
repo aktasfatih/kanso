@@ -100,6 +100,24 @@ class TrashService {
 	}
 
 	/**
+	 * Validates the actor may restore the card (EDIT on the board + card
+	 * visibility) and returns it, WITHOUT revealing its trash state. Exposed so
+	 * callers can run access validation before any card-state check: a caller
+	 * who may not see the card must not be able to probe its state (e.g. whether
+	 * its stack still exists) ahead of the `forbidden` the guards owe them.
+	 *
+	 * @throws DoesNotExistException if the card or its board does not exist, or the board is deleted
+	 * @throws NotPermittedException if the actor may not edit the board or may not see the card
+	 */
+	public function assertAccess(int $cardId, string $actorUid): Card {
+		$card = $this->cardMapper->find($cardId);
+		$board = $this->loadBoard($card->getBoardId());
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		return $card;
+	}
+
+	/**
 	 * Restores a trashed card (clears deleted_at) so it returns to its stack.
 	 * Requires EDIT.
 	 *
@@ -108,10 +126,7 @@ class TrashService {
 	 * @throws InvalidInputException if the card is not in the trash
 	 */
 	public function restore(int $cardId, string $actorUid): Card {
-		$card = $this->cardMapper->find($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$card = $this->assertAccess($cardId, $actorUid);
 		// Only AFTER access is settled may the card's trash state be revealed:
 		// a 400 "not in the trash" ahead of the guards is an existence oracle.
 		$this->assertTrashed($card);

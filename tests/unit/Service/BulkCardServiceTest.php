@@ -82,6 +82,10 @@ class BulkCardServiceTest extends TestCase {
 	 * and the stack-existence check (every stack except 999 is live on the board).
 	 */
 	private function stubRestorePreReads(int $stackId = 2): void {
+		// The closure validates access through TrashService first (so `forbidden`
+		// wins over any card-state), then checks the stack.
+		$this->trashService->method('assertAccess')
+			->willReturnCallback(fn (int $id, string $uid): Card => $this->trashedCard($id, $stackId));
 		$this->cardMapper->method('find')
 			->willReturnCallback(fn (int $id): Card => $this->trashedCard($id, $stackId));
 		$this->stackMapper->method('findByIds')
@@ -426,6 +430,20 @@ class BulkCardServiceTest extends TestCase {
 		$result = $this->service->apply([11], BulkCardService::ACTION_RESTORE, [], 'alice');
 		self::assertSame([], $result['ok'], 'a card whose stack is gone is skipped, not restored');
 		self::assertSame([['id' => 11, 'reason' => 'not_found']], $result['skipped']);
+	}
+
+	public function testBulkRestoreReportsForbiddenBeforeRevealingAMissingStack(): void {
+		// A card the caller may not edit whose stack is gone must report `forbidden`
+		// (access denied) rather than `not_found` (missing stack) - revealing the
+		// stack state ahead of the access guard is an existence oracle.
+		$this->stackMapper->method('findByIds')->willReturn([]); // card's stack is gone
+		$this->trashService->method('assertAccess')
+			->willThrowException(new NotPermittedException('nope')); // caller may not edit
+		$this->trashService->expects(self::never())->method('restore');
+
+		$result = $this->service->apply([11], BulkCardService::ACTION_RESTORE, [], 'alice');
+		self::assertSame([], $result['ok']);
+		self::assertSame([['id' => 11, 'reason' => 'forbidden']], $result['skipped']);
 	}
 
 	public function testBulkRestoreSkipsANonEditableCardInsteadOfFailingTheRequest(): void {
