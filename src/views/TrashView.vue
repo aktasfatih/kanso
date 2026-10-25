@@ -3,7 +3,9 @@ SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<div class="trash-view kanso-page-view">
+	<div
+		class="trash-view kanso-page-view"
+		:class="{ 'trash-view--selecting': bulk.selectionMode.value }">
 		<!-- Header: back affordance + title + in-view filter -->
 		<div class="trash-view__header">
 			<NcButton class="trash-view__back" @click="goBack">
@@ -28,6 +30,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:placeholder="t('kanso', 'Filter trash…')"
 					:aria-label="t('kanso', 'Filter deleted cards')" />
 			</div>
+
+			<!-- Multi-select: select several deleted cards and restore them in ONE
+			     action instead of one click per card. The same mode, bar and chunking
+			     the board and the archive page use, so this is the same gesture on
+			     another surface, not a second interaction to learn. Offered only to
+			     editors - the one bulk action here (restore) is EDIT-gated. -->
+			<NcButton
+				v-if="canEdit && !trashQuery.isLoading.value && trashCards.length > 0"
+				class="trash-view__select-toggle"
+				:type="bulk.selectionMode.value ? 'secondary' : 'tertiary'"
+				:aria-pressed="bulk.selectionMode.value ? 'true' : 'false'"
+				@click="bulk.selectionMode.value ? bulk.exitMode() : bulk.enterMode()">
+				<template #icon>
+					<SelectMultipleIcon :size="20" />
+				</template>
+				{{ bulk.selectionMode.value ? t('kanso', 'Exit multi-select') : t('kanso', 'Select multiple cards') }}
+			</NcButton>
 		</div>
 
 		<!-- Loading -->
@@ -79,14 +98,44 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 
 					<!-- Card row -->
-					<div v-else class="trash-view__row">
+					<div
+						v-else
+						class="trash-view__row"
+						:class="{ 'trash-view__row--selected': isRowSelected(rows[vRow.index].card.id) }">
+						<!-- Selection tick, shown only in multi-select mode. The row
+						     title button beside it is the control assistive tech sees
+						     (it carries the pressed state); this box shows the state and
+						     is clickable itself. `.prevent` is load-bearing: without it the
+						     browser's own activation flips `checked` first, and a click that
+						     leaves the model UNCHANGED would then leave the tick
+						     contradicting both the row's tint and the bar's count. -->
+						<input
+							v-if="bulk.selectionMode.value"
+							type="checkbox"
+							class="trash-view__row-select"
+							:checked="isRowSelected(rows[vRow.index].card.id)"
+							tabindex="-1"
+							aria-hidden="true"
+							@click.stop.prevent="onRowSelect(rows[vRow.index].card.id, $event)" />
 						<div class="trash-view__row-info">
-							<span class="trash-view__row-title">{{ rows[vRow.index].card.title }}</span>
+							<button
+								v-if="bulk.selectionMode.value"
+								class="trash-view__row-title trash-view__row-title--button"
+								:aria-pressed="isRowSelected(rows[vRow.index].card.id) ? 'true' : 'false'"
+								@click="onRowActivate(rows[vRow.index].card.id, $event)">
+								{{ rows[vRow.index].card.title }}
+							</button>
+							<span v-else class="trash-view__row-title">{{ rows[vRow.index].card.title }}</span>
 							<span v-if="rows[vRow.index].card.deletedAt" class="trash-view__row-deleted">
 								{{ formatDeletedAt(rows[vRow.index].card.deletedAt) }}
 							</span>
 						</div>
-						<div class="trash-view__row-actions">
+						<!-- The single-row actions are withdrawn inside selection mode:
+						     a row must not offer two contradictory actions at once, and
+						     acting on a SELECTED row behind the bar's back would leave a
+						     dead id in the selection - over-reported in the count, then
+						     sent as a no-op. -->
+						<div v-if="!bulk.selectionMode.value" class="trash-view__row-actions">
 							<!-- Restore: available to editors. -->
 							<NcButton
 								v-if="canEdit"
@@ -133,13 +182,33 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<div v-if="actionError" class="trash-view__action-error">
 			{{ actionError }}
 		</div>
+
+		<!-- The shared multi-select bar, holding the one bulk action this page has:
+		     restore the whole selection in one action. Chunking to the server's
+		     per-request cap is useBulkSelect's job, so a 400-card trash restores
+		     in four requests rather than one rejected one. -->
+		<BulkSelectionBar
+			v-if="bulk.selectionMode.value"
+			:count="bulk.selectedCount.value"
+			@close="bulk.exitMode()">
+			<NcButton
+				type="primary"
+				:disabled="bulk.applying.value || bulk.selectedCount.value === 0"
+				@click="handleRestoreSelected">
+				<template #icon>
+					<RestoreIcon :size="20" />
+				</template>
+				{{ t('kanso', 'Restore selected') }}
+			</NcButton>
+		</BulkSelectionBar>
 	</div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
+import { showSuccess, showWarning } from '@nextcloud/dialogs'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useQueryClient } from '@tanstack/vue-query'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -148,9 +217,12 @@ import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import RestoreIcon from 'vue-material-design-icons/Restore.vue'
 import DeleteForeverIcon from 'vue-material-design-icons/DeleteForever.vue'
 import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
+import SelectMultipleIcon from 'vue-material-design-icons/SelectMultiple.vue'
+import BulkSelectionBar from '../components/BulkSelectionBar.vue'
 import { useBoard } from '../composables/useBoard.js'
 import { usePageTitle } from '../composables/usePageTitle.js'
 import { useTrash } from '../composables/useTrash.js'
+import { useBulkSelect } from '../composables/useBulkSelect.js'
 import { boardQueryKey } from '../composables/queryKeys.js'
 import { cssColor } from '../services/color.js'
 
@@ -255,6 +327,101 @@ const virtualizer = useVirtualizer(computed(() => ({
 	getItemKey: (i) => rows.value[i]?.id ?? i,
 })))
 
+// ── Multi-select ──────────────────────────────────────────────────────────────
+// The board's selection store, unchanged: a Set of card ids, shift-ranges, and
+// a bulk apply chunked to the server's MAX_CARDS. Nothing here is trash-specific
+// except which action the bar offers (restore).
+const bulk = useBulkSelect(boardId, queryClient)
+
+/**
+ * The card rows' ids in display order — the list a shift-range is resolved
+ * against. Taken from `rows` (the data model) rather than from the DOM, so a
+ * range whose endpoints sit either side of the virtualized window still covers
+ * everything in between; the virtualizer only indexes into this list, it never
+ * shortens it.
+ */
+const orderedCardIds = computed(() =>
+	rows.value.filter((r) => r.type === 'card').map((r) => r.card.id),
+)
+
+/**
+ * Whether a row is ticked. Selection mode is part of the question so a stale
+ * selection can never paint rows after the mode is left.
+ *
+ * @param {number} cardId - the row's card id
+ * @return {boolean} true when the row is selected and the mode is on
+ */
+function isRowSelected(cardId) {
+	return bulk.selectionMode.value && bulk.isSelected(cardId)
+}
+
+/**
+ * A click on a row (or its tick): toggles the selection, or extends the range
+ * from the last one on a shift-click — the board's gesture, applied to this
+ * list's order.
+ *
+ * @param {number} cardId - the row's card id
+ * @param {MouseEvent} event - the originating click
+ */
+function onRowSelect(cardId, event) {
+	if (event?.shiftKey) {
+		bulk.selectRange(orderedCardIds.value, cardId)
+	} else {
+		bulk.toggle(cardId)
+	}
+}
+
+/**
+ * A click on the row title: toggles the selection while multi-select is on.
+ *
+ * @param {number} cardId - the row's card id
+ * @param {MouseEvent} event - the originating click
+ */
+function onRowActivate(cardId, event) {
+	onRowSelect(cardId, event)
+}
+
+// Nothing left to select: leave the mode rather than strand the bar over the
+// empty state — restoring everything is the expected end of this flow.
+watch(() => trashCards.value.length, (count) => {
+	if (count === 0 && bulk.selectionMode.value) bulk.exitMode()
+})
+
+/**
+ * Restore the whole selection in one action. Reports like every other bulk path
+ * (BoardView.runBulkAction, ArchivedView.handleRestoreSelected): a summary toast
+ * on success, a warning naming the cards that were skipped per-card server-side,
+ * and — because a big selection is applied in chunks — a warning naming what DID
+ * land when a later chunk fails. No optimistic write: the rows leave the list on
+ * the invalidation below, which is the database-first path.
+ */
+async function handleRestoreSelected() {
+	actionError.value = ''
+	// The bulk path invalidates the board + cross-board feeds, but not the trash
+	// list - revalidate it so the restored cards leave the panel.
+	const trashKey = ['trash', String(props.id)]
+	try {
+		const result = await bulk.apply('restore')
+		await queryClient.invalidateQueries({ queryKey: trashKey })
+		const ok = result?.ok?.length ?? 0
+		const skipped = result?.skipped?.length ?? 0
+		if (skipped > 0) {
+			showWarning(t('kanso', '{ok} restored, {skipped} skipped', { ok, skipped }))
+		} else if (ok > 0) {
+			showSuccess(t('kanso', '{ok} cards restored', { ok }))
+		}
+	} catch (err) {
+		actionError.value = err?.response?.data?.error || t('kanso', 'Bulk action failed.')
+		// A later chunk failed after earlier ones committed - those cards DID
+		// restore server-side, so revalidate the trash list to drop them.
+		await queryClient.invalidateQueries({ queryKey: trashKey }).catch(() => {})
+		const partialOk = err?.partial?.ok?.length ?? 0
+		if (partialOk > 0) {
+			showWarning(t('kanso', '{ok} cards restored before the action failed', { ok: partialOk }))
+		}
+	}
+}
+
 // ── Actions ───────────────────────────────────────────────────────────────────
 const restoringId = ref(null)
 const purgingId = ref(null)
@@ -319,6 +486,15 @@ function formatDeletedAt(deletedAt) {
 	overflow: hidden;
 }
 
+/* The selection bar is `position: fixed` over the bottom of the viewport, so it
+   would cover the last rows AND the action-error banner (the page's last in-flow
+   child — the one that reports a failed restore). Shortening the PAGE, not just
+   the scroller, is what keeps both clear of it; only paid while the bar is up. */
+.trash-view--selecting {
+	box-sizing: border-box;
+	padding-bottom: 76px;
+}
+
 /* ── Header ─────────────────────────────────────────────────────────────────── */
 .trash-view__header {
 	display: flex;
@@ -379,6 +555,10 @@ function formatDeletedAt(deletedAt) {
 
 .trash-view__filter-input:focus {
 	outline: none;
+}
+
+.trash-view__select-toggle {
+	flex-shrink: 0;
 }
 
 /* ── Loading / error / empty ─────────────────────────────────────────────────── */
@@ -509,6 +689,46 @@ function formatDeletedAt(deletedAt) {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* The title becomes a button in multi-select mode (it toggles the selection).
+   Reset the UA button chrome so it reads as the same text as the span it
+   replaces, and let it ellipsize inside the row. */
+.trash-view__row-title--button {
+	display: block;
+	width: 100%;
+	padding: 0;
+	background: transparent;
+	border: none;
+	text-align: start;
+	cursor: pointer;
+	font: inherit;
+	color: inherit;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.trash-view__row-title--button:hover {
+	text-decoration: underline;
+}
+
+/* A tint, where the board's tile uses an outline ring: these rows are adjacent
+   and each sits in a fixed-height, overflow-hidden virtualizer cell, so an
+   outline would be clipped and would fight the row's bottom border. */
+.trash-view__row--selected {
+	background: var(--color-primary-element-light, rgba(0, 130, 201, 0.15));
+}
+
+/* Same geometry and accent as the board tile's box (CardTile), so the tick reads
+   as the same control and follows the instance theme instead of the UA's blue. */
+.trash-view__row-select {
+	flex: 0 0 auto;
+	width: 16px;
+	height: 16px;
+	margin: 0 0 0 4px;
+	accent-color: var(--color-primary-element);
+	cursor: pointer;
 }
 
 .trash-view__row-deleted {

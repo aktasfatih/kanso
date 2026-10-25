@@ -170,6 +170,32 @@ class TrashServiceTest extends TestCase {
 		self::assertSame(0, $restored->getDeletedAt());
 	}
 
+	public function testRestoreOfACardWhoseStackIsGoneStillSucceeds(): void {
+		// Pinned behaviour: restore() performs NO stack-existence check. A trashed
+		// card whose stack was deleted afterwards is still restored - deleted_at is
+		// cleared and the change row is written - leaving the card live with a
+		// dangling stack reference (the board render then shows it under "Unknown
+		// stack"). It is not a 500 and not a skip. If a stack check were added
+		// here, this test would fail.
+		$card = $this->trashedCard(9);
+		$card->setStackId(999); // a stack that no longer exists
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->expects(self::once())
+			->method('update')
+			->willReturnCallback(function (Card $c): Card {
+				self::assertSame(0, $c->getDeletedAt());
+				return $c;
+			});
+		$this->changeNotifier->expects(self::once())
+			->method('notify')
+			->willReturn(new Change());
+
+		$restored = $this->service->restore(9, 'alice');
+		self::assertSame(0, $restored->getDeletedAt());
+		self::assertSame(999, $restored->getStackId(), 'the dangling stack reference is preserved');
+	}
+
 	public function testRestoreRejectsCardNotInTrash(): void {
 		$card = $this->trashedCard(9);
 		$card->setDeletedAt(0); // a live card

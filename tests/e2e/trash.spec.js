@@ -196,4 +196,64 @@ test.describe('Trash', () => {
 		// The card id is now gone; nullify so afterAll cleanup does not try to delete it.
 		state.cardId = 0
 	})
+
+	test('restoring several cards at once returns them all to the board', async ({ page }) => {
+		// Self-contained: create three cards, trash them, then restore them in ONE
+		// bulk action and assert they all come back to their original stack. Does
+		// not depend on any other test's card state.
+		const titles = ['Bulk Restore One', 'Bulk Restore Two', 'Bulk Restore Three']
+		const created = []
+		for (const title of titles) {
+			const card = await api.post('/cards', { stackId: state.stackId, title })
+			created.push({ id: card.id, title })
+		}
+		// Soft-delete all three so they sit in the trash.
+		for (const { id } of created) {
+			await api.delete(`/cards/${id}`)
+		}
+
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+
+		// Open the routed Trash page.
+		await openTrashPage(page)
+
+		// Enter multi-select mode (editors only; admin is an editor).
+		const selectToggle = page.getByRole('button', { name: 'Select multiple cards' })
+		await expect(selectToggle).toBeVisible()
+		await selectToggle.click()
+
+		// The shared selection bar appears.
+		const bar = page.locator('.bulk-action-bar')
+		await expect(bar).toBeVisible()
+
+		// Select each of our cards by its row title (a button in selection mode).
+		for (const { title } of created) {
+			const rowTitle = page.locator('.trash-view__row-title--button', { hasText: title })
+			await expect(rowTitle).toBeVisible()
+			await rowTitle.click()
+		}
+
+		// The bar's count reflects the three selected cards.
+		await expect(bar).toContainText('3 selected')
+
+		// Restore the whole selection in one action.
+		const restoreBtn = page.getByRole('button', { name: 'Restore selected' })
+		await expect(restoreBtn).toBeEnabled()
+		await restoreBtn.click()
+
+		// Our three cards leave the trash list.
+		for (const { title } of created) {
+			const trashItem = page.locator('.trash-view__row-title').filter({ hasText: title })
+			await expect(trashItem).not.toBeVisible({ timeout: 8000 })
+		}
+
+		// Back to the board: all three cards are back in their original stack.
+		await backToBoard(page)
+		for (const { title } of created) {
+			const boardCardTile = page.locator('.card-tile').filter({ hasText: title })
+			await expect(boardCardTile).toBeVisible()
+		}
+	})
 })
