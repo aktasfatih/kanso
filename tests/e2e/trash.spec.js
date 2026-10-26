@@ -257,6 +257,51 @@ test.describe('Trash', () => {
 		}
 	})
 
+	// #10924 — clicking the selection checkbox itself (not the row title) must
+	// tick it and select the row. The tick is model-driven: `:checked` reads the
+	// selection and the click updates it. A `.prevent` on the click used to cancel
+	// the browser's own activation and leave the tick un-set on a select, while
+	// the row tint (also model-driven) still applied — so the box and the row
+	// disagreed. Selecting via the row title never exposed it, which is why this
+	// path had no coverage.
+	test('clicking the row checkbox ticks it and selects the row', async ({ page }) => {
+		// Self-contained: one trashed card, selected by its checkbox, not its title.
+		const ts = Date.now()
+		const title = `Checkbox Tick ${ts}`
+		const card = await api.post('/cards', { stackId: state.stackId, title })
+		await api.delete(`/cards/${card.id}`)
+
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+
+		await openTrashPage(page)
+
+		// Enter multi-select mode so the checkbox is rendered.
+		const selectToggle = page.getByRole('button', { name: 'Select multiple cards' })
+		await expect(selectToggle).toBeVisible()
+		await selectToggle.click()
+
+		const bar = page.locator('.bulk-action-bar')
+		await expect(bar).toBeVisible()
+
+		// The checkbox for our row, scoped to the row that carries our card.
+		const row = page.locator('.trash-view__row').filter({ hasText: title })
+		const box = row.locator('.trash-view__row-select')
+		await expect(box).toBeVisible()
+
+		// Clicking the checkbox itself ticks it AND selects the row.
+		await box.click()
+		await expect(box).toBeChecked()
+		await expect(row).toHaveClass(/trash-view__row--selected/)
+		await expect(bar).toContainText('1 selected')
+
+		// Clicking again unticks it and deselects the row.
+		await box.click()
+		await expect(box).not.toBeChecked()
+		await expect(row).not.toHaveClass(/trash-view__row--selected/)
+	})
+
 	// #10923 — a trashed card whose stack was deleted afterwards would restore
 	// with a dangling stackId and never render (BoardView groups by stackId and
 	// only draws live stacks). Bulk restore now skips it per-card and reports the
