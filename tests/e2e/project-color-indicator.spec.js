@@ -93,19 +93,24 @@ test.describe('Project colour indicator on the board tile', () => {
 	// viewer's projects and the client merges them by id) WITHOUT a page reload
 	// or a full board refetch.
 	test('a project membership change reaches an open board via the delta, no reload', async ({ page }) => {
-		// Force the deterministic 5s delta poll (the push path also delta-syncs,
-		// but the poll is what we can reliably force on any runner).
-		occSafe('app:disable notify_push')
-		await waitPushOff()
-
 		// Self-contained: a card NOT yet in a project, so the dot is absent until
 		// the membership change is delta-delivered.
 		const ts = Date.now()
-		const board = await api.post('/boards', { title: `Delta Proj ${ts}` })
-		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
-		const card = await api.post('/cards', { stackId: stack.id, title: `Delta card ${ts}` })
-		const project = await api.post('/projects', { title: `Delta project ${ts}`, color: COLOR })
+		let board = null
+		let project = null
 		try {
+			// Force the deterministic 5s delta poll (the push path also delta-syncs,
+			// but the poll is what we can reliably force on any runner). The disable
+			// and the setup below live INSIDE the try so a failing setup step still
+			// restores notify_push in the finally — leaking it disabled would break
+			// the push-path specs that run later on this shared stack.
+			occSafe('app:disable notify_push')
+			await waitPushOff()
+
+			board = await api.post('/boards', { title: `Delta Proj ${ts}` })
+			const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
+			const card = await api.post('/cards', { stackId: stack.id, title: `Delta card ${ts}` })
+			project = await api.post('/projects', { title: `Delta project ${ts}`, color: COLOR })
 			// Track board reads: the change must arrive via /changes, not a full
 			// /boards/{id} refetch. Set up before the load so the initial read is
 			// counted, then baseline it.
@@ -144,9 +149,11 @@ test.describe('Project colour indicator on the board tile', () => {
 			expect(deltaReads.length).toBeGreaterThan(0)
 			expect(fullReads.length).toBe(fullReadsAfterLoad)
 		} finally {
+			// Runs even when the setup above threw — notify_push is always
+			// restored, and only the resources that actually exist are deleted.
 			occSafe('app:enable notify_push')
-			await api.delete(`/projects/${project.id}`).catch(() => {})
-			await api.delete(`/boards/${board.id}`).catch(() => {})
+			if (project) await api.delete(`/projects/${project.id}`).catch(() => {})
+			if (board) await api.delete(`/boards/${board.id}`).catch(() => {})
 		}
 	})
 
