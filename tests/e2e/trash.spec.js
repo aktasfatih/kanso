@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, BASE, toast } from './helpers.js'
 
 // ── Helpers for opening the routed Trash page ────────────────────────────────
 
@@ -255,5 +255,74 @@ test.describe('Trash', () => {
 			const boardCardTile = page.locator('.card-tile').filter({ hasText: title })
 			await expect(boardCardTile).toBeVisible()
 		}
+	})
+
+	// #10923 — a trashed card whose stack was deleted afterwards would restore
+	// with a dangling stackId and never render (BoardView groups by stackId and
+	// only draws live stacks). Bulk restore now skips it per-card and reports the
+	// skip, while the rest of the selection still comes back.
+	test('bulk restore skips a card whose stack was deleted but restores the rest', async ({ page }) => {
+		// Self-contained: two cards in two stacks; the orphan's stack is deleted
+		// AFTER both cards are trashed, so only the alive card can come back.
+		const ts = Date.now()
+		const aliveTitle = `Restore Alive ${ts}`
+		const orphanTitle = `Restore Orphan ${ts}`
+		const doomedStack = await api.post('/stacks', { boardId: state.boardId, title: `Doomed ${ts}` })
+		const aliveCard = await api.post('/cards', { stackId: state.stackId, title: aliveTitle })
+		const orphanCard = await api.post('/cards', { stackId: doomedStack.id, title: orphanTitle })
+
+		// Both cards into the trash first, then the orphan's stack goes away.
+		await ensureTrashed(state.boardId, aliveCard.id)
+		await ensureTrashed(state.boardId, orphanCard.id)
+		await api.delete(`/stacks/${doomedStack.id}`)
+
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+
+		await openTrashPage(page)
+
+		// Both trashed cards are listed (the orphan under its "Unknown stack" group).
+		for (const title of [aliveTitle, orphanTitle]) {
+			await expect(page.locator('.trash-view__row-title').filter({ hasText: title })).toBeVisible()
+		}
+
+		// Enter multi-select and tick both rows.
+		const selectToggle = page.getByRole('button', { name: 'Select multiple cards' })
+		await expect(selectToggle).toBeVisible()
+		await selectToggle.click()
+		const bar = page.locator('.bulk-action-bar')
+		await expect(bar).toBeVisible()
+		for (const title of [aliveTitle, orphanTitle]) {
+			const rowTitle = page.locator('.trash-view__row-title--button', { hasText: title })
+			await expect(rowTitle).toBeVisible()
+			await rowTitle.click()
+		}
+		await expect(bar).toContainText('2 selected')
+
+		// Restore the whole selection in one action.
+		const restoreBtn = page.getByRole('button', { name: 'Restore selected' })
+		await expect(restoreBtn).toBeEnabled()
+		await restoreBtn.click()
+
+		// The alive card leaves the trash list; the orphan stays (its stack is gone).
+		await expect(page.locator('.trash-view__row-title').filter({ hasText: aliveTitle }))
+			.not.toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.trash-view__row-title').filter({ hasText: orphanTitle })).toBeVisible()
+
+		// The graceful-skip summary, not an error banner. A plain toast dismisses
+		// itself at 7s, so the wait must stay under that life (short-budget-ok:).
+		// short-budget-ok: toast expires at 7s; a longer wait would report an expired toast
+		await expect(toast(page, '1 restored, 1 skipped')).toBeVisible({ timeout: 6_000 })
+
+		// The server agrees: the alive card is back, the orphan is still trashed.
+		const trash = await api.get(`/boards/${state.boardId}/trash`)
+		expect(trash.some((c) => c.id === aliveCard.id)).toBe(false)
+		expect(trash.some((c) => c.id === orphanCard.id)).toBe(true)
+
+		// Back on the board, only the alive card renders.
+		await backToBoard(page)
+		await expect(page.locator('.card-tile').filter({ hasText: aliveTitle })).toBeVisible()
+		await expect(page.locator('.card-tile').filter({ hasText: orphanTitle })).toHaveCount(0)
 	})
 })
