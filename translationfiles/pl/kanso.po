@@ -1500,7 +1500,7 @@ msgstr "Postęp listy kontrolnej: {done} z {total}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:515
+#: src/components/CardTile.vue:519
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Postęp listy kontrolnej: {done} z {total}, %n krok po terminie"
@@ -5408,7 +5408,7 @@ msgid "Select"
 msgstr "Lista wyboru"
 
 #: src/components/StackColumn.vue:206
-#: src/views/ArchivedView.vue:406
+#: src/views/ArchivedView.vue:420
 msgid "Select %n card"
 msgid_plural "Select %n cards"
 msgstr[0] "Zaznacz %n kartę"
@@ -5416,7 +5416,7 @@ msgstr[1] "Zaznacz %n karty"
 msgstr[2] "Zaznacz %n kart"
 
 #: src/components/StackColumn.vue:205
-#: src/views/ArchivedView.vue:405
+#: src/views/ArchivedView.vue:419
 msgid "Select %n visible card"
 msgid_plural "Select %n visible cards"
 msgstr[0] "Zaznacz %n widoczną kartę"
