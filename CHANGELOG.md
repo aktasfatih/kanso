@@ -11,6 +11,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.41.0](https://github.com/aktasfatih/kanso/compare/v0.40.0...v0.41.0) (2026-10-26)
+
+
+### Bug Fixes
+
+* **boards:** add spacing between the project dot and name in the card modal ([d04a8db](https://github.com/aktasfatih/kanso/commit/d04a8dbd7808321ee8f749d415249f6ea95dacda))
+* **boards:** place project dots on the card title row to save vertical space ([c3cca00](https://github.com/aktasfatih/kanso/commit/c3cca00ffe3a3680e62530611d29c01dcc52810d))
+* **boards:** tick the row checkbox when clicked in the trash and archived views ([d3e3ceb](https://github.com/aktasfatih/kanso/commit/d3e3ceb65c38a77d046f830e7f739c73facc250c))
+* **boards:** validate access before revealing a missing stack on bulk restore ([29d1334](https://github.com/aktasfatih/kanso/commit/29d1334cb1541345d23590f4c7f37680c7146f90))
+* keep project colors in board deltas and skip restoring cards whose stack is gone ([e10bf6e](https://github.com/aktasfatih/kanso/commit/e10bf6e8bdea1f451f5b9c121502661952c9bafd)), closes [#197](https://github.com/aktasfatih/kanso/issues/197)
+* **views:** show assignee and owner display names in the Views feed ([ce9df65](https://github.com/aktasfatih/kanso/commit/ce9df65e919997e0e7313e2dc32fbf156b44d1e3))
+
+
+### Features
+
+* **projects:** show a card's project color on the board so cards are easy to identify by project ([b2ad8e5](https://github.com/aktasfatih/kanso/commit/b2ad8e5f751cdfc56415cb91231841de60aa45a5))
+* **trash:** restore multiple deleted cards from Trash in one action ([884d05e](https://github.com/aktasfatih/kanso/commit/884d05ed67995e48c14efc3a09fec8675aacbe73))
+
 # [0.40.0](https://github.com/aktasfatih/kanso/compare/v0.39.0...v0.40.0) (2026-10-22)
 
 
