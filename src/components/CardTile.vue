@@ -43,21 +43,25 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ label.title }}
 				</span>
 			</div>
-			<!-- Project dots row - only rendered when the card belongs to a coloured
-			     project. A small dot per project, the project title on hover, so the
-			     tile stays clean even when a card sits in several projects. -->
-			<div v-if="cardProjects.length" class="card-tile__projects" :aria-label="t('kanso', 'Projects')">
-				<span
-					v-for="project in cardProjects"
-					:key="project.id"
-					class="card-tile__project-dot"
-					:style="{ background: cssColor(project.color) }"
-					:title="project.title" />
-			</div>
 			<!-- Human-readable reference id (e.g. KAN-123) - a stable display id -->
 			<span v-if="cardHumanId" class="card-tile__ref">{{ cardHumanId }}</span>
-			<!-- Card title - max 2 lines with ellipsis overflow -->
-			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
+			<!-- Title row: the title (max 2 lines, clamped) and the project dots
+			     share one visual line, so a card that belongs to a project does not
+			     grow a whole extra row for them. The dots sit after the title,
+			     vertically centred, and render only when the card belongs to a
+			     coloured project - a small dot per project, the project title on
+			     hover, so the tile stays clean even across several projects. -->
+			<div class="card-tile__title-row">
+				<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
+				<div v-if="cardProjects.length" class="card-tile__projects" :aria-label="t('kanso', 'Projects')">
+					<span
+						v-for="project in cardProjects"
+						:key="project.id"
+						class="card-tile__project-dot"
+						:style="{ background: cssColor(project.color) }"
+						:title="project.title" />
+				</div>
+			</div>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
 				v-if="card.parentCardId || isInProgress || card.blocked || card.blocking || card.waitingOnExternal || card.recurring || (card.timerRunning && cardFeatures.timeTracking) || card.duedate || (cardFeatures.checklist && card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || (cardFeatures.estimate && card.estimate) || isRestricted"
@@ -715,7 +719,20 @@ const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.
 	font-family: var(--font-face-monospace, monospace);
 }
 
+/* Title row - the title and the project dots share one visual line, so a card
+ * that belongs to a project does not grow a whole extra row for the dots. The
+ * title keeps its clamp and takes the remaining width; the dots sit after it,
+ * vertically centred. */
+.card-tile__title-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+}
+
 .card-tile__title {
+	flex: 1;
+	min-width: 0;
 	color: var(--color-main-text);
 	font-size: 0.875rem;
 	line-height: 1.4;
@@ -806,12 +823,13 @@ const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.
 }
 
 /* Project dots — one per coloured project the card belongs to. A small, quiet
- * affordance: the dot carries the project's colour, the title is on hover. */
+ * affordance: the dot carries the project's colour, the title is on hover.
+ * Sits on the title row (after the title), so it adds no row of its own. */
 .card-tile__projects {
 	display: flex;
-	flex-wrap: wrap;
+	align-items: center;
+	flex-shrink: 0;
 	gap: 4px;
-	margin-bottom: 2px;
 }
 
 .card-tile__project-dot {
