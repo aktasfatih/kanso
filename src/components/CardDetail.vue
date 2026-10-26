@@ -8076,6 +8076,7 @@ async function handleToggleProject(projectId) {
 	background: var(--color-primary-element);
 	border: 1px solid rgba(0, 0, 0, 0.1);
 	flex-shrink: 0;
+	margin-right: 6px;
 }
 .card-modal__label-create {
 	display: flex;
