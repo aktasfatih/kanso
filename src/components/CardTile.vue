@@ -45,8 +45,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</div>
 			<!-- Human-readable reference id (e.g. KAN-123) - a stable display id -->
 			<span v-if="cardHumanId" class="card-tile__ref">{{ cardHumanId }}</span>
-			<!-- Card title - max 2 lines with ellipsis overflow -->
-			<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
+			<!-- Title row: the title (max 2 lines, clamped) and the project dots
+			     share one visual line, so a card that belongs to a project does not
+			     grow a whole extra row for them. The dots sit after the title,
+			     vertically centred, and render only when the card belongs to a
+			     coloured project - a small dot per project, the project title on
+			     hover, so the tile stays clean even across several projects. -->
+			<div class="card-tile__title-row">
+				<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
+				<div v-if="cardProjects.length" class="card-tile__projects" :aria-label="t('kanso', 'Projects')">
+					<span
+						v-for="project in cardProjects"
+						:key="project.id"
+						class="card-tile__project-dot"
+						:style="{ background: cssColor(project.color) }"
+						:title="project.title" />
+				</div>
+			</div>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
 				v-if="card.parentCardId || isInProgress || card.blocked || card.blocking || card.waitingOnExternal || card.recurring || (card.timerRunning && cardFeatures.timeTracking) || card.duedate || (cardFeatures.checklist && card.checklist && card.checklist.total > 0) || (card.childProgress && card.childProgress.total > 0) || card.commentCount > 0 || card.priority > 0 || cardType || (card.assigneeIds && card.assigneeIds.length) || card.reviewState || (cardFeatures.estimate && card.estimate) || isRestricted"
@@ -291,6 +306,11 @@ const props = defineProps({
 		type: Map,
 		default: () => new Map(),
 	},
+	/** Map<projectId, project> from the board payload - passed down from BoardView. */
+	projectsById: {
+		type: Map,
+		default: () => new Map(),
+	},
 	/** Board human-id prefix (e.g. "KAN") - composed with card.boardSeq for the ref badge. */
 	boardPrefix: {
 		type: String,
@@ -445,6 +465,14 @@ onUnmounted(() => {
 const cardLabels = computed(() => {
 	const ids = Array.isArray(props.card.labelIds) ? props.card.labelIds : []
 	return ids.map((id) => props.labelsById.get(id)).filter(Boolean)
+})
+
+// Resolve project objects from the projectsById map for the card's projectIds.
+// Only projects that carry a colour are rendered — an uncoloured project has
+// nothing to show, and the tile must not grow an affordance for it.
+const cardProjects = computed(() => {
+	const ids = Array.isArray(props.card.projectIds) ? props.card.projectIds : []
+	return ids.map((id) => props.projectsById.get(id)).filter((p) => p && p.color)
 })
 
 // Done: doneAt > 0
@@ -691,7 +719,20 @@ const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.
 	font-family: var(--font-face-monospace, monospace);
 }
 
+/* Title row - the title and the project dots share one visual line, so a card
+ * that belongs to a project does not grow a whole extra row for the dots. The
+ * title keeps its clamp and takes the remaining width; the dots sit after it,
+ * vertically centred. */
+.card-tile__title-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+}
+
 .card-tile__title {
+	flex: 1;
+	min-width: 0;
 	color: var(--color-main-text);
 	font-size: 0.875rem;
 	line-height: 1.4;
@@ -779,6 +820,24 @@ const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.
 	background: var(--color-background-dark);
 	color: var(--color-main-text);
 	border: 1px solid var(--color-border);
+}
+
+/* Project dots — one per coloured project the card belongs to. A small, quiet
+ * affordance: the dot carries the project's colour, the title is on hover.
+ * Sits on the title row (after the title), so it adds no row of its own. */
+.card-tile__projects {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 4px;
+}
+
+.card-tile__project-dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	border: 1px solid var(--color-border);
+	flex-shrink: 0;
 }
 
 /* Done state

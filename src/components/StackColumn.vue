@@ -383,6 +383,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<CardTile
 						:card="cards[vRow.index]"
 						:labels-by-id="labelsById"
+						:projects-by-id="projectsById"
 						:board-prefix="boardPrefix"
 						:lane-key="laneKey"
 						:compact="compact"
@@ -542,6 +543,11 @@ const props = defineProps({
 	},
 	/** Map<labelId, label> from the board payload - passed down from BoardView */
 	labelsById: {
+		type: Map,
+		default: () => new Map(),
+	},
+	/** Map<projectId, project> from the board payload - passed down from BoardView */
+	projectsById: {
 		type: Map,
 		default: () => new Map(),
 	},

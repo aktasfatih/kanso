@@ -693,8 +693,8 @@ jobs:
   # first-boot install, same as one install-matrix leg. The cap below matches
   # install-matrix, not the ~1.5h e2e job.
   #
-  # NOT yet in the required-checks list (that is a repo setting, not a file):
-  # add `upgrade` there once it has a few green runs.
+  # In the required-checks list (that is a repo setting, not a file):
+  # `upgrade (last release → this branch, with data)` must pass to merge.
   upgrade:
     runs-on: kanso-runners
     timeout-minutes: 30

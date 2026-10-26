@@ -118,13 +118,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:class="{ 'archived-view__row--selected': isRowSelected(rows[vRow.index].card.id) }">
 						<!-- Selection tick. The row button beside it is the control
 						     that assistive tech sees (it carries the pressed state);
-						     this box shows the state and is clickable itself.
-						     `.prevent` is load-bearing: without it the browser's own
-						     activation flips `checked` first, and a click that leaves
-						     the model UNCHANGED (re-covering a row with a second
-						     shift-click) would then leave the tick contradicting both
-						     the row's tint and the bar's count, because Vue skips
-						     patching a prop whose bound value did not change. -->
+						     this box shows the state and is clickable itself. The tick
+						     is model-driven: `:checked` reads the selection, the click
+						     updates the selection, and the handler reconciles `checked`
+						     to the selection in a microtask — after the browser's own activation
+						     and after Vue's re-render — so the box always matches the model:
+						     a plain select, a deselect, and a no-op shift-click (where the
+						     model is unchanged and the browser's flip would otherwise stick).
+						     No `.prevent`: cancelling the activation left the tick un-set
+						     on a select in Chrome. -->
 						<input
 							v-if="bulk.selectionMode.value"
 							type="checkbox"
@@ -132,7 +134,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:checked="isRowSelected(rows[vRow.index].card.id)"
 							tabindex="-1"
 							aria-hidden="true"
-							@click.stop.prevent="onRowSelect(rows[vRow.index].card.id, $event)" />
+							@click.stop="onRowSelect(rows[vRow.index].card.id, $event)" />
 						<button
 							class="archived-view__row-open"
 							:title="bulk.selectionMode.value ? undefined : t('kanso', 'Open card')"
@@ -374,6 +376,18 @@ function onRowSelect(cardId, event) {
 		bulk.selectRange(orderedCardIds.value, cardId)
 	} else {
 		bulk.toggle(cardId)
+	}
+	// Reconcile the tick to the model in a microtask — after the browser's own
+	// activation has flipped `checked` and after Vue's re-render. The model is
+	// the final word in every case: a plain select, a deselect, and a no-op
+	// shift-click (where the model is unchanged and the browser's flip would
+	// otherwise stick, because Vue skips re-patching an unchanged `:checked`).
+	// Only the checkbox has a `checked` property; the row button's target does not.
+	const target = event?.target
+	if (target && target.type === 'checkbox') {
+		queueMicrotask(() => {
+			target.checked = isRowSelected(cardId)
+		})
 	}
 }
 

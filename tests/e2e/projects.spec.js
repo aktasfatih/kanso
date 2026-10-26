@@ -308,4 +308,40 @@ test.describe('Projects — cross-board card collections', () => {
 
 		for (const p of picked) await api.delete(`/projects/${p.id}`).catch(() => {})
 	})
+
+	// #d04a8db — the card modal's Projects picker keeps a visible gap between the
+	// project dot and the project name (the dot's margin-right), so the two read
+	// as separate rather than touching.
+	test('the project dot and name in the modal picker keep a visible gap', async ({ page }) => {
+		const ts = Date.now()
+		const project = await api.post('/projects', { title: `Gap project ${ts}`, color: 'e53935' })
+		try {
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardA}/card/${state.cardA}`)
+			await page.waitForSelector('.card-modal', { timeout: 15_000 })
+
+			// Open the Projects picker.
+			await page.locator('.card-modal__attr button[data-pill="project"]').first().click()
+			const popover = page.locator('.card-modal__attr .card-modal__popover')
+			await expect(popover).toBeVisible()
+
+			const row = popover.locator('.card-modal__label-toggle', { hasText: `Gap project ${ts}` })
+			await expect(row).toBeVisible()
+			const dot = row.locator('.card-modal__project-dot')
+			await expect(dot).toBeVisible()
+
+			// The dot keeps a visible gap from the project name.
+			await expect(dot).toHaveCSS('margin-right', '6px')
+
+			// Sanity: the dot sits to the left of the row's text area (the name
+			// follows it), so the gap is real rather than an overflow.
+			const dotBox = await dot.boundingBox()
+			const rowBox = await row.boundingBox()
+			expect(dotBox, 'dot must have a bounding box').not.toBeNull()
+			expect(rowBox, 'row must have a bounding box').not.toBeNull()
+			expect(dotBox.x + dotBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width)
+		} finally {
+			await api.delete(`/projects/${project.id}`).catch(() => {})
+		}
+	})
 })

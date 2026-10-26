@@ -215,7 +215,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, provide } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
@@ -244,6 +244,7 @@ import {
 	filterToQuery,
 } from '../composables/useBoardFilters.js'
 import { groupCardsByField, VIEW_GROUP_BY } from '../composables/useSwimlanes.js'
+import { ASSIGNEE_NAMES } from '../services/assigneeNames.js'
 
 const props = defineProps({
 	/** The saved-view id from the route (/views/:id). */
@@ -422,15 +423,31 @@ const filteredCards = computed(() => {
 // (BoardFilterBar hides it on an empty participants list), leaving no way back.
 // The row-derived pass is kept as a fallback so an older/cached envelope without
 // `participants` still renders group headers.
+//
+// Each `participants` entry is {uid, displayName}: the name is resolved
+// SERVER-side (one directory lookup per uid), so the facet, the chips and the
+// group headers all show the real display name with no extra request. A uid the
+// directory no longer knows (a deleted account) carries displayName === uid, so
+// the fallback to the raw uid only ever happens for a genuinely unresolvable
+// account.
 const nameByUid = computed(() => {
 	const m = new Map()
-	for (const uid of cardsData.value?.participants ?? []) if (!m.has(uid)) m.set(uid, uid)
+	for (const p of cardsData.value?.participants ?? []) {
+		if (p && typeof p.uid === 'string' && !m.has(p.uid)) m.set(p.uid, p.displayName || p.uid)
+	}
 	for (const c of cards.value) {
 		for (const uid of c.assigneeIds || []) if (!m.has(uid)) m.set(uid, uid)
 		if (c.owner && !m.has(c.owner)) m.set(c.owner, c.owner)
 	}
 	return m
 })
+
+// The feed's server-resolved participant names are provided so the deeply nested
+// avatar stacks (AssigneeAvatars, reached through List/Timeline/Kanban) can name
+// their assignees with no extra request (#10801). A surface with no provider —
+// a board — falls back to the bare uid.
+provide(ASSIGNEE_NAMES, nameByUid)
+
 const titleByBoard = computed(() => {
 	const m = new Map()
 	for (const c of cards.value) if (c.boardId != null && !m.has(Number(c.boardId))) m.set(Number(c.boardId), c.boardTitle)
@@ -442,9 +459,11 @@ const groups = computed(() =>
 )
 
 // Cross-board assignee/owner facet for the filter control — the server-supplied
-// vocabulary above, so it stays complete however narrow the filter gets.
+// vocabulary above, so it stays complete however narrow the filter gets. The
+// display name is the server-resolved one (nameByUid), falling back to the uid
+// only for a deleted account.
 const participants = computed(() =>
-	[...nameByUid.value.keys()].map((uid) => ({ uid, displayName: uid })),
+	[...nameByUid.value.entries()].map(([uid, displayName]) => ({ uid, displayName })),
 )
 
 // Real cross-board labelsById map (#3950): the feed envelope carries the union of

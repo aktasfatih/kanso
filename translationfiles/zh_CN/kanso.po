@@ -230,6 +230,14 @@ msgstr "{n} 天"
 msgid "{n}h"
 msgstr "{n} 小时"
 
+#: src/views/TrashView.vue
+msgid "{ok} cards restored"
+msgstr ""
+
+#: src/views/TrashView.vue
+msgid "{ok} cards restored before the action failed"
+msgstr ""
+
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} cards updated"
@@ -239,6 +247,10 @@ msgstr "已更新 {ok} 张卡片"
 #: src/views/BoardView.vue
 msgid "{ok} cards updated before the action failed"
 msgstr "操作失败前已更新 {ok} 张卡片"
+
+#: src/views/TrashView.vue
+msgid "{ok} restored, {skipped} skipped"
+msgstr ""
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
@@ -340,7 +352,7 @@ msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] "%n 张卡片"
 
-#: src/components/StackColumn.vue:1060
+#: src/components/StackColumn.vue:1066
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "已归档 %n 张卡片"
@@ -380,7 +392,7 @@ msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
 
-#: src/views/BoardView.vue:2626
+#: src/views/BoardView.vue:2640
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "已复制 %n 个 ID。"
@@ -1081,6 +1093,7 @@ msgstr "内置分区"
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
+#: src/views/TrashView.vue
 msgid "Bulk action failed."
 msgstr "批量操作失败。"
 
@@ -1407,7 +1420,7 @@ msgstr "清单进度 {total} 中的 {done}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:491
+#: src/components/CardTile.vue:519
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "清单进度 {total} 中的 {done}，%n 个步骤已逾期"
@@ -2541,6 +2554,7 @@ msgstr "这里显示的所有人都已指派到此卡片。"
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
+#: src/views/TrashView.vue
 msgid "Exit multi-select"
 msgstr "退出多选"
 
@@ -4765,6 +4779,7 @@ msgid "Project title"
 msgstr "项目标题"
 
 #: src/App.vue
+#: src/components/CardTile.vue
 #: src/views/ProjectsView.vue
 msgid "Projects"
 msgstr "项目"
@@ -5093,6 +5108,7 @@ msgid "Restore panel size"
 msgstr "还原面板大小"
 
 #: src/views/ArchivedView.vue
+#: src/views/TrashView.vue
 msgid "Restore selected"
 msgstr "恢复所选卡片"
 
@@ -5294,13 +5310,13 @@ msgid "Select"
 msgstr "下拉选择"
 
 #: src/components/StackColumn.vue:206
-#: src/views/ArchivedView.vue:406
+#: src/views/ArchivedView.vue:420
 msgid "Select %n card"
 msgid_plural "Select %n cards"
 msgstr[0] "选择 %n 张卡片"
 
 #: src/components/StackColumn.vue:205
-#: src/views/ArchivedView.vue:405
+#: src/views/ArchivedView.vue:419
 msgid "Select %n visible card"
 msgid_plural "Select %n visible cards"
 msgstr[0] "选择 %n 张可见卡片"
@@ -5323,6 +5339,7 @@ msgstr "选择列…"
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
+#: src/views/TrashView.vue
 msgid "Select multiple cards"
 msgstr "选择多张卡片"
 

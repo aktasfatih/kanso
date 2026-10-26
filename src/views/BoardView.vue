@@ -408,6 +408,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:stack="stack"
 					:cards="cardsForStack(stack.id)"
 					:labels-by-id="labelsById"
+					:projects-by-id="projectsById"
 					:board-prefix="boardData.board.prefix"
 					:new-cards-on-top="boardData.board.newCardsOnTop === true"
 					:on-create-card="canEditBoard ? handleCreateCard : null"
@@ -479,6 +480,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:lane="lane"
 					:stacks="sortedStacks"
 					:labels-by-id="labelsById"
+					:projects-by-id="projectsById"
 					:board-prefix="boardData.board.prefix"
 					:register-column-ref="registerLaneColumnRef"
 					:new-cards-on-top="boardData.board.newCardsOnTop === true"
@@ -1459,6 +1461,18 @@ const labelsById = computed(() => {
 	const map = new Map()
 	for (const label of boardLabels.value) {
 		map.set(label.id, label)
+	}
+	return map
+})
+
+/** All board-level projects from the board payload (the viewer's own, referenced by visible cards). */
+const boardProjects = computed(() => boardData.value?.projects ?? [])
+
+/** Map<id, project> for O(1) lookup by id - passed to StackColumn → CardTile. */
+const projectsById = computed(() => {
+	const map = new Map()
+	for (const project of boardProjects.value) {
+		map.set(project.id, project)
 	}
 	return map
 })

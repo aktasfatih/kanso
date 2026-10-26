@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, BASE, toast } from './helpers.js'
 
 // ── Helpers for opening the routed Trash page ────────────────────────────────
 
@@ -195,5 +195,179 @@ test.describe('Trash', () => {
 
 		// The card id is now gone; nullify so afterAll cleanup does not try to delete it.
 		state.cardId = 0
+	})
+
+	test('restoring several cards at once returns them all to the board', async ({ page }) => {
+		// Self-contained: create three cards, trash them, then restore them in ONE
+		// bulk action and assert they all come back to their original stack. Does
+		// not depend on any other test's card state.
+		const titles = ['Bulk Restore One', 'Bulk Restore Two', 'Bulk Restore Three']
+		const created = []
+		for (const title of titles) {
+			const card = await api.post('/cards', { stackId: state.stackId, title })
+			created.push({ id: card.id, title })
+		}
+		// Soft-delete all three so they sit in the trash.
+		for (const { id } of created) {
+			await api.delete(`/cards/${id}`)
+		}
+
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+
+		// Open the routed Trash page.
+		await openTrashPage(page)
+
+		// Enter multi-select mode (editors only; admin is an editor).
+		const selectToggle = page.getByRole('button', { name: 'Select multiple cards' })
+		await expect(selectToggle).toBeVisible()
+		await selectToggle.click()
+
+		// The shared selection bar appears.
+		const bar = page.locator('.bulk-action-bar')
+		await expect(bar).toBeVisible()
+
+		// Select each of our cards by its row title (a button in selection mode).
+		for (const { title } of created) {
+			const rowTitle = page.locator('.trash-view__row-title--button', { hasText: title })
+			await expect(rowTitle).toBeVisible()
+			await rowTitle.click()
+		}
+
+		// The bar's count reflects the three selected cards.
+		await expect(bar).toContainText('3 selected')
+
+		// Restore the whole selection in one action.
+		const restoreBtn = page.getByRole('button', { name: 'Restore selected' })
+		await expect(restoreBtn).toBeEnabled()
+		await restoreBtn.click()
+
+		// Our three cards leave the trash list.
+		for (const { title } of created) {
+			const trashItem = page.locator('.trash-view__row-title').filter({ hasText: title })
+			await expect(trashItem).not.toBeVisible({ timeout: 8000 })
+		}
+
+		// Back to the board: all three cards are back in their original stack.
+		await backToBoard(page)
+		for (const { title } of created) {
+			const boardCardTile = page.locator('.card-tile').filter({ hasText: title })
+			await expect(boardCardTile).toBeVisible()
+		}
+	})
+
+	// #10924 — clicking the selection checkbox itself (not the row title) must
+	// tick it and select the row. The tick is model-driven: `:checked` reads the
+	// selection and the click updates it. A `.prevent` on the click used to cancel
+	// the browser's own activation and leave the tick un-set on a select, while
+	// the row tint (also model-driven) still applied — so the box and the row
+	// disagreed. Selecting via the row title never exposed it, which is why this
+	// path had no coverage.
+	test('clicking the row checkbox ticks it and selects the row', async ({ page }) => {
+		// Self-contained: one trashed card, selected by its checkbox, not its title.
+		const ts = Date.now()
+		const title = `Checkbox Tick ${ts}`
+		const card = await api.post('/cards', { stackId: state.stackId, title })
+		await api.delete(`/cards/${card.id}`)
+
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+
+		await openTrashPage(page)
+
+		// Enter multi-select mode so the checkbox is rendered.
+		const selectToggle = page.getByRole('button', { name: 'Select multiple cards' })
+		await expect(selectToggle).toBeVisible()
+		await selectToggle.click()
+
+		const bar = page.locator('.bulk-action-bar')
+		await expect(bar).toBeVisible()
+
+		// The checkbox for our row, scoped to the row that carries our card.
+		const row = page.locator('.trash-view__row').filter({ hasText: title })
+		const box = row.locator('.trash-view__row-select')
+		await expect(box).toBeVisible()
+
+		// Clicking the checkbox itself ticks it AND selects the row.
+		await box.click()
+		await expect(box).toBeChecked()
+		await expect(row).toHaveClass(/trash-view__row--selected/)
+		await expect(bar).toContainText('1 selected')
+
+		// Clicking again unticks it and deselects the row.
+		await box.click()
+		await expect(box).not.toBeChecked()
+		await expect(row).not.toHaveClass(/trash-view__row--selected/)
+	})
+
+	// #10923 — a trashed card whose stack was deleted afterwards would restore
+	// with a dangling stackId and never render (BoardView groups by stackId and
+	// only draws live stacks). Bulk restore now skips it per-card and reports the
+	// skip, while the rest of the selection still comes back.
+	test('bulk restore skips a card whose stack was deleted but restores the rest', async ({ page }) => {
+		// Self-contained: two cards in two stacks; the orphan's stack is deleted
+		// AFTER both cards are trashed, so only the alive card can come back.
+		const ts = Date.now()
+		const aliveTitle = `Restore Alive ${ts}`
+		const orphanTitle = `Restore Orphan ${ts}`
+		const doomedStack = await api.post('/stacks', { boardId: state.boardId, title: `Doomed ${ts}` })
+		const aliveCard = await api.post('/cards', { stackId: state.stackId, title: aliveTitle })
+		const orphanCard = await api.post('/cards', { stackId: doomedStack.id, title: orphanTitle })
+
+		// Both cards into the trash first, then the orphan's stack goes away.
+		await ensureTrashed(state.boardId, aliveCard.id)
+		await ensureTrashed(state.boardId, orphanCard.id)
+		await api.delete(`/stacks/${doomedStack.id}`)
+
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+
+		await openTrashPage(page)
+
+		// Both trashed cards are listed (the orphan under its "Unknown stack" group).
+		for (const title of [aliveTitle, orphanTitle]) {
+			await expect(page.locator('.trash-view__row-title').filter({ hasText: title })).toBeVisible()
+		}
+
+		// Enter multi-select and tick both rows.
+		const selectToggle = page.getByRole('button', { name: 'Select multiple cards' })
+		await expect(selectToggle).toBeVisible()
+		await selectToggle.click()
+		const bar = page.locator('.bulk-action-bar')
+		await expect(bar).toBeVisible()
+		for (const title of [aliveTitle, orphanTitle]) {
+			const rowTitle = page.locator('.trash-view__row-title--button', { hasText: title })
+			await expect(rowTitle).toBeVisible()
+			await rowTitle.click()
+		}
+		await expect(bar).toContainText('2 selected')
+
+		// Restore the whole selection in one action.
+		const restoreBtn = page.getByRole('button', { name: 'Restore selected' })
+		await expect(restoreBtn).toBeEnabled()
+		await restoreBtn.click()
+
+		// The alive card leaves the trash list; the orphan stays (its stack is gone).
+		await expect(page.locator('.trash-view__row-title').filter({ hasText: aliveTitle }))
+			.not.toBeVisible({ timeout: 8_000 })
+		await expect(page.locator('.trash-view__row-title').filter({ hasText: orphanTitle })).toBeVisible()
+
+		// The graceful-skip summary, not an error banner. A plain toast dismisses
+		// itself at 7s, so the wait must stay under that life (short-budget-ok:).
+		// short-budget-ok: toast expires at 7s; a longer wait would report an expired toast
+		await expect(toast(page, '1 restored, 1 skipped')).toBeVisible({ timeout: 6_000 })
+
+		// The server agrees: the alive card is back, the orphan is still trashed.
+		const trash = await api.get(`/boards/${state.boardId}/trash`)
+		expect(trash.some((c) => c.id === aliveCard.id)).toBe(false)
+		expect(trash.some((c) => c.id === orphanCard.id)).toBe(true)
+
+		// Back on the board, only the alive card renders.
+		await backToBoard(page)
+		await expect(page.locator('.card-tile').filter({ hasText: aliveTitle })).toBeVisible()
+		await expect(page.locator('.card-tile').filter({ hasText: orphanTitle })).toHaveCount(0)
 	})
 })

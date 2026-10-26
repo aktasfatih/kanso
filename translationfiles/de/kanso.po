@@ -242,6 +242,14 @@ msgstr "{n}T"
 msgid "{n}h"
 msgstr "{n}Std"
 
+#: src/views/TrashView.vue
+msgid "{ok} cards restored"
+msgstr ""
+
+#: src/views/TrashView.vue
+msgid "{ok} cards restored before the action failed"
+msgstr ""
+
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
 msgid "{ok} cards updated"
@@ -251,6 +259,10 @@ msgstr "{ok} Karten aktualisiert"
 #: src/views/BoardView.vue
 msgid "{ok} cards updated before the action failed"
 msgstr "{ok} Karten wurden aktualisiert, bevor die Aktion fehlschlug"
+
+#: src/views/TrashView.vue
+msgid "{ok} restored, {skipped} skipped"
+msgstr ""
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
@@ -355,7 +367,7 @@ msgid_plural "%n cards"
 msgstr[0] "%n Karte"
 msgstr[1] "%n Karten"
 
-#: src/components/StackColumn.vue:1060
+#: src/components/StackColumn.vue:1066
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "%n Karte archiviert"
@@ -403,7 +415,7 @@ msgid_plural "%n hours ago"
 msgstr[0] "vor %n Stunde"
 msgstr[1] "vor %n Stunden"
 
-#: src/views/BoardView.vue:2626
+#: src/views/BoardView.vue:2640
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n ID kopiert."
@@ -1121,6 +1133,7 @@ msgstr "Integrierte Abschnitte"
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
+#: src/views/TrashView.vue
 msgid "Bulk action failed."
 msgstr "Sammelaktion fehlgeschlagen."
 
@@ -1447,7 +1460,7 @@ msgstr "Checklisten-Fortschritt {done} von {total}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:491
+#: src/components/CardTile.vue:519
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Checklisten-Fortschritt {done} von {total}, %n überfälliger Schritt"
@@ -2587,6 +2600,7 @@ msgstr "Alle hier angezeigten Personen sind dieser Karte bereits zugewiesen."
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
+#: src/views/TrashView.vue
 msgid "Exit multi-select"
 msgstr "Mehrfachauswahl beenden"
 
@@ -4814,6 +4828,7 @@ msgid "Project title"
 msgstr "Projekttitel"
 
 #: src/App.vue
+#: src/components/CardTile.vue
 #: src/views/ProjectsView.vue
 msgid "Projects"
 msgstr "Projekte"
@@ -5142,6 +5157,7 @@ msgid "Restore panel size"
 msgstr "Bereichsgröße zurücksetzen"
 
 #: src/views/ArchivedView.vue
+#: src/views/TrashView.vue
 msgid "Restore selected"
 msgstr "Auswahl wiederherstellen"
 
@@ -5343,14 +5359,14 @@ msgid "Select"
 msgstr "Auswahlliste"
 
 #: src/components/StackColumn.vue:206
-#: src/views/ArchivedView.vue:406
+#: src/views/ArchivedView.vue:420
 msgid "Select %n card"
 msgid_plural "Select %n cards"
 msgstr[0] "%n Karte auswählen"
 msgstr[1] "%n Karten auswählen"
 
 #: src/components/StackColumn.vue:205
-#: src/views/ArchivedView.vue:405
+#: src/views/ArchivedView.vue:419
 msgid "Select %n visible card"
 msgid_plural "Select %n visible cards"
 msgstr[0] "%n sichtbare Karte auswählen"
@@ -5374,6 +5390,7 @@ msgstr "Spalte auswählen…"
 
 #: src/views/ArchivedView.vue
 #: src/views/BoardView.vue
+#: src/views/TrashView.vue
 msgid "Select multiple cards"
 msgstr "Mehrere Karten auswählen"
 

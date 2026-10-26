@@ -28,6 +28,9 @@ use OCA\Kanso\Db\ChecklistItemMapper;
 use OCA\Kanso\Db\CommentMapper;
 use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
+use OCA\Kanso\Db\Project;
+use OCA\Kanso\Db\ProjectCardMapper;
+use OCA\Kanso\Db\ProjectMapper;
 use OCA\Kanso\Db\RecurRuleMapper;
 use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Db\Stack;
@@ -77,6 +80,8 @@ class BoardControllerTest extends TestCase {
 	private CardRelationMapper&MockObject $cardRelationMapper;
 	private CardRelationService&MockObject $cardRelationService;
 	private RecurRuleMapper&MockObject $recurRuleMapper;
+	private ProjectCardMapper&MockObject $projectCardMapper;
+	private ProjectMapper&MockObject $projectMapper;
 	private BoardAccess&MockObject $boardAccess;
 	private BoardController $controller;
 
@@ -104,6 +109,8 @@ class BoardControllerTest extends TestCase {
 		$this->subscriptionService = $this->createMock(SubscriptionService::class);
 		$this->cardRelationMapper = $this->createMock(CardRelationMapper::class);
 		$this->recurRuleMapper = $this->createMock(RecurRuleMapper::class);
+		$this->projectCardMapper = $this->createMock(ProjectCardMapper::class);
+		$this->projectMapper = $this->createMock(ProjectMapper::class);
 		// The board-scoped timeline edge list; masking itself is the service's
 		// job (and is tested there) - the controller only has to carry it.
 		// Left unstubbed here so each test can state its own edges; the mock's
@@ -135,6 +142,7 @@ class BoardControllerTest extends TestCase {
 			$this->cardRelationMapper,
 			$this->recurRuleMapper,
 			$this->createMock(CardRunningTimerMapper::class),
+			$this->projectCardMapper,
 			new CardVisibilityScope(),
 		);
 
@@ -149,6 +157,7 @@ class BoardControllerTest extends TestCase {
 			$this->stackMapper,
 			$this->cardMapper,
 			$this->labelMapper,
+			$this->projectMapper,
 			$this->reviewTypeMapper,
 			$this->cardFieldMapper,
 			$this->aclMapper,
@@ -366,6 +375,102 @@ class BoardControllerTest extends TestCase {
 		self::assertArrayNotHasKey('description', $data['cards'][0]);
 	}
 
+	/**
+	 * Sets up the minimum board payload (board, one card, empty enrichment) so
+	 * a show() test can focus on a single enrichment dimension.
+	 */
+	private function stubShowBase(int $cardId = 3): void {
+		$board = $this->board();
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($board);
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(7);
+		$this->request->method('getHeader')->with('If-None-Match')->willReturn('"3"');
+		$this->stackMapper->method('findByBoard')->with(1)->willReturn([]);
+		$this->labelMapper->method('findByBoard')->with(1)->willReturn([]);
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+
+		$card = new Card();
+		$card->setId($cardId);
+		$card->setBoardId(1);
+		$card->setStackId(2);
+		$card->setTitle('A card');
+		$this->cardMapper->method('findSummariesByBoard')->with(1)->willReturn([$card]);
+		$this->stubEnrichmentEmpty();
+	}
+
+	public function testShowShipsProjectColorForAColoredProject(): void {
+		$this->stubShowBase(3);
+		// The card is collected into the viewer's own project 10.
+		$this->projectCardMapper->method('findProjectIdsByBoard')->with(1, 'alice')->willReturn([3 => [10]]);
+		$project = new Project();
+		$project->setId(10);
+		$project->setTitle('Q3 Initiative');
+		$project->setColor('e53935');
+		$project->setOwner('alice');
+		$project->setCreatedAt(1700000000);
+		$this->projectMapper->method('findByIdsForOwner')->with([10], 'alice')->willReturn([$project]);
+
+		$response = $this->controller->show(1);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+
+		$data = $response->getData();
+		// The card summary carries the project id…
+		self::assertSame([10], $data['cards'][0]['projectIds']);
+		// …and the board payload carries the project's colour for the tile to resolve.
+		self::assertCount(1, $data['projects']);
+		self::assertSame(10, $data['projects'][0]['id']);
+		self::assertSame('Q3 Initiative', $data['projects'][0]['title']);
+		self::assertSame('e53935', $data['projects'][0]['color']);
+	}
+
+	public function testShowShipsProjectWithNoColor(): void {
+		$this->stubShowBase(3);
+		$this->projectCardMapper->method('findProjectIdsByBoard')->with(1, 'alice')->willReturn([3 => [10]]);
+		$project = new Project();
+		$project->setId(10);
+		$project->setTitle('No Color');
+		$project->setColor(null);
+		$project->setOwner('alice');
+		$project->setCreatedAt(1700000000);
+		$this->projectMapper->method('findByIdsForOwner')->with([10], 'alice')->willReturn([$project]);
+
+		$response = $this->controller->show(1);
+		$data = $response->getData();
+		// The project is still shipped (the tile simply renders no dot for it).
+		self::assertCount(1, $data['projects']);
+		self::assertNull($data['projects'][0]['color']);
+		self::assertSame([10], $data['cards'][0]['projectIds']);
+	}
+
+	public function testShowDoesNotLeakAProjectTheViewerCannotRead(): void {
+		$this->stubShowBase(3);
+		// The card is collected into project 10, but that project is owned by
+		// someone else. The owner-scoped lookup returns nothing, so the project's
+		// title and colour must not leak into the board payload.
+		$this->projectCardMapper->method('findProjectIdsByBoard')->with(1, 'alice')->willReturn([3 => [10]]);
+		$this->projectMapper->method('findByIdsForOwner')->with([10], 'alice')->willReturn([]);
+
+		$response = $this->controller->show(1);
+		$data = $response->getData();
+		self::assertSame([], $data['projects'], 'a project the viewer does not own must not leak');
+		// The card's projectIds still reference the project, but the board payload
+		// carries no title or colour for it - the tile resolves nothing.
+		self::assertSame([10], $data['cards'][0]['projectIds']);
+	}
+
+	public function testShowShipsEmptyProjectsWhenNoCardIsCollected(): void {
+		$this->stubShowBase(3);
+		// No card is collected into any project.
+		$this->projectCardMapper->method('findProjectIdsByBoard')->with(1, 'alice')->willReturn([]);
+		// The lookup must not even run for an empty id set.
+		$this->projectMapper->expects(self::never())->method('findByIdsForOwner');
+
+		$response = $this->controller->show(1);
+		$data = $response->getData();
+		self::assertSame([], $data['projects']);
+		self::assertSame([], $data['cards'][0]['projectIds']);
+	}
+
 	public function testShowMapsNotPermittedTo403(): void {
 		$this->boardService->method('find')->willThrowException(new NotPermittedException());
 
@@ -530,6 +635,9 @@ class BoardControllerTest extends TestCase {
 		$this->commentMapper->method('countsByBoard')->willReturn([]);
 		$this->cardReviewMapper->method('reviewStatesByBoard')->willReturn([]);
 		$this->cardRelationMapper->method('liveBlocksEdgesByBoard')->willReturn([]);
+		// findProjectIdsByBoard is left unstubbed here: a no-constraint stub would
+		// shadow a test's specific stub (first matcher wins). The mock's default
+		// array return is [] - exactly the "no card collected" case.
 	}
 
 	public function testChangesResyncsWhenCursorIsZero(): void {
@@ -923,6 +1031,95 @@ class BoardControllerTest extends TestCase {
 		$data = $this->controller->changes(1, 0)->getData();
 		self::assertTrue($data['resync']);
 		self::assertArrayNotHasKey('blocksEdges', $data);
+	}
+
+	// ---- projects: the board-level project list the tile resolves projectIds --
+
+	public function testChangesCarriesProjectDetailsForACardThatReferencesOne(): void {
+		// A card whose project membership changed in the window must render with
+		// the right project colour WITHOUT a full show() refetch: the delta carries
+		// the viewer's OWN projects referenced by its upserted cards, like show().
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(8);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([
+			$this->change(8, Change::ENTITY_CARD, 42, Change::ACTION_UPDATE),
+		]);
+		$this->stubEnrichmentEmpty();
+		// Card 42 is collected into the viewer's own project 10.
+		$this->projectCardMapper->method('findProjectIdsByBoard')->with(1, 'alice')->willReturn([42 => [10]]);
+
+		$card = new Card();
+		$card->setId(42);
+		$card->setBoardId(1);
+		$card->setStackId(3);
+		$card->setTitle('Collected into a project');
+		$this->cardMapper->method('findSummariesByIds')->with(1, [42])->willReturn([$card]);
+		$this->stackMapper->method('findByIds')->willReturn([]);
+
+		$project = new Project();
+		$project->setId(10);
+		$project->setTitle('Q3 Initiative');
+		$project->setColor('e53935');
+		$project->setOwner('alice');
+		$project->setCreatedAt(1700000000);
+		$this->projectMapper->expects(self::once())
+			->method('findByIdsForOwner')->with([10], 'alice')->willReturn([$project]);
+
+		$data = $this->controller->changes(1, 5)->getData();
+		self::assertFalse($data['resync']);
+		self::assertSame([10], $data['cards']['upsert'][0]['projectIds']);
+		// The delta carries the project's colour for the tile to resolve, like show().
+		self::assertCount(1, $data['projects']);
+		self::assertSame(10, $data['projects'][0]['id']);
+		self::assertSame('Q3 Initiative', $data['projects'][0]['title']);
+		self::assertSame('e53935', $data['projects'][0]['color']);
+	}
+
+	public function testChangesDoesNotLeakAProjectTheViewerDoesNotOwn(): void {
+		// Card 42 references project 10, but that project is owned by someone else.
+		// The owner-scoped lookup returns nothing, so the project's title and colour
+		// must not leak into the delta payload.
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(8);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([
+			$this->change(8, Change::ENTITY_CARD, 42, Change::ACTION_UPDATE),
+		]);
+		$this->stubEnrichmentEmpty();
+		$this->projectCardMapper->method('findProjectIdsByBoard')->with(1, 'alice')->willReturn([42 => [10]]);
+
+		$card = new Card();
+		$card->setId(42);
+		$card->setBoardId(1);
+		$card->setStackId(3);
+		$card->setTitle('References a foreign project');
+		$this->cardMapper->method('findSummariesByIds')->with(1, [42])->willReturn([$card]);
+		$this->stackMapper->method('findByIds')->willReturn([]);
+		$this->projectMapper->method('findByIdsForOwner')->with([10], 'alice')->willReturn([]);
+
+		$data = $this->controller->changes(1, 5)->getData();
+		self::assertSame([], $data['projects'], 'a project the viewer does not own must not leak');
+		self::assertSame([10], $data['cards']['upsert'][0]['projectIds']);
+	}
+
+	public function testChangesOmitsProjectsOnEmptyWindow(): void {
+		// The idle poll: nothing changed, so the projects lookup must not even run
+		// (an empty `IN ()` is invalid SQL and the query is wasted) and the key is
+		// omitted entirely - the client keeps its current list.
+		$this->boardService->method('find')->with(1, 'alice')->willReturn($this->board());
+		$this->changeMapper->method('getLatestChangeId')->with(1)->willReturn(5);
+		$this->changeMapper->method('getOldestChangeId')->with(1)->willReturn(1);
+		$this->changeMapper->method('findSince')->willReturn([]);
+		$this->stubEnrichmentEmpty();
+		$this->cardMapper->method('findSummariesByIds')->willReturn([]);
+		$this->stackMapper->method('findByIds')->willReturn([]);
+
+		$this->projectMapper->expects(self::never())->method('findByIdsForOwner');
+
+		$data = $this->controller->changes(1, 5)->getData();
+		self::assertFalse($data['resync']);
+		self::assertArrayNotHasKey('projects', $data);
 	}
 
 	public function testUpdateReturnsUpdatedBoard(): void {

@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\StackMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
@@ -35,6 +36,7 @@ class BulkCardService {
 	public const ACTION_ARCHIVE = 'archive';
 	public const ACTION_UNARCHIVE = 'unarchive';
 	public const ACTION_DELETE = 'delete';
+	public const ACTION_RESTORE = 'restore';
 
 	public const ACTIONS = [
 		self::ACTION_MOVE,
@@ -46,6 +48,7 @@ class BulkCardService {
 		self::ACTION_ARCHIVE,
 		self::ACTION_UNARCHIVE,
 		self::ACTION_DELETE,
+		self::ACTION_RESTORE,
 	];
 
 	/**
@@ -60,6 +63,8 @@ class BulkCardService {
 		private LabelService $labelService,
 		private AssigneeService $assigneeService,
 		private CardMapper $cardMapper,
+		private StackMapper $stackMapper,
+		private TrashService $trashService,
 	) {
 	}
 
@@ -90,6 +95,7 @@ class BulkCardService {
 	 *   - archive:       (none)
 	 *   - unarchive:     (none) - the inverse of archive, so an archive is undoable
 	 *   - delete:        (none)
+	 *   - restore:       (none) - the inverse of delete, so a delete is undoable
 	 *
 	 * @param int[] $cardIds
 	 * @param array<string, mixed> $params
@@ -281,6 +287,32 @@ class BulkCardService {
 			case self::ACTION_DELETE:
 				return function (int $cardId) use ($uid): bool {
 					$this->cardService->delete($cardId, $uid);
+					return true;
+				};
+
+			case self::ACTION_RESTORE:
+				// The inverse of delete, so a delete is undoable in one action. Delegates
+				// to the single-card path so behaviour cannot diverge: the board ACL, the
+				// card-visibility guard, the "is it actually trashed" check and the
+				// kanso_changes row all apply identically. A card that is not trashed,
+				// that the caller may not edit, or that no longer exists is a per-card
+				// skip, like every other action here.
+				return function (int $cardId) use ($uid): bool {
+					// Access is validated FIRST (EDIT on the board + card visibility)
+					// so a caller who may not see the card gets `forbidden` before any
+					// card-state is revealed - checking the stack ahead of the guards
+					// would let them probe whether its stack still exists.
+					$card = $this->trashService->assertAccess($cardId, $uid);
+					// A trashed card whose stack was deleted afterwards would be
+					// restored with a dangling stackId and never render (BoardView
+					// groups cards by stackId and renders only existing stacks) - so
+					// it is skipped, not restored. One bounded, board-scoped check:
+					// the card's stack must still be a live stack on its board.
+					// Thrown as the existing `not_found`, with no new user-facing message.
+					if ($this->stackMapper->findByIds($card->getBoardId(), [$card->getStackId()]) === []) {
+						throw new DoesNotExistException('Stack ' . $card->getStackId() . ' is gone');
+					}
+					$this->trashService->restore($cardId, $uid);
 					return true;
 				};
 

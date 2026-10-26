@@ -11,6 +11,7 @@ use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Db\BoardPrefix;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\LabelMapper;
+use OCP\IUserManager;
 
 /**
  * The cross-board feed behind saved "Views" (#3815) - every non-deleted,
@@ -69,6 +70,7 @@ class ViewService {
 		private CardSummaryService $cardSummaryService,
 		private BoardAccess $boardAccess,
 		private LabelMapper $labelMapper,
+		private IUserManager $userManager,
 	) {
 	}
 
@@ -94,6 +96,13 @@ class ViewService {
 	 * survivors (which would make the facet vanish at zero matches and leave no way to
 	 * add a second person). Accumulating it in the assembly pass costs no extra query.
 	 *
+	 * Each entry is `{uid, displayName}` - the display name is resolved from the uid
+	 * ONCE per distinct uid (one directory lookup, the same one-query shape
+	 * {@see InboxService::findMine()} uses for its authors), bounded by the cards in
+	 * play rather than board membership. A uid the directory no longer knows (a
+	 * deleted account) falls back to the uid as its own name, so the facet keeps
+	 * offering it instead of silently dropping it.
+	 *
 	 * Each card additionally carries `boardPrefix` (its board's human-id prefix) and
 	 * `labels` is the union of each readable board's serialized labels (the label's
 	 * own shape: id/boardId/title/color) across the same readable boards - all
@@ -107,7 +116,7 @@ class ViewService {
 	 * row of an arbitrary window. `default` keeps the historical stable
 	 * (boardId, id) order, so a View saved before the sort control looks unchanged.
 	 *
-	 * @return array{cards: list<array<string, mixed>>, labels: list<array<string, mixed>>, participants: list<string>, capped: bool, total: int, limit: int}
+	 * @return array{cards: list<array<string, mixed>>, labels: list<array<string, mixed>>, participants: list<array{uid: string, displayName: string}>, capped: bool, total: int, limit: int}
 	 */
 	public function findMine(string $uid, string $sortMode = 'default', string $sortDir = 'asc', ?ViewFilter $filter = null): array {
 		// ARCHIVED BOARDS are out of the feed entirely (#10126) - an archived
@@ -270,17 +279,34 @@ class ViewService {
 
 		ksort($participants, SORT_STRING);
 
-		return [
-			'cards' => $out,
-			'labels' => array_values($labels),
-			// strval() because PHP silently coerces a canonical decimal string array
+		// Resolve each distinct uid's display name ONCE (one directory lookup per
+		// uid, not per row - the same one-query shape InboxService::findMine() uses
+		// for its authors). The vocabulary is bounded by the cards in play, NOT by
+		// board membership, so a board shared with a huge group costs only as many
+		// lookups as the people actually on its visible cards. A uid the directory
+		// no longer knows (a deleted account) falls back to the uid as its own name,
+		// so the facet keeps offering it instead of silently dropping it.
+		$participantsOut = [];
+		foreach (array_keys($participants) as $participantUid) {
+			// (string) because PHP silently coerces a canonical decimal string array
 			// KEY to int - so a numeric uid (routine with LDAP employee-number
 			// provisioning) would come back as int(12345) and ship as a JSON number,
 			// which the client drops as "not a uid". That would resurrect the very
 			// facet self-narrowing this vocabulary exists to prevent: the numeric
 			// account would vanish from the assignee/owner facet with no way to
 			// re-add them.
-			'participants' => array_map('strval', array_keys($participants)),
+			$participantUid = (string)$participantUid;
+			$user = $this->userManager->get($participantUid);
+			$participantsOut[] = [
+				'uid' => $participantUid,
+				'displayName' => $user !== null ? $user->getDisplayName() : $participantUid,
+			];
+		}
+
+		return [
+			'cards' => $out,
+			'labels' => array_values($labels),
+			'participants' => $participantsOut,
 			'capped' => $capped,
 			'total' => $total,
 			'limit' => self::MAX_CARDS,

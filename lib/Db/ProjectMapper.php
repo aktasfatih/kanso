@@ -54,4 +54,29 @@ class ProjectMapper extends QBMapper {
 
 		return $this->findEntities($qb);
 	}
+
+	/**
+	 * The viewer's OWN projects among the given ids, in one query - the board
+	 * payload's project lookup. Projects are owner-only, so restricting to
+	 * `owner = uid` is the whole ACL: a project someone else owns is invisible,
+	 * and its title/color must not leak through a shared card.
+	 *
+	 * @param int[] $ids
+	 * @return Project[]
+	 * @throws Exception
+	 */
+	public function findByIdsForOwner(array $ids, string $uid): array {
+		if ($ids === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->in('id', $qb->createNamedParameter(array_values($ids), IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('owner', $qb->createNamedParameter($uid)))
+			->orderBy('id', 'ASC');
+
+		return $this->findEntities($qb);
+	}
 }

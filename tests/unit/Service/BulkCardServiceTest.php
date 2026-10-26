@@ -9,12 +9,15 @@ namespace OCA\Kanso\Tests\Unit\Service;
 
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\Stack;
+use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\AssigneeService;
 use OCA\Kanso\Service\BulkCardService;
 use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\LabelService;
 use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\TrashService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -24,6 +27,8 @@ class BulkCardServiceTest extends TestCase {
 	private LabelService&MockObject $labelService;
 	private AssigneeService&MockObject $assigneeService;
 	private CardMapper&MockObject $cardMapper;
+	private StackMapper&MockObject $stackMapper;
+	private TrashService&MockObject $trashService;
 	private BulkCardService $service;
 
 	protected function setUp(): void {
@@ -32,11 +37,15 @@ class BulkCardServiceTest extends TestCase {
 		$this->labelService = $this->createMock(LabelService::class);
 		$this->assigneeService = $this->createMock(AssigneeService::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
+		$this->stackMapper = $this->createMock(StackMapper::class);
+		$this->trashService = $this->createMock(TrashService::class);
 		$this->service = new BulkCardService(
 			$this->cardService,
 			$this->labelService,
 			$this->assigneeService,
 			$this->cardMapper,
+			$this->stackMapper,
+			$this->trashService,
 		);
 	}
 
@@ -54,6 +63,38 @@ class BulkCardServiceTest extends TestCase {
 	private function stubArchivedStateIs(bool $archived): void {
 		$this->cardMapper->method('find')
 			->willReturnCallback(fn (int $id): Card => $this->card($id, $archived));
+	}
+
+	/**
+	 * A trashed card on board 1 in the given stack - the shape the bulk restore
+	 * path reads before delegating to the single-card path.
+	 */
+	private function trashedCard(int $id, int $stackId = 2): Card {
+		$card = new Card();
+		$card->setId($id);
+		$card->setBoardId(1);
+		$card->setStackId($stackId);
+		return $card;
+	}
+
+	/**
+	 * Stubs the bulk restore path's pre-reads: the card (board 1, given stack)
+	 * and the stack-existence check (every stack except 999 is live on the board).
+	 */
+	private function stubRestorePreReads(int $stackId = 2): void {
+		// The closure validates access through TrashService first (so `forbidden`
+		// wins over any card-state), then checks the stack.
+		$this->trashService->method('assertAccess')
+			->willReturnCallback(fn (int $id, string $uid): Card => $this->trashedCard($id, $stackId));
+		$this->cardMapper->method('find')
+			->willReturnCallback(fn (int $id): Card => $this->trashedCard($id, $stackId));
+		$this->stackMapper->method('findByIds')
+			->willReturnCallback(function (int $boardId, array $ids): array {
+				$stack = new Stack();
+				$stack->setId($ids[0]);
+				$stack->setBoardId($boardId);
+				return $ids[0] === 999 ? [] : [$stack];
+			});
 	}
 
 	// ── Happy paths (one per action) ────────────────────────────────────────────
@@ -356,6 +397,114 @@ class BulkCardServiceTest extends TestCase {
 		$result = $this->service->apply([11, 12], BulkCardService::ACTION_DELETE, [], 'alice');
 		self::assertSame([11, 12], $result['ok']);
 		self::assertSame([11, 12], $deleted);
+	}
+
+	public function testBulkRestoreCallsTrashServiceRestorePerCard(): void {
+		// Restore is the inverse of delete, so a delete is undoable in one action.
+		// It delegates to the single-card path (TrashService::restore) per card.
+		// Both cards sit in a live stack, so the pre-reads pass.
+		$this->stubRestorePreReads();
+		$restored = [];
+		$this->trashService->expects(self::exactly(2))->method('restore')
+			->willReturnCallback(function (int $id, string $uid) use (&$restored): Card {
+				self::assertSame('alice', $uid);
+				$restored[] = $id;
+				return $this->card($id);
+			});
+
+		$result = $this->service->apply([11, 12], BulkCardService::ACTION_RESTORE, [], 'alice');
+		self::assertSame([11, 12], $result['ok']);
+		self::assertSame([11, 12], $restored);
+	}
+
+	public function testBulkRestoreSkipsACardWhoseStackIsGone(): void {
+		// A trashed card whose stack was deleted afterwards would be restored with
+		// a dangling stackId and never render (BoardView groups cards by stackId
+		// and renders only existing stacks) - so the bulk path skips it instead of
+		// losing it. The single-card path (TrashService::restore) is unchanged:
+		// this check lives only in the bulk op.
+		$this->stubRestorePreReads(999); // card 11 sits in stack 999, which is gone
+		// The single-card path must never run for the gone-stack card.
+		$this->trashService->expects(self::never())->method('restore');
+
+		$result = $this->service->apply([11], BulkCardService::ACTION_RESTORE, [], 'alice');
+		self::assertSame([], $result['ok'], 'a card whose stack is gone is skipped, not restored');
+		self::assertSame([['id' => 11, 'reason' => 'not_found']], $result['skipped']);
+	}
+
+	public function testBulkRestoreReportsForbiddenBeforeRevealingAMissingStack(): void {
+		// A card the caller may not edit whose stack is gone must report `forbidden`
+		// (access denied) rather than `not_found` (missing stack) - revealing the
+		// stack state ahead of the access guard is an existence oracle.
+		$this->stackMapper->method('findByIds')->willReturn([]); // card's stack is gone
+		$this->trashService->method('assertAccess')
+			->willThrowException(new NotPermittedException('nope')); // caller may not edit
+		$this->trashService->expects(self::never())->method('restore');
+
+		$result = $this->service->apply([11], BulkCardService::ACTION_RESTORE, [], 'alice');
+		self::assertSame([], $result['ok']);
+		self::assertSame([['id' => 11, 'reason' => 'forbidden']], $result['skipped']);
+	}
+
+	public function testBulkRestoreSkipsANonEditableCardInsteadOfFailingTheRequest(): void {
+		// Card 12 lives on a board alice cannot edit → TrashService::restore throws
+		// NotPermittedException. The other cards still restore. All sit in a live
+		// stack, so the pre-reads pass and the skip comes from the single-card path.
+		$this->stubRestorePreReads();
+		$this->trashService->method('restore')
+			->willReturnCallback(function (int $id, string $uid): Card {
+				if ($id === 12) {
+					throw new NotPermittedException('nope');
+				}
+				return $this->card($id);
+			});
+
+		$result = $this->service->apply([11, 12, 13], BulkCardService::ACTION_RESTORE, [], 'alice');
+		self::assertSame([11, 13], $result['ok']);
+		self::assertSame([['id' => 12, 'reason' => 'forbidden']], $result['skipped']);
+	}
+
+	public function testBulkRestoreSkipsALiveCardWithItsMessage(): void {
+		// A card that is not in the trash (already restored) is a per-card skip, not
+		// a whole-request failure - TrashService::restore throws InvalidInputException.
+		// Both sit in a live stack, so the pre-reads pass and the skip is the message.
+		$this->stubRestorePreReads();
+		$this->trashService->method('restore')
+			->willReturnCallback(function (int $id, string $uid): Card {
+				if ($id === 12) {
+					throw new InvalidInputException('Card 12 is not in the trash');
+				}
+				return $this->card($id);
+			});
+
+		$result = $this->service->apply([11, 12], BulkCardService::ACTION_RESTORE, [], 'alice');
+		self::assertSame([11], $result['ok']);
+		self::assertSame([['id' => 12, 'reason' => 'Card 12 is not in the trash']], $result['skipped']);
+	}
+
+	public function testBulkRestoreHonoursMaxCards(): void {
+		// The 100-cap applies to restore like every other action: a full chunk is
+		// accepted, an oversized one is a whole-request 400. Every card sits in a
+		// live stack, so the pre-reads pass for the whole chunk.
+		$this->stubRestorePreReads();
+		$this->trashService->expects(self::exactly(100))->method('restore')
+			->willReturnCallback(fn (int $id, string $uid): Card => $this->card($id));
+
+		$result = $this->service->apply(
+			range(1, BulkCardService::MAX_CARDS),
+			BulkCardService::ACTION_RESTORE,
+			[],
+			'alice',
+		);
+		self::assertCount(100, $result['ok']);
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->apply(
+			range(1, BulkCardService::MAX_CARDS + 1),
+			BulkCardService::ACTION_RESTORE,
+			[],
+			'alice',
+		);
 	}
 
 	// ── Permission denial: a card on a board the caller can't edit is skipped ────
