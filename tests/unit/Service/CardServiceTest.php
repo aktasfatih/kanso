@@ -3549,6 +3549,77 @@ class CardServiceTest extends TestCase {
 		self::assertSame(['bob'], $watchers, 'the unreadable watcher is dropped (leak guard)');
 	}
 
+	/**
+	 * Minimal cross-board move (card 9 on board 1 → stack 7 on board 2) that
+	 * carries one readable assignee ('bob'). Returns the captured
+	 * insertAssignment() calls as [cardId, uid, actorName] tuples.
+	 *
+	 * @param array<int, array{uid: string, actorName: string|null}> $sourceAssignees
+	 * @return array<int, array{0: int, 1: string, 2: string|null}>
+	 */
+	private function moveToBoardCapturingAssignments(?bool $targetAllowsAiActors, array $sourceAssignees): array {
+		$sourceBoard = $this->board(1);
+		$targetBoard = $this->board(2);
+		$targetBoard->setAllowAiActors($targetAllowsAiActors);
+		$targetStack = $this->stack(7, 2);
+		$source = $this->card(9, 5, 1);
+
+		$this->cardMapper->method('find')->willReturnMap([[9, $source]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($targetStack);
+		$this->boardMapper->method('find')->willReturnMap([[1, $sourceBoard], [2, $targetBoard]]);
+		$this->cardMapper->method('findLastInStack')->with(7)->willReturn(null);
+		$this->cardMapper->method('nextBoardSeq')->with(2)->willReturn(88);
+		$this->cardMapper->method('findChildren')->with(9)->willReturn([]);
+		$this->cardMapper->method('insert')->willReturnCallback(static function (Card $c): Card {
+			$c->setId(42);
+			return $c;
+		});
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+		$this->cardLabelMapper->method('findLabelIdsByCard')->with(9)->willReturn([]);
+		$this->checklistItemMapper->method('findByCard')->with(9)->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn(['bob']);
+		$this->subscriptionMapper->method('findCardSubscriberUids')->with(9)->willReturn([]);
+		$this->cardAssigneeMapper->method('findAssigneesByCard')->with(9)->willReturn($sourceAssignees);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$assigned = [];
+		$this->cardAssigneeMapper->method('insertAssignment')->willReturnCallback(
+			function (int $cardId, string $uid, ?string $actorName) use (&$assigned): \OCA\Kanso\Db\CardAssignee {
+				$assigned[] = [$cardId, $uid, $actorName];
+				return new \OCA\Kanso\Db\CardAssignee();
+			},
+		);
+
+		$this->service->moveToBoard(9, 7, 'alice');
+		return $assigned;
+	}
+
+	/**
+	 * A cross-board move carries an AI-attributed assignee's actor name onto the
+	 * target when the target board allows AI actors (#352).
+	 */
+	public function testMoveToBoardCarriesActorNameWhenTargetAllowsAiActors(): void {
+		$assigned = $this->moveToBoardCapturingAssignments(true, [
+			['uid' => 'bob', 'actorName' => 'Claude'],
+		]);
+
+		self::assertSame([[42, 'bob', 'Claude']], $assigned, 'the AI actor name crosses with the assignee');
+	}
+
+	/**
+	 * A cross-board move drops an AI-attributed assignee's actor name when the
+	 * target board does NOT allow AI actors (#352) - a move must not smuggle an
+	 * AI attribution onto a board that forbids it.
+	 */
+	public function testMoveToBoardDropsActorNameWhenTargetDisallowsAiActors(): void {
+		$assigned = $this->moveToBoardCapturingAssignments(false, [
+			['uid' => 'bob', 'actorName' => 'Claude'],
+		]);
+
+		self::assertSame([[42, 'bob', null]], $assigned, 'the actor name is cleared on a board that forbids AI actors');
+	}
+
 	// ---- templates (#3409) ------------------------------------------------
 
 	private function templateCard(int $id = 9, int $stackId = 5, int $boardId = 1): Card {
