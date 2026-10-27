@@ -9,7 +9,7 @@
 import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
 test.describe('Projects — cross-board card collections', () => {
-	const state = { boardA: 0, boardB: 0, projectId: 0, cardA: 0, cardB: 0 }
+	const state = { boardA: 0, boardB: 0, projectId: 0, cardA: 0, cardB: 0, refA: '', refB: '' }
 
 	test.beforeAll(async () => {
 		const ts = Date.now()
@@ -23,6 +23,10 @@ test.describe('Projects — cross-board card collections', () => {
 		const cardB = await api.post('/cards', { stackId: stackB.id, title: 'Beta cross-board task' })
 		state.cardA = cardA.id
 		state.cardB = cardB.id
+		// Each card's board reference (PREFIX-<boardSeq>) - the board's derived
+		// prefix plus the card's per-board number, both straight from the API.
+		state.refA = `${boardA.prefix}-${cardA.boardSeq}`
+		state.refB = `${boardB.prefix}-${cardB.boardSeq}`
 
 		const project = await api.post('/projects', { title: `Q3 Initiative ${ts}` })
 		state.projectId = project.id
@@ -46,6 +50,13 @@ test.describe('Projects — cross-board card collections', () => {
 		// Both cards, from two different boards, are listed.
 		await expect(view).toContainText('Alpha cross-board task')
 		await expect(view).toContainText('Beta cross-board task')
+
+		// Each row also shows the card's board reference (PREFIX-<boardSeq>) so a
+		// card is identifiable by board + number, not just its board title.
+		const rowA = page.locator('.project-view__row', { hasText: 'Alpha cross-board task' })
+		await expect(rowA.locator('.project-view__ref')).toHaveText(state.refA)
+		const rowB = page.locator('.project-view__row', { hasText: 'Beta cross-board task' })
+		await expect(rowB.locator('.project-view__ref')).toHaveText(state.refB)
 
 		await page.locator('[data-test=project-mode-board]').click()
 		// Grouped by board: both board headers render as section titles.

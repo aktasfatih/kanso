@@ -315,6 +315,71 @@ class ProjectCardMapperTest extends TestCase {
 		self::assertSame([], $mapper->findCardsInProjectAndBoards(4, [], 'alice', []));
 	}
 
+	/**
+	 * The project card row carries the board's `prefix` (as `boardPrefix`)
+	 * alongside the card's `boardSeq` - the two halves of the card's human
+	 * reference (e.g. KANSO-359) that the project view renders on each row.
+	 * A row without a per-board number maps to a null boardSeq (a
+	 * pre-migration card), so the client hides the chip rather than render a
+	 * broken id.
+	 */
+	public function testFindCardsInProjectAndBoardsCarriesTheBoardPrefixForTheCardReference(): void {
+		$qb = $this->createMock(IQueryBuilder::class);
+		foreach ([
+			'select', 'selectAlias', 'addSelect', 'from', 'innerJoin', 'leftJoin',
+			'where', 'andWhere', 'orderBy', 'addOrderBy',
+		] as $method) {
+			$qb->method($method)->willReturnSelf();
+		}
+		$qb->method('expr')->willReturn(new class {
+			public function __call(string $name, array $args): string {
+				return $name . '(' . implode(',', array_map(strval(...), $args)) . ')';
+			}
+		});
+		$next = 0;
+		$qb->method('createNamedParameter')->willReturnCallback(function (mixed $value) use (&$next): string {
+			return ':p' . $next++;
+		});
+
+		$result = $this->createMock(IResult::class);
+		$queue = [[
+			'id' => '9',
+			'board_id' => '1',
+			'board_title' => 'Kanban',
+			'board_prefix' => 'KANSO',
+			'board_seq' => '359',
+			'stack_title' => 'To do',
+			'title' => 'Ship it',
+			'duedate' => null,
+			'start_date' => null,
+			'priority' => '0',
+			'done_at' => '0',
+			'started_at' => '0',
+			'parent_card_id' => null,
+			'sort_key' => 'a',
+			'estimate' => null,
+			'estimate_scale' => 'none',
+			'estimate_custom' => null,
+			'disabled_card_features' => null,
+			'created_at' => '100',
+			'added_at' => '200',
+		]];
+		$result->method('fetch')->willReturnCallback(static function () use (&$queue) {
+			$row = array_shift($queue);
+			return $row ?? false;
+		});
+		$qb->method('executeQuery')->willReturn($result);
+		$this->db->method('getQueryBuilder')->willReturn($qb);
+
+		$rows = $this->mapper->findCardsInProjectAndBoards(5, [1], 'alice', [1 => ViewerContext::ROLE_INTERNAL]);
+
+		self::assertCount(1, $rows);
+		self::assertSame('KANSO', $rows[0]['boardPrefix'], 'the board prefix rides the project card row');
+		self::assertSame(359, $rows[0]['boardSeq'], 'the per-board number rides the project card row');
+		self::assertSame('Kanban', $rows[0]['boardTitle']);
+		self::assertSame('To do', $rows[0]['stackTitle']);
+	}
+
 	public function testOpenBlockerCountsOnlyCountsOpenBlockersTheViewerCanSee(): void {
 		$predicates = $this->recordQuery(
 			fn (ProjectCardMapper $m) => $m->openBlockerCounts([11, 12], [7], 'alice', [7 => ViewerContext::ROLE_INTERNAL])

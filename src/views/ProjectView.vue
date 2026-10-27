@@ -243,6 +243,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<div class="project-view__row-main">
 									<span class="project-view__card-title">{{ card.title }}</span>
 									<span class="project-view__meta">
+										<span v-if="cardRef(card)" class="project-view__ref">{{ cardRef(card) }}</span>
 										<span v-if="mode === 'status'">{{ card.boardTitle }} · </span>
 										<span class="project-view__stack">{{ card.stackTitle }}</span>
 									</span>
@@ -578,6 +579,7 @@ import ProjectHealth from '../components/ProjectHealth.vue'
 import ProjectBurnup from '../components/ProjectBurnup.vue'
 import BoardTimelineView from '../components/BoardTimelineView.vue'
 import { renderMarkdown } from '../services/markdown.js'
+import { humanId } from '../services/humanId.js'
 import { useMarkdownToolbar } from '../composables/useMarkdownToolbar.js'
 
 const COLOR_PRESETS = [
@@ -630,6 +632,14 @@ const boardGroups = computed(() => {
 
 function isOverdue(card) {
 	return !card.doneAt && !!card.duedate && new Date(card.duedate).getTime() < Date.now()
+}
+
+// The card's board reference (e.g. KANSO-359): its board's prefix plus the
+// card's per-board number, both on the project-card payload. Null when either
+// half is missing (a pre-migration card), so the chip hides rather than
+// rendering a broken id.
+function cardRef(card) {
+	return card.boardPrefix ? humanId(card.boardPrefix, card.boardSeq) : null
 }
 
 function statusOf(card) {
@@ -1440,8 +1450,19 @@ async function handleDeleteComment(comment) {
 }
 
 .project-view__meta {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
 	font-size: 0.8rem;
 	color: var(--color-text-maxcontrast);
+}
+
+/* The card's board reference (e.g. KANSO-359) - small, muted, monospace so it reads as an id */
+.project-view__ref {
+	font-size: 0.68rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	font-family: var(--font-face-monospace, monospace);
 }
 
 .project-view__due {
