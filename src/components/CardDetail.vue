@@ -897,7 +897,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 					<!-- Assignees -->
 					<span
-						v-for="assignee in cardAssignees"
+						v-for="assignee in assigneePills"
 						:key="assignee.uid"
 						class="card-modal__assignee-pill">
 						<NcAvatar
@@ -3291,6 +3291,22 @@ const cardAssigneeIds = computed(() =>
 const cardAssignees = computed(() =>
 	Array.isArray(cardData.value?.assignees) ? cardData.value.assignees : [],
 )
+
+// The assignee PILL list. Iterate the (optimistic) uid list, not the
+// server-named `cardAssignees`: the optimistic write (useAssignees.onMutate)
+// patches assigneeIds, while the named list only arrives on a full card read.
+// Keying the pill off the named list alone made a just-added assignee invisible
+// until the refetch landed - a held/slow read left the pill at zero elements
+// (#10923). Pull each uid's AI actor name from the named list when it is
+// already loaded, so the attribution badge appears as soon as the server has
+// named it.
+const assigneePills = computed(() => {
+	const byUid = new Map(cardAssignees.value.map((a) => [a.uid, a]))
+	return cardAssigneeIds.value.map((uid) => ({
+		uid,
+		actorName: byUid.get(uid)?.actorName ?? null,
+	}))
+})
 
 // uid → participant, for resolving display names. Three layers, authoritative
 // last:

@@ -18,8 +18,9 @@ test.describe('Projects — cross-board card collections', () => {
 		// Give the two boards distinct prefixes so their first cards (both seq 1)
 		// produce different references (ALPHA-1 vs BETA-1). Otherwise both derive
 		// the prefix PROJB and the row assertions can't tell the boards apart.
-		await api.put(`/boards/${boardA.id}`, { prefix: 'ALPHA' })
-		await api.put(`/boards/${boardB.id}`, { prefix: 'BETA' })
+		// (board update is a PATCH route - PUT 405s)
+		await api.patch(`/boards/${boardA.id}`, { prefix: 'ALPHA' })
+		await api.patch(`/boards/${boardB.id}`, { prefix: 'BETA' })
 		state.boardA = boardA.id
 		state.boardB = boardB.id
 		const stackA = await api.post('/stacks', { boardId: boardA.id, title: 'To Do' })

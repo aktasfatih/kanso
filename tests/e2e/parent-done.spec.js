@@ -12,6 +12,9 @@ test.describe('Auto-complete parent when all children are done', () => {
 	test.beforeAll(async () => {
 		const board = await api.post('/boards', { title: 'Parent-Done E2E' })
 		boardId = board.id
+		// KANSO-360: parent auto-completion is now an opt-in board setting (off
+		// by default), so enable it on this board before exercising the behavior.
+		await api.patch(`/boards/${boardId}`, { autoCompleteParent: true })
 		const stack = await api.post('/stacks', { boardId, title: 'Tasks' })
 		stackId = stack.id
 	})
