@@ -187,6 +187,9 @@ class Card(CardSummary):
     projectIds: List[int] = Field(default_factory=list)
     fieldValues: List[Any] = Field(default_factory=list)
     relations: Optional[Any] = None
+    # The card's assignees WITH their display names and optional AI actor name
+    # (#352); `assigneeIds` (on CardSummary) is the bare uid list.
+    assignees: List[Any] = Field(default_factory=list)
 
 
 class SearchHit(_Base):

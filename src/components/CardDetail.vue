@@ -1290,10 +1290,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:disable-tooltip="true" />
 							<span
 								class="card-modal__review-name"
-								:class="{ 'card-modal__review-name--ai': review.actorName }"
-								:title="review.actorName || participantName(review.reviewer)">
-								<RobotOutlineIcon v-if="review.actorName" :size="14" class="card-modal__ai-actor-icon" />
-								{{ review.actorName || participantName(review.reviewer) }}
+								:title="participantName(review.reviewer)">
+								{{ participantName(review.reviewer) }}
+							</span>
+							<span
+								v-if="review.actorName"
+								class="card-modal__review-name card-modal__review-name--ai"
+								:title="t('kanso', 'Requested by AI actor')">
+								<RobotOutlineIcon :size="14" class="card-modal__ai-actor-icon" />
+								{{ review.actorName }}
 							</span>
 							<span
 								v-if="reviewTypeById(review.reviewTypeId)"
@@ -2294,7 +2299,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											:title="t('kanso', 'Show this resolved thread')"
 											@click="toggleThreadExpanded(topComment)">
 											<CheckCircleOutlineIcon :size="16" class="card-modal__thread-summary-icon" />
-											<span class="card-modal__thread-summary-author">{{ topComment.authorDisplayName || topComment.author }}</span>
+											<span
+												class="card-modal__thread-summary-author"
+												:class="{ 'card-modal__comment-author--ai': topComment.actorName }">
+												<RobotOutlineIcon v-if="topComment.actorName" :size="14" class="card-modal__ai-actor-icon" />
+												{{ topComment.actorName || topComment.authorDisplayName || topComment.author }}
+											</span>
 											<span class="card-modal__thread-summary-state">{{ t('kanso', 'Resolved') }}</span>
 											<span v-if="replies.length > 0" class="card-modal__thread-summary-replies">{{ n('kanso', '%n reply', '%n replies', replies.length) }}</span>
 											<span class="card-modal__thread-summary-show">{{ t('kanso', 'Show') }}</span>

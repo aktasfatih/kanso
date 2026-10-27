@@ -15,6 +15,11 @@ test.describe('Projects — cross-board card collections', () => {
 		const ts = Date.now()
 		const boardA = await api.post('/boards', { title: `Proj Board A ${ts}` })
 		const boardB = await api.post('/boards', { title: `Proj Board B ${ts}` })
+		// Give the two boards distinct prefixes so their first cards (both seq 1)
+		// produce different references (ALPHA-1 vs BETA-1). Otherwise both derive
+		// the prefix PROJB and the row assertions can't tell the boards apart.
+		await api.put(`/boards/${boardA.id}`, { prefix: 'ALPHA' })
+		await api.put(`/boards/${boardB.id}`, { prefix: 'BETA' })
 		state.boardA = boardA.id
 		state.boardB = boardB.id
 		const stackA = await api.post('/stacks', { boardId: boardA.id, title: 'To Do' })
@@ -23,10 +28,10 @@ test.describe('Projects — cross-board card collections', () => {
 		const cardB = await api.post('/cards', { stackId: stackB.id, title: 'Beta cross-board task' })
 		state.cardA = cardA.id
 		state.cardB = cardB.id
-		// Each card's board reference (PREFIX-<boardSeq>) - the board's derived
-		// prefix plus the card's per-board number, both straight from the API.
-		state.refA = `${boardA.prefix}-${cardA.boardSeq}`
-		state.refB = `${boardB.prefix}-${cardB.boardSeq}`
+		// Each card's board reference (PREFIX-<boardSeq>) - the board's prefix plus
+		// the card's per-board number.
+		state.refA = `ALPHA-${cardA.boardSeq}`
+		state.refB = `BETA-${cardB.boardSeq}`
 
 		const project = await api.post('/projects', { title: `Q3 Initiative ${ts}` })
 		state.projectId = project.id

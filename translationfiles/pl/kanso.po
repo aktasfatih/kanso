@@ -417,7 +417,7 @@ msgstr[0] "Wykryto %n wiersz danych"
 msgstr[1] "Wykryto %n wiersze danych"
 msgstr[2] "Wykryto %n wierszy danych"
 
-#: src/components/CardDetail.vue:4972
+#: src/components/CardDetail.vue:4982
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dzień temu"
@@ -431,7 +431,7 @@ msgstr[0] "%n plik"
 msgstr[1] "%n pliki"
 msgstr[2] "%n plików"
 
-#: src/components/CardDetail.vue:4970
+#: src/components/CardDetail.vue:4980
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n godzinę temu"
@@ -466,7 +466,7 @@ msgstr[0] "%n etykieta nie została utworzona i brakuje jej na zaimportowanych k
 msgstr[1] "%n etykiety nie zostały utworzone i brakuje ich na zaimportowanych kartach: tylko osoby zarządzające tablicą mogą dodawać nowe etykiety. Poproś taką osobę, aby je dodała, a potem ustaw je na kartach."
 msgstr[2] "%n etykiet nie zostało utworzonych i brakuje ich na zaimportowanych kartach: tylko osoby zarządzające tablicą mogą dodawać nowe etykiety. Poproś taką osobę, aby je dodała, a potem ustaw je na kartach."
 
-#: src/components/CardDetail.vue:4968
+#: src/components/CardDetail.vue:4978
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minutę temu"
@@ -501,7 +501,7 @@ msgstr[0] "%n projekt"
 msgstr[1] "%n projekty"
 msgstr[2] "%n projektów"
 
-#: src/components/CardDetail.vue:2299
+#: src/components/CardDetail.vue:2309
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n odpowiedź"
@@ -2052,7 +2052,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:2298
-#: src/components/CardDetail.vue:5161
+#: src/components/CardDetail.vue:5171
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dzień"
@@ -3605,7 +3605,7 @@ msgstr "Cel, zakres lub zasady. Każdy użytkownik tej tablicy może je przeczyt
 msgid "Jump to the discussion"
 msgstr "Przejdź do dyskusji"
 
-#: src/components/CardDetail.vue:6982
+#: src/components/CardDetail.vue:6992
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Przejdź do dyskusji (%n komentarz)"
@@ -3982,7 +3982,7 @@ msgid "Mon"
 msgstr "Pn"
 
 #: src/components/BoardSettingsModal.vue:2300
-#: src/components/CardDetail.vue:5163
+#: src/components/CardDetail.vue:5173
 msgid "month"
 msgid_plural "months"
 msgstr[0] "miesiąc"
@@ -5181,6 +5181,10 @@ msgstr "poprosił o recenzję"
 msgid "requested a review on"
 msgstr "poprosił o recenzję"
 
+#: src/components/CardDetail.vue
+msgid "Requested by AI actor"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Require verified senders (DMARC)"
 msgstr "Wymagaj zweryfikowanych nadawców (DMARC)"
@@ -5549,7 +5553,7 @@ msgstr "Pokaż dyskusję pod kartą"
 msgid "Show the discussion panel"
 msgstr "Pokaż panel dyskusji"
 
-#: src/components/CardDetail.vue:6988
+#: src/components/CardDetail.vue:6998
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Pokaż panel dyskusji (%n komentarz)"
@@ -6336,7 +6340,7 @@ msgid "Wed"
 msgstr "Śr"
 
 #: src/components/BoardSettingsModal.vue:2299
-#: src/components/CardDetail.vue:5162
+#: src/components/CardDetail.vue:5172
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "tydzień"
@@ -6446,7 +6450,7 @@ msgid "wrote"
 msgstr "napisał"
 
 #: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5164
+#: src/components/CardDetail.vue:5174
 msgid "year"
 msgid_plural "years"
 msgstr[0] "rok"

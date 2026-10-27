@@ -145,7 +145,7 @@ class CardReviewMapper extends QBMapper {
 	 *
 	 * @param int[] $boardIds the reviewer's readable board ids (empty → [])
 	 * @param array<int, string> $rolesByBoard the reviewer's role per board id
-	 * @return list<array{id: int, cardId: int, cardTitle: string, boardId: int, boardTitle: string, state: string, reviewTypeId: ?int, reviewTypeTitle: ?string, reviewTypeColor: ?string, requestedBy: string, createdAt: int}>
+	 * @return list<array{id: int, cardId: int, cardTitle: string, boardId: int, boardTitle: string, state: string, reviewTypeId: ?int, reviewTypeTitle: ?string, reviewTypeColor: ?string, requestedBy: string, actorName: ?string, createdAt: int}>
 	 * @throws Exception
 	 */
 	public function findByReviewerInBoards(string $reviewer, array $boardIds, array $rolesByBoard): array {
@@ -154,7 +154,7 @@ class CardReviewMapper extends QBMapper {
 		}
 
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('r.id', 'r.card_id', 'r.state', 'r.review_type_id', 'r.requested_by', 'r.created_at')
+		$qb->select('r.id', 'r.card_id', 'r.state', 'r.review_type_id', 'r.requested_by', 'r.actor_name', 'r.created_at')
 			->selectAlias('c.title', 'card_title')
 			->addSelect('c.board_id')
 			->selectAlias('b.title', 'board_title')
@@ -185,6 +185,9 @@ class CardReviewMapper extends QBMapper {
 				'reviewTypeTitle' => $row['type_title'] !== null ? (string)$row['type_title'] : null,
 				'reviewTypeColor' => $row['type_color'] !== null ? (string)$row['type_color'] : null,
 				'requestedBy' => (string)$row['requested_by'],
+				// Optional AI actor name that requested the review (#352); NULL when
+				// the request came from a human directly.
+				'actorName' => $row['actor_name'] !== null ? (string)$row['actor_name'] : null,
 				'createdAt' => (int)$row['created_at'],
 			];
 		}

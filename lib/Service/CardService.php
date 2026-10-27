@@ -530,6 +530,17 @@ class CardService {
 			$this->cardAssigneeMapper->findUserIdsByCard($id),
 			$targetBoard,
 		)));
+		// The carried assignees' optional AI actor names (#352), keyed by uid.
+		// Carried over only when the TARGET board allows AI actors - a move must
+		// not smuggle an AI attribution onto a board that forbids it.
+		$assigneeActorNames = [];
+		if ($targetBoard->getAllowAiActors() === true) {
+			foreach ($this->cardAssigneeMapper->findAssigneesByCard($id) as $a) {
+				if ($a['actorName'] !== null) {
+					$assigneeActorNames[$a['uid']] = $a['actorName'];
+				}
+			}
+		}
 		$carriedWatchers = array_values(array_unique($this->filterReadableOnTarget(
 			$this->subscriptionMapper->findCardSubscriberUids($id),
 			$targetBoard,
@@ -585,7 +596,7 @@ class CardService {
 
 				// Assignees / watchers that survived the READ filter.
 				foreach ($carriedAssignees as $assigneeUid) {
-					$this->cardAssigneeMapper->insertAssignment($newId, $assigneeUid);
+					$this->cardAssigneeMapper->insertAssignment($newId, $assigneeUid, $assigneeActorNames[$assigneeUid] ?? null);
 				}
 				foreach ($carriedWatchers as $watcherUid) {
 					$sub = new Subscription();
@@ -1821,14 +1832,14 @@ class CardService {
 
 	/**
 	 * Auto-completes a parent card once ALL of its children are resolved (done
-	 * or archived) - the "all children done → parent done" workflow. Gated by
-	 * the board's `autoCompleteParent` setting (#198), which is OFF by default:
-	 * a parent is only stamped done this way when the board owner has opted in.
-	 * Called from a CHILD's update()/move() after it persists; a card with no
-	 * parent is a fast no-op (the common case). Forward-only for v1: it never
-	 * RE-OPENS a parent (a parent a human marked done is left alone), and since
-	 * the hierarchy is one level (a parent has no parent) stamping it done cannot
-	 * cascade - no loop guard needed.
+	 * or archived) AND its own checklist is fully done - the "all children done
+	 * → parent done" workflow. Gated by the board's `autoCompleteParent` setting
+	 * (#198), which is OFF by default: a parent is only stamped done this way
+	 * when the board owner has opted in. Called from a CHILD's update()/move()
+	 * after it persists; a card with no parent is a fast no-op (the common case).
+	 * Forward-only for v1: it never RE-OPENS a parent (a parent a human marked
+	 * done is left alone), and since the hierarchy is one level (a parent has no
+	 * parent) stamping it done cannot cascade - no loop guard needed.
 	 */
 	private function maybeCompleteParent(Card $child, string $uid): void {
 		$parentId = $child->getParentCardId();
@@ -1862,6 +1873,16 @@ class CardService {
 		foreach ($this->cardMapper->findChildren($parentId) as $sibling) {
 			if ($sibling->getDoneAt() === 0 && !$sibling->getArchived()) {
 				return; // an unresolved child remains
+			}
+		}
+
+		// A parent that still has open checklist steps of its own must not be stamped
+		// done just because its subcards are resolved (#198): the checklist is part of
+		// the parent's own work, so it is a precondition for auto-completion too. An
+		// itemless parent (or one whose steps are all done) passes.
+		foreach ($this->checklistItemMapper->findByCard($parentId) as $item) {
+			if (!$item->getDone()) {
+				return; // an open checklist step remains
 			}
 		}
 

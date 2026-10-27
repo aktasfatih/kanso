@@ -377,7 +377,7 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:4972
+#: src/components/CardDetail.vue:4982
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
@@ -387,7 +387,7 @@ msgid "%n file"
 msgid_plural "%n files"
 msgstr[0] "%n 个文件"
 
-#: src/components/CardDetail.vue:4970
+#: src/components/CardDetail.vue:4980
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
@@ -412,7 +412,7 @@ msgid "%n label was not created and is missing from the imported cards: only boa
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
 msgstr[0] "有 %n 个标签未能创建，导入的卡片中缺少它们：只有看板管理者才能添加新标签。请让管理者添加，然后在卡片上设置它们。"
 
-#: src/components/CardDetail.vue:4968
+#: src/components/CardDetail.vue:4978
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -437,7 +437,7 @@ msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
 
-#: src/components/CardDetail.vue:2299
+#: src/components/CardDetail.vue:2309
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n 条回复"
@@ -1970,7 +1970,7 @@ msgid "Date"
 msgstr "日期"
 
 #: src/components/BoardSettingsModal.vue:2298
-#: src/components/CardDetail.vue:5161
+#: src/components/CardDetail.vue:5171
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -3511,7 +3511,7 @@ msgstr "看板的用途、范围或协作约定。看板中的所有人都可以
 msgid "Jump to the discussion"
 msgstr "跳转到讨论"
 
-#: src/components/CardDetail.vue:6982
+#: src/components/CardDetail.vue:6992
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "跳转到讨论（%n 条评论）"
@@ -3886,7 +3886,7 @@ msgid "Mon"
 msgstr "周一"
 
 #: src/components/BoardSettingsModal.vue:2300
-#: src/components/CardDetail.vue:5163
+#: src/components/CardDetail.vue:5173
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -5083,6 +5083,10 @@ msgstr "请求了评审"
 msgid "requested a review on"
 msgstr "请求评审"
 
+#: src/components/CardDetail.vue
+msgid "Requested by AI actor"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Require verified senders (DMARC)"
 msgstr "要求验证发件人（DMARC）"
@@ -5447,7 +5451,7 @@ msgstr "在卡片下方显示讨论"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:6988
+#: src/components/CardDetail.vue:6998
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -6232,7 +6236,7 @@ msgid "Wed"
 msgstr "周三"
 
 #: src/components/BoardSettingsModal.vue:2299
-#: src/components/CardDetail.vue:5162
+#: src/components/CardDetail.vue:5172
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -6340,7 +6344,7 @@ msgid "wrote"
 msgstr "写道"
 
 #: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5164
+#: src/components/CardDetail.vue:5174
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"

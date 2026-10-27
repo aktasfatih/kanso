@@ -192,6 +192,11 @@ class AssigneeService {
 		if ($name !== null && $board->getAllowAiActors() !== true) {
 			throw new InvalidInputException('This board does not allow AI actors');
 		}
+		// The `actor_name` column is a 255-char string; a longer name would fail
+		// (or truncate) at the DB layer, so bound it here, multibyte-safe.
+		if ($name !== null && mb_strlen($name) > 255) {
+			throw new InvalidInputException('Actor name is too long');
+		}
 		return $name;
 	}
 
