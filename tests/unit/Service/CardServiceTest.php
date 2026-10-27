@@ -128,11 +128,15 @@ class CardServiceTest extends TestCase {
 		);
 	}
 
-	private function board(int $id = 1): Board {
+	// The test board defaults to the "all children done → parent done" automation
+	// ENABLED, so the parent-completion tests exercise that path; a test that wants
+	// the production default (OFF) passes `autoCompleteParent: false`.
+	private function board(int $id = 1, bool $autoCompleteParent = true): Board {
 		$board = new Board();
 		$board->setId($id);
 		$board->setOwner('alice');
 		$board->setDeletedAt(0);
+		$board->setAutoCompleteParent($autoCompleteParent);
 		return $board;
 	}
 
@@ -2403,10 +2407,11 @@ class CardServiceTest extends TestCase {
 		self::assertSame(0, $parent->getDoneAt());
 	}
 
-	public function testParentWithOpenChecklistIsNotAutoCompleted(): void {
-		// The checklist gate: a parent with open steps of its own must not be
-		// stamped done just because its subcards are resolved (#198) - the
-		// checklist is part of the parent's own work.
+	public function testParentNotAutoCompletedWhenBoardGateOff(): void {
+		// The production default: the board's "all children done → parent done"
+		// gate is OFF, so completing the last sub-issue leaves the parent open for
+		// a human to close (#198). The gate short-circuits before the children and
+		// review queries run at all.
 		$child = $this->card(9, 5, 1, 'I');
 		$child->setParentCardId(100);
 		$parent = $this->card(100, 6, 1, 'K');
@@ -2414,15 +2419,9 @@ class CardServiceTest extends TestCase {
 			9 => $child,
 			100 => $parent,
 		});
-		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		// Gate OFF (the production default).
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board(1, false));
 		$this->stubRolelessColumns();
-		$doneSibling = $this->card(11, 5, 1, 'J');
-		$doneSibling->setDoneAt(1000);
-		$this->cardMapper->method('findChildren')->with(100)->willReturn([$child, $doneSibling]);
-		// The child completes (nothing unapproved on it); the PARENT still has
-		// open checklist steps of its own.
-		$this->cardReviewMapper->method('hasUnapprovedReviews')->willReturn(false);
-		$this->checklistItemMapper->method('hasOpenItems')->with(100)->willReturn(true);
 		$updated = [];
 		$this->cardMapper->method('update')->willReturnCallback(function (Card $c) use (&$updated): Card {
 			$updated[] = $c->getId();
@@ -2433,7 +2432,7 @@ class CardServiceTest extends TestCase {
 		$this->service->update(9, null, null, null, true, null, 'alice');
 
 		self::assertContains(9, $updated, 'the child itself still completes');
-		self::assertNotContains(100, $updated, 'the parent must not be auto-completed');
+		self::assertNotContains(100, $updated, 'the parent must not be auto-completed while the gate is off');
 		self::assertSame(0, $parent->getDoneAt());
 	}
 

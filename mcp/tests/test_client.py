@@ -985,6 +985,18 @@ async def test_update_board_sends_allow_ai_actors():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_update_board_sends_auto_complete_parent():
+    route = respx.patch(f"{BASE}/boards/3").mock(
+        return_value=httpx.Response(200, json={"id": 3, "title": "B", "autoCompleteParent": True})
+    )
+    async with _client() as c:
+        board = await c.update_board(3, auto_complete_parent=True)
+    assert json.loads(route.calls.last.request.content) == {"autoCompleteParent": True}
+    assert board.autoCompleteParent is True
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_add_comment_forwards_actor_name():
     route = respx.post(f"{BASE}/cards/100/comments").mock(
         return_value=httpx.Response(

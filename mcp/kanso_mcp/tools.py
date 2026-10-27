@@ -203,6 +203,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         prefix: Optional[str] = None,
         description: Optional[str] = None,
         allow_ai_actors: Optional[bool] = None,
+        auto_complete_parent: Optional[bool] = None,
     ) -> dict:
         """Update a board. Only the fields you pass are changed.
 
@@ -219,6 +220,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
                 comments, review requests and assignees may carry an AI name
                 (e.g. "Claude Code"). OFF by default; turn it on before setting
                 an actor_name on this board's actions.
+            auto_complete_parent: Whether a parent card is stamped done
+                automatically once all of its sub-issues are done/archived.
+                OFF by default (the parent stays open for a human to close).
         """
         return (
             await client.update_board(
@@ -229,6 +233,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
                 prefix=prefix,
                 description=description,
                 allow_ai_actors=allow_ai_actors,
+                auto_complete_parent=auto_complete_parent,
             )
         ).model_dump()
 

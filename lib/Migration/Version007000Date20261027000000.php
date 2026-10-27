@@ -77,6 +77,14 @@ class Version007000Date20261027000000 extends SimpleMigrationStep {
 				]);
 				$changed = true;
 			}
+			if (!$boards->hasColumn('auto_complete_parent')) {
+				// Per-board gate for "all children done → parent done" (#198),
+				// OFF by default: a NULL column reads as OFF, so no backfill.
+				$boards->addColumn('auto_complete_parent', Types::BOOLEAN, [
+					'notnull' => false,
+				]);
+				$changed = true;
+			}
 		}
 
 		return $changed ? $schema : null;

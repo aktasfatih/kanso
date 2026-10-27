@@ -14,7 +14,7 @@ msgstr ""
 msgid "— none —"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:4861
+#: src/components/BoardSettingsModal.vue:4893
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] ""
@@ -2009,7 +2009,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2282
+#: src/components/BoardSettingsModal.vue:2298
 #: src/components/CardDetail.vue:5161
 msgid "day"
 msgid_plural "days"
@@ -2565,7 +2565,7 @@ msgstr ""
 msgid "Every card in this project is done."
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:4841
+#: src/components/BoardSettingsModal.vue:4873
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] ""
@@ -2575,19 +2575,19 @@ msgstr[1] ""
 msgid "Every estimate needs a label."
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:4851
+#: src/components/BoardSettingsModal.vue:4883
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:4843
+#: src/components/BoardSettingsModal.vue:4875
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:4853
+#: src/components/BoardSettingsModal.vue:4885
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] ""
@@ -3900,6 +3900,10 @@ msgid "Mark done"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
+msgid "Mark parent as done when sub-issues are done"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Maximize"
 msgstr ""
 
@@ -3928,7 +3932,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2284
+#: src/components/BoardSettingsModal.vue:2300
 #: src/components/CardDetail.vue:5163
 msgid "month"
 msgid_plural "months"
@@ -6278,7 +6282,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2283
+#: src/components/BoardSettingsModal.vue:2299
 #: src/components/CardDetail.vue:5162
 msgid "week"
 msgid_plural "weeks"
@@ -6315,6 +6319,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "When a card enters role"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "When on, a parent card is completed automatically once all of its sub-issues are done or archived. Off by default — the parent stays open for a human to close."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -6383,7 +6391,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2285
+#: src/components/BoardSettingsModal.vue:2301
 #: src/components/CardDetail.vue:5164
 msgid "year"
 msgid_plural "years"

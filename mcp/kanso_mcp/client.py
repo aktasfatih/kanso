@@ -132,6 +132,7 @@ class KansoClient:
         prefix: Optional[str] = None,
         description: Optional[str] = None,
         allow_ai_actors: Optional[bool] = None,
+        auto_complete_parent: Optional[bool] = None,
     ) -> Board:
         data = await self._request(
             "PATCH",
@@ -143,6 +144,7 @@ class KansoClient:
                 "prefix": prefix,
                 "description": description,
                 "allowAiActors": allow_ai_actors,
+                "autoCompleteParent": auto_complete_parent,
             },
         )
         return Board.model_validate(data)

@@ -1821,11 +1821,13 @@ class CardService {
 
 	/**
 	 * Auto-completes a parent card once ALL of its children are resolved (done
-	 * or archived) - the "all children done → parent done" workflow. Called from
-	 * a CHILD's update()/move() after it persists; a card with no parent is a
-	 * fast no-op (the common case). Forward-only for v1: it never RE-OPENS a
-	 * parent (a parent a human marked done is left alone), and since the
-	 * hierarchy is one level (a parent has no parent) stamping it done cannot
+	 * or archived) - the "all children done → parent done" workflow. Gated by
+	 * the board's `autoCompleteParent` setting (#198), which is OFF by default:
+	 * a parent is only stamped done this way when the board owner has opted in.
+	 * Called from a CHILD's update()/move() after it persists; a card with no
+	 * parent is a fast no-op (the common case). Forward-only for v1: it never
+	 * RE-OPENS a parent (a parent a human marked done is left alone), and since
+	 * the hierarchy is one level (a parent has no parent) stamping it done cannot
 	 * cascade - no loop guard needed.
 	 */
 	private function maybeCompleteParent(Card $child, string $uid): void {
@@ -1842,19 +1844,25 @@ class CardService {
 			return;
 		}
 
+		// This automation is OPT-IN per board (#198): OFF by default, so a parent
+		// is never stamped done just because its subcards are resolved unless the
+		// board owner has explicitly enabled it. A NULL column reads as OFF, so
+		// boards that predate the column keep the manual "mark the parent done"
+		// behaviour. Checked first so the common (off) case skips the children and
+		// review queries entirely.
+		try {
+			$board = $this->boardMapper->find($parent->getBoardId());
+		} catch (DoesNotExistException) {
+			return;
+		}
+		if ($board->getAutoCompleteParent() !== true) {
+			return;
+		}
+
 		foreach ($this->cardMapper->findChildren($parentId) as $sibling) {
 			if ($sibling->getDoneAt() === 0 && !$sibling->getArchived()) {
 				return; // an unresolved child remains
 			}
-		}
-
-		// A parent that still has open checklist steps must not be stamped done just
-		// because its subcards are resolved (#198): the checklist is part of the
-		// parent's own work, so it is a precondition for auto-completion too. An
-		// itemless parent (or one whose steps are all done) passes, preserving the
-		// original behaviour.
-		if ($this->checklistItemMapper->hasOpenItems($parentId)) {
-			return;
 		}
 
 		// The parent is about to be stamped done, so it passes the same review gate

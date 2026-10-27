@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— 无 —"
 
-#: src/components/BoardSettingsModal.vue:4861
+#: src/components/BoardSettingsModal.vue:4893
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n 次"
@@ -1969,7 +1969,7 @@ msgstr "危险区域"
 msgid "Date"
 msgstr "日期"
 
-#: src/components/BoardSettingsModal.vue:2282
+#: src/components/BoardSettingsModal.vue:2298
 #: src/components/CardDetail.vue:5161
 msgid "day"
 msgid_plural "days"
@@ -2524,7 +2524,7 @@ msgstr "每"
 msgid "Every card in this project is done."
 msgstr "此项目中的所有卡片均已完成。"
 
-#: src/components/BoardSettingsModal.vue:4841
+#: src/components/BoardSettingsModal.vue:4873
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "每 %n 天"
@@ -2533,17 +2533,17 @@ msgstr[0] "每 %n 天"
 msgid "Every estimate needs a label."
 msgstr "每个估算值都需要一个标签。"
 
-#: src/components/BoardSettingsModal.vue:4851
+#: src/components/BoardSettingsModal.vue:4883
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "每 %n 个月"
 
-#: src/components/BoardSettingsModal.vue:4843
+#: src/components/BoardSettingsModal.vue:4875
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "每 %n 周"
 
-#: src/components/BoardSettingsModal.vue:4853
+#: src/components/BoardSettingsModal.vue:4885
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "每 %n 年"
@@ -3853,6 +3853,10 @@ msgid "Mark done"
 msgstr "标记为已完成"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Mark parent as done when sub-issues are done"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Maximize"
 msgstr "最大化"
 
@@ -3881,7 +3885,7 @@ msgstr "模式"
 msgid "Mon"
 msgstr "周一"
 
-#: src/components/BoardSettingsModal.vue:2284
+#: src/components/BoardSettingsModal.vue:2300
 #: src/components/CardDetail.vue:5163
 msgid "month"
 msgid_plural "months"
@@ -6227,7 +6231,7 @@ msgstr "Webhook 已启用"
 msgid "Wed"
 msgstr "周三"
 
-#: src/components/BoardSettingsModal.vue:2283
+#: src/components/BoardSettingsModal.vue:2299
 #: src/components/CardDetail.vue:5162
 msgid "week"
 msgid_plural "weeks"
@@ -6264,6 +6268,10 @@ msgstr "当卡片进入{role}时"
 #: src/components/BoardSettingsModal.vue
 msgid "When a card enters role"
 msgstr "当卡片进入以下角色的列时"
+
+#: src/components/BoardSettingsModal.vue
+msgid "When on, a parent card is completed automatically once all of its sub-issues are done or archived. Off by default — the parent stays open for a human to close."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "When on, AI-assisted work can be attributed to a named AI actor (e.g. \"Claude Code\") on comments, reviews and assignees. Off by default."
@@ -6331,7 +6339,7 @@ msgstr "写入时间"
 msgid "wrote"
 msgstr "写道"
 
-#: src/components/BoardSettingsModal.vue:2285
+#: src/components/BoardSettingsModal.vue:2301
 #: src/components/CardDetail.vue:5164
 msgid "year"
 msgid_plural "years"

@@ -231,8 +231,9 @@ class BoardService {
 	 *
 	 * @param array<array-key, mixed>|null $cardFeatures partial enabled-map patch, e.g. `['attachments' => false]`
 	 * @param bool|null $allowAiActors the AI-actor attribution gate (#352); null = leave unchanged
+	 * @param bool|null $autoCompleteParent the "all children done → parent done" gate (#198); null = leave unchanged
 	 */
-	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null, ?array $cardFeatures = null, ?string $description = null, ?array $estimateCustom = null, ?bool $allowAiActors = null): Board {
+	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null, ?array $cardFeatures = null, ?string $description = null, ?array $estimateCustom = null, ?bool $allowAiActors = null, ?bool $autoCompleteParent = null): Board {
 		$board = $this->loadBoard($id);
 		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
@@ -277,6 +278,10 @@ class BoardService {
 		if ($allowAiActors !== null) {
 			// AI-actor attribution gate (#352): a plain boolean, OFF by default.
 			$board->setAllowAiActors($allowAiActors);
+		}
+		if ($autoCompleteParent !== null) {
+			// "All children done → parent done" gate (#198): a plain boolean, OFF by default.
+			$board->setAutoCompleteParent($autoCompleteParent);
 		}
 		if ($prefix !== null) {
 			// Normalize to the stored shape (uppercased, alnum, capped). A value

@@ -68,30 +68,6 @@ class ChecklistItemMapper extends QBMapper {
 	}
 
 	/**
-	 * Whether a card has at least one OPEN (not done) checklist item - the
-	 * single-card precondition for parent auto-completion (#198). A card with no
-	 * items, or all of them done, returns false, so an itemless parent still
-	 * completes once its subcards are resolved. `LIMIT 1` stops at the first open
-	 * item, so the cost is independent of checklist size.
-	 *
-	 * @throws Exception
-	 */
-	public function hasOpenItems(int $cardId): bool {
-		$qb = $this->db->getQueryBuilder();
-		$qb->select('1')
-			->from($this->getTableName())
-			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->eq('done', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
-			->setMaxResults(1);
-
-		$result = $qb->executeQuery();
-		$row = $result->fetch();
-		$result->closeCursor();
-
-		return $row !== false;
-	}
-
-	/**
 	 * The last item of a card in display order, or null for an empty
 	 * checklist - the append anchor for item creation.
 	 *

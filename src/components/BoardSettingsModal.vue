@@ -197,6 +197,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</p>
 						<span v-if="allowAiActorsError" class="label-settings__error">{{ allowAiActorsError }}</span>
 
+						<!-- "All children done → parent done" automation (#198): when on,
+						     a parent card is stamped done automatically once all of its
+						     sub-issues are done/archived. OFF by default so the parent
+						     stays open for a human to close. -->
+						<NcCheckboxRadioSwitch
+							v-if="canManage"
+							:model-value="autoCompleteParent"
+							:disabled="autoCompleteParentSaving"
+							@update:model-value="onAutoCompleteParentChange">
+							{{ t('kanso', 'Mark parent as done when sub-issues are done') }}
+						</NcCheckboxRadioSwitch>
+						<p v-if="canManage" class="board-settings__general-hint">
+							{{ t('kanso', 'When on, a parent card is completed automatically once all of its sub-issues are done or archived. Off by default — the parent stays open for a human to close.') }}
+						</p>
+						<span v-if="autoCompleteParentError" class="label-settings__error">{{ autoCompleteParentError }}</span>
+
 						<template v-if="canManage">
 							<label class="board-settings__prefix-label" for="bs-card-prefix">
 								{{ t('kanso', 'Card ID prefix') }}
@@ -3805,6 +3821,22 @@ async function onAllowAiActorsChange(checked) {
 		allowAiActorsError.value = err?.response?.data?.error || t('kanso', 'Failed to update setting.')
 	} finally {
 		allowAiActorsSaving.value = false
+	}
+}
+
+// ── Auto-complete parent (per-board, #198) ───────────────────────────────────
+const autoCompleteParent = computed(() => boardQueryData.value?.board?.autoCompleteParent === true)
+const autoCompleteParentSaving = ref(false)
+const autoCompleteParentError = ref('')
+async function onAutoCompleteParentChange(checked) {
+	autoCompleteParentSaving.value = true
+	autoCompleteParentError.value = ''
+	try {
+		await updateBoard.mutateAsync({ autoCompleteParent: checked })
+	} catch (err) {
+		autoCompleteParentError.value = err?.response?.data?.error || t('kanso', 'Failed to update setting.')
+	} finally {
+		autoCompleteParentSaving.value = false
 	}
 }
 
