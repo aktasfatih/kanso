@@ -112,6 +112,26 @@ class CardReviewMapper extends QBMapper {
 	}
 
 	/**
+	 * The card's reviews that are not yet approved, in request order - the exact
+	 * rows the done-gate blocks on. The done-gate uses this to name the blocking
+	 * reviewer(s) in its refusal, so the caller knows who to wait on. A card with
+	 * no such rows returns an empty list.
+	 *
+	 * @return CardReview[]
+	 * @throws Exception
+	 */
+	public function findUnapprovedByCard(int $cardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->neq('state', $qb->createNamedParameter(CardReview::STATE_APPROVED)))
+			->orderBy('id', 'ASC');
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Every review requested from $reviewer across the given (readable) boards,
 	 * enriched with its card + board context - the cross-board "My Reviews"
 	 * feed. One query joining through `kanso_cards` and `kanso_boards`; the

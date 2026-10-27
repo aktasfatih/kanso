@@ -65,13 +65,14 @@ class BoardGroupControllerTest extends TestCase {
 	}
 
 	public function testAssignBoardYouCannotReadIsForbidden(): void {
-		// The service enforces board READ; a denial surfaces as HTTP 403.
+		// The service enforces board READ; a denial surfaces as HTTP 403 with the
+		// service's own reason in the body (not a flattened "Access denied").
 		$this->service->method('assignBoard')
 			->willThrowException(new NotPermittedException('nope'));
 
 		$response = $this->controller->assign(2, 99);
 		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
-		self::assertSame(['error' => 'Access denied'], $response->getData());
+		self::assertSame(['error' => 'nope'], $response->getData());
 	}
 
 	public function testRenameOfAnotherUsersFolderIsForbidden(): void {

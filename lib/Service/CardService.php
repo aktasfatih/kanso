@@ -16,6 +16,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardReview;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeDetailMapper;
@@ -1805,9 +1806,17 @@ class CardService {
 	 * @throws \OCP\DB\Exception
 	 */
 	private function assertReviewsApproved(int $cardId): void {
-		if ($this->cardReviewMapper->hasUnapprovedReviews($cardId)) {
-			throw new NotPermittedException('All requested reviews must be approved before this card can be marked done');
+		if (!$this->cardReviewMapper->hasUnapprovedReviews($cardId)) {
+			return;
 		}
+		// Name the blocking reviewer(s) so the caller knows exactly who to wait on
+		// (the generic "access denied" that used to reach the client said nothing
+		// about which review was still open).
+		$blocking = array_map(
+			static fn (CardReview $review): string => $review->getReviewer() . ' (review #' . $review->getId() . ')',
+			$this->cardReviewMapper->findUnapprovedByCard($cardId),
+		);
+		throw new NotPermittedException('Blocked by unapproved review(s): ' . implode(', ', $blocking));
 	}
 
 	/**

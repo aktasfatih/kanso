@@ -925,6 +925,27 @@ async def test_error_raises_kanso_api_error():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_done_gate_403_surfaces_which_review_blocks():
+    # Marking a card done while a review is still unapproved is a 403 whose body
+    # names the blocking reviewer(s). The client must surface that reason verbatim
+    # (in both the body and the message) rather than flatten it to a generic
+    # string - that is how the agent learns who to wait on.
+    respx.patch(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(
+            403,
+            json={"error": "Blocked by unapproved review(s): bob (review #12)"},
+        )
+    )
+    async with _client() as c:
+        with pytest.raises(KansoApiError) as excinfo:
+            await c.update_card(100, done=True)
+    assert excinfo.value.status_code == 403
+    assert "bob (review #12)" in excinfo.value.body
+    assert "bob (review #12)" in str(excinfo.value)
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_request_review_put_path():
     route = respx.put(f"{BASE}/cards/100/reviews/bob").mock(
         return_value=httpx.Response(200, json=[])

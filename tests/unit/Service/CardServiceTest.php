@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardReview;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeDetail;
@@ -159,6 +160,18 @@ class CardServiceTest extends TestCase {
 		$card->setOwner('alice');
 		$card->setDeletedAt(0);
 		return $card;
+	}
+
+	private function review(int $id = 12, string $reviewer = 'bob', string $state = CardReview::STATE_PENDING): CardReview {
+		$review = new CardReview();
+		$review->setId($id);
+		$review->setCardId(9);
+		$review->setReviewer($reviewer);
+		$review->setState($state);
+		$review->setRequestedBy('alice');
+		$review->setCreatedAt(1000);
+		$review->setReviewTypeId(0);
+		return $review;
 	}
 
 	/**
@@ -2146,6 +2159,7 @@ class CardServiceTest extends TestCase {
 			6 => $this->stack(6, 1, Stack::ROLE_DONE),
 		});
 		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->cardReviewMapper->method('findUnapprovedByCard')->with(9)->willReturn([$this->review()]);
 		$this->db->expects(self::never())->method('beginTransaction');
 		$this->changeNotifier->expects(self::never())->method('recordChange');
 
@@ -2165,6 +2179,7 @@ class CardServiceTest extends TestCase {
 			6 => $this->stack(6, 1, Stack::ROLE_DONE),
 		});
 		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->cardReviewMapper->method('findUnapprovedByCard')->with(9)->willReturn([$this->review()]);
 		$this->db->expects(self::never())->method('beginTransaction');
 
 		$this->expectException(NotPermittedException::class);
@@ -2204,6 +2219,7 @@ class CardServiceTest extends TestCase {
 			6 => $this->stack(6, 1, Stack::ROLE_DONE),
 		});
 		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->cardReviewMapper->method('findUnapprovedByCard')->with(9)->willReturn([$this->review()]);
 		$this->db->expects(self::never())->method('beginTransaction');
 		$this->changeNotifier->expects(self::never())->method('recordChange');
 
@@ -2221,6 +2237,7 @@ class CardServiceTest extends TestCase {
 			6 => $this->stack(6, 1, Stack::ROLE_DONE),
 		});
 		$this->cardReviewMapper->method('hasUnapprovedReviews')->willReturn(true);
+		$this->cardReviewMapper->method('findUnapprovedByCard')->willReturn([$this->review()]);
 		$this->db->expects(self::never())->method('beginTransaction');
 
 		$this->expectException(NotPermittedException::class);
@@ -2276,6 +2293,7 @@ class CardServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->stubRolelessColumns();
 		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->cardReviewMapper->method('findUnapprovedByCard')->with(9)->willReturn([$this->review()]);
 		$this->cardMapper->expects(self::never())->method('update');
 		$this->changeNotifier->expects(self::never())->method('recordChange');
 
@@ -2291,10 +2309,34 @@ class CardServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->stubRolelessColumns();
 		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->cardReviewMapper->method('findUnapprovedByCard')->with(9)->willReturn([$this->review()]);
 		$this->cardMapper->expects(self::never())->method('update');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->update(9, null, null, null, null, null, 'alice', null, null, 'done');
+	}
+
+	public function testBlockedDoneNamesTheReviewersWaitingOn(): void {
+		// The refusal must say WHICH review(s) block and WHO is being waited on -
+		// a bare "access denied" tells the caller (human or MCP agent) nothing
+		// about who to ask. Two pending reviews are named in request order.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stubRolelessColumns();
+		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->cardReviewMapper->method('findUnapprovedByCard')->with(9)
+			->willReturn([$this->review(12, 'bob'), $this->review(13, 'carol')]);
+		$this->cardMapper->expects(self::never())->method('update');
+
+		try {
+			$this->service->update(9, null, null, null, true, null, 'alice');
+			self::fail('expected the review gate to refuse the completion');
+		} catch (NotPermittedException $e) {
+			self::assertSame(
+				'Blocked by unapproved review(s): bob (review #12), carol (review #13)',
+				$e->getMessage(),
+			);
+		}
 	}
 
 	public function testUpdateDoneTrueCompletesNormallyWhenReviewsAreApproved(): void {
