@@ -2225,6 +2225,33 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</button>
 						</div>
 
+						<!-- Comment order: a display-only toggle that reorders the TOP-LEVEL
+						     threads (replies stay attached and keep oldest-first order within a
+						     thread). Per-browser preference in localStorage, mirroring board-sort. -->
+						<div
+							v-if="discussionTab === 'discussion' && commentThread.length > 0"
+							class="card-modal__comment-toolbar">
+							<span class="card-modal__comment-toolbar-label">{{ t('kanso', 'Order') }}</span>
+							<div class="card-modal__comment-order" role="group" :aria-label="t('kanso', 'Comment order')">
+								<button
+									type="button"
+									class="card-modal__comment-order-btn"
+									:class="{ 'card-modal__comment-order-btn--active': commentOrder === 'oldest' }"
+									:aria-pressed="commentOrder === 'oldest'"
+									@click="setCommentOrder('oldest')">
+									{{ t('kanso', 'Oldest first') }}
+								</button>
+								<button
+									type="button"
+									class="card-modal__comment-order-btn"
+									:class="{ 'card-modal__comment-order-btn--active': commentOrder === 'newest' }"
+									:aria-pressed="commentOrder === 'newest'"
+									@click="setCommentOrder('newest')">
+									{{ t('kanso', 'Newest first') }}
+								</button>
+							</div>
+						</div>
+
 						<!-- Activity feed (read-only view over the change log) -->
 						<div v-if="discussionTab === 'activity'" class="card-modal__activity">
 							<ul v-if="activityItems.length > 0" class="card-modal__activity-list">
@@ -5273,8 +5300,31 @@ async function handleVisibilityChange(visibility) {
 	}
 }
 
+// ── Comment order (display-only) ─────────────────────────────────────────────
+// 'oldest' (default) renders top-level threads in server order; 'newest'
+// reverses them. A per-browser view preference persisted in localStorage,
+// mirroring the board-sort control — deliberately NOT a server user setting.
+const COMMENT_ORDERS = ['oldest', 'newest']
+const commentOrder = ref('oldest')
+try {
+	const savedOrder = localStorage.getItem('kanso.commentOrder')
+	if (savedOrder && COMMENT_ORDERS.includes(savedOrder)) commentOrder.value = savedOrder
+} catch (e) { /* default to oldest */ }
+function setCommentOrder(order) {
+	if (!COMMENT_ORDERS.includes(order)) return
+	commentOrder.value = order
+	try {
+		localStorage.setItem('kanso.commentOrder', order)
+	} catch (e) { /* ignore persistence failure */ }
+}
+
 const flatComments = computed(() => commentsQuery.data.value ?? [])
-const commentThread = computed(() => buildCommentTree(flatComments.value))
+const commentThread = computed(() => {
+	const tree = buildCommentTree(flatComments.value)
+	// Newest-first is a display-only reverse of the TOP-LEVEL threads; replies
+	// stay attached to their parent and keep oldest-first order within a thread.
+	return commentOrder.value === 'newest' ? [...tree].reverse() : tree
+})
 
 // ── Resolved threads ─────────────────────────────────────────────────────────
 // A resolved thread (server-side `resolvedAt > 0` on its top-level comment)
@@ -9319,6 +9369,39 @@ async function handleToggleProject(projectId) {
 .card-modal__discussion-tabs {
 	gap: 4px;
 	padding: 8px 12px;
+}
+/* Comment order toolbar (discussion tab, only when there are comments) */
+.card-modal__comment-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 16px;
+	border-bottom: 1px solid var(--color-border);
+}
+.card-modal__comment-toolbar-label {
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__comment-order {
+	display: flex;
+	gap: 2px;
+}
+.card-modal__comment-order-btn {
+	padding: 4px 10px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.75rem;
+	font-weight: 600;
+	cursor: pointer;
+	white-space: nowrap;
+}
+.card-modal__comment-order-btn:hover { background: var(--color-background-hover); }
+.card-modal__comment-order-btn--active {
+	background: var(--color-primary-element-light);
+	color: var(--color-main-text);
 }
 .card-modal__discussion-tab {
 	display: inline-flex;
