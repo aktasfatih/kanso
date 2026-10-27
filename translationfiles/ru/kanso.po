@@ -417,7 +417,7 @@ msgstr[0] "Обнаружена %n строка данных"
 msgstr[1] "Обнаружено %n строки данных"
 msgstr[2] "Обнаружено %n строк данных"
 
-#: src/components/CardDetail.vue:5011
+#: src/components/CardDetail.vue:5036
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n день назад"
@@ -431,7 +431,7 @@ msgstr[0] "%n файл"
 msgstr[1] "%n файла"
 msgstr[2] "%n файлов"
 
-#: src/components/CardDetail.vue:5009
+#: src/components/CardDetail.vue:5034
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n час назад"
@@ -466,7 +466,7 @@ msgstr[0] "%n метка не была создана и отсутствует 
 msgstr[1] "%n метки не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 msgstr[2] "%n меток не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 
-#: src/components/CardDetail.vue:5007
+#: src/components/CardDetail.vue:5032
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n минуту назад"
@@ -501,7 +501,7 @@ msgstr[0] "%n проект"
 msgstr[1] "%n проекта"
 msgstr[2] "%n проектов"
 
-#: src/components/CardDetail.vue:2309
+#: src/components/CardDetail.vue:2334
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n ответ"
@@ -1701,6 +1701,10 @@ msgid "Comment"
 msgstr "Комментарий"
 
 #: src/components/CardDetail.vue
+msgid "Comment order"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "commented"
 msgstr "прокомментировал"
 
@@ -2052,7 +2056,7 @@ msgid "Date"
 msgstr "Дата"
 
 #: src/components/BoardSettingsModal.vue:2298
-#: src/components/CardDetail.vue:5200
+#: src/components/CardDetail.vue:5225
 msgid "day"
 msgid_plural "days"
 msgstr[0] "день"
@@ -3605,7 +3609,7 @@ msgstr "Назначение, границы или правила. Любой �
 msgid "Jump to the discussion"
 msgstr "Перейти к обсуждению"
 
-#: src/components/CardDetail.vue:7021
+#: src/components/CardDetail.vue:7069
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Перейти к обсуждению (%n комментарий)"
@@ -3982,7 +3986,7 @@ msgid "Mon"
 msgstr "Пн"
 
 #: src/components/BoardSettingsModal.vue:2300
-#: src/components/CardDetail.vue:5202
+#: src/components/CardDetail.vue:5227
 msgid "month"
 msgid_plural "months"
 msgstr[0] "месяц"
@@ -4170,6 +4174,10 @@ msgstr "Новый шаблон"
 #: src/App.vue
 msgid "New view"
 msgstr "Новый вид"
+
+#: src/components/CardDetail.vue
+msgid "Newest first"
+msgstr ""
 
 #: templates/admin-backup.php
 msgid "Newest first."
@@ -4538,6 +4546,10 @@ msgstr "Смещение (дни)"
 msgid "Offset after (days)"
 msgstr "Смещение после (дни)"
 
+#: src/components/CardDetail.vue
+msgid "Oldest first"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "On days"
 msgstr "По дням"
@@ -4662,6 +4674,10 @@ msgstr "или вставьте ниже"
 #: src/components/StackColumn.vue
 msgid "Orange"
 msgstr "Оранжевый"
+
+#: src/components/CardDetail.vue
+msgid "Order"
+msgstr ""
 
 #: src/components/MarkdownEditor.vue
 msgid "Ordered list"
@@ -5553,7 +5569,7 @@ msgstr "Показывать обсуждение под карточкой"
 msgid "Show the discussion panel"
 msgstr "Показать панель обсуждения"
 
-#: src/components/CardDetail.vue:7027
+#: src/components/CardDetail.vue:7075
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Показать панель обсуждения (%n комментарий)"
@@ -6340,7 +6356,7 @@ msgid "Wed"
 msgstr "Ср"
 
 #: src/components/BoardSettingsModal.vue:2299
-#: src/components/CardDetail.vue:5201
+#: src/components/CardDetail.vue:5226
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "неделя"
@@ -6450,7 +6466,7 @@ msgid "wrote"
 msgstr "написал"
 
 #: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5203
+#: src/components/CardDetail.vue:5228
 msgid "year"
 msgid_plural "years"
 msgstr[0] "год"

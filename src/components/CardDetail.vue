@@ -2225,33 +2225,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</button>
 						</div>
 
-						<!-- Comment order: a display-only toggle that reorders the TOP-LEVEL
-						     threads (replies stay attached and keep oldest-first order within a
-						     thread). Per-browser preference in localStorage, mirroring board-sort. -->
-						<div
-							v-if="discussionTab === 'discussion' && commentThread.length > 0"
-							class="card-modal__comment-toolbar">
-							<span class="card-modal__comment-toolbar-label">{{ t('kanso', 'Order') }}</span>
-							<div class="card-modal__comment-order" role="group" :aria-label="t('kanso', 'Comment order')">
-								<button
-									type="button"
-									class="card-modal__comment-order-btn"
-									:class="{ 'card-modal__comment-order-btn--active': commentOrder === 'oldest' }"
-									:aria-pressed="commentOrder === 'oldest'"
-									@click="setCommentOrder('oldest')">
-									{{ t('kanso', 'Oldest first') }}
-								</button>
-								<button
-									type="button"
-									class="card-modal__comment-order-btn"
-									:class="{ 'card-modal__comment-order-btn--active': commentOrder === 'newest' }"
-									:aria-pressed="commentOrder === 'newest'"
-									@click="setCommentOrder('newest')">
-									{{ t('kanso', 'Newest first') }}
-								</button>
-							</div>
-						</div>
-
 						<!-- Activity feed (read-only view over the change log) -->
 						<div v-if="discussionTab === 'activity'" class="card-modal__activity">
 							<ul v-if="activityItems.length > 0" class="card-modal__activity-list">
@@ -2304,6 +2277,31 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 
 						<div v-if="discussionTab === 'discussion'" class="card-modal__thread-scroll">
+							<!-- Order toggle, sticky inside the scroller so it does not shrink the pane height.
+							     Display-only reorder of top-level threads; replies stay attached. -->
+							<div
+								v-if="commentThread.length > 0"
+								class="card-modal__comment-toolbar">
+								<span class="card-modal__comment-toolbar-label">{{ t('kanso', 'Order') }}</span>
+								<div class="card-modal__comment-order" role="group" :aria-label="t('kanso', 'Comment order')">
+									<button
+										type="button"
+										class="card-modal__comment-order-btn"
+										:class="{ 'card-modal__comment-order-btn--active': commentOrder === 'oldest' }"
+										:aria-pressed="commentOrder === 'oldest'"
+										@click="setCommentOrder('oldest')">
+										{{ t('kanso', 'Oldest first') }}
+									</button>
+									<button
+										type="button"
+										class="card-modal__comment-order-btn"
+										:class="{ 'card-modal__comment-order-btn--active': commentOrder === 'newest' }"
+										:aria-pressed="commentOrder === 'newest'"
+										@click="setCommentOrder('newest')">
+										{{ t('kanso', 'Newest first') }}
+									</button>
+								</div>
+							</div>
 							<div v-if="commentThread.length > 0" class="card-modal__thread">
 								<div
 									v-for="{ comment: topComment, replies } in commentThread"
@@ -9370,12 +9368,17 @@ async function handleToggleProject(projectId) {
 	gap: 4px;
 	padding: 8px 12px;
 }
-/* Comment order toolbar (discussion tab, only when there are comments) */
+/* Comment order toolbar — sticky inside the thread scroller so it does not
+   shrink the pane height (the #10657 height contract) while staying visible. */
 .card-modal__comment-toolbar {
+	position: sticky;
+	top: 0;
+	z-index: 1;
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	padding: 6px 16px;
+	background: var(--color-main-background);
 	border-bottom: 1px solid var(--color-border);
 }
 .card-modal__comment-toolbar-label {
