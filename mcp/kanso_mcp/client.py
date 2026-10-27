@@ -131,6 +131,7 @@ class KansoClient:
         archived: Optional[bool] = None,
         prefix: Optional[str] = None,
         description: Optional[str] = None,
+        allow_ai_actors: Optional[bool] = None,
     ) -> Board:
         data = await self._request(
             "PATCH",
@@ -141,6 +142,7 @@ class KansoClient:
                 "archived": archived,
                 "prefix": prefix,
                 "description": description,
+                "allowAiActors": allow_ai_actors,
             },
         )
         return Board.model_validate(data)
@@ -285,23 +287,37 @@ class KansoClient:
     async def unassign_label(self, card_id: int, label_id: int) -> Any:
         return await self._request("DELETE", f"/cards/{card_id}/labels/{label_id}")
 
-    async def assign_user(self, card_id: int, user_id: str) -> Any:
-        return await self._request("PUT", f"/cards/{card_id}/assignees/{user_id}")
+    async def assign_user(
+        self, card_id: int, user_id: str, actor_name: Optional[str] = None
+    ) -> Any:
+        # actorName (when set) attributes the assignment to an AI actor (#352);
+        # the server refuses it unless the board's allowAiActors gate is on.
+        return await self._request(
+            "PUT",
+            f"/cards/{card_id}/assignees/{user_id}",
+            json={"actorName": actor_name},
+        )
 
     async def unassign_user(self, card_id: int, user_id: str) -> Any:
         return await self._request("DELETE", f"/cards/{card_id}/assignees/{user_id}")
 
     # ----------------------------------------------------------------- reviews
     async def request_review(
-        self, card_id: int, user_id: str, review_type_id: Optional[int] = None
+        self,
+        card_id: int,
+        user_id: str,
+        review_type_id: Optional[int] = None,
+        actor_name: Optional[str] = None,
     ) -> Any:
         # Idempotent server-side: re-requesting an already-pending reviewer
         # succeeds without writing (the controller swallows the unique-constraint
-        # violation), so callers never have to check first.
+        # violation), so callers never have to check first. actorName (when set)
+        # attributes the review to an AI actor (#352); the server refuses it
+        # unless the board's allowAiActors gate is on.
         return await self._request(
             "PUT",
             f"/cards/{card_id}/reviews/{user_id}",
-            json={"reviewTypeId": review_type_id},
+            json={"reviewTypeId": review_type_id, "actorName": actor_name},
         )
 
     async def withdraw_review(self, card_id: int, review_id: int) -> Any:
@@ -325,14 +341,24 @@ class KansoClient:
         return [Comment.model_validate(c) for c in (data or [])]
 
     async def add_comment(
-        self, card_id: int, body: str, parent_comment_id: Optional[int] = None
+        self,
+        card_id: int,
+        body: str,
+        parent_comment_id: Optional[int] = None,
+        actor_name: Optional[str] = None,
     ) -> Comment:
         # The controller field is `body` (NOT `text`); parentCommentId is
-        # dropped by _request when None (a top-level comment).
+        # dropped by _request when None (a top-level comment). actorName (when
+        # set) attributes the comment to an AI actor (#352); the server refuses
+        # it unless the board's allowAiActors gate is on.
         data = await self._request(
             "POST",
             f"/cards/{card_id}/comments",
-            json={"body": body, "parentCommentId": parent_comment_id},
+            json={
+                "body": body,
+                "parentCommentId": parent_comment_id,
+                "actorName": actor_name,
+            },
         )
         return Comment.model_validate(data)
 

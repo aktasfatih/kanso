@@ -14,7 +14,7 @@ msgstr ""
 msgid "— none —"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:4827
+#: src/components/BoardSettingsModal.vue:4861
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] ""
@@ -396,7 +396,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4949
+#: src/components/CardDetail.vue:4972
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
@@ -408,7 +408,7 @@ msgid_plural "%n files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4947
+#: src/components/CardDetail.vue:4970
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
@@ -438,7 +438,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:4945
+#: src/components/CardDetail.vue:4968
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -462,13 +462,13 @@ msgid_plural "%n points"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:1231
+#: src/components/CardDetail.vue:1237
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:2287
+#: src/components/CardDetail.vue:2299
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -711,6 +711,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "All requested reviews must be approved before this card can be marked done. Waiting on {names}."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Allow AI actors"
 msgstr ""
 
 #: src/views/BoardStats.vue
@@ -1003,7 +1007,7 @@ msgstr ""
 msgid "Blocked by"
 msgstr ""
 
-#: src/views/ProjectView.vue:253
+#: src/views/ProjectView.vue:254
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] ""
@@ -2005,8 +2009,8 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2266
-#: src/components/CardDetail.vue:5138
+#: src/components/BoardSettingsModal.vue:2282
+#: src/components/CardDetail.vue:5161
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -2561,7 +2565,7 @@ msgstr ""
 msgid "Every card in this project is done."
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:4807
+#: src/components/BoardSettingsModal.vue:4841
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] ""
@@ -2571,19 +2575,19 @@ msgstr[1] ""
 msgid "Every estimate needs a label."
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:4817
+#: src/components/BoardSettingsModal.vue:4851
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:4809
+#: src/components/BoardSettingsModal.vue:4843
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:4819
+#: src/components/BoardSettingsModal.vue:4853
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] ""
@@ -3553,7 +3557,7 @@ msgstr ""
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:6959
+#: src/components/CardDetail.vue:6982
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3924,8 +3928,8 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2268
-#: src/components/CardDetail.vue:5140
+#: src/components/BoardSettingsModal.vue:2284
+#: src/components/CardDetail.vue:5163
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -5489,7 +5493,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr ""
 
-#: src/components/CardDetail.vue:6965
+#: src/components/CardDetail.vue:6988
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] ""
@@ -6274,8 +6278,8 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2267
-#: src/components/CardDetail.vue:5139
+#: src/components/BoardSettingsModal.vue:2283
+#: src/components/CardDetail.vue:5162
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -6311,6 +6315,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "When a card enters role"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "When on, AI-assisted work can be attributed to a named AI actor (e.g. \"Claude Code\") on comments, reviews and assignees. Off by default."
 msgstr ""
 
 #: src/views/MyReviewsView.vue
@@ -6375,8 +6383,8 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2269
-#: src/components/CardDetail.vue:5141
+#: src/components/BoardSettingsModal.vue:2285
+#: src/components/CardDetail.vue:5164
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

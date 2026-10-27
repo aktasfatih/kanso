@@ -181,6 +181,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</p>
 						<span v-if="newCardsOnTopError" class="label-settings__error">{{ newCardsOnTopError }}</span>
 
+						<!-- AI-actor attribution (#352): when on, comments, review
+						     requests and assignees on this board may carry an AI
+						     name (e.g. "Claude Code") alongside the human uid, so
+						     AI work is distinguishable. OFF by default. -->
+						<NcCheckboxRadioSwitch
+							v-if="canManage"
+							:model-value="allowAiActors"
+							:disabled="allowAiActorsSaving"
+							@update:model-value="onAllowAiActorsChange">
+							{{ t('kanso', 'Allow AI actors') }}
+						</NcCheckboxRadioSwitch>
+						<p v-if="canManage" class="board-settings__general-hint">
+							{{ t('kanso', 'When on, AI-assisted work can be attributed to a named AI actor (e.g. "Claude Code") on comments, reviews and assignees. Off by default.') }}
+						</p>
+						<span v-if="allowAiActorsError" class="label-settings__error">{{ allowAiActorsError }}</span>
+
 						<template v-if="canManage">
 							<label class="board-settings__prefix-label" for="bs-card-prefix">
 								{{ t('kanso', 'Card ID prefix') }}
@@ -3771,6 +3787,24 @@ async function onNewCardsOnTopChange(checked) {
 		newCardsOnTopError.value = err?.response?.data?.error || t('kanso', 'Failed to update setting.')
 	} finally {
 		newCardsOnTopSaving.value = false
+	}
+}
+
+// ── Allow AI actors (per-board, #352) ────────────────────────────────────────
+const allowAiActors = computed(() => boardQueryData.value?.board?.allowAiActors === true)
+const allowAiActorsSaving = ref(false)
+const allowAiActorsError = ref('')
+async function onAllowAiActorsChange(checked) {
+	allowAiActorsSaving.value = true
+	allowAiActorsError.value = ''
+	// Same cache-bound pattern as the new-cards-on-top switch above: a failed
+	// save leaves the cache on its prior value and the toggle visibly reverts.
+	try {
+		await updateBoard.mutateAsync({ allowAiActors: checked })
+	} catch (err) {
+		allowAiActorsError.value = err?.response?.data?.error || t('kanso', 'Failed to update setting.')
+	} finally {
+		allowAiActorsSaving.value = false
 	}
 }
 

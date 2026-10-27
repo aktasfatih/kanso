@@ -897,16 +897,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 					<!-- Assignees -->
 					<span
-						v-for="uid in cardAssigneeIds"
-						:key="uid"
+						v-for="assignee in cardAssignees"
+						:key="assignee.uid"
 						class="card-modal__assignee-pill">
 						<NcAvatar
-							:user="uid"
-							:display-name="participantName(uid)"
+							:user="assignee.uid"
+							:display-name="participantName(assignee.uid)"
 							:size="22"
 							:hide-status="true"
 							:disable-tooltip="true" />
-						<span class="card-modal__assignee-name" :title="participantName(uid)">{{ participantName(uid) }}</span>
+						<span
+							class="card-modal__assignee-name"
+							:class="{ 'card-modal__assignee-name--ai': assignee.actorName }"
+							:title="assignee.actorName || participantName(assignee.uid)">
+							<RobotOutlineIcon v-if="assignee.actorName" :size="14" class="card-modal__ai-actor-icon" />
+							{{ assignee.actorName || participantName(assignee.uid) }}
+						</span>
 						<!-- Unassigning is a write (#10703): a member shared in with READ
 						     only keeps the avatar and the name - the whole point of the
 						     pill - but is not offered a button the server answers 403 to. -->
@@ -929,8 +935,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							v-if="canEdit"
 							class="card-modal__pill-x"
 							:title="t('kanso', 'Remove assignee')"
-							:aria-busy="isAssigneeTogglePending(uid) ? 'true' : undefined"
-							@click="handleToggleAssignee(uid, false)">
+							:aria-busy="isAssigneeTogglePending(assignee.uid) ? 'true' : undefined"
+							@click="handleToggleAssignee(assignee.uid, false)">
 							<CloseIcon :size="12" />
 						</button>
 					</span>
@@ -1282,7 +1288,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:size="22"
 								:hide-status="true"
 								:disable-tooltip="true" />
-							<span class="card-modal__review-name" :title="participantName(review.reviewer)">{{ participantName(review.reviewer) }}</span>
+							<span
+								class="card-modal__review-name"
+								:class="{ 'card-modal__review-name--ai': review.actorName }"
+								:title="review.actorName || participantName(review.reviewer)">
+								<RobotOutlineIcon v-if="review.actorName" :size="14" class="card-modal__ai-actor-icon" />
+								{{ review.actorName || participantName(review.reviewer) }}
+							</span>
 							<span
 								v-if="reviewTypeById(review.reviewTypeId)"
 								class="card-modal__review-type-badge"
@@ -2307,7 +2319,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											class="card-modal__comment-avatar" />
 										<div class="card-modal__comment-main">
 											<div class="card-modal__comment-meta">
-												<span class="card-modal__comment-author">{{ topComment.authorDisplayName || topComment.author }}</span>
+												<span
+													class="card-modal__comment-author"
+													:class="{ 'card-modal__comment-author--ai': topComment.actorName }">
+													<RobotOutlineIcon v-if="topComment.actorName" :size="14" class="card-modal__ai-actor-icon" />
+													{{ topComment.actorName || topComment.authorDisplayName || topComment.author }}
+												</span>
 												<span class="card-modal__comment-time">{{ formatCommentTime(topComment.createdAt) }}</span>
 												<span v-if="topComment.editedAt > 0" class="card-modal__comment-edited">{{ t('kanso', 'edited') }}</span>
 											</div>
@@ -2438,7 +2455,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												class="card-modal__comment-avatar" />
 											<div class="card-modal__comment-main">
 												<div class="card-modal__comment-meta">
-													<span class="card-modal__comment-author">{{ reply.authorDisplayName || reply.author }}</span>
+													<span
+														class="card-modal__comment-author"
+														:class="{ 'card-modal__comment-author--ai': reply.actorName }">
+														<RobotOutlineIcon v-if="reply.actorName" :size="14" class="card-modal__ai-actor-icon" />
+														{{ reply.actorName || reply.authorDisplayName || reply.author }}
+													</span>
 													<span class="card-modal__comment-time">{{ formatCommentTime(reply.createdAt) }}</span>
 													<span v-if="reply.editedAt > 0" class="card-modal__comment-edited">{{ t('kanso', 'edited') }}</span>
 												</div>
@@ -2747,6 +2769,7 @@ import EyeOffOutlineIcon from 'vue-material-design-icons/EyeOffOutline.vue'
 import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import CheckDecagramOutlineIcon from 'vue-material-design-icons/CheckDecagramOutline.vue'
 import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
+import RobotOutlineIcon from 'vue-material-design-icons/RobotOutline.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronDoubleUpIcon from 'vue-material-design-icons/ChevronDoubleUp.vue'
@@ -9511,6 +9534,20 @@ async function handleToggleProject(projectId) {
 .card-modal__comment-author {
 	font-size: 0.8125rem;
 	font-weight: 600;
+}
+/* AI-actor attribution (#352): a bot glyph + the AI name, distinct from a
+ * plain human author. Shared by comment, review and assignee names. */
+.card-modal__ai-actor-icon {
+	vertical-align: -2px;
+	margin-right: 2px;
+	color: var(--color-primary);
+}
+.card-modal__comment-author--ai,
+.card-modal__review-name--ai,
+.card-modal__assignee-name--ai {
+	display: inline-flex;
+	align-items: center;
+	color: var(--color-primary);
 }
 .card-modal__comment-time,
 .card-modal__comment-edited {

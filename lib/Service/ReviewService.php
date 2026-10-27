@@ -83,15 +83,20 @@ class ReviewService {
 	 * Idempotent per (card, reviewer, type): re-requesting the SAME type is a
 	 * no-op; a different type creates a new review.
 	 *
+	 * @param string|null $actorName optional AI actor name (#352) the review is
+	 *                               attributed to; the $reviewerUid stays the token owner. Refused when
+	 *                               the board's `allowAiActors` gate is off.
+	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not edit the board
-	 * @throws InvalidInputException if the reviewer cannot read the board, or the review type is invalid
+	 * @throws InvalidInputException if the reviewer cannot read the board, the review type is invalid, or an AI actor name is set on a board that does not allow it
 	 */
-	public function requestReview(int $cardId, string $reviewerUid, string $actorUid, ?int $reviewTypeId = null): void {
+	public function requestReview(int $cardId, string $reviewerUid, string $actorUid, ?int $reviewTypeId = null, ?string $actorName = null): void {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
 		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$actorName = $this->normalizeActorName($board, $actorName);
 
 		// A reviewer who cannot see the board could never open the card to act.
 		if (($this->permissionService->getPermissions($board, $reviewerUid) & PermissionService::PERMISSION_READ) === 0) {
@@ -121,7 +126,7 @@ class ReviewService {
 		}
 
 		try {
-			$review = $this->cardReviewMapper->insertRequest($cardId, $reviewerUid, $actorUid, $reviewTypeId);
+			$review = $this->cardReviewMapper->insertRequest($cardId, $reviewerUid, $actorUid, $reviewTypeId, $actorName);
 		} catch (\OCP\DB\Exception $e) {
 			if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 				// Concurrent PUT lost the check-then-insert race - the request
@@ -366,6 +371,24 @@ class ReviewService {
 			$review->setNotifiedAt(time());
 			$this->cardReviewMapper->update($review);
 		}
+	}
+
+	/**
+	 * Normalises an optional AI actor name (#352): trimmed, blank => null, and
+	 * refused when the board's `allowAiActors` gate is off. The single place the
+	 * gate is enforced for reviews.
+	 *
+	 * @throws InvalidInputException when a name is set on a board that does not allow AI actors
+	 */
+	private function normalizeActorName(Board $board, ?string $actorName): ?string {
+		$name = $actorName !== null ? trim($actorName) : null;
+		if ($name === '') {
+			$name = null;
+		}
+		if ($name !== null && $board->getAllowAiActors() !== true) {
+			throw new InvalidInputException('This board does not allow AI actors');
+		}
+		return $name;
 	}
 
 	private function notify(Card $card, string $actorUid, ?int $verb = null): void {

@@ -202,6 +202,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         archived: Optional[bool] = None,
         prefix: Optional[str] = None,
         description: Optional[str] = None,
+        allow_ai_actors: Optional[bool] = None,
     ) -> dict:
         """Update a board. Only the fields you pass are changed.
 
@@ -214,6 +215,10 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             description: What the board is for — purpose, scope, house rules.
                 Markdown, up to 4000 characters, shown under the board title.
                 Pass "" to clear it.
+            allow_ai_actors: Whether this board allows AI-actor attribution —
+                comments, review requests and assignees may carry an AI name
+                (e.g. "Claude Code"). OFF by default; turn it on before setting
+                an actor_name on this board's actions.
         """
         return (
             await client.update_board(
@@ -223,6 +228,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
                 archived=archived,
                 prefix=prefix,
                 description=description,
+                allow_ai_actors=allow_ai_actors,
             )
         ).model_dump()
 
@@ -502,14 +508,20 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         return {"unassigned": True, "cardId": card_id, "labelId": label_id}
 
     @mcp.tool(title="Assign a user to a Kanso card")
-    async def kanso_assign_user(card_id: int, user_id: str) -> dict:
+    async def kanso_assign_user(
+        card_id: int, user_id: str, actor_name: Optional[str] = None
+    ) -> dict:
         """Assign a Nextcloud user to a card. Idempotent.
 
         Args:
             card_id: The card id.
             user_id: The Nextcloud user id (uid) to assign.
+            actor_name: Optional AI actor name (e.g. "Claude Code") to attribute
+                the assignment to. The user stays the token owner; this is a
+                display label. Refused unless the board's `allow_ai_actors`
+                setting is on.
         """
-        await client.assign_user(card_id, user_id)
+        await client.assign_user(card_id, user_id, actor_name)
         return {"assigned": True, "cardId": card_id, "userId": user_id}
 
     @mcp.tool(title="Unassign a user from a Kanso card")
@@ -526,7 +538,10 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
     # ----------------------------------------------------------------- reviews
     @mcp.tool(title="Request a review of a Kanso card")
     async def kanso_request_review(
-        card_id: int, user_id: str, review_type_id: Optional[int] = None
+        card_id: int,
+        user_id: str,
+        review_type_id: Optional[int] = None,
+        actor_name: Optional[str] = None,
     ) -> dict:
         """Ask a user to review a card. The request lands in that user's
         cross-board "My Reviews" feed and notifies them, which is how you hand
@@ -543,8 +558,11 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             user_id: The Nextcloud user id (uid) to request the review from.
             review_type_id: Optional board review-type id to categorise the
                 request; omit for an untyped review.
+            actor_name: Optional AI actor name (e.g. "Claude Code") to attribute
+                the review to. The user stays the token owner; this is a display
+                label. Refused unless the board's `allow_ai_actors` setting is on.
         """
-        await client.request_review(card_id, user_id, review_type_id)
+        await client.request_review(card_id, user_id, review_type_id, actor_name)
         return {"requested": True, "cardId": card_id, "reviewer": user_id}
 
     @mcp.tool(
@@ -605,7 +623,10 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
 
     @mcp.tool(title="Add a comment to a Kanso card")
     async def kanso_add_comment(
-        card_id: int, body: str, parent_comment_id: Optional[int] = None
+        card_id: int,
+        body: str,
+        parent_comment_id: Optional[int] = None,
+        actor_name: Optional[str] = None,
     ) -> dict:
         """Post a comment on a card. Pass `parent_comment_id` to reply to an
         existing top-level comment (replies are one level deep).
@@ -615,9 +636,13 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             body: The comment text (markdown).
             parent_comment_id: Optional id of the top-level comment to reply to;
                 omit (null) for a new top-level comment.
+            actor_name: Optional AI actor name (e.g. "Claude Code") to attribute
+                the comment to. The posting user stays the token owner; this is
+                a display label. Refused unless the board's `allow_ai_actors`
+                setting is on.
         """
         return (
-            await client.add_comment(card_id, body, parent_comment_id)
+            await client.add_comment(card_id, body, parent_comment_id, actor_name)
         ).model_dump()
 
     # --------------------------------------------------------------- checklist

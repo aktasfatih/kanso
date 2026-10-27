@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— ninguno —"
 
-#: src/components/BoardSettingsModal.vue:4827
+#: src/components/BoardSettingsModal.vue:4861
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n vez"
@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n fila de datos detectada"
 msgstr[1] "%n filas de datos detectadas"
 
-#: src/components/CardDetail.vue:4949
+#: src/components/CardDetail.vue:4972
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "hace %n día"
@@ -409,7 +409,7 @@ msgid_plural "%n files"
 msgstr[0] "%n archivo"
 msgstr[1] "%n archivos"
 
-#: src/components/CardDetail.vue:4947
+#: src/components/CardDetail.vue:4970
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "hace %n hora"
@@ -439,7 +439,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etiqueta no se ha creado y falta en las tarjetas importadas: solo quienes pueden gestionar el tablero pueden añadir etiquetas nuevas. Pide a un gestor que la añada y luego ponla en las tarjetas."
 msgstr[1] "%n etiquetas no se han creado y faltan en las tarjetas importadas: solo quienes pueden gestionar el tablero pueden añadir etiquetas nuevas. Pide a un gestor que las añada y luego ponlas en las tarjetas."
 
-#: src/components/CardDetail.vue:4945
+#: src/components/CardDetail.vue:4968
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "hace %n minuto"
@@ -463,13 +463,13 @@ msgid_plural "%n points"
 msgstr[0] "%n punto"
 msgstr[1] "%n puntos"
 
-#: src/components/CardDetail.vue:1231
+#: src/components/CardDetail.vue:1237
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n proyecto"
 msgstr[1] "%n proyectos"
 
-#: src/components/CardDetail.vue:2287
+#: src/components/CardDetail.vue:2299
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n respuesta"
@@ -713,6 +713,10 @@ msgstr "Todas las incidencias"
 #: src/components/CardDetail.vue
 msgid "All requested reviews must be approved before this card can be marked done. Waiting on {names}."
 msgstr "Todas las revisiones solicitadas deben estar aprobadas antes de poder marcar esta tarjeta como terminada. En espera de {names}."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Allow AI actors"
+msgstr ""
 
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
@@ -1004,7 +1008,7 @@ msgstr "Bloqueada"
 msgid "Blocked by"
 msgstr "Bloqueada por"
 
-#: src/views/ProjectView.vue:253
+#: src/views/ProjectView.vue:254
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Bloqueada por {count} tarjeta abierta"
@@ -2006,8 +2010,8 @@ msgstr "Zona de peligro"
 msgid "Date"
 msgstr "Fecha"
 
-#: src/components/BoardSettingsModal.vue:2266
-#: src/components/CardDetail.vue:5138
+#: src/components/BoardSettingsModal.vue:2282
+#: src/components/CardDetail.vue:5161
 msgid "day"
 msgid_plural "days"
 msgstr[0] "día"
@@ -2562,7 +2566,7 @@ msgstr "Cada"
 msgid "Every card in this project is done."
 msgstr "Todas las tarjetas de este proyecto están terminadas."
 
-#: src/components/BoardSettingsModal.vue:4807
+#: src/components/BoardSettingsModal.vue:4841
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Cada día"
@@ -2572,19 +2576,19 @@ msgstr[1] "Cada %n días"
 msgid "Every estimate needs a label."
 msgstr "Cada estimación necesita una etiqueta."
 
-#: src/components/BoardSettingsModal.vue:4817
+#: src/components/BoardSettingsModal.vue:4851
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Cada mes"
 msgstr[1] "Cada %n meses"
 
-#: src/components/BoardSettingsModal.vue:4809
+#: src/components/BoardSettingsModal.vue:4843
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Cada semana"
 msgstr[1] "Cada %n semanas"
 
-#: src/components/BoardSettingsModal.vue:4819
+#: src/components/BoardSettingsModal.vue:4853
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Cada año"
@@ -3554,7 +3558,7 @@ msgstr "Su propósito, alcance o normas. Cualquier miembro del tablero puede lee
 msgid "Jump to the discussion"
 msgstr "Ir a la conversación"
 
-#: src/components/CardDetail.vue:6959
+#: src/components/CardDetail.vue:6982
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Ir a la conversación (%n comentario)"
@@ -3925,8 +3929,8 @@ msgstr "Modo"
 msgid "Mon"
 msgstr "Lun"
 
-#: src/components/BoardSettingsModal.vue:2268
-#: src/components/CardDetail.vue:5140
+#: src/components/BoardSettingsModal.vue:2284
+#: src/components/CardDetail.vue:5163
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mes"
@@ -5490,7 +5494,7 @@ msgstr "Mostrar la conversación debajo de la tarjeta"
 msgid "Show the discussion panel"
 msgstr "Mostrar el panel de conversación"
 
-#: src/components/CardDetail.vue:6965
+#: src/components/CardDetail.vue:6988
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostrar el panel de conversación (%n comentario)"
@@ -6275,8 +6279,8 @@ msgstr "Webhook activo"
 msgid "Wed"
 msgstr "Mié"
 
-#: src/components/BoardSettingsModal.vue:2267
-#: src/components/CardDetail.vue:5139
+#: src/components/BoardSettingsModal.vue:2283
+#: src/components/CardDetail.vue:5162
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "semana"
@@ -6313,6 +6317,10 @@ msgstr "Cuando una tarjeta entra en {role}"
 #: src/components/BoardSettingsModal.vue
 msgid "When a card enters role"
 msgstr "Cuando una tarjeta entra en el rol"
+
+#: src/components/BoardSettingsModal.vue
+msgid "When on, AI-assisted work can be attributed to a named AI actor (e.g. \"Claude Code\") on comments, reviews and assignees. Off by default."
+msgstr ""
 
 #: src/views/MyReviewsView.vue
 msgid "When someone requests your review on a card it will appear here."
@@ -6376,8 +6384,8 @@ msgstr "Escrita"
 msgid "wrote"
 msgstr "escribió"
 
-#: src/components/BoardSettingsModal.vue:2269
-#: src/components/CardDetail.vue:5141
+#: src/components/BoardSettingsModal.vue:2285
+#: src/components/CardDetail.vue:5164
 msgid "year"
 msgid_plural "years"
 msgstr[0] "año"

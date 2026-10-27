@@ -47,9 +47,9 @@ class CommentController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function create(int $cardId, string $body = '', ?int $parentCommentId = null): JSONResponse {
-		return $this->respond(function () use ($cardId, $body, $parentCommentId): JSONResponse {
-			$comment = $this->commentService->addComment($cardId, $body, $parentCommentId, $this->currentUserId());
+	public function create(int $cardId, string $body = '', ?int $parentCommentId = null, ?string $actorName = null): JSONResponse {
+		return $this->respond(function () use ($cardId, $body, $parentCommentId, $actorName): JSONResponse {
+			$comment = $this->commentService->addComment($cardId, $body, $parentCommentId, $this->currentUserId(), $actorName);
 			return new JSONResponse($this->serialize($comment));
 		});
 	}

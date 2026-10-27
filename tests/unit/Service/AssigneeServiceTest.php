@@ -106,7 +106,7 @@ class AssigneeServiceTest extends TestCase {
 		$this->cardAssigneeMapper->method('exists')->with(9, 'bob')->willReturn(false);
 		$this->cardAssigneeMapper->expects(self::once())
 			->method('insertAssignment')
-			->with(9, 'bob');
+			->with(9, 'bob', null);
 		$change = new Change();
 		$change->setId(77);
 		$this->changeNotifier->expects(self::once())
@@ -134,6 +134,36 @@ class AssigneeServiceTest extends TestCase {
 			->with(9, 0, 'bob');
 
 		$this->service->assign(9, 'bob', 'alice');
+	}
+
+	public function testAssignWithAiActorNameWhenBoardAllowsIt(): void {
+		$board = $this->board();
+		$board->setAllowAiActors(true);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')
+			->willReturn(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT);
+		$this->cardAssigneeMapper->method('exists')->with(9, 'bob')->willReturn(false);
+		$this->cardAssigneeMapper->expects(self::once())
+			->method('insertAssignment')
+			->with(9, 'bob', 'Claude Code');
+		$change = new Change();
+		$change->setId(77);
+		$this->changeNotifier->method('notify')->willReturn($change);
+
+		$this->service->assign(9, 'bob', 'alice', 'Claude Code');
+	}
+
+	public function testAssignWithAiActorNameRejectedWhenBoardGateOff(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardAssigneeMapper->expects(self::never())->method('insertAssignment');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('This board does not allow AI actors');
+		$this->service->assign(9, 'bob', 'alice', 'Claude Code');
 	}
 
 	public function testAssignIsIdempotentAndWritesNoChangeRowOnReassign(): void {
@@ -239,7 +269,7 @@ class AssigneeServiceTest extends TestCase {
 		$this->cardAssigneeMapper->method('exists')->with(9, 'carol')->willReturn(false);
 		$this->cardAssigneeMapper->expects(self::once())
 			->method('insertAssignment')
-			->with(9, 'carol');
+			->with(9, 'carol', null);
 		$carolChange = new Change();
 		$carolChange->setId(99);
 		$this->changeNotifier->expects(self::once())
@@ -433,7 +463,10 @@ class AssigneeServiceTest extends TestCase {
 		$board = $this->board();
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
-		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn(['bob', 'carol']);
+		$this->cardAssigneeMapper->method('findAssigneesByCard')->with(9)->willReturn([
+			['uid' => 'bob', 'actorName' => null],
+			['uid' => 'carol', 'actorName' => null],
+		]);
 		$this->userManager->method('get')->willReturnCallback(
 			function (string $uid): IUser {
 				$user = $this->createMock(IUser::class);
@@ -443,8 +476,8 @@ class AssigneeServiceTest extends TestCase {
 		);
 
 		self::assertSame([
-			['uid' => 'bob', 'displayName' => 'Bob B.'],
-			['uid' => 'carol', 'displayName' => 'Carol B.'],
+			['uid' => 'bob', 'displayName' => 'Bob B.', 'actorName' => null],
+			['uid' => 'carol', 'displayName' => 'Carol B.', 'actorName' => null],
 		], $this->service->listForCard(9, 'alice'));
 	}
 
@@ -463,7 +496,9 @@ class AssigneeServiceTest extends TestCase {
 		}
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn($uids);
+		$this->cardAssigneeMapper->method('findAssigneesByCard')->with(9)->willReturn(
+			array_map(static fn (string $uid): array => ['uid' => $uid, 'actorName' => null], $uids)
+		);
 		$this->userManager->method('get')->willReturnCallback(
 			function (string $uid): IUser {
 				$user = $this->createMock(IUser::class);
@@ -476,7 +511,7 @@ class AssigneeServiceTest extends TestCase {
 		self::assertCount($over, $named);
 		// The LAST one - the one the cap would have shed - is named, not a bare uid.
 		self::assertSame(
-			['uid' => 'pool' . $over, 'displayName' => 'Pool Person ' . $over],
+			['uid' => 'pool' . $over, 'displayName' => 'Pool Person ' . $over, 'actorName' => null],
 			$named[$over - 1]
 		);
 	}
@@ -489,11 +524,13 @@ class AssigneeServiceTest extends TestCase {
 	public function testListForCardFallsBackToTheUidForAnUnknownAccount(): void {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn(['ghost']);
+		$this->cardAssigneeMapper->method('findAssigneesByCard')->with(9)->willReturn([
+			['uid' => 'ghost', 'actorName' => null],
+		]);
 		$this->userManager->method('get')->with('ghost')->willReturn(null);
 
 		self::assertSame(
-			[['uid' => 'ghost', 'displayName' => 'ghost']],
+			[['uid' => 'ghost', 'displayName' => 'ghost', 'actorName' => null]],
 			$this->service->listForCard(9, 'alice')
 		);
 	}

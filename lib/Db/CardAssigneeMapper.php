@@ -246,15 +246,49 @@ class CardAssigneeMapper extends QBMapper {
 	}
 
 	/**
+	 * @param string|null $actorName optional AI actor name (#352) the assignment
+	 *                               is attributed to; null for a plain human assignment
 	 * @throws Exception
 	 */
-	public function insertAssignment(int $cardId, string $uid): CardAssignee {
+	public function insertAssignment(int $cardId, string $uid, ?string $actorName = null): CardAssignee {
 		$assignment = new CardAssignee();
 		$assignment->setCardId($cardId);
 		$assignment->setParticipant($uid);
 		$assignment->setType(CardAssignee::TYPE_USER);
+		$assignment->setActorName($actorName);
 
 		return $this->insert($assignment);
+	}
+
+	/**
+	 * The card's user assignees with their optional AI actor name (#352), in
+	 * assignment order. The detail payload needs the name alongside the uid so
+	 * the UI can render an AI-attributed assignment distinctly; the uid-only
+	 * {@see self::findUserIdsByCard()} stays for the surfaces that only count
+	 * or list uids.
+	 *
+	 * @return list<array{uid: string, actorName: ?string}>
+	 * @throws Exception
+	 */
+	public function findAssigneesByCard(int $cardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('participant', 'actor_name')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('type', $qb->createNamedParameter(CardAssignee::TYPE_USER, IQueryBuilder::PARAM_INT)))
+			->orderBy('id', 'ASC');
+
+		$result = $qb->executeQuery();
+		$out = [];
+		while (($row = $result->fetch()) !== false) {
+			$out[] = [
+				'uid' => (string)$row['participant'],
+				'actorName' => $row['actor_name'] !== null ? (string)$row['actor_name'] : null,
+			];
+		}
+		$result->closeCursor();
+
+		return $out;
 	}
 
 	/**

@@ -285,14 +285,17 @@ class CardReviewMapper extends QBMapper {
 	}
 
 	/**
+	 * @param string|null $actorName optional AI actor name (#352) the review is
+	 *                               attributed to; null for a plain human review
 	 * @throws Exception
 	 */
-	public function insertRequest(int $cardId, string $reviewer, string $requestedBy, ?int $reviewTypeId = null): CardReview {
+	public function insertRequest(int $cardId, string $reviewer, string $requestedBy, ?int $reviewTypeId = null, ?string $actorName = null): CardReview {
 		$review = new CardReview();
 		$review->setCardId($cardId);
 		$review->setReviewer($reviewer);
 		$review->setState(CardReview::STATE_PENDING);
 		$review->setRequestedBy($requestedBy);
+		$review->setActorName($actorName);
 		$review->setCreatedAt(time());
 		// 0 = untyped (the column is NOT NULL); a real type id otherwise.
 		$review->setReviewTypeId($reviewTypeId ?? 0);

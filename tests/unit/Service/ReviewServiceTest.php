@@ -149,7 +149,7 @@ class ReviewServiceTest extends TestCase {
 		$inserted = $this->review('bob');
 		$this->cardReviewMapper->expects(self::once())
 			->method('insertRequest')
-			->with(9, 'bob', 'alice', null)
+			->with(9, 'bob', 'alice', null, null)
 			->willReturn($inserted);
 		// No lower-stage review exists → not gated → the notification fires and
 		// notified_at is stamped (one update).
@@ -220,6 +220,34 @@ class ReviewServiceTest extends TestCase {
 		$this->service->requestReview(9, 'bob', 'alice', 2);
 	}
 
+	public function testRequestWithAiActorNameWhenBoardAllowsIt(): void {
+		$board = $this->loadCardAndBoard();
+		$board->setAllowAiActors(true);
+		$this->permissionService->method('getPermissions')
+			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
+		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 0)->willReturn(false);
+		$inserted = $this->review('bob');
+		$this->cardReviewMapper->expects(self::once())
+			->method('insertRequest')
+			->with(9, 'bob', 'alice', null, 'Claude Code')
+			->willReturn($inserted);
+		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$inserted]);
+		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([]);
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->requestReview(9, 'bob', 'alice', null, 'Claude Code');
+	}
+
+	public function testRequestWithAiActorNameRejectedWhenBoardGateOff(): void {
+		$this->loadCardAndBoard();
+		$this->cardReviewMapper->expects(self::never())->method('insertRequest');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('This board does not allow AI actors');
+		$this->service->requestReview(9, 'bob', 'alice', null, 'Claude Code');
+	}
+
 	public function testRequestSameReviewerDifferentTypeIsAllowed(): void {
 		$board = $this->loadCardAndBoard();
 		$this->permissionService->method('getPermissions')->with($board, 'bob')
@@ -229,7 +257,7 @@ class ReviewServiceTest extends TestCase {
 		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 5)->willReturn(false);
 		$inserted = $this->review('bob', CardReview::STATE_PENDING, 7, 9);
 		$inserted->setReviewTypeId(5);
-		$this->cardReviewMapper->expects(self::once())->method('insertRequest')->with(9, 'bob', 'alice', 5)
+		$this->cardReviewMapper->expects(self::once())->method('insertRequest')->with(9, 'bob', 'alice', 5, null)
 			->willReturn($inserted);
 		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$inserted]);
 		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([5 => 0]);
@@ -352,7 +380,7 @@ class ReviewServiceTest extends TestCase {
 		$inserted->setReviewTypeId(3);
 		$this->cardReviewMapper->expects(self::once())
 			->method('insertRequest')
-			->with(9, 'bob', 'alice', 3)
+			->with(9, 'bob', 'alice', 3, null)
 			->willReturn($inserted);
 		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$inserted]);
 		$this->reviewTypeMapper->method('stageMapForBoard')->with(1)->willReturn([3 => 0]);
