@@ -2361,6 +2361,40 @@ class CardServiceTest extends TestCase {
 		self::assertSame(0, $parent->getDoneAt());
 	}
 
+	public function testParentWithOpenChecklistIsNotAutoCompleted(): void {
+		// The checklist gate: a parent with open steps of its own must not be
+		// stamped done just because its subcards are resolved (#198) - the
+		// checklist is part of the parent's own work.
+		$child = $this->card(9, 5, 1, 'I');
+		$child->setParentCardId(100);
+		$parent = $this->card(100, 6, 1, 'K');
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			100 => $parent,
+		});
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stubRolelessColumns();
+		$doneSibling = $this->card(11, 5, 1, 'J');
+		$doneSibling->setDoneAt(1000);
+		$this->cardMapper->method('findChildren')->with(100)->willReturn([$child, $doneSibling]);
+		// The child completes (nothing unapproved on it); the PARENT still has
+		// open checklist steps of its own.
+		$this->cardReviewMapper->method('hasUnapprovedReviews')->willReturn(false);
+		$this->checklistItemMapper->method('hasOpenItems')->with(100)->willReturn(true);
+		$updated = [];
+		$this->cardMapper->method('update')->willReturnCallback(function (Card $c) use (&$updated): Card {
+			$updated[] = $c->getId();
+			return $c;
+		});
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$this->service->update(9, null, null, null, true, null, 'alice');
+
+		self::assertContains(9, $updated, 'the child itself still completes');
+		self::assertNotContains(100, $updated, 'the parent must not be auto-completed');
+		self::assertSame(0, $parent->getDoneAt());
+	}
+
 	// ---- auto-complete parent (all children done) -------------------------
 
 	public function testUpdatingLastChildToDoneStampsParentDone(): void {

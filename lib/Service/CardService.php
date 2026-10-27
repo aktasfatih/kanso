@@ -1839,6 +1839,15 @@ class CardService {
 			}
 		}
 
+		// A parent that still has open checklist steps must not be stamped done just
+		// because its subcards are resolved (#198): the checklist is part of the
+		// parent's own work, so it is a precondition for auto-completion too. An
+		// itemless parent (or one whose steps are all done) passes, preserving the
+		// original behaviour.
+		if ($this->checklistItemMapper->hasOpenItems($parentId)) {
+			return;
+		}
+
 		// The parent is about to be stamped done, so it passes the same review gate
 		// as every explicit route (#10070) - finishing the last subtask must not
 		// quietly complete a parent whose own reviews are still unapproved. This one
