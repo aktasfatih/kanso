@@ -377,7 +377,7 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:4982
+#: src/components/CardDetail.vue:4995
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
@@ -387,7 +387,7 @@ msgid "%n file"
 msgid_plural "%n files"
 msgstr[0] "%n 个文件"
 
-#: src/components/CardDetail.vue:4980
+#: src/components/CardDetail.vue:4993
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
@@ -412,7 +412,7 @@ msgid "%n label was not created and is missing from the imported cards: only boa
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
 msgstr[0] "有 %n 个标签未能创建，导入的卡片中缺少它们：只有看板管理者才能添加新标签。请让管理者添加，然后在卡片上设置它们。"
 
-#: src/components/CardDetail.vue:4978
+#: src/components/CardDetail.vue:4991
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -1970,7 +1970,7 @@ msgid "Date"
 msgstr "日期"
 
 #: src/components/BoardSettingsModal.vue:2298
-#: src/components/CardDetail.vue:5171
+#: src/components/CardDetail.vue:5184
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -3511,7 +3511,7 @@ msgstr "看板的用途、范围或协作约定。看板中的所有人都可以
 msgid "Jump to the discussion"
 msgstr "跳转到讨论"
 
-#: src/components/CardDetail.vue:6992
+#: src/components/CardDetail.vue:7005
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "跳转到讨论（%n 条评论）"
@@ -3886,7 +3886,7 @@ msgid "Mon"
 msgstr "周一"
 
 #: src/components/BoardSettingsModal.vue:2300
-#: src/components/CardDetail.vue:5173
+#: src/components/CardDetail.vue:5186
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -5451,7 +5451,7 @@ msgstr "在卡片下方显示讨论"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:6998
+#: src/components/CardDetail.vue:7011
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -6236,7 +6236,7 @@ msgid "Wed"
 msgstr "周三"
 
 #: src/components/BoardSettingsModal.vue:2299
-#: src/components/CardDetail.vue:5172
+#: src/components/CardDetail.vue:5185
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -6344,7 +6344,7 @@ msgid "wrote"
 msgstr "写道"
 
 #: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5174
+#: src/components/CardDetail.vue:5187
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"
