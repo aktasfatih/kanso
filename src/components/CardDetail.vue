@@ -1281,7 +1281,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								'card-modal__review-pill--compact': reviewsCompact,
 								'card-modal__review-pill--gated': review.gated,
 							}]"
-							:title="review.gated ? reviewGateTooltip(review) : null">
+							:title="reviewPillTooltip(review)">
 							<NcAvatar
 								:user="review.reviewer"
 								:display-name="participantName(review.reviewer)"
@@ -3793,6 +3793,19 @@ function reviewGateTooltip(review) {
 	const unique = [...new Set(names)]
 	if (unique.length === 0) return t('kanso', 'Waiting on an earlier review')
 	return t('kanso', 'Waiting on {type} review', { type: unique.join(', ') })
+}
+
+// Accessible attribution for the review pill: the human reviewer plus the
+// optional AI actor name. In compact mode (3+ reviews) the name spans are
+// hidden, so this tooltip is the remaining accessible source for both
+// identities; the gated message leads when the review is blocked.
+function reviewPillTooltip(review) {
+	const reviewer = participantName(review.reviewer)
+	const actor = review.actorName
+		? ` · ${t('kanso', 'Requested by AI actor')}: ${review.actorName}`
+		: ''
+	const gated = review.gated ? `${reviewGateTooltip(review)} — ` : ''
+	return gated + reviewer + actor
 }
 
 // ── Done toggle ──────────────────────────────────────────────────────────────
@@ -7901,10 +7914,10 @@ async function handleToggleProject(projectId) {
 .card-modal__review-state--gated { color: var(--color-text-maxcontrast); }
 /* Compact mode (3+ reviews): drop the reviewer name and the state text so the
    chip shrinks to avatar + type badge + state icon and N reviews stay on one
-   row. The reviewer name is still available via the avatar's hover tooltip and
-   the state via its coloured icon + border. */
+   row. The reviewer name stays accessible via the pill's tooltip, and the AI
+   actor badge is kept visible so AI attribution is never lost in compact mode. */
 .card-modal__review-pill--compact { gap: 4px; padding: 0 6px 0 3px; }
-.card-modal__review-pill--compact .card-modal__review-name,
+.card-modal__review-pill--compact .card-modal__review-name:not(.card-modal__review-name--ai),
 .card-modal__review-pill--compact .card-modal__review-state-label { display: none; }
 
 /* ── Popovers ────────────────────────────────────────────────────────────── */
