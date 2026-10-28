@@ -11,6 +11,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.42.0](https://github.com/aktasfatih/kanso/compare/v0.41.0...v0.42.0) (2026-10-28)
+
+
+### Bug Fixes
+
+* **actors:** keep AI attribution visible on compact review pills ([8eb8c24](https://github.com/aktasfatih/kanso/commit/8eb8c2449d8001d98ef6b3f167b309a7a46544c1))
+* address CodeRabbit review findings on actor names, reviewer display, and e2e refs ([73985e2](https://github.com/aktasfatih/kanso/commit/73985e2e86ed2181170fe7f6200dc74e379ecb21))
+* **boards:** keep parent open while its checklist has open steps ([34e0d23](https://github.com/aktasfatih/kanso/commit/34e0d23ab6f1563ec38a7f4af508c06e62b4f28a)), closes [#198](https://github.com/aktasfatih/kanso/issues/198)
+* **e2e:** repair the five failing specs from the KANSO-360 rework and review fixes ([86e829d](https://github.com/aktasfatih/kanso/commit/86e829d518c5edf05063b4ca25819e6a074ae42a)), closes [#10923](https://github.com/aktasfatih/kanso/issues/10923)
+* **mcp:** surface which review blocks marking a card done ([be12dfe](https://github.com/aktasfatih/kanso/commit/be12dfe949e47ec5853d2261803d19183036d106))
+
+
+### Features
+
+* **actors:** optional AI actor name on comments, reviews, and assignees ([022bc9d](https://github.com/aktasfatih/kanso/commit/022bc9d606ce8c26b8a0614a0792296ee31e5e07))
+* **boards:** make "parent done when sub-issues done" an opt-in board setting ([e2076db](https://github.com/aktasfatih/kanso/commit/e2076dbe0ac16cf77506a143772de275a1731b04)), closes [#198](https://github.com/aktasfatih/kanso/issues/198)
+* **projects:** show each card's board reference in the project view ([4191953](https://github.com/aktasfatih/kanso/commit/4191953de68183ff7b1b730d7d66efec820c418c))
+* **search:** find cards by id and KANSO-<n> reference ([dbf1141](https://github.com/aktasfatih/kanso/commit/dbf1141119edd82839bc8319de298fdcf0bbb8ea))
+
 # [0.41.0](https://github.com/aktasfatih/kanso/compare/v0.40.0...v0.41.0) (2026-10-26)
 
 
