@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— нет —"
 
-#: src/components/BoardSettingsModal.vue:4827
+#: src/components/BoardSettingsModal.vue:4893
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· повторов: %n"
@@ -417,7 +417,7 @@ msgstr[0] "Обнаружена %n строка данных"
 msgstr[1] "Обнаружено %n строки данных"
 msgstr[2] "Обнаружено %n строк данных"
 
-#: src/components/CardDetail.vue:4949
+#: src/components/CardDetail.vue:5011
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n день назад"
@@ -431,7 +431,7 @@ msgstr[0] "%n файл"
 msgstr[1] "%n файла"
 msgstr[2] "%n файлов"
 
-#: src/components/CardDetail.vue:4947
+#: src/components/CardDetail.vue:5009
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n час назад"
@@ -466,7 +466,7 @@ msgstr[0] "%n метка не была создана и отсутствует 
 msgstr[1] "%n метки не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 msgstr[2] "%n меток не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 
-#: src/components/CardDetail.vue:4945
+#: src/components/CardDetail.vue:5007
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n минуту назад"
@@ -494,14 +494,14 @@ msgstr[0] "%n балл"
 msgstr[1] "%n балла"
 msgstr[2] "%n баллов"
 
-#: src/components/CardDetail.vue:1231
+#: src/components/CardDetail.vue:1237
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n проект"
 msgstr[1] "%n проекта"
 msgstr[2] "%n проектов"
 
-#: src/components/CardDetail.vue:2287
+#: src/components/CardDetail.vue:2309
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n ответ"
@@ -749,6 +749,10 @@ msgstr "Все issue"
 #: src/components/CardDetail.vue
 msgid "All requested reviews must be approved before this card can be marked done. Waiting on {names}."
 msgstr "Все запрошенные проверки должны быть одобрены, прежде чем эту карточку можно отметить готовой. Ожидаемые проверяющие: {names}."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Allow AI actors"
+msgstr ""
 
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
@@ -1043,7 +1047,7 @@ msgstr "Заблокирована"
 msgid "Blocked by"
 msgstr "Блокируется"
 
-#: src/views/ProjectView.vue:253
+#: src/views/ProjectView.vue:254
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Заблокирована {count} открытой карточкой"
@@ -2047,8 +2051,8 @@ msgstr "Опасная зона"
 msgid "Date"
 msgstr "Дата"
 
-#: src/components/BoardSettingsModal.vue:2266
-#: src/components/CardDetail.vue:5138
+#: src/components/BoardSettingsModal.vue:2298
+#: src/components/CardDetail.vue:5200
 msgid "day"
 msgid_plural "days"
 msgstr[0] "день"
@@ -2604,7 +2608,7 @@ msgstr "Каждые"
 msgid "Every card in this project is done."
 msgstr "Все карточки в этом проекте готовы."
 
-#: src/components/BoardSettingsModal.vue:4807
+#: src/components/BoardSettingsModal.vue:4873
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Каждый %n день"
@@ -2615,21 +2619,21 @@ msgstr[2] "Каждые %n дней"
 msgid "Every estimate needs a label."
 msgstr "У каждой оценки должна быть метка."
 
-#: src/components/BoardSettingsModal.vue:4817
+#: src/components/BoardSettingsModal.vue:4883
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Каждый %n месяц"
 msgstr[1] "Каждые %n месяца"
 msgstr[2] "Каждые %n месяцев"
 
-#: src/components/BoardSettingsModal.vue:4809
+#: src/components/BoardSettingsModal.vue:4875
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Каждую %n неделю"
 msgstr[1] "Каждые %n недели"
 msgstr[2] "Каждые %n недель"
 
-#: src/components/BoardSettingsModal.vue:4819
+#: src/components/BoardSettingsModal.vue:4885
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Каждый %n год"
@@ -3601,7 +3605,7 @@ msgstr "Назначение, границы или правила. Любой �
 msgid "Jump to the discussion"
 msgstr "Перейти к обсуждению"
 
-#: src/components/CardDetail.vue:6959
+#: src/components/CardDetail.vue:7021
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Перейти к обсуждению (%n комментарий)"
@@ -3945,6 +3949,10 @@ msgid "Mark done"
 msgstr "Отметить готовым"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Mark parent as done when sub-issues are done"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Maximize"
 msgstr "Развернуть"
 
@@ -3973,8 +3981,8 @@ msgstr "Режим"
 msgid "Mon"
 msgstr "Пн"
 
-#: src/components/BoardSettingsModal.vue:2268
-#: src/components/CardDetail.vue:5140
+#: src/components/BoardSettingsModal.vue:2300
+#: src/components/CardDetail.vue:5202
 msgid "month"
 msgid_plural "months"
 msgstr[0] "месяц"
@@ -5173,6 +5181,10 @@ msgstr "запросил проверку"
 msgid "requested a review on"
 msgstr "запросил проверку"
 
+#: src/components/CardDetail.vue
+msgid "Requested by AI actor"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Require verified senders (DMARC)"
 msgstr "Требовать проверенных отправителей (DMARC)"
@@ -5541,7 +5553,7 @@ msgstr "Показывать обсуждение под карточкой"
 msgid "Show the discussion panel"
 msgstr "Показать панель обсуждения"
 
-#: src/components/CardDetail.vue:6965
+#: src/components/CardDetail.vue:7027
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Показать панель обсуждения (%n комментарий)"
@@ -6327,8 +6339,8 @@ msgstr "Webhook активен"
 msgid "Wed"
 msgstr "Ср"
 
-#: src/components/BoardSettingsModal.vue:2267
-#: src/components/CardDetail.vue:5139
+#: src/components/BoardSettingsModal.vue:2299
+#: src/components/CardDetail.vue:5201
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "неделя"
@@ -6366,6 +6378,14 @@ msgstr "Когда карточка попадает в {role}"
 #: src/components/BoardSettingsModal.vue
 msgid "When a card enters role"
 msgstr "Когда карточка попадает в роль"
+
+#: src/components/BoardSettingsModal.vue
+msgid "When on, a parent card is completed automatically once all of its sub-issues are done or archived. Off by default — the parent stays open for a human to close."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "When on, AI-assisted work can be attributed to a named AI actor (e.g. \"Claude Code\") on comments, reviews and assignees. Off by default."
+msgstr ""
 
 #: src/views/MyReviewsView.vue
 msgid "When someone requests your review on a card it will appear here."
@@ -6429,8 +6449,8 @@ msgstr "Записана"
 msgid "wrote"
 msgstr "написал"
 
-#: src/components/BoardSettingsModal.vue:2269
-#: src/components/CardDetail.vue:5141
+#: src/components/BoardSettingsModal.vue:2301
+#: src/components/CardDetail.vue:5203
 msgid "year"
 msgid_plural "years"
 msgstr[0] "год"

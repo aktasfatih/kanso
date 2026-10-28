@@ -25,6 +25,8 @@ use OCP\DB\Types;
  * @method void setParentCommentId(?int $parentCommentId)
  * @method string getAuthor()
  * @method void setAuthor(string $author)
+ * @method string|null getActorName()
+ * @method void setActorName(?string $actorName)
  * @method string getBody()
  * @method void setBody(string $body)
  * @method int getCreatedAt()
@@ -43,6 +45,10 @@ class Comment extends Entity implements \JsonSerializable {
 	protected ?int $cardId = null;
 	protected ?int $parentCommentId = null;
 	protected ?string $author = null;
+	// Optional AI actor name (e.g. "Claude Code") the comment is attributed to
+	// (#352). The `author` uid stays the token owner; this is a display label,
+	// never a Nextcloud account. NULL = a plain human comment.
+	protected ?string $actorName = null;
 	protected ?string $body = null;
 	protected ?int $createdAt = null;
 	protected ?int $editedAt = null;
@@ -55,6 +61,7 @@ class Comment extends Entity implements \JsonSerializable {
 		$this->addType('cardId', Types::INTEGER);
 		$this->addType('parentCommentId', Types::INTEGER);
 		$this->addType('author', Types::STRING);
+		$this->addType('actorName', Types::STRING);
 		$this->addType('body', Types::STRING);
 		$this->addType('createdAt', Types::INTEGER);
 		$this->addType('editedAt', Types::INTEGER);
@@ -63,7 +70,7 @@ class Comment extends Entity implements \JsonSerializable {
 	}
 
 	/**
-	 * @return array{id: int, cardId: ?int, parentCommentId: ?int, author: ?string, body: ?string, createdAt: int, editedAt: int, resolvedAt: int}
+	 * @return array{id: int, cardId: ?int, parentCommentId: ?int, author: ?string, actorName: ?string, body: ?string, createdAt: int, editedAt: int, resolvedAt: int}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -72,6 +79,8 @@ class Comment extends Entity implements \JsonSerializable {
 			'cardId' => $this->cardId,
 			'parentCommentId' => $this->parentCommentId,
 			'author' => $this->author,
+			// Optional AI actor name (#352); null for a plain human comment.
+			'actorName' => $this->actorName,
 			'body' => $this->body,
 			'createdAt' => $this->createdAt ?? 0,
 			'editedAt' => $this->editedAt ?? 0,

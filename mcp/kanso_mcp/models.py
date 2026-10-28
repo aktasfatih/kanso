@@ -41,6 +41,10 @@ class BoardSummary(_Base):
     newCardsOnTop: bool = False
     prefix: Optional[str] = None
     chatUrl: Optional[str] = None
+    # Whether the board allows AI-actor attribution (#352); OFF by default.
+    allowAiActors: bool = False
+    # "All children done → parent done" gate (#198); OFF by default.
+    autoCompleteParent: bool = False
     groupId: Optional[int] = None
     pinned: bool = False
     permissions: Optional[int] = None
@@ -69,6 +73,10 @@ class Board(_Base):
     # Single-board payload only — the boards LIST deliberately omits it, so
     # BoardSummary above has no such field.
     description: Optional[str] = None
+    # Whether the board allows AI-actor attribution (#352); OFF by default.
+    allowAiActors: bool = False
+    # "All children done → parent done" gate (#198); OFF by default.
+    autoCompleteParent: bool = False
 
 
 class Stack(_Base):
@@ -112,6 +120,9 @@ class Comment(_Base):
     cardId: Optional[int] = None
     parentCommentId: Optional[int] = None
     author: Optional[str] = None
+    # Optional AI actor name (#352) the comment is attributed to; null for a
+    # plain human comment.
+    actorName: Optional[str] = None
     authorDisplayName: Optional[str] = None
     body: Optional[str] = None
     createdAt: int = 0
@@ -176,6 +187,9 @@ class Card(CardSummary):
     projectIds: List[int] = Field(default_factory=list)
     fieldValues: List[Any] = Field(default_factory=list)
     relations: Optional[Any] = None
+    # The card's assignees WITH their display names and optional AI actor name
+    # (#352); `assigneeIds` (on CardSummary) is the bare uid list.
+    assignees: List[Any] = Field(default_factory=list)
 
 
 class SearchHit(_Base):

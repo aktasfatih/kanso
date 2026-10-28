@@ -16,6 +16,7 @@ use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardReview;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeDetailMapper;
@@ -529,6 +530,17 @@ class CardService {
 			$this->cardAssigneeMapper->findUserIdsByCard($id),
 			$targetBoard,
 		)));
+		// The carried assignees' optional AI actor names (#352), keyed by uid.
+		// Carried over only when the TARGET board allows AI actors - a move must
+		// not smuggle an AI attribution onto a board that forbids it.
+		$assigneeActorNames = [];
+		if ($targetBoard->getAllowAiActors() === true) {
+			foreach ($this->cardAssigneeMapper->findAssigneesByCard($id) as $a) {
+				if ($a['actorName'] !== null) {
+					$assigneeActorNames[$a['uid']] = $a['actorName'];
+				}
+			}
+		}
 		$carriedWatchers = array_values(array_unique($this->filterReadableOnTarget(
 			$this->subscriptionMapper->findCardSubscriberUids($id),
 			$targetBoard,
@@ -584,7 +596,7 @@ class CardService {
 
 				// Assignees / watchers that survived the READ filter.
 				foreach ($carriedAssignees as $assigneeUid) {
-					$this->cardAssigneeMapper->insertAssignment($newId, $assigneeUid);
+					$this->cardAssigneeMapper->insertAssignment($newId, $assigneeUid, $assigneeActorNames[$assigneeUid] ?? null);
 				}
 				foreach ($carriedWatchers as $watcherUid) {
 					$sub = new Subscription();
@@ -1805,19 +1817,29 @@ class CardService {
 	 * @throws \OCP\DB\Exception
 	 */
 	private function assertReviewsApproved(int $cardId): void {
-		if ($this->cardReviewMapper->hasUnapprovedReviews($cardId)) {
-			throw new NotPermittedException('All requested reviews must be approved before this card can be marked done');
+		if (!$this->cardReviewMapper->hasUnapprovedReviews($cardId)) {
+			return;
 		}
+		// Name the blocking reviewer(s) so the caller knows exactly who to wait on
+		// (the generic "access denied" that used to reach the client said nothing
+		// about which review was still open).
+		$blocking = array_map(
+			static fn (CardReview $review): string => $review->getReviewer() . ' (review #' . $review->getId() . ')',
+			$this->cardReviewMapper->findUnapprovedByCard($cardId),
+		);
+		throw new NotPermittedException('Blocked by unapproved review(s): ' . implode(', ', $blocking));
 	}
 
 	/**
 	 * Auto-completes a parent card once ALL of its children are resolved (done
-	 * or archived) - the "all children done → parent done" workflow. Called from
-	 * a CHILD's update()/move() after it persists; a card with no parent is a
-	 * fast no-op (the common case). Forward-only for v1: it never RE-OPENS a
-	 * parent (a parent a human marked done is left alone), and since the
-	 * hierarchy is one level (a parent has no parent) stamping it done cannot
-	 * cascade - no loop guard needed.
+	 * or archived) AND its own checklist is fully done - the "all children done
+	 * → parent done" workflow. Gated by the board's `autoCompleteParent` setting
+	 * (#198), which is OFF by default: a parent is only stamped done this way
+	 * when the board owner has opted in. Called from a CHILD's update()/move()
+	 * after it persists; a card with no parent is a fast no-op (the common case).
+	 * Forward-only for v1: it never RE-OPENS a parent (a parent a human marked
+	 * done is left alone), and since the hierarchy is one level (a parent has no
+	 * parent) stamping it done cannot cascade - no loop guard needed.
 	 */
 	private function maybeCompleteParent(Card $child, string $uid): void {
 		$parentId = $child->getParentCardId();
@@ -1833,9 +1855,34 @@ class CardService {
 			return;
 		}
 
+		// This automation is OPT-IN per board (#198): OFF by default, so a parent
+		// is never stamped done just because its subcards are resolved unless the
+		// board owner has explicitly enabled it. A NULL column reads as OFF, so
+		// boards that predate the column keep the manual "mark the parent done"
+		// behaviour. Checked first so the common (off) case skips the children and
+		// review queries entirely.
+		try {
+			$board = $this->boardMapper->find($parent->getBoardId());
+		} catch (DoesNotExistException) {
+			return;
+		}
+		if ($board->getAutoCompleteParent() !== true) {
+			return;
+		}
+
 		foreach ($this->cardMapper->findChildren($parentId) as $sibling) {
 			if ($sibling->getDoneAt() === 0 && !$sibling->getArchived()) {
 				return; // an unresolved child remains
+			}
+		}
+
+		// A parent that still has open checklist steps of its own must not be stamped
+		// done just because its subcards are resolved (#198): the checklist is part of
+		// the parent's own work, so it is a precondition for auto-completion too. An
+		// itemless parent (or one whose steps are all done) passes.
+		foreach ($this->checklistItemMapper->findByCard($parentId) as $item) {
+			if (!$item->getDone()) {
+				return; // an open checklist step remains
 			}
 		}
 

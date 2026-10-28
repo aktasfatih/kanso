@@ -27,8 +27,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:style="typeChipStyle">
 					{{ review.reviewTypeTitle }}
 				</span>
-				<span class="review-row__requested-by">
-					{{ t('kanso', 'by {user}', { user: review.requestedBy }) }}
+				<span
+					class="review-row__requested-by"
+					:class="{ 'review-row__requested-by--ai': review.actorName }">
+					<RobotOutlineIcon v-if="review.actorName" :size="14" class="review-row__ai-actor-icon" />
+					{{ t('kanso', 'by {user}', { user: review.actorName || review.requestedBy }) }}
 				</span>
 				<span class="review-row__time" :title="fullDate">{{ relativeTime }}</span>
 			</div>
@@ -75,6 +78,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
+import RobotOutlineIcon from 'vue-material-design-icons/RobotOutline.vue'
 import { cssColor, readableColor } from '../services/color.js'
 
 const props = defineProps({
@@ -184,6 +188,19 @@ const relativeTime = computed(() => {
 .review-row__requested-by,
 .review-row__time {
 	color: var(--color-text-maxcontrast);
+}
+
+/* AI-actor attribution (#352): a bot glyph + the AI name, distinct from a
+ * plain human requester. */
+.review-row__ai-actor-icon {
+	vertical-align: -2px;
+	margin-right: 2px;
+	color: var(--color-primary);
+}
+.review-row__requested-by--ai {
+	display: inline-flex;
+	align-items: center;
+	color: var(--color-primary);
 }
 
 .review-row__actions {

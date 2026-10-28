@@ -897,16 +897,22 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 					<!-- Assignees -->
 					<span
-						v-for="uid in cardAssigneeIds"
-						:key="uid"
+						v-for="assignee in assigneePills"
+						:key="assignee.uid"
 						class="card-modal__assignee-pill">
 						<NcAvatar
-							:user="uid"
-							:display-name="participantName(uid)"
+							:user="assignee.uid"
+							:display-name="participantName(assignee.uid)"
 							:size="22"
 							:hide-status="true"
 							:disable-tooltip="true" />
-						<span class="card-modal__assignee-name" :title="participantName(uid)">{{ participantName(uid) }}</span>
+						<span
+							class="card-modal__assignee-name"
+							:class="{ 'card-modal__assignee-name--ai': assignee.actorName }"
+							:title="assignee.actorName || participantName(assignee.uid)">
+							<RobotOutlineIcon v-if="assignee.actorName" :size="14" class="card-modal__ai-actor-icon" />
+							{{ assignee.actorName || participantName(assignee.uid) }}
+						</span>
 						<!-- Unassigning is a write (#10703): a member shared in with READ
 						     only keeps the avatar and the name - the whole point of the
 						     pill - but is not offered a button the server answers 403 to. -->
@@ -929,8 +935,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							v-if="canEdit"
 							class="card-modal__pill-x"
 							:title="t('kanso', 'Remove assignee')"
-							:aria-busy="isAssigneeTogglePending(uid) ? 'true' : undefined"
-							@click="handleToggleAssignee(uid, false)">
+							:aria-busy="isAssigneeTogglePending(assignee.uid) ? 'true' : undefined"
+							@click="handleToggleAssignee(assignee.uid, false)">
 							<CloseIcon :size="12" />
 						</button>
 					</span>
@@ -1275,14 +1281,25 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								'card-modal__review-pill--compact': reviewsCompact,
 								'card-modal__review-pill--gated': review.gated,
 							}]"
-							:title="review.gated ? reviewGateTooltip(review) : null">
+							:title="reviewPillTooltip(review)">
 							<NcAvatar
 								:user="review.reviewer"
 								:display-name="participantName(review.reviewer)"
 								:size="22"
 								:hide-status="true"
 								:disable-tooltip="true" />
-							<span class="card-modal__review-name" :title="participantName(review.reviewer)">{{ participantName(review.reviewer) }}</span>
+							<span
+								class="card-modal__review-name"
+								:title="participantName(review.reviewer)">
+								{{ participantName(review.reviewer) }}
+							</span>
+							<span
+								v-if="review.actorName"
+								class="card-modal__review-name card-modal__review-name--ai"
+								:title="t('kanso', 'Requested by AI actor')">
+								<RobotOutlineIcon :size="14" class="card-modal__ai-actor-icon" />
+								{{ review.actorName }}
+							</span>
 							<span
 								v-if="reviewTypeById(review.reviewTypeId)"
 								class="card-modal__review-type-badge"
@@ -2282,7 +2299,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											:title="t('kanso', 'Show this resolved thread')"
 											@click="toggleThreadExpanded(topComment)">
 											<CheckCircleOutlineIcon :size="16" class="card-modal__thread-summary-icon" />
-											<span class="card-modal__thread-summary-author">{{ topComment.authorDisplayName || topComment.author }}</span>
+											<span
+												class="card-modal__thread-summary-author"
+												:class="{ 'card-modal__comment-author--ai': topComment.actorName }">
+												<RobotOutlineIcon v-if="topComment.actorName" :size="14" class="card-modal__ai-actor-icon" />
+												{{ topComment.actorName || topComment.authorDisplayName || topComment.author }}
+											</span>
 											<span class="card-modal__thread-summary-state">{{ t('kanso', 'Resolved') }}</span>
 											<span v-if="replies.length > 0" class="card-modal__thread-summary-replies">{{ n('kanso', '%n reply', '%n replies', replies.length) }}</span>
 											<span class="card-modal__thread-summary-show">{{ t('kanso', 'Show') }}</span>
@@ -2307,7 +2329,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											class="card-modal__comment-avatar" />
 										<div class="card-modal__comment-main">
 											<div class="card-modal__comment-meta">
-												<span class="card-modal__comment-author">{{ topComment.authorDisplayName || topComment.author }}</span>
+												<span
+													class="card-modal__comment-author"
+													:class="{ 'card-modal__comment-author--ai': topComment.actorName }">
+													<RobotOutlineIcon v-if="topComment.actorName" :size="14" class="card-modal__ai-actor-icon" />
+													{{ topComment.actorName || topComment.authorDisplayName || topComment.author }}
+												</span>
 												<span class="card-modal__comment-time">{{ formatCommentTime(topComment.createdAt) }}</span>
 												<span v-if="topComment.editedAt > 0" class="card-modal__comment-edited">{{ t('kanso', 'edited') }}</span>
 											</div>
@@ -2438,7 +2465,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												class="card-modal__comment-avatar" />
 											<div class="card-modal__comment-main">
 												<div class="card-modal__comment-meta">
-													<span class="card-modal__comment-author">{{ reply.authorDisplayName || reply.author }}</span>
+													<span
+														class="card-modal__comment-author"
+														:class="{ 'card-modal__comment-author--ai': reply.actorName }">
+														<RobotOutlineIcon v-if="reply.actorName" :size="14" class="card-modal__ai-actor-icon" />
+														{{ reply.actorName || reply.authorDisplayName || reply.author }}
+													</span>
 													<span class="card-modal__comment-time">{{ formatCommentTime(reply.createdAt) }}</span>
 													<span v-if="reply.editedAt > 0" class="card-modal__comment-edited">{{ t('kanso', 'edited') }}</span>
 												</div>
@@ -2747,6 +2779,7 @@ import EyeOffOutlineIcon from 'vue-material-design-icons/EyeOffOutline.vue'
 import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import CheckDecagramOutlineIcon from 'vue-material-design-icons/CheckDecagramOutline.vue'
 import AlertDecagramIcon from 'vue-material-design-icons/AlertDecagram.vue'
+import RobotOutlineIcon from 'vue-material-design-icons/RobotOutline.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronDoubleUpIcon from 'vue-material-design-icons/ChevronDoubleUp.vue'
@@ -3259,6 +3292,22 @@ const cardAssignees = computed(() =>
 	Array.isArray(cardData.value?.assignees) ? cardData.value.assignees : [],
 )
 
+// The assignee PILL list. Iterate the (optimistic) uid list, not the
+// server-named `cardAssignees`: the optimistic write (useAssignees.onMutate)
+// patches assigneeIds, while the named list only arrives on a full card read.
+// Keying the pill off the named list alone made a just-added assignee invisible
+// until the refetch landed - a held/slow read left the pill at zero elements
+// (#10923). Pull each uid's AI actor name from the named list when it is
+// already loaded, so the attribution badge appears as soon as the server has
+// named it.
+const assigneePills = computed(() => {
+	const byUid = new Map(cardAssignees.value.map((a) => [a.uid, a]))
+	return cardAssigneeIds.value.map((uid) => ({
+		uid,
+		actorName: byUid.get(uid)?.actorName ?? null,
+	}))
+})
+
 // uid → participant, for resolving display names. Three layers, authoritative
 // last:
 //   1. the cached participants page - the board's picker data source, capped at
@@ -3760,6 +3809,19 @@ function reviewGateTooltip(review) {
 	const unique = [...new Set(names)]
 	if (unique.length === 0) return t('kanso', 'Waiting on an earlier review')
 	return t('kanso', 'Waiting on {type} review', { type: unique.join(', ') })
+}
+
+// Accessible attribution for the review pill: the human reviewer plus the
+// optional AI actor name. In compact mode (3+ reviews) the name spans are
+// hidden, so this tooltip is the remaining accessible source for both
+// identities; the gated message leads when the review is blocked.
+function reviewPillTooltip(review) {
+	const reviewer = participantName(review.reviewer)
+	const actor = review.actorName
+		? ` · ${t('kanso', 'Requested by AI actor')}: ${review.actorName}`
+		: ''
+	const gated = review.gated ? `${reviewGateTooltip(review)} — ` : ''
+	return gated + reviewer + actor
 }
 
 // ── Done toggle ──────────────────────────────────────────────────────────────
@@ -7868,10 +7930,10 @@ async function handleToggleProject(projectId) {
 .card-modal__review-state--gated { color: var(--color-text-maxcontrast); }
 /* Compact mode (3+ reviews): drop the reviewer name and the state text so the
    chip shrinks to avatar + type badge + state icon and N reviews stay on one
-   row. The reviewer name is still available via the avatar's hover tooltip and
-   the state via its coloured icon + border. */
+   row. The reviewer name stays accessible via the pill's tooltip, and the AI
+   actor badge is kept visible so AI attribution is never lost in compact mode. */
 .card-modal__review-pill--compact { gap: 4px; padding: 0 6px 0 3px; }
-.card-modal__review-pill--compact .card-modal__review-name,
+.card-modal__review-pill--compact .card-modal__review-name:not(.card-modal__review-name--ai),
 .card-modal__review-pill--compact .card-modal__review-state-label { display: none; }
 
 /* ── Popovers ────────────────────────────────────────────────────────────── */
@@ -9511,6 +9573,20 @@ async function handleToggleProject(projectId) {
 .card-modal__comment-author {
 	font-size: 0.8125rem;
 	font-weight: 600;
+}
+/* AI-actor attribution (#352): a bot glyph + the AI name, distinct from a
+ * plain human author. Shared by comment, review and assignee names. */
+.card-modal__ai-actor-icon {
+	vertical-align: -2px;
+	margin-right: 2px;
+	color: var(--color-primary);
+}
+.card-modal__comment-author--ai,
+.card-modal__review-name--ai,
+.card-modal__assignee-name--ai {
+	display: inline-flex;
+	align-items: center;
+	color: var(--color-primary);
 }
 .card-modal__comment-time,
 .card-modal__comment-edited {

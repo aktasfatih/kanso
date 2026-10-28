@@ -66,16 +66,21 @@ class CommentService {
 	 * Posts a comment ($parentCommentId null) or a reply to a top-level comment.
 	 * Requires EDIT.
 	 *
+	 * @param string|null $actorName optional AI actor name (#352) the comment is
+	 *                               attributed to; the $actorUid stays the token owner. Refused when the
+	 *                               board's `allowAiActors` gate is off.
+	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not edit the board
-	 * @throws InvalidInputException if the body is empty/too long, or the parent is invalid (missing, other card, deleted, or itself a reply - one level only)
+	 * @throws InvalidInputException if the body is empty/too long, the parent is invalid (missing, other card, deleted, or itself a reply - one level only), or an AI actor name is set on a board that does not allow it
 	 */
-	public function addComment(int $cardId, string $body, ?int $parentCommentId, string $actorUid): Comment {
+	public function addComment(int $cardId, string $body, ?int $parentCommentId, string $actorUid, ?string $actorName = null): Comment {
 		$body = $this->normalizeBody($body);
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
 		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$actorName = $this->normalizeActorName($board, $actorName);
 
 		if ($parentCommentId !== null) {
 			$parent = $this->loadParentComment($parentCommentId);
@@ -91,6 +96,7 @@ class CommentService {
 		$comment->setCardId($cardId);
 		$comment->setParentCommentId($parentCommentId);
 		$comment->setAuthor($actorUid);
+		$comment->setActorName($actorName);
 		$comment->setBody($body);
 		$comment->setCreatedAt(time());
 		$comment->setEditedAt(0);
@@ -254,6 +260,29 @@ class CommentService {
 			throw new InvalidInputException('Comment body is too long');
 		}
 		return $body;
+	}
+
+	/**
+	 * Normalises an optional AI actor name (#352): trimmed, blank => null, and
+	 * refused when the board's `allowAiActors` gate is off. The single place the
+	 * gate is enforced for comments.
+	 *
+	 * @throws InvalidInputException when a name is set on a board that does not allow AI actors
+	 */
+	private function normalizeActorName(Board $board, ?string $actorName): ?string {
+		$name = $actorName !== null ? trim($actorName) : null;
+		if ($name === '') {
+			$name = null;
+		}
+		if ($name !== null && $board->getAllowAiActors() !== true) {
+			throw new InvalidInputException('This board does not allow AI actors');
+		}
+		// The `actor_name` column is a 255-char string; a longer name would fail
+		// (or truncate) at the DB layer, so bound it here, multibyte-safe.
+		if ($name !== null && mb_strlen($name) > 255) {
+			throw new InvalidInputException('Actor name is too long');
+		}
+		return $name;
 	}
 
 	/**

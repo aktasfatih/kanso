@@ -30,6 +30,8 @@ use OCP\DB\Types;
  * @method void setState(string $state)
  * @method string getRequestedBy()
  * @method void setRequestedBy(string $requestedBy)
+ * @method string|null getActorName()
+ * @method void setActorName(?string $actorName)
  * @method int getCreatedAt()
  * @method void setCreatedAt(int $createdAt)
  * @method int getReviewTypeId()
@@ -52,6 +54,10 @@ class CardReview extends Entity implements \JsonSerializable {
 	protected ?string $reviewer = null;
 	protected ?string $state = null;
 	protected ?string $requestedBy = null;
+	// Optional AI actor name (e.g. "Claude Code") the review request is
+	// attributed to (#352). The `reviewer` uid stays the token owner; this is a
+	// display label, never a Nextcloud account. NULL = a plain human review.
+	protected ?string $actorName = null;
 	protected ?int $createdAt = null;
 	protected ?int $reviewTypeId = null;
 	protected ?int $notifiedAt = null;
@@ -61,13 +67,14 @@ class CardReview extends Entity implements \JsonSerializable {
 		$this->addType('reviewer', Types::STRING);
 		$this->addType('state', Types::STRING);
 		$this->addType('requestedBy', Types::STRING);
+		$this->addType('actorName', Types::STRING);
 		$this->addType('createdAt', Types::INTEGER);
 		$this->addType('reviewTypeId', Types::INTEGER);
 		$this->addType('notifiedAt', Types::INTEGER);
 	}
 
 	/**
-	 * @return array{id: int, cardId: int, reviewer: string, state: string, requestedBy: string, createdAt: int, reviewTypeId: int, notifiedAt: ?int}
+	 * @return array{id: int, cardId: int, reviewer: string, state: string, requestedBy: string, actorName: ?string, createdAt: int, reviewTypeId: int, notifiedAt: ?int}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -77,6 +84,8 @@ class CardReview extends Entity implements \JsonSerializable {
 			'reviewer' => (string)$this->getReviewer(),
 			'state' => (string)$this->getState(),
 			'requestedBy' => (string)$this->getRequestedBy(),
+			// Optional AI actor name (#352); null for a plain human review.
+			'actorName' => $this->getActorName(),
 			'createdAt' => (int)$this->getCreatedAt(),
 			'reviewTypeId' => (int)$this->getReviewTypeId(),
 			'notifiedAt' => $this->getNotifiedAt() !== null ? (int)$this->getNotifiedAt() : null,

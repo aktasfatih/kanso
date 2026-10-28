@@ -382,4 +382,153 @@ class SearchServiceTest extends TestCase {
 		self::assertLessThanOrEqual(161, mb_strlen($snippet)); // 160 + ellipsis
 		self::assertStringEndsWith('…', $snippet);
 	}
+
+	// ── #359: search by numeric id and by `PREFIX-<seq>` reference ─────────────
+
+	/** A readable board carrying a human-id prefix, for the reference tests. */
+	private function prefixedBoard(int $id, string $prefix): Board {
+		$board = $this->board($id);
+		$board->setPrefix($prefix);
+		return $board;
+	}
+
+	public function testSearchByNumericCardIdReturnsIt(): void {
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
+		// No text match - the id is the only route to the card.
+		$this->cardMapper->method('searchInBoards')->willReturn([]);
+		$this->commentMapper->method('searchInBoards')->willReturn([]);
+		$this->cardMapper->method('findSearchById')
+			->with([1], 11503, 'alice', self::anything(), false)
+			->willReturn($this->card(11503, 1, 'We need search by id'));
+
+		$result = $this->service->search('11503', 'alice', null, 25, 0);
+
+		self::assertSame(1, $result['total']);
+		self::assertSame('card', $result['results'][0]['type']);
+		self::assertSame(11503, $result['results'][0]['cardId']);
+	}
+
+	public function testSearchByReferenceReturnsIt(): void {
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->prefixedBoard(1, 'KANSO')]);
+		$this->cardMapper->method('searchInBoards')->willReturn([]);
+		$this->commentMapper->method('searchInBoards')->willReturn([]);
+		$this->cardMapper->method('findSearchByBoardSeq')
+			->with(1, 359, 'alice', self::anything(), false)
+			->willReturn($this->card(11503, 1, 'We need search by id'));
+
+		$result = $this->service->search('KANSO-359', 'alice', null, 25, 0);
+
+		self::assertSame(1, $result['total']);
+		self::assertSame('card', $result['results'][0]['type']);
+		self::assertSame(11503, $result['results'][0]['cardId']);
+	}
+
+	public function testReferencePrefixIsCaseInsensitive(): void {
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->prefixedBoard(1, 'KANSO')]);
+		$this->cardMapper->method('searchInBoards')->willReturn([]);
+		$this->commentMapper->method('searchInBoards')->willReturn([]);
+		$this->cardMapper->method('findSearchByBoardSeq')
+			->with(1, 359, 'alice', self::anything(), false)
+			->willReturn($this->card(11503, 1, 'We need search by id'));
+
+		$result = $this->service->search('kanso-359', 'alice', null, 25, 0);
+
+		self::assertSame(1, $result['total']);
+		self::assertSame(11503, $result['results'][0]['cardId']);
+	}
+
+	public function testExactMatchOutranksATitleSubstring(): void {
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
+		// A text hit on a DIFFERENT card, plus the exact-id hit on card 11503.
+		$this->cardMapper->method('searchInBoards')->willReturn([$this->card(20, 1, '11503 is a ticket number')]);
+		$this->commentMapper->method('searchInBoards')->willReturn([]);
+		$this->cardMapper->method('findSearchById')
+			->with([1], 11503, 'alice', self::anything(), false)
+			->willReturn($this->card(11503, 1, 'We need search by id'));
+
+		$result = $this->service->search('11503', 'alice', null, 25, 0);
+
+		// The exact-id card sorts ahead of the title-substring card.
+		self::assertSame(2, $result['total']);
+		self::assertSame(11503, $result['results'][0]['cardId']);
+		self::assertSame(20, $result['results'][1]['cardId']);
+	}
+
+	public function testCardMatchedByTextAndIdAppearsOnce(): void {
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
+		// The SAME card (id 11503) matches by title text AND by its numeric id.
+		$this->cardMapper->method('searchInBoards')->willReturn([$this->card(11503, 1, '11503')]);
+		$this->commentMapper->method('searchInBoards')->willReturn([]);
+		$this->cardMapper->method('findSearchById')
+			->with([1], 11503, 'alice', self::anything(), false)
+			->willReturn($this->card(11503, 1, '11503'));
+
+		$result = $this->service->search('11503', 'alice', null, 25, 0);
+
+		// Deduplicated to a single row, at the exact (highest) rank.
+		self::assertSame(1, $result['total']);
+		self::assertSame(11503, $result['results'][0]['cardId']);
+	}
+
+	/**
+	 * ACL: the id lookup is scoped to the readable board set, so a card on a
+	 * board the viewer cannot read never resolves. The mock mirrors the mapper's
+	 * `board_id IN (...)` filter: it returns the card only if its board is in the
+	 * requested set - so a service that leaked board 99 into the set fails.
+	 */
+	public function testIdOnInaccessibleBoardIsNotReturned(): void {
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->board(1)]);
+		$this->cardMapper->method('searchInBoards')->willReturn([]);
+		$this->commentMapper->method('searchInBoards')->willReturn([]);
+		$secret = $this->card(500, 99, 'Secret card');
+		$this->cardMapper->method('findSearchById')->willReturnCallback(
+			static fn (array $boardIds): ?Card => in_array(99, $boardIds, true) ? $secret : null,
+		);
+
+		$result = $this->service->search('500', 'alice', null, 25, 0);
+
+		self::assertSame(0, $result['total']);
+	}
+
+	/**
+	 * ACL: the reference lookup is only attempted on readable boards, so a card
+	 * on an inaccessible board with the same prefix never resolves.
+	 */
+	public function testReferenceOnlyResolvesOnReadableBoards(): void {
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$this->prefixedBoard(1, 'KANSO')]);
+		$this->cardMapper->method('searchInBoards')->willReturn([]);
+		$this->commentMapper->method('searchInBoards')->willReturn([]);
+		// Exactly one attempt, on the readable board only.
+		$this->cardMapper->expects(self::once())
+			->method('findSearchByBoardSeq')
+			->with(1, 359, 'alice', self::anything(), false)
+			->willReturn(null);
+
+		$result = $this->service->search('KANSO-359', 'alice', null, 25, 0);
+
+		self::assertSame(0, $result['total']);
+	}
+
+	/**
+	 * A board-scoped search must not let a reference resolve on ANOTHER readable
+	 * board: the reference is only attempted on the requested board.
+	 */
+	public function testBoardScopeRestrictsReferenceResolution(): void {
+		$board1 = $this->prefixedBoard(1, 'KANSO');
+		$board2 = $this->prefixedBoard(2, 'KANSO');
+		$this->boardService->method('findAllActive')->with('alice')->willReturn([$board1, $board2]);
+		$this->cardMapper->method('searchInBoards')->willReturn([]);
+		$this->commentMapper->method('searchInBoards')->willReturn([]);
+		// Searching within board 2: the lookup must target board 2 only, even
+		// though board 1 shares the prefix and is also readable.
+		$this->cardMapper->expects(self::once())
+			->method('findSearchByBoardSeq')
+			->with(2, 359, 'alice', self::anything(), false)
+			->willReturn($this->card(11503, 2, 'Scoped card'));
+
+		$result = $this->service->search('KANSO-359', 'alice', 2, 25, 0);
+
+		self::assertSame(1, $result['total']);
+		self::assertSame(2, $result['results'][0]['boardId']);
+	}
 }

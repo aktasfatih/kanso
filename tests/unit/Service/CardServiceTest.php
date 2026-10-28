@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardReview;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeDetail;
@@ -127,11 +128,15 @@ class CardServiceTest extends TestCase {
 		);
 	}
 
-	private function board(int $id = 1): Board {
+	// The test board defaults to the "all children done → parent done" automation
+	// ENABLED, so the parent-completion tests exercise that path; a test that wants
+	// the production default (OFF) passes `autoCompleteParent: false`.
+	private function board(int $id = 1, bool $autoCompleteParent = true): Board {
 		$board = new Board();
 		$board->setId($id);
 		$board->setOwner('alice');
 		$board->setDeletedAt(0);
+		$board->setAutoCompleteParent($autoCompleteParent);
 		return $board;
 	}
 
@@ -159,6 +164,18 @@ class CardServiceTest extends TestCase {
 		$card->setOwner('alice');
 		$card->setDeletedAt(0);
 		return $card;
+	}
+
+	private function review(int $id = 12, string $reviewer = 'bob', string $state = CardReview::STATE_PENDING): CardReview {
+		$review = new CardReview();
+		$review->setId($id);
+		$review->setCardId(9);
+		$review->setReviewer($reviewer);
+		$review->setState($state);
+		$review->setRequestedBy('alice');
+		$review->setCreatedAt(1000);
+		$review->setReviewTypeId(0);
+		return $review;
 	}
 
 	/**
@@ -2146,6 +2163,7 @@ class CardServiceTest extends TestCase {
 			6 => $this->stack(6, 1, Stack::ROLE_DONE),
 		});
 		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->cardReviewMapper->method('findUnapprovedByCard')->with(9)->willReturn([$this->review()]);
 		$this->db->expects(self::never())->method('beginTransaction');
 		$this->changeNotifier->expects(self::never())->method('recordChange');
 
@@ -2165,6 +2183,7 @@ class CardServiceTest extends TestCase {
 			6 => $this->stack(6, 1, Stack::ROLE_DONE),
 		});
 		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->cardReviewMapper->method('findUnapprovedByCard')->with(9)->willReturn([$this->review()]);
 		$this->db->expects(self::never())->method('beginTransaction');
 
 		$this->expectException(NotPermittedException::class);
@@ -2204,6 +2223,7 @@ class CardServiceTest extends TestCase {
 			6 => $this->stack(6, 1, Stack::ROLE_DONE),
 		});
 		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->cardReviewMapper->method('findUnapprovedByCard')->with(9)->willReturn([$this->review()]);
 		$this->db->expects(self::never())->method('beginTransaction');
 		$this->changeNotifier->expects(self::never())->method('recordChange');
 
@@ -2221,6 +2241,7 @@ class CardServiceTest extends TestCase {
 			6 => $this->stack(6, 1, Stack::ROLE_DONE),
 		});
 		$this->cardReviewMapper->method('hasUnapprovedReviews')->willReturn(true);
+		$this->cardReviewMapper->method('findUnapprovedByCard')->willReturn([$this->review()]);
 		$this->db->expects(self::never())->method('beginTransaction');
 
 		$this->expectException(NotPermittedException::class);
@@ -2276,6 +2297,7 @@ class CardServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->stubRolelessColumns();
 		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->cardReviewMapper->method('findUnapprovedByCard')->with(9)->willReturn([$this->review()]);
 		$this->cardMapper->expects(self::never())->method('update');
 		$this->changeNotifier->expects(self::never())->method('recordChange');
 
@@ -2291,10 +2313,34 @@ class CardServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->stubRolelessColumns();
 		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->cardReviewMapper->method('findUnapprovedByCard')->with(9)->willReturn([$this->review()]);
 		$this->cardMapper->expects(self::never())->method('update');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->update(9, null, null, null, null, null, 'alice', null, null, 'done');
+	}
+
+	public function testBlockedDoneNamesTheReviewersWaitingOn(): void {
+		// The refusal must say WHICH review(s) block and WHO is being waited on -
+		// a bare "access denied" tells the caller (human or MCP agent) nothing
+		// about who to ask. Two pending reviews are named in request order.
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->stubRolelessColumns();
+		$this->cardReviewMapper->method('hasUnapprovedReviews')->with(9)->willReturn(true);
+		$this->cardReviewMapper->method('findUnapprovedByCard')->with(9)
+			->willReturn([$this->review(12, 'bob'), $this->review(13, 'carol')]);
+		$this->cardMapper->expects(self::never())->method('update');
+
+		try {
+			$this->service->update(9, null, null, null, true, null, 'alice');
+			self::fail('expected the review gate to refuse the completion');
+		} catch (NotPermittedException $e) {
+			self::assertSame(
+				'Blocked by unapproved review(s): bob (review #12), carol (review #13)',
+				$e->getMessage(),
+			);
+		}
 	}
 
 	public function testUpdateDoneTrueCompletesNormallyWhenReviewsAreApproved(): void {
@@ -2358,6 +2404,35 @@ class CardServiceTest extends TestCase {
 
 		self::assertContains(9, $updated, 'the child itself still completes');
 		self::assertNotContains(100, $updated, 'the parent must not be auto-completed');
+		self::assertSame(0, $parent->getDoneAt());
+	}
+
+	public function testParentNotAutoCompletedWhenBoardGateOff(): void {
+		// The production default: the board's "all children done → parent done"
+		// gate is OFF, so completing the last sub-issue leaves the parent open for
+		// a human to close (#198). The gate short-circuits before the children and
+		// review queries run at all.
+		$child = $this->card(9, 5, 1, 'I');
+		$child->setParentCardId(100);
+		$parent = $this->card(100, 6, 1, 'K');
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => match ($id) {
+			9 => $child,
+			100 => $parent,
+		});
+		// Gate OFF (the production default).
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board(1, false));
+		$this->stubRolelessColumns();
+		$updated = [];
+		$this->cardMapper->method('update')->willReturnCallback(function (Card $c) use (&$updated): Card {
+			$updated[] = $c->getId();
+			return $c;
+		});
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$this->service->update(9, null, null, null, true, null, 'alice');
+
+		self::assertContains(9, $updated, 'the child itself still completes');
+		self::assertNotContains(100, $updated, 'the parent must not be auto-completed while the gate is off');
 		self::assertSame(0, $parent->getDoneAt());
 	}
 
@@ -3472,6 +3547,77 @@ class CardServiceTest extends TestCase {
 		self::assertSame([71], $labelAssignments, 'only the title+color twin is mapped; the unmatched label drops');
 		self::assertSame(['bob'], $assignees, 'the unreadable assignee is dropped (leak guard)');
 		self::assertSame(['bob'], $watchers, 'the unreadable watcher is dropped (leak guard)');
+	}
+
+	/**
+	 * Minimal cross-board move (card 9 on board 1 → stack 7 on board 2) that
+	 * carries one readable assignee ('bob'). Returns the captured
+	 * insertAssignment() calls as [cardId, uid, actorName] tuples.
+	 *
+	 * @param array<int, array{uid: string, actorName: string|null}> $sourceAssignees
+	 * @return array<int, array{0: int, 1: string, 2: string|null}>
+	 */
+	private function moveToBoardCapturingAssignments(?bool $targetAllowsAiActors, array $sourceAssignees): array {
+		$sourceBoard = $this->board(1);
+		$targetBoard = $this->board(2);
+		$targetBoard->setAllowAiActors($targetAllowsAiActors);
+		$targetStack = $this->stack(7, 2);
+		$source = $this->card(9, 5, 1);
+
+		$this->cardMapper->method('find')->willReturnMap([[9, $source]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($targetStack);
+		$this->boardMapper->method('find')->willReturnMap([[1, $sourceBoard], [2, $targetBoard]]);
+		$this->cardMapper->method('findLastInStack')->with(7)->willReturn(null);
+		$this->cardMapper->method('nextBoardSeq')->with(2)->willReturn(88);
+		$this->cardMapper->method('findChildren')->with(9)->willReturn([]);
+		$this->cardMapper->method('insert')->willReturnCallback(static function (Card $c): Card {
+			$c->setId(42);
+			return $c;
+		});
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+		$this->cardLabelMapper->method('findLabelIdsByCard')->with(9)->willReturn([]);
+		$this->checklistItemMapper->method('findByCard')->with(9)->willReturn([]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn(['bob']);
+		$this->subscriptionMapper->method('findCardSubscriberUids')->with(9)->willReturn([]);
+		$this->cardAssigneeMapper->method('findAssigneesByCard')->with(9)->willReturn($sourceAssignees);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$assigned = [];
+		$this->cardAssigneeMapper->method('insertAssignment')->willReturnCallback(
+			function (int $cardId, string $uid, ?string $actorName) use (&$assigned): \OCA\Kanso\Db\CardAssignee {
+				$assigned[] = [$cardId, $uid, $actorName];
+				return new \OCA\Kanso\Db\CardAssignee();
+			},
+		);
+
+		$this->service->moveToBoard(9, 7, 'alice');
+		return $assigned;
+	}
+
+	/**
+	 * A cross-board move carries an AI-attributed assignee's actor name onto the
+	 * target when the target board allows AI actors (#352).
+	 */
+	public function testMoveToBoardCarriesActorNameWhenTargetAllowsAiActors(): void {
+		$assigned = $this->moveToBoardCapturingAssignments(true, [
+			['uid' => 'bob', 'actorName' => 'Claude'],
+		]);
+
+		self::assertSame([[42, 'bob', 'Claude']], $assigned, 'the AI actor name crosses with the assignee');
+	}
+
+	/**
+	 * A cross-board move drops an AI-attributed assignee's actor name when the
+	 * target board does NOT allow AI actors (#352) - a move must not smuggle an
+	 * AI attribution onto a board that forbids it.
+	 */
+	public function testMoveToBoardDropsActorNameWhenTargetDisallowsAiActors(): void {
+		$assigned = $this->moveToBoardCapturingAssignments(false, [
+			['uid' => 'bob', 'actorName' => 'Claude'],
+		]);
+
+		self::assertSame([[42, 'bob', null]], $assigned, 'the actor name is cleared on a board that forbids AI actors');
 	}
 
 	// ---- templates (#3409) ------------------------------------------------

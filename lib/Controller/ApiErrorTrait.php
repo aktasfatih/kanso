@@ -36,8 +36,12 @@ trait ApiErrorTrait {
 				['error' => $e->getMessage()],
 				Http::STATUS_REQUEST_ENTITY_TOO_LARGE
 			);
-		} catch (NotPermittedException) {
-			return new JSONResponse(['error' => 'Access denied'], Http::STATUS_FORBIDDEN);
+		} catch (NotPermittedException $e) {
+			// Surface the reason, not a bare "Access denied": the message already
+			// names what is missing (e.g. the review gate names the blocking
+			// reviewer(s)), and a non-UI caller (the MCP server, a script) has no
+			// other way to learn why the write was refused.
+			return new JSONResponse(['error' => $e->getMessage()], Http::STATUS_FORBIDDEN);
 		} catch (DoesNotExistException) {
 			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
 		} catch (DescriptionConflictException $e) {

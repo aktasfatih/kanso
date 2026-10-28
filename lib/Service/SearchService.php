@@ -8,6 +8,8 @@ declare(strict_types=1);
 namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Access\BoardAccess;
+use OCA\Kanso\Db\Board;
+use OCA\Kanso\Db\BoardPrefix;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CommentMapper;
@@ -36,6 +38,8 @@ class SearchService {
 	/** Per-source row cap before merge/rank - bounds the LIKE scan. */
 	private const SOURCE_CAP = 100;
 
+	// An exact id / `PREFIX-<seq>` match outranks a title substring (#359).
+	private const RANK_EXACT = 4;
 	private const RANK_CARD_TITLE = 3;
 	private const RANK_CARD_DESCRIPTION = 2;
 	private const RANK_COMMENT = 1;
@@ -105,6 +109,18 @@ class SearchService {
 			];
 		}
 
+		// #359: a term that IS a card's numeric id or its `PREFIX-<seq>`
+		// reference resolves to that card directly, at the highest rank. Both
+		// lookups are constrained to the readable set + the same card-visibility
+		// the LIKE path uses, so a card on an inaccessible board never resolves.
+		foreach ($this->exactMatches($term, $boards, $boardIds, $uid, $rolesByBoard, $includeArchived) as $card) {
+			$results[] = $this->exactResult($card);
+		}
+
+		// A card can match by text AND by id/reference - keep it once, at its
+		// highest rank, rather than listing it twice.
+		$results = $this->dedupe($results);
+
 		// Stable rank sort (higher rank first); ties keep source order, which is
 		// already most-recent-first.
 		usort($results, static fn (array $a, array $b): int => $b['rank'] <=> $a['rank']);
@@ -129,6 +145,115 @@ class SearchService {
 			'snippet' => $this->snippet((string)$card->getDescription()),
 			'rank' => $titleMatches ? self::RANK_CARD_TITLE : self::RANK_CARD_DESCRIPTION,
 		];
+	}
+
+	/**
+	 * #359: the exact-id and `PREFIX-<board_seq>` halves of "search by id". A
+	 * term that is a whole numeric card id (e.g. "11503"), or a readable board's
+	 * prefix plus a sequence number (e.g. "KANSO-359", prefix case-insensitive),
+	 * resolves to that card. Both lookups are constrained to the viewer's
+	 * readable board set and the same card-visibility the LIKE path uses, so a
+	 * card on an inaccessible board - or a hidden card - never resolves.
+	 *
+	 * @param Board[] $boards the viewer's readable boards (for their prefixes)
+	 * @param int[] $boardIds the (possibly board-scoped) readable board set
+	 * @param array<int, string> $rolesByBoard the viewer's role per board id
+	 * @return Card[]
+	 */
+	private function exactMatches(string $term, array $boards, array $boardIds, string $uid, array $rolesByBoard, bool $includeArchived): array {
+		$cards = [];
+
+		// Whole term is a numeric card id (e.g. "11503").
+		if (preg_match('/^\d{1,20}$/', $term) === 1) {
+			$card = $this->cardMapper->findSearchById($boardIds, (int)$term, $uid, $rolesByBoard, $includeArchived);
+			if ($card !== null) {
+				$cards[] = $card;
+			}
+		}
+
+		// Term is `PREFIX-<board_seq>` (e.g. "KANSO-359"), prefix case-insensitive.
+		if (preg_match('/^([A-Za-z][A-Za-z0-9]{0,4})-(\d+)$/', $term, $m) === 1) {
+			$prefix = mb_strtoupper($m[1]);
+			$seq = (int)$m[2];
+			if ($seq > 0) {
+				foreach ($boards as $board) {
+					// Only boards in the (possibly narrowed) readable set may
+					// resolve - a board-scoped search must not reach another board.
+					if (!in_array($board->getId(), $boardIds, true)) {
+						continue;
+					}
+					// Fall back to the shared default for boards predating the
+					// prefix backfill, mirroring the board payload's default.
+					$boardPrefix = $board->getPrefix() ?? BoardPrefix::DEFAULT;
+					if (mb_strtoupper($boardPrefix) !== $prefix) {
+						continue;
+					}
+					$card = $this->cardMapper->findSearchByBoardSeq($board->getId(), $seq, $uid, $rolesByBoard, $includeArchived);
+					if ($card !== null) {
+						$cards[] = $card;
+					}
+				}
+			}
+		}
+
+		return $cards;
+	}
+
+	/**
+	 * A card resolved by its id / reference, at the highest rank. The mapper
+	 * returns the summary shape (no description), so the snippet stays empty -
+	 * the title and column identify the card.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function exactResult(Card $card): array {
+		return [
+			'type' => 'card',
+			'cardId' => $card->getId(),
+			'boardId' => $card->getBoardId(),
+			'stackId' => $card->getStackId(),
+			'title' => $card->getTitle(),
+			'snippet' => '',
+			'rank' => self::RANK_EXACT,
+		];
+	}
+
+	/**
+	 * Collapse a card that matched by more than one route (text + id/reference)
+	 * into a single row, keeping the highest rank. Comments are keyed by their
+	 * own id, so they never collide with a card row. First-seen order is kept.
+	 *
+	 * @param list<array<string, mixed>> $results
+	 * @return list<array<string, mixed>>
+	 */
+	private function dedupe(array $results): array {
+		$byKey = [];
+		$order = [];
+		foreach ($results as $row) {
+			$key = $this->resultKey($row);
+			if (!isset($byKey[$key])) {
+				$byKey[$key] = $row;
+				$order[] = $key;
+			} elseif ($row['rank'] > $byKey[$key]['rank']) {
+				$byKey[$key] = $row;
+			}
+		}
+
+		$out = [];
+		foreach ($order as $key) {
+			$out[] = $byKey[$key];
+		}
+		return $out;
+	}
+
+	/**
+	 * @param array<string, mixed> $row
+	 */
+	private function resultKey(array $row): string {
+		if (($row['type'] ?? '') === 'comment') {
+			return 'comment-' . $row['commentId'];
+		}
+		return 'card-' . $row['cardId'];
 	}
 
 	/**

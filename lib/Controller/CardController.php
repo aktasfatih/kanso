@@ -408,11 +408,14 @@ class CardController extends Controller {
 	/**
 	 * Assigns a user of the card's board to the card. Idempotent - PUT of
 	 * an already assigned user succeeds without writing anything.
+	 *
+	 * @param string|null $actorName optional AI actor name (#352) the assignment
+	 *                               is attributed to; refused when the board's gate is off
 	 */
 	#[NoAdminRequired]
-	public function assignUser(int $id, string $userId): JSONResponse {
-		return $this->respond(function () use ($id, $userId): JSONResponse {
-			$this->assigneeService->assign($id, $userId, $this->currentUserId());
+	public function assignUser(int $id, string $userId, ?string $actorName = null): JSONResponse {
+		return $this->respond(function () use ($id, $userId, $actorName): JSONResponse {
+			$this->assigneeService->assign($id, $userId, $this->currentUserId(), $actorName);
 			return new JSONResponse([]);
 		});
 	}

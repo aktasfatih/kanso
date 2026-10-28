@@ -25,6 +25,8 @@ use OCP\DB\Types;
  * @method void setParticipant(string $participant)
  * @method int getType()
  * @method void setType(int $type)
+ * @method string|null getActorName()
+ * @method void setActorName(?string $actorName)
  */
 class CardAssignee extends Entity {
 	public const TYPE_USER = 0;
@@ -36,10 +38,15 @@ class CardAssignee extends Entity {
 	protected ?int $cardId = null;
 	protected ?string $participant = null;
 	protected ?int $type = null;
+	// Optional AI actor name (e.g. "Claude Code") the assignment is attributed
+	// to (#352). The `participant` uid stays the token owner; this is a display
+	// label, never a Nextcloud account. NULL = a plain human assignment.
+	protected ?string $actorName = null;
 
 	public function __construct() {
 		$this->addType('cardId', Types::INTEGER);
 		$this->addType('participant', Types::STRING);
 		$this->addType('type', Types::INTEGER);
+		$this->addType('actorName', Types::STRING);
 	}
 }

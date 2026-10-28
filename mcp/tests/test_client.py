@@ -925,6 +925,27 @@ async def test_error_raises_kanso_api_error():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_done_gate_403_surfaces_which_review_blocks():
+    # Marking a card done while a review is still unapproved is a 403 whose body
+    # names the blocking reviewer(s). The client must surface that reason verbatim
+    # (in both the body and the message) rather than flatten it to a generic
+    # string - that is how the agent learns who to wait on.
+    respx.patch(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(
+            403,
+            json={"error": "Blocked by unapproved review(s): bob (review #12)"},
+        )
+    )
+    async with _client() as c:
+        with pytest.raises(KansoApiError) as excinfo:
+            await c.update_card(100, done=True)
+    assert excinfo.value.status_code == 403
+    assert "bob (review #12)" in excinfo.value.body
+    assert "bob (review #12)" in str(excinfo.value)
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_request_review_put_path():
     route = respx.put(f"{BASE}/cards/100/reviews/bob").mock(
         return_value=httpx.Response(200, json=[])
@@ -947,6 +968,98 @@ async def test_request_review_forwards_review_type_id():
     async with _client() as c:
         await c.request_review(100, "bob", review_type_id=7)
     assert json.loads(route.calls.last.request.content) == {"reviewTypeId": 7}
+
+
+# ------------------------------------------------------------------ AI actors (#352)
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_board_sends_allow_ai_actors():
+    route = respx.patch(f"{BASE}/boards/3").mock(
+        return_value=httpx.Response(200, json={"id": 3, "title": "B", "allowAiActors": True})
+    )
+    async with _client() as c:
+        board = await c.update_board(3, allow_ai_actors=True)
+    assert json.loads(route.calls.last.request.content) == {"allowAiActors": True}
+    assert board.allowAiActors is True
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_board_sends_auto_complete_parent():
+    route = respx.patch(f"{BASE}/boards/3").mock(
+        return_value=httpx.Response(200, json={"id": 3, "title": "B", "autoCompleteParent": True})
+    )
+    async with _client() as c:
+        board = await c.update_board(3, auto_complete_parent=True)
+    assert json.loads(route.calls.last.request.content) == {"autoCompleteParent": True}
+    assert board.autoCompleteParent is True
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_add_comment_forwards_actor_name():
+    route = respx.post(f"{BASE}/cards/100/comments").mock(
+        return_value=httpx.Response(
+            200,
+            json={"id": 9, "cardId": 100, "author": "bob", "actorName": "Claude Code", "body": "hi"},
+        )
+    )
+    async with _client() as c:
+        comment = await c.add_comment(100, "hi", actor_name="Claude Code")
+    assert json.loads(route.calls.last.request.content) == {"body": "hi", "actorName": "Claude Code"}
+    assert comment.actorName == "Claude Code"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_add_comment_drops_actor_name_when_none():
+    route = respx.post(f"{BASE}/cards/100/comments").mock(
+        return_value=httpx.Response(200, json={"id": 9, "cardId": 100, "body": "hi"})
+    )
+    async with _client() as c:
+        await c.add_comment(100, "hi")
+    # actorName is None, so _request drops it from the payload.
+    assert json.loads(route.calls.last.request.content) == {"body": "hi"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_assign_user_forwards_actor_name():
+    route = respx.put(f"{BASE}/cards/100/assignees/bob").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    async with _client() as c:
+        await c.assign_user(100, "bob", actor_name="Claude Code")
+    assert json.loads(route.calls.last.request.content) == {"actorName": "Claude Code"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_request_review_forwards_actor_name():
+    route = respx.put(f"{BASE}/cards/100/reviews/bob").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    async with _client() as c:
+        await c.request_review(100, "bob", actor_name="Claude Code")
+    assert json.loads(route.calls.last.request.content) == {"actorName": "Claude Code"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_add_comment_rejected_when_board_gate_off():
+    # The board's allowAiActors gate is OFF: the server refuses the actor name
+    # with a 400, and the client surfaces the message verbatim.
+    respx.post(f"{BASE}/cards/100/comments").mock(
+        return_value=httpx.Response(
+            400, json={"error": "This board does not allow AI actors"}
+        )
+    )
+    async with _client() as c:
+        with pytest.raises(KansoApiError) as excinfo:
+            await c.add_comment(100, "hi", actor_name="Claude Code")
+    assert excinfo.value.status_code == 400
+    assert "This board does not allow AI actors" in excinfo.value.body
+    assert "This board does not allow AI actors" in str(excinfo.value)
 
 
 @respx.mock

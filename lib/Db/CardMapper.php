@@ -813,6 +813,70 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
+	 * The exact-id half of "search by id" (#359): the single card with the given
+	 * internal id, restricted to the given readable boards and the viewer's
+	 * card-visibility. Same shape and scoping as {@see self::searchInBoards()}
+	 * (summary columns, cross-board visibility mode, archived opt-in) so a hit is
+	 * indistinguishable from a text hit except for its rank. A card whose board
+	 * is not in $boardIds - or that the viewer cannot see - is simply absent.
+	 *
+	 * @param int[] $boardIds the viewer's readable board set
+	 * @param array<int, string> $rolesByBoard the viewer's role per board id
+	 *                                         ({@see \OCA\Kanso\Access\BoardAccess::rolesFor()})
+	 * @param bool $includeArchived opt in to archived cards as well (default: live cards only)
+	 * @throws Exception
+	 */
+	public function findSearchById(array $boardIds, int $id, string $uid, array $rolesByBoard, bool $includeArchived = false): ?Card {
+		if ($boardIds === []) {
+			return null;
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select(self::SUMMARY_COLUMNS)
+			->from($this->getTableName())
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->setMaxResults(1);
+		if (!$includeArchived) {
+			$qb->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)));
+		}
+		$this->visibilityScope->apply($qb, '', $uid, null, $rolesByBoard);
+
+		$cards = $this->findEntities($qb);
+		return $cards[0] ?? null;
+	}
+
+	/**
+	 * The `PREFIX-<board_seq>` half of "search by reference" (#359): the single
+	 * card with the given per-board sequence on ONE board. The caller has already
+	 * matched the board's prefix, so this is a (board_id, board_seq) point read.
+	 * Same shape and scoping as {@see self::searchInBoards()} (summary columns,
+	 * cross-board visibility mode, archived opt-in). A card the viewer cannot
+	 * see is simply absent.
+	 *
+	 * @param array<int, string> $rolesByBoard the viewer's role per board id
+	 *                                         ({@see \OCA\Kanso\Access\BoardAccess::rolesFor()})
+	 * @param bool $includeArchived opt in to archived cards as well (default: live cards only)
+	 * @throws Exception
+	 */
+	public function findSearchByBoardSeq(int $boardId, int $seq, string $uid, array $rolesByBoard, bool $includeArchived = false): ?Card {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select(self::SUMMARY_COLUMNS)
+			->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('board_seq', $qb->createNamedParameter($seq, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->setMaxResults(1);
+		if (!$includeArchived) {
+			$qb->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)));
+		}
+		$this->visibilityScope->apply($qb, '', $uid, null, $rolesByBoard);
+
+		$cards = $this->findEntities($qb);
+		return $cards[0] ?? null;
+	}
+
+	/**
 	 * Summaries (no description) of the SOFT-DELETED cards of a board - the
 	 * trash listing, most-recently-deleted first.
 	 *

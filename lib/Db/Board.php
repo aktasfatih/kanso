@@ -64,6 +64,10 @@ use OCP\DB\Types;
  * @method void setDisabledCardFeatures(?string $disabledCardFeatures)
  * @method string|null getDescription()
  * @method void setDescription(?string $description)
+ * @method bool|null getAllowAiActors()
+ * @method void setAllowAiActors(?bool $allowAiActors)
+ * @method bool|null getAutoCompleteParent()
+ * @method void setAutoCompleteParent(?bool $autoCompleteParent)
  */
 class Board extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -140,6 +144,18 @@ class Board extends Entity implements \JsonSerializable {
 	// by the client's shared sanitising renderer (src/services/markdown.js), the
 	// same way a card body is - so this column never holds HTML.
 	protected ?string $description = null;
+	// AI-actor attribution gate (#352). MANAGE-only to set, readable by every
+	// member (it rides the board payload). OFF by default: a NULL column reads
+	// as false, so boards that predate the column need no backfill. When false,
+	// the services refuse to stamp an `actor_name` on a comment, review or
+	// assignee of this board.
+	protected ?bool $allowAiActors = null;
+	// "All children done → parent done" automation gate (#198). MANAGE-only to
+	// set, readable by every member (it rides the board payload). OFF by default:
+	// a NULL column reads as false, so boards that predate the column keep the
+	// manual "mark the parent done" behaviour. When false, completing a child's
+	// last sibling never stamps the parent done.
+	protected ?bool $autoCompleteParent = null;
 
 	public function __construct() {
 		$this->addType('title', Types::STRING);
@@ -166,10 +182,12 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('chatUrl', Types::STRING);
 		$this->addType('disabledCardFeatures', Types::TEXT);
 		$this->addType('description', Types::TEXT);
+		$this->addType('allowAiActors', Types::BOOLEAN);
+		$this->addType('autoCompleteParent', Types::BOOLEAN);
 	}
 
 	/**
-	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, background: ?string, archived: bool, lastModified: int, estimateScale: string, estimateTokens: list<array{label: string, value: float}>, estimateCustom: list<array{label: string, value: float}>, newCardsOnTop: bool, prefix: string, chatUrl: ?string, description: ?string, cardFeatures: array<string, bool>}
+	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, background: ?string, archived: bool, lastModified: int, estimateScale: string, estimateTokens: list<array{label: string, value: float}>, estimateCustom: list<array{label: string, value: float}>, newCardsOnTop: bool, prefix: string, chatUrl: ?string, description: ?string, cardFeatures: array<string, bool>, allowAiActors: bool, autoCompleteParent: bool}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -201,6 +219,12 @@ class Board extends Entity implements \JsonSerializable {
 			// ({contacts: true, attachments: false, ...}) so the client never
 			// parses the raw storage and a NULL column reads as all-enabled.
 			'cardFeatures' => CardFeatures::decode($this->disabledCardFeatures),
+			// AI-actor attribution gate (#352): a NULL column reads as OFF, so
+			// boards that predate the column need no backfill.
+			'allowAiActors' => $this->allowAiActors ?? false,
+			// "All children done → parent done" gate (#198): a NULL column reads as
+			// OFF, so boards that predate the column keep the manual behaviour.
+			'autoCompleteParent' => $this->autoCompleteParent ?? false,
 		];
 	}
 

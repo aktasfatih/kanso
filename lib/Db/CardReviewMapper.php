@@ -112,6 +112,26 @@ class CardReviewMapper extends QBMapper {
 	}
 
 	/**
+	 * The card's reviews that are not yet approved, in request order - the exact
+	 * rows the done-gate blocks on. The done-gate uses this to name the blocking
+	 * reviewer(s) in its refusal, so the caller knows who to wait on. A card with
+	 * no such rows returns an empty list.
+	 *
+	 * @return CardReview[]
+	 * @throws Exception
+	 */
+	public function findUnapprovedByCard(int $cardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->neq('state', $qb->createNamedParameter(CardReview::STATE_APPROVED)))
+			->orderBy('id', 'ASC');
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Every review requested from $reviewer across the given (readable) boards,
 	 * enriched with its card + board context - the cross-board "My Reviews"
 	 * feed. One query joining through `kanso_cards` and `kanso_boards`; the
@@ -125,7 +145,7 @@ class CardReviewMapper extends QBMapper {
 	 *
 	 * @param int[] $boardIds the reviewer's readable board ids (empty → [])
 	 * @param array<int, string> $rolesByBoard the reviewer's role per board id
-	 * @return list<array{id: int, cardId: int, cardTitle: string, boardId: int, boardTitle: string, state: string, reviewTypeId: ?int, reviewTypeTitle: ?string, reviewTypeColor: ?string, requestedBy: string, createdAt: int}>
+	 * @return list<array{id: int, cardId: int, cardTitle: string, boardId: int, boardTitle: string, state: string, reviewTypeId: ?int, reviewTypeTitle: ?string, reviewTypeColor: ?string, requestedBy: string, actorName: ?string, createdAt: int}>
 	 * @throws Exception
 	 */
 	public function findByReviewerInBoards(string $reviewer, array $boardIds, array $rolesByBoard): array {
@@ -134,7 +154,7 @@ class CardReviewMapper extends QBMapper {
 		}
 
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('r.id', 'r.card_id', 'r.state', 'r.review_type_id', 'r.requested_by', 'r.created_at')
+		$qb->select('r.id', 'r.card_id', 'r.state', 'r.review_type_id', 'r.requested_by', 'r.actor_name', 'r.created_at')
 			->selectAlias('c.title', 'card_title')
 			->addSelect('c.board_id')
 			->selectAlias('b.title', 'board_title')
@@ -165,6 +185,9 @@ class CardReviewMapper extends QBMapper {
 				'reviewTypeTitle' => $row['type_title'] !== null ? (string)$row['type_title'] : null,
 				'reviewTypeColor' => $row['type_color'] !== null ? (string)$row['type_color'] : null,
 				'requestedBy' => (string)$row['requested_by'],
+				// Optional AI actor name that requested the review (#352); NULL when
+				// the request came from a human directly.
+				'actorName' => $row['actor_name'] !== null ? (string)$row['actor_name'] : null,
 				'createdAt' => (int)$row['created_at'],
 			];
 		}
@@ -265,14 +288,17 @@ class CardReviewMapper extends QBMapper {
 	}
 
 	/**
+	 * @param string|null $actorName optional AI actor name (#352) the review is
+	 *                               attributed to; null for a plain human review
 	 * @throws Exception
 	 */
-	public function insertRequest(int $cardId, string $reviewer, string $requestedBy, ?int $reviewTypeId = null): CardReview {
+	public function insertRequest(int $cardId, string $reviewer, string $requestedBy, ?int $reviewTypeId = null, ?string $actorName = null): CardReview {
 		$review = new CardReview();
 		$review->setCardId($cardId);
 		$review->setReviewer($reviewer);
 		$review->setState(CardReview::STATE_PENDING);
 		$review->setRequestedBy($requestedBy);
+		$review->setActorName($actorName);
 		$review->setCreatedAt(time());
 		// 0 = untyped (the column is NOT NULL); a real type id otherwise.
 		$review->setReviewTypeId($reviewTypeId ?? 0);

@@ -461,7 +461,7 @@ class SettingsControllerTest extends TestCase {
 
 		$response = $anonymous->index();
 		self::assertSame(403, $response->getStatus());
-		self::assertSame(['error' => 'Access denied'], $response->getData());
+		self::assertSame(['error' => 'No authenticated user'], $response->getData());
 	}
 
 	public function testWriteIsDeniedWithoutASession(): void {
@@ -469,6 +469,6 @@ class SettingsControllerTest extends TestCase {
 
 		$response = $this->put(['cardDiscussionPosition' => 'bottom'], null);
 		self::assertSame(403, $response->getStatus());
-		self::assertSame(['error' => 'Access denied'], $response->getData());
+		self::assertSame(['error' => 'No authenticated user'], $response->getData());
 	}
 }

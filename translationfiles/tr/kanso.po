@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— yok —"
 
-#: src/components/BoardSettingsModal.vue:4827
+#: src/components/BoardSettingsModal.vue:4893
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n kez"
@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n veri satırı bulundu"
 msgstr[1] "%n veri satırı bulundu"
 
-#: src/components/CardDetail.vue:4949
+#: src/components/CardDetail.vue:5011
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n gün önce"
@@ -409,7 +409,7 @@ msgid_plural "%n files"
 msgstr[0] "%n dosya"
 msgstr[1] "%n dosya"
 
-#: src/components/CardDetail.vue:4947
+#: src/components/CardDetail.vue:5009
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
@@ -439,7 +439,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 msgstr[1] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 
-#: src/components/CardDetail.vue:4945
+#: src/components/CardDetail.vue:5007
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n dakika önce"
@@ -463,13 +463,13 @@ msgid_plural "%n points"
 msgstr[0] "%n puan"
 msgstr[1] "%n puan"
 
-#: src/components/CardDetail.vue:1231
+#: src/components/CardDetail.vue:1237
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n proje"
 msgstr[1] "%n proje"
 
-#: src/components/CardDetail.vue:2287
+#: src/components/CardDetail.vue:2309
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n yanıt"
@@ -713,6 +713,10 @@ msgstr "Tüm sorunlar"
 #: src/components/CardDetail.vue
 msgid "All requested reviews must be approved before this card can be marked done. Waiting on {names}."
 msgstr "Bu kartın tamamlandı olarak işaretlenebilmesi için istenen tüm incelemelerin onaylanması gerekir. {names} bekleniyor."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Allow AI actors"
+msgstr ""
 
 #: src/views/BoardStats.vue
 #: src/views/ProjectStats.vue
@@ -1004,7 +1008,7 @@ msgstr "Engellendi"
 msgid "Blocked by"
 msgstr "Engelleyen"
 
-#: src/views/ProjectView.vue:253
+#: src/views/ProjectView.vue:254
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "{count} açık kart tarafından engellendi"
@@ -2006,8 +2010,8 @@ msgstr "Tehlikeli bölge"
 msgid "Date"
 msgstr "Tarih"
 
-#: src/components/BoardSettingsModal.vue:2266
-#: src/components/CardDetail.vue:5138
+#: src/components/BoardSettingsModal.vue:2298
+#: src/components/CardDetail.vue:5200
 msgid "day"
 msgid_plural "days"
 msgstr[0] "gün"
@@ -2562,7 +2566,7 @@ msgstr "Her"
 msgid "Every card in this project is done."
 msgstr "Bu projedeki tüm kartlar tamamlandı."
 
-#: src/components/BoardSettingsModal.vue:4807
+#: src/components/BoardSettingsModal.vue:4873
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Her gün"
@@ -2572,19 +2576,19 @@ msgstr[1] "Her %n günde bir"
 msgid "Every estimate needs a label."
 msgstr "Her tahminin bir etiketi olmalı."
 
-#: src/components/BoardSettingsModal.vue:4817
+#: src/components/BoardSettingsModal.vue:4883
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Her ay"
 msgstr[1] "Her %n ayda bir"
 
-#: src/components/BoardSettingsModal.vue:4809
+#: src/components/BoardSettingsModal.vue:4875
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Her hafta"
 msgstr[1] "Her %n haftada bir"
 
-#: src/components/BoardSettingsModal.vue:4819
+#: src/components/BoardSettingsModal.vue:4885
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Her yıl"
@@ -3554,7 +3558,7 @@ msgstr "Amacı, kapsamı veya kuralları. Panodaki herkes pano adının yanında
 msgid "Jump to the discussion"
 msgstr "Tartışmaya atla"
 
-#: src/components/CardDetail.vue:6959
+#: src/components/CardDetail.vue:7021
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Tartışmaya atla (%n yorum)"
@@ -3897,6 +3901,10 @@ msgid "Mark done"
 msgstr "Tamamlandı olarak işaretle"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Mark parent as done when sub-issues are done"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Maximize"
 msgstr "Büyüt"
 
@@ -3925,8 +3933,8 @@ msgstr "Mod"
 msgid "Mon"
 msgstr "Pzt"
 
-#: src/components/BoardSettingsModal.vue:2268
-#: src/components/CardDetail.vue:5140
+#: src/components/BoardSettingsModal.vue:2300
+#: src/components/CardDetail.vue:5202
 msgid "month"
 msgid_plural "months"
 msgstr[0] "ay"
@@ -5124,6 +5132,10 @@ msgstr "bir inceleme istedi"
 msgid "requested a review on"
 msgstr "inceleme istedi:"
 
+#: src/components/CardDetail.vue
+msgid "Requested by AI actor"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Require verified senders (DMARC)"
 msgstr "Doğrulanmış gönderenler zorunlu (DMARC)"
@@ -5490,7 +5502,7 @@ msgstr "Tartışmayı kartın altında göster"
 msgid "Show the discussion panel"
 msgstr "Tartışma panelini göster"
 
-#: src/components/CardDetail.vue:6965
+#: src/components/CardDetail.vue:7027
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Tartışma panelini göster (%n yorum)"
@@ -6275,8 +6287,8 @@ msgstr "Webhook etkin"
 msgid "Wed"
 msgstr "Çar"
 
-#: src/components/BoardSettingsModal.vue:2267
-#: src/components/CardDetail.vue:5139
+#: src/components/BoardSettingsModal.vue:2299
+#: src/components/CardDetail.vue:5201
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "hafta"
@@ -6313,6 +6325,14 @@ msgstr "Bir kart {role} rolüne girdiğinde"
 #: src/components/BoardSettingsModal.vue
 msgid "When a card enters role"
 msgstr "Bir kart şu role girdiğinde"
+
+#: src/components/BoardSettingsModal.vue
+msgid "When on, a parent card is completed automatically once all of its sub-issues are done or archived. Off by default — the parent stays open for a human to close."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "When on, AI-assisted work can be attributed to a named AI actor (e.g. \"Claude Code\") on comments, reviews and assignees. Off by default."
+msgstr ""
 
 #: src/views/MyReviewsView.vue
 msgid "When someone requests your review on a card it will appear here."
@@ -6376,8 +6396,8 @@ msgstr "Yazıldı"
 msgid "wrote"
 msgstr "yazdı"
 
-#: src/components/BoardSettingsModal.vue:2269
-#: src/components/CardDetail.vue:5141
+#: src/components/BoardSettingsModal.vue:2301
+#: src/components/CardDetail.vue:5203
 msgid "year"
 msgid_plural "years"
 msgstr[0] "yıl"

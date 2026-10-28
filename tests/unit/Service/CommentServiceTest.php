@@ -140,6 +140,30 @@ class CommentServiceTest extends TestCase {
 		$this->service->addComment(9, '  Hello world  ', null, 'bob');
 	}
 
+	public function testAddCommentWithAiActorNameWhenBoardAllowsIt(): void {
+		$board = $this->expectCardLoaded();
+		$board->setAllowAiActors(true);
+		$this->commentMapper->expects(self::once())
+			->method('insert')
+			->willReturnCallback(function (Comment $c): Comment {
+				self::assertSame('Claude Code', $c->getActorName());
+				self::assertSame('bob', $c->getAuthor());
+				return $c;
+			});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		$this->service->addComment(9, 'Fixed the bug', null, 'bob', 'Claude Code');
+	}
+
+	public function testAddCommentWithAiActorNameRejectedWhenBoardGateOff(): void {
+		$this->expectCardLoaded();
+		$this->commentMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('This board does not allow AI actors');
+		$this->service->addComment(9, 'Fixed the bug', null, 'bob', 'Claude Code');
+	}
+
 	public function testAddReplyToTopLevelCommentSucceeds(): void {
 		$this->expectCardLoaded();
 		$this->commentMapper->method('find')->with(50)->willReturn($this->comment(50, 9, null));

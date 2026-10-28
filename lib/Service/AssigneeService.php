@@ -48,15 +48,20 @@ class AssigneeService {
 	 * Assigns the user to the card. Idempotent: re-assigning an already
 	 * assigned user is a no-op and writes no change row.
 	 *
+	 * @param string|null $actorName optional AI actor name (#352) the assignment
+	 *                               is attributed to; the $participantUid stays the token owner. Refused
+	 *                               when the board's `allowAiActors` gate is off.
+	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not edit the board
-	 * @throws InvalidInputException if the assignee cannot read the board (or does not exist)
+	 * @throws InvalidInputException if the assignee cannot read the board (or does not exist), or an AI actor name is set on a board that does not allow it
 	 */
-	public function assign(int $cardId, string $participantUid, string $actorUid): void {
+	public function assign(int $cardId, string $participantUid, string $actorUid, ?string $actorName = null): void {
 		$card = $this->loadCard($cardId);
 		$board = $this->loadBoard($card->getBoardId());
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
 		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$actorName = $this->normalizeActorName($board, $actorName);
 
 		// Directly or via a group ACL, the assignee must at least see the
 		// board. Unknown users hold no permissions, so they fail this too.
@@ -69,7 +74,7 @@ class AssigneeService {
 		}
 
 		try {
-			$this->cardAssigneeMapper->insertAssignment($cardId, $participantUid);
+			$this->cardAssigneeMapper->insertAssignment($cardId, $participantUid, $actorName);
 		} catch (\OCP\DB\Exception $e) {
 			if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 				// Concurrent PUT lost the check-then-insert race - the
@@ -149,7 +154,7 @@ class AssigneeService {
 	 * directory data, so READ on the board plus card visibility are asserted here
 	 * the same way the mutating methods above assert EDIT.
 	 *
-	 * @return list<array{uid: string, displayName: string}> in assignment order
+	 * @return list<array{uid: string, displayName: string, actorName: ?string}> in assignment order
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted, or the card is not visible to the actor
 	 * @throws NotPermittedException if the actor may not read the board
 	 */
@@ -159,12 +164,40 @@ class AssigneeService {
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
 		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		// array_values so the result is a genuine list - the mapper's return is not
-		// typed as one, and the payload serializes this as a JSON array.
-		return array_values(array_map(
-			fn (string $uid): array => ['uid' => $uid, 'displayName' => $this->displayName($uid)],
-			$this->cardAssigneeMapper->findUserIdsByCard($cardId)
-		));
+		// The mapper returns a genuine list, so the payload serializes as a JSON
+		// array. Each row carries the optional AI actor name (#352) so the UI can
+		// render an AI-attributed assignment distinctly.
+		return array_map(
+			fn (array $a): array => [
+				'uid' => $a['uid'],
+				'displayName' => $this->displayName($a['uid']),
+				'actorName' => $a['actorName'],
+			],
+			$this->cardAssigneeMapper->findAssigneesByCard($cardId)
+		);
+	}
+
+	/**
+	 * Normalises an optional AI actor name (#352): trimmed, blank => null, and
+	 * refused when the board's `allowAiActors` gate is off. The single place the
+	 * gate is enforced for assignees.
+	 *
+	 * @throws InvalidInputException when a name is set on a board that does not allow AI actors
+	 */
+	private function normalizeActorName(Board $board, ?string $actorName): ?string {
+		$name = $actorName !== null ? trim($actorName) : null;
+		if ($name === '') {
+			$name = null;
+		}
+		if ($name !== null && $board->getAllowAiActors() !== true) {
+			throw new InvalidInputException('This board does not allow AI actors');
+		}
+		// The `actor_name` column is a 255-char string; a longer name would fail
+		// (or truncate) at the DB layer, so bound it here, multibyte-safe.
+		if ($name !== null && mb_strlen($name) > 255) {
+			throw new InvalidInputException('Actor name is too long');
+		}
+		return $name;
 	}
 
 	/**
