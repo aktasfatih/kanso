@@ -9375,6 +9375,7 @@ async function handleToggleProject(projectId) {
 	top: 0;
 	z-index: 1;
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 8px;
 	padding: 6px 16px;
@@ -9388,6 +9389,7 @@ async function handleToggleProject(projectId) {
 }
 .card-modal__comment-order {
 	display: flex;
+	flex-wrap: wrap;
 	gap: 2px;
 }
 .card-modal__comment-order-btn {
@@ -10154,6 +10156,12 @@ async function handleToggleProject(projectId) {
 		position: sticky;
 		bottom: 0;
 		z-index: 10;
+	}
+	/* The order toolbar is sticky in the side layout, but in the bottom layout the
+	   discussion tabs also pin at top:0 with a higher z-index and would paint over
+	   it, so keep it in normal flow there. */
+	.card-modal--discussion-bottom .card-modal__comment-toolbar {
+		position: static;
 	}
 }
 
