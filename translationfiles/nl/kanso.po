@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n gegevensrij gevonden"
 msgstr[1] "%n gegevensrijen gevonden"
 
-#: src/components/CardDetail.vue:4995
+#: src/components/CardDetail.vue:5011
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dag geleden"
@@ -409,7 +409,7 @@ msgid_plural "%n files"
 msgstr[0] "%n bestand"
 msgstr[1] "%n bestanden"
 
-#: src/components/CardDetail.vue:4993
+#: src/components/CardDetail.vue:5009
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n uur geleden"
@@ -439,7 +439,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n label is niet aangemaakt en ontbreekt op de geïmporteerde kaarten: alleen bordbeheerders kunnen nieuwe labels toevoegen. Vraag een beheerder om het toe te voegen en stel het daarna in op de kaarten."
 msgstr[1] "%n labels zijn niet aangemaakt en ontbreken op de geïmporteerde kaarten: alleen bordbeheerders kunnen nieuwe labels toevoegen. Vraag een beheerder om ze toe te voegen en stel ze daarna in op de kaarten."
 
-#: src/components/CardDetail.vue:4991
+#: src/components/CardDetail.vue:5007
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuut geleden"
@@ -2011,7 +2011,7 @@ msgid "Date"
 msgstr "Datum"
 
 #: src/components/BoardSettingsModal.vue:2298
-#: src/components/CardDetail.vue:5184
+#: src/components/CardDetail.vue:5200
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dag"
@@ -3558,7 +3558,7 @@ msgstr "Het doel, de afbakening of de afspraken. Iedereen op dit bord kan het le
 msgid "Jump to the discussion"
 msgstr "Naar de discussie springen"
 
-#: src/components/CardDetail.vue:7005
+#: src/components/CardDetail.vue:7021
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Naar de discussie springen (%n reactie)"
@@ -3934,7 +3934,7 @@ msgid "Mon"
 msgstr "ma"
 
 #: src/components/BoardSettingsModal.vue:2300
-#: src/components/CardDetail.vue:5186
+#: src/components/CardDetail.vue:5202
 msgid "month"
 msgid_plural "months"
 msgstr[0] "maand"
@@ -5502,7 +5502,7 @@ msgstr "De discussie onder de kaart tonen"
 msgid "Show the discussion panel"
 msgstr "Het discussiepaneel tonen"
 
-#: src/components/CardDetail.vue:7011
+#: src/components/CardDetail.vue:7027
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Het discussiepaneel tonen (%n reactie)"
@@ -6288,7 +6288,7 @@ msgid "Wed"
 msgstr "wo"
 
 #: src/components/BoardSettingsModal.vue:2299
-#: src/components/CardDetail.vue:5185
+#: src/components/CardDetail.vue:5201
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "week"
@@ -6397,7 +6397,7 @@ msgid "wrote"
 msgstr "schreef"
 
 #: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5187
+#: src/components/CardDetail.vue:5203
 msgid "year"
 msgid_plural "years"
 msgstr[0] "jaar"
