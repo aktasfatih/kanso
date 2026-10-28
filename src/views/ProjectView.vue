@@ -45,8 +45,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							data-test="project-pin-toggle"
 							@click="togglePin(project)">
 							<template #icon>
-								<StarIcon v-if="project.pinned" :size="20" />
-								<StarOutlineIcon v-else :size="20" />
+								<PinIcon v-if="project.pinned" :size="20" />
+								<PinOutlineIcon v-else :size="20" />
 							</template>
 							{{ project.pinned ? t('kanso', 'Unpin project') : t('kanso', 'Pin to sidebar') }}
 						</NcActionButton>
@@ -563,8 +563,8 @@ import CodeTagsIcon from 'vue-material-design-icons/CodeTags.vue'
 import LinkVariantIcon from 'vue-material-design-icons/LinkVariant.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
 import BlockHelperIcon from 'vue-material-design-icons/BlockHelper.vue'
-import StarIcon from 'vue-material-design-icons/Star.vue'
-import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
+import PinIcon from 'vue-material-design-icons/Pin.vue'
+import PinOutlineIcon from 'vue-material-design-icons/PinOutline.vue'
 import FormatListGroupIcon from 'vue-material-design-icons/FormatListGroup.vue'
 import ViewDashboardOutlineIcon from 'vue-material-design-icons/ViewDashboardOutline.vue'
 import ChartGanttIcon from 'vue-material-design-icons/ChartGantt.vue'

@@ -35,8 +35,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				close-after-click
 				@click="$emit('toggle-pin')">
 				<template #icon>
-					<StarIcon v-if="isPinned" :size="20" />
-					<StarOutlineIcon v-else :size="20" />
+					<PinIcon v-if="isPinned" :size="20" />
+					<PinOutlineIcon v-else :size="20" />
 				</template>
 				{{ isPinned ? t('kanso', 'Unpin board') : t('kanso', 'Pin board') }}
 			</NcActionButton>
@@ -157,8 +157,8 @@ import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcActionText from '@nextcloud/vue/components/NcActionText'
 import DotsHorizontalIcon from 'vue-material-design-icons/DotsHorizontal.vue'
-import StarIcon from 'vue-material-design-icons/Star.vue'
-import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
+import PinIcon from 'vue-material-design-icons/Pin.vue'
+import PinOutlineIcon from 'vue-material-design-icons/PinOutline.vue'
 import FolderOutlineIcon from 'vue-material-design-icons/FolderOutline.vue'
 import FolderRemoveOutlineIcon from 'vue-material-design-icons/FolderRemoveOutline.vue'
 import CheckIcon from 'vue-material-design-icons/Check.vue'

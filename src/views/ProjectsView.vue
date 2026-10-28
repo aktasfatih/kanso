@@ -61,8 +61,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						data-test="project-tile-pin"
 						@click.stop="togglePin(project)"
 						@keydown.enter.stop>
-						<StarIcon v-if="project.pinned" :size="18" />
-						<StarOutlineIcon v-else :size="18" />
+						<PinIcon v-if="project.pinned" :size="18" />
+						<PinOutlineIcon v-else :size="18" />
 					</button>
 				</div>
 				<span v-if="project.description" class="projects-view__project-desc">{{ project.description }}</span>
@@ -180,8 +180,8 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
-import StarIcon from 'vue-material-design-icons/Star.vue'
-import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
+import PinIcon from 'vue-material-design-icons/Pin.vue'
+import PinOutlineIcon from 'vue-material-design-icons/PinOutline.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import { useQueries } from '@tanstack/vue-query'
 import { useProjects } from '../composables/useProjects.js'
