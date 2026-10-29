@@ -417,7 +417,7 @@ msgstr[0] "Обнаружена %n строка данных"
 msgstr[1] "Обнаружено %n строки данных"
 msgstr[2] "Обнаружено %n строк данных"
 
-#: src/components/CardDetail.vue:5036
+#: src/components/CardDetail.vue:5039
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n день назад"
@@ -431,7 +431,7 @@ msgstr[0] "%n файл"
 msgstr[1] "%n файла"
 msgstr[2] "%n файлов"
 
-#: src/components/CardDetail.vue:5034
+#: src/components/CardDetail.vue:5037
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n час назад"
@@ -466,7 +466,7 @@ msgstr[0] "%n метка не была создана и отсутствует 
 msgstr[1] "%n метки не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 msgstr[2] "%n меток не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 
-#: src/components/CardDetail.vue:5032
+#: src/components/CardDetail.vue:5035
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n минуту назад"
@@ -2056,7 +2056,7 @@ msgid "Date"
 msgstr "Дата"
 
 #: src/components/BoardSettingsModal.vue:2298
-#: src/components/CardDetail.vue:5225
+#: src/components/CardDetail.vue:5228
 msgid "day"
 msgid_plural "days"
 msgstr[0] "день"
@@ -3609,7 +3609,7 @@ msgstr "Назначение, границы или правила. Любой �
 msgid "Jump to the discussion"
 msgstr "Перейти к обсуждению"
 
-#: src/components/CardDetail.vue:7069
+#: src/components/CardDetail.vue:7072
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Перейти к обсуждению (%n комментарий)"
@@ -3986,7 +3986,7 @@ msgid "Mon"
 msgstr "Пн"
 
 #: src/components/BoardSettingsModal.vue:2300
-#: src/components/CardDetail.vue:5227
+#: src/components/CardDetail.vue:5230
 msgid "month"
 msgid_plural "months"
 msgstr[0] "месяц"
@@ -4066,8 +4066,8 @@ msgid "moved this card from {from} to {to}"
 msgstr "переместил эту карточку из {from} в {to}"
 
 #: src/components/CardDetail.vue
-msgid "Moves the card to another board and removes it from here. Assignees and watchers are kept only if they can access the target board."
-msgstr "Карточка переносится на другую доску и удаляется отсюда. Исполнители и наблюдатели сохраняются, только если у них есть доступ к целевой доске."
+msgid "Moves this card and all connected cards to the selected column. Everyone involved must be able to access the destination cards."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Moving…"
@@ -5569,7 +5569,7 @@ msgstr "Показывать обсуждение под карточкой"
 msgid "Show the discussion panel"
 msgstr "Показать панель обсуждения"
 
-#: src/components/CardDetail.vue:7075
+#: src/components/CardDetail.vue:7078
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Показать панель обсуждения (%n комментарий)"
@@ -5883,6 +5883,10 @@ msgstr "В CSV нужна строка заголовков и хотя бы о�
 #: src/views/BoardList.vue
 msgid "The Deck app is not installed on this server, so there is nothing to import."
 msgstr "Приложение Deck не установлено на этом сервере, поэтому импортировать нечего."
+
+#: src/components/CardDetail.vue
+msgid "The destination board must have matching labels, custom fields and review types used by the moved cards."
+msgstr ""
 
 #: templates/admin-backup.php
 msgid "The file goes to that account's trashbin and keeps using space until that is emptied."
@@ -6356,7 +6360,7 @@ msgid "Wed"
 msgstr "Ср"
 
 #: src/components/BoardSettingsModal.vue:2299
-#: src/components/CardDetail.vue:5226
+#: src/components/CardDetail.vue:5229
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "неделя"
@@ -6466,7 +6470,7 @@ msgid "wrote"
 msgstr "написал"
 
 #: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5228
+#: src/components/CardDetail.vue:5231
 msgid "year"
 msgid_plural "years"
 msgstr[0] "год"

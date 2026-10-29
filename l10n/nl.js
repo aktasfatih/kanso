@@ -917,7 +917,6 @@ OC.L10N.register(
     "Move to…" : "Verplaatsen naar…",
     "moved this card" : "heeft deze kaart verplaatst",
     "moved this card from {from} to {to}" : "heeft deze kaart verplaatst van {from} naar {to}",
-    "Moves the card to another board and removes it from here. Assignees and watchers are kept only if they can access the target board." : "Verplaatst de kaart naar een ander bord en haalt hem hier weg. Toegewezen personen en volgers blijven alleen behouden als ze toegang hebben tot het doelbord.",
     "Moving…" : "Verplaatsen…",
     "My Boards" : "Mijn borden",
     "My first board" : "Mijn eerste bord",

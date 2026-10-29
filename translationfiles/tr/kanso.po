@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n veri satırı bulundu"
 msgstr[1] "%n veri satırı bulundu"
 
-#: src/components/CardDetail.vue:5036
+#: src/components/CardDetail.vue:5039
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n gün önce"
@@ -409,7 +409,7 @@ msgid_plural "%n files"
 msgstr[0] "%n dosya"
 msgstr[1] "%n dosya"
 
-#: src/components/CardDetail.vue:5034
+#: src/components/CardDetail.vue:5037
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
@@ -439,7 +439,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 msgstr[1] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 
-#: src/components/CardDetail.vue:5032
+#: src/components/CardDetail.vue:5035
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n dakika önce"
@@ -2015,7 +2015,7 @@ msgid "Date"
 msgstr "Tarih"
 
 #: src/components/BoardSettingsModal.vue:2298
-#: src/components/CardDetail.vue:5225
+#: src/components/CardDetail.vue:5228
 msgid "day"
 msgid_plural "days"
 msgstr[0] "gün"
@@ -3562,7 +3562,7 @@ msgstr "Amacı, kapsamı veya kuralları. Panodaki herkes pano adının yanında
 msgid "Jump to the discussion"
 msgstr "Tartışmaya atla"
 
-#: src/components/CardDetail.vue:7069
+#: src/components/CardDetail.vue:7072
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Tartışmaya atla (%n yorum)"
@@ -3938,7 +3938,7 @@ msgid "Mon"
 msgstr "Pzt"
 
 #: src/components/BoardSettingsModal.vue:2300
-#: src/components/CardDetail.vue:5227
+#: src/components/CardDetail.vue:5230
 msgid "month"
 msgid_plural "months"
 msgstr[0] "ay"
@@ -4017,8 +4017,8 @@ msgid "moved this card from {from} to {to}"
 msgstr "bu kartı taşıdı: {from} → {to}"
 
 #: src/components/CardDetail.vue
-msgid "Moves the card to another board and removes it from here. Assignees and watchers are kept only if they can access the target board."
-msgstr "Kartı başka bir panoya taşır ve buradan kaldırır. Atananlar ve izleyiciler yalnızca hedef panoya erişebiliyorsa korunur."
+msgid "Moves this card and all connected cards to the selected column. Everyone involved must be able to access the destination cards."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Moving…"
@@ -5518,7 +5518,7 @@ msgstr "Tartışmayı kartın altında göster"
 msgid "Show the discussion panel"
 msgstr "Tartışma panelini göster"
 
-#: src/components/CardDetail.vue:7075
+#: src/components/CardDetail.vue:7078
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Tartışma panelini göster (%n yorum)"
@@ -5831,6 +5831,10 @@ msgstr "CSV'nin bir başlık satırı ve en az bir veri satırı olmalı."
 #: src/views/BoardList.vue
 msgid "The Deck app is not installed on this server, so there is nothing to import."
 msgstr "Bu sunucuda Deck uygulaması kurulu değil, içe aktarılacak bir şey yok."
+
+#: src/components/CardDetail.vue
+msgid "The destination board must have matching labels, custom fields and review types used by the moved cards."
+msgstr ""
 
 #: templates/admin-backup.php
 msgid "The file goes to that account's trashbin and keeps using space until that is emptied."
@@ -6304,7 +6308,7 @@ msgid "Wed"
 msgstr "Çar"
 
 #: src/components/BoardSettingsModal.vue:2299
-#: src/components/CardDetail.vue:5226
+#: src/components/CardDetail.vue:5229
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "hafta"
@@ -6413,7 +6417,7 @@ msgid "wrote"
 msgstr "yazdı"
 
 #: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5228
+#: src/components/CardDetail.vue:5231
 msgid "year"
 msgid_plural "years"
 msgstr[0] "yıl"

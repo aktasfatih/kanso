@@ -917,7 +917,6 @@ OC.L10N.register(
     "Move to…" : "移动到…",
     "moved this card" : "移动了这张卡片",
     "moved this card from {from} to {to}" : "把这张卡片从 {from} 移动到 {to}",
-    "Moves the card to another board and removes it from here. Assignees and watchers are kept only if they can access the target board." : "把卡片移动到另一个看板，并从此处移除。只有在能访问目标看板时，负责人和关注者才会保留。",
     "Moving…" : "移动中…",
     "My Boards" : "我的看板",
     "My first board" : "我的第一个看板",

@@ -99,7 +99,9 @@ browser profile) picks up the new `l10n/<lang>.js`.
 
   Commit all of it. `npm run l10n:check` runs exactly that sequence and then
   `git diff --exit-code`s the result — it's the same command the `build-frontend`
-  job runs, so if it's clean locally, that CI step is green.
+  job runs. After `npm ci` installs the Git hooks, the pre-push hook also checks
+  the committed files being pushed in a temporary snapshot, without changing
+  your working tree. Commit the generated files before pushing.
 
   **Don't skip the sync step.** `extract` only refreshes the template; nothing
   else copies a new string into the <!-- l10n:count -->ten<!-- /l10n:count -->
