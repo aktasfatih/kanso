@@ -67,6 +67,18 @@ class CommentMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
+	/** @return Comment[] */
+	public function findAllByCardForMove(int $cardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
+			->orderBy('created_at', 'ASC')
+			->addOrderBy('id', 'ASC');
+
+		return $this->findEntities($qb);
+	}
+
 	/**
 	 * The anonymous-share twin of {@see self::findByCard()} (#3949): every
 	 * non-deleted comment on a board's PUBLIC cards only, oldest first, keyed by

@@ -9,7 +9,7 @@ namespace OCA\Kanso\Tests\Unit\Controller;
 
 use OCA\Kanso\Controller\DeepLinkController;
 use OCA\Kanso\Db\Card;
-use OCA\Kanso\Service\CardService;
+use OCA\Kanso\Service\CardMoveAliasService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\UserSettingsService;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -29,7 +29,7 @@ use PHPUnit\Framework\TestCase;
  */
 class DeepLinkControllerTest extends TestCase {
 	private IRequest&MockObject $request;
-	private CardService&MockObject $cardService;
+	private CardMoveAliasService&MockObject $cardService;
 	private IConfig&MockObject $config;
 	private IInitialState&MockObject $initialState;
 	private IURLGenerator&MockObject $urlGenerator;
@@ -37,7 +37,7 @@ class DeepLinkControllerTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->request = $this->createMock(IRequest::class);
-		$this->cardService = $this->createMock(CardService::class);
+		$this->cardService = $this->createMock(CardMoveAliasService::class);
 		$this->config = $this->createMock(IConfig::class);
 		$this->initialState = $this->createMock(IInitialState::class);
 		$this->urlGenerator = $this->createMock(IURLGenerator::class);
@@ -62,7 +62,7 @@ class DeepLinkControllerTest extends TestCase {
 		$card->setId(9);
 		$card->setBoardId(3);
 		// The card load runs the full API authorization (READ + visibility).
-		$this->cardService->expects(self::once())->method('find')->with(9, 'bob')->willReturn($card);
+		$this->cardService->expects(self::once())->method('resolve')->with(9, 'bob')->willReturn($card);
 		// No preferences stored: every key reads back as its own default.
 		$this->config->method('getUserValue')->willReturnArgument(3);
 		$provided = $this->captureInitialState();
@@ -84,7 +84,7 @@ class DeepLinkControllerTest extends TestCase {
 		$card = new Card();
 		$card->setId(9);
 		$card->setBoardId(3);
-		$this->cardService->method('find')->willReturn($card);
+		$this->cardService->method('resolve')->willReturn($card);
 		$this->config->method('getUserValue')
 			->willReturnCallback(static function (string $uid, string $app, string $key, string $default): string {
 				self::assertSame('bob', $uid);
@@ -116,7 +116,7 @@ class DeepLinkControllerTest extends TestCase {
 	}
 
 	public function testMissingCardRendersNotFoundPage(): void {
-		$this->cardService->method('find')->willThrowException(new DoesNotExistException('gone'));
+		$this->cardService->method('resolve')->willThrowException(new DoesNotExistException('gone'));
 		$this->initialState->expects(self::never())->method('provideInitialState');
 
 		$response = $this->controller('bob')->card(999);
@@ -128,7 +128,7 @@ class DeepLinkControllerTest extends TestCase {
 	public function testNonMemberGetsTheSameNotFoundShapeNotA403(): void {
 		// A 403 would confirm the card id exists; the deep link must answer a
 		// non-member exactly like a card that never existed.
-		$this->cardService->method('find')->willThrowException(new NotPermittedException('denied'));
+		$this->cardService->method('resolve')->willThrowException(new NotPermittedException('denied'));
 		$this->initialState->expects(self::never())->method('provideInitialState');
 
 		$response = $this->controller('eve')->card(9);
@@ -140,7 +140,7 @@ class DeepLinkControllerTest extends TestCase {
 	public function testMissingSessionRendersNotFoundWithoutTouchingTheCard(): void {
 		// Defense-in-depth: unauthenticated requests are redirected to login
 		// before the controller runs, but a null user must still never probe.
-		$this->cardService->expects(self::never())->method('find');
+		$this->cardService->expects(self::never())->method('resolve');
 
 		$response = $this->controller(null)->card(9);
 

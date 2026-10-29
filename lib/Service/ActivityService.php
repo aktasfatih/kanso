@@ -9,6 +9,7 @@ namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardActivityHistoryMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeDetailMapper;
@@ -34,6 +35,7 @@ class ActivityService {
 		private IUserManager $userManager,
 		private CardVisibilityGuard $visibilityGuard,
 		private ChangeDetailMapper $changeDetailMapper,
+		private CardActivityHistoryMapper $historyMapper,
 	) {
 	}
 
@@ -104,6 +106,24 @@ class ActivityService {
 					];
 				}
 			}
+		}
+
+		// Snapshot IDs use the negative range to remain distinct from live change IDs.
+		foreach ($this->historyMapper->findLatest($cardId, $limit - count($items)) as $history) {
+			$actor = $history->getActor();
+			if ($actor !== null && !array_key_exists($actor, $names)) {
+				$user = $this->userManager->get($actor);
+				$names[$actor] = $user !== null ? $user->getDisplayName() : $actor;
+			}
+			$items[] = [
+				'id' => -$history->getId(),
+				'actor' => $actor,
+				'actorName' => $actor !== null ? $names[$actor] : null,
+				'verb' => $history->getVerb(),
+				'action' => $history->getAction(),
+				'timestamp' => $history->getCreatedAt(),
+				'detail' => $history->getHasDetail() ? ['from' => $history->getFromText(), 'to' => $history->getToText()] : null,
+			];
 		}
 
 		return array_values($items);

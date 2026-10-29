@@ -8,7 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\AppInfo\Application;
-use OCA\Kanso\Service\CardService;
+use OCA\Kanso\Service\CardMoveAliasService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\UserSettingsService;
 use OCP\AppFramework\Controller;
@@ -34,7 +34,7 @@ use OCP\Util;
  * the path or query ({id} is numeric), so the Nextcloud login controller
  * never drops the redirect target.
  *
- * Authorization mirrors the card API ({@see CardService::find}: board READ +
+ * Authorization mirrors the card API ({@see CardMoveAliasService::resolve}: board READ +
  * card visibility). Any failure - missing card, hidden card, non-member -
  * renders the SAME 404 page, so the route is not an existence oracle. An
  * unauthenticated request never reaches here (no #[PublicPage]): Nextcloud
@@ -45,7 +45,7 @@ class DeepLinkController extends Controller {
 		string $appName,
 		IRequest $request,
 		private ?string $userId,
-		private CardService $cardService,
+		private CardMoveAliasService $cardAliases,
 		private UserSettingsService $userSettings,
 		private IInitialState $initialState,
 		private IURLGenerator $urlGenerator,
@@ -63,7 +63,7 @@ class DeepLinkController extends Controller {
 		}
 
 		try {
-			$card = $this->cardService->find($id, $this->userId);
+			$card = $this->cardAliases->resolve($id, $this->userId);
 		} catch (DoesNotExistException|NotPermittedException) {
 			// One shape for every failure: a hidden card, a foreign board and
 			// a card that never existed must be indistinguishable.

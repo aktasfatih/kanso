@@ -51,6 +51,17 @@ class CardFileLinkMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
+	/** @return CardFileLink[] */
+	public function findAllByCardForMove(int $cardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
+			->orderBy('id', 'ASC');
+
+		return $this->findEntities($qb);
+	}
+
 	/**
 	 * Unbounded on purpose: the cap check must see rows beyond MAX_PER_CARD.
 	 *

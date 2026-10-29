@@ -2656,7 +2656,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<h2 class="card-modal__copy-title">{{ copyDialogIsMove ? t('kanso', 'Move card to board…') : t('kanso', 'Copy card to…') }}</h2>
 			<p class="card-modal__copy-hint">
 				{{ copyDialogIsMove
-					? t('kanso', 'Moves the card to another board and removes it from here. Assignees and watchers are kept only if they can access the target board.')
+					? t('kanso', 'Moves this card and all connected cards to the selected column. Everyone involved must be able to access the destination cards.')
 					: t('kanso', 'Duplicates the title, description, labels, checklist, estimate, priority and status. Comments, activity and assignees are not copied.') }}
 			</p>
 			<label class="card-modal__copy-field">
@@ -2672,8 +2672,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<option v-for="s in copyStackOptions" :key="s.id" :value="s.id">{{ s.title }}</option>
 				</select>
 			</label>
-			<p v-if="copyIsCrossBoard" class="card-modal__copy-note">
+			<p v-if="copyIsCrossBoard && !copyDialogIsMove" class="card-modal__copy-note">
 				{{ t('kanso', 'Labels are board-specific: only labels that also exist (same name and color) on the target board are kept.') }}
+			</p>
+			<p v-if="copyIsCrossBoard && copyDialogIsMove" class="card-modal__copy-note">
+				{{ t('kanso', 'The destination board must have matching labels, custom fields and review types used by the moved cards.') }}
 			</p>
 			<span v-if="copyError" class="card-modal__save-error">{{ copyError }}</span>
 			<div class="card-modal__copy-actions">
@@ -2966,7 +2969,7 @@ const { data: cardData, isLoading: cardIsLoading, isError: cardIsError, error: c
 // there until the same value shows up), so modal behaviour is unchanged.
 const boardId = computed(() => {
 	if (props.boardId != null) return String(props.boardId)
-	if (route.params.id) return route.params.id
+	if (!props.controlled && route.params.id) return route.params.id
 	const fromCard = cardData.value?.boardId
 	return fromCard != null ? String(fromCard) : undefined
 })

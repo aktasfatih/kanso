@@ -174,13 +174,13 @@ class BoardCascadeCompletenessTest extends TestCase {
 
 	/**
 	 * Columns holding a CARD id that {@see BoardCascade::BY_CARD_ID} deliberately
-	 * does not sweep. Exactly one, and it is the card table's own sub-card link:
-	 * a card purge deletes that row rather than clearing a pointer to it, and the
-	 * board purge empties the whole table through the card mapper.
+	 * does not sweep. A moved-card alias must outlive source and intermediate
+	 * card purges so old navigation links can resolve across repeated moves.
 	 *
 	 * @var array<string, list<string>>
 	 */
 	private const CARD_COLUMNS_NOT_SWEPT = [
+		'kanso_card_move_aliases' => ['old_card_id', 'target_card_id'],
 		'kanso_cards' => ['parent_card_id'],
 	];
 

@@ -21,6 +21,26 @@ use OCA\Kanso\Service\CardMoveContentService;
 use PHPUnit\Framework\TestCase;
 
 class CardMoveContentServiceTest extends TestCase {
+	public function testRewritesAttachmentsFromOtherMovedCards(): void {
+		$cards = $this->createMock(CardMapper::class);
+		$comments = $this->createMock(CommentMapper::class);
+		$reactions = $this->createMock(CommentReactionMapper::class);
+		$links = $this->createMock(CardFileLinkMapper::class);
+		$attachments = $this->createMock(CardAttachmentService::class);
+		$attachments->expects(self::never())->method('copyForMovedCard');
+		$service = new CardMoveContentService($cards, $comments, $reactions, $links, $attachments);
+		$source = new Card();
+		$source->setId(9);
+		$source->setDescription('![other](/apps/kanso/api/cards/10/attachments/8/inline)');
+		$target = new Card();
+		$target->setId(42);
+		$board = new Board();
+		$board->setId(2);
+		$cards->expects(self::once())->method('update')->with($target)->willReturn($target);
+		$service->copy($source, $target, $board, [9 => [], 10 => [8 => 88]], [9 => 42, 10 => 43]);
+		self::assertSame('![other](/apps/kanso/api/cards/43/attachments/88/inline)', $target->getDescription());
+	}
+
 	public function testCopiesDiscussionLinksAndRewritesOnlyOwnInlineUrls(): void {
 		$cards = $this->createMock(CardMapper::class);
 		$comments = $this->createMock(CommentMapper::class);
@@ -36,7 +56,7 @@ class CardMoveContentServiceTest extends TestCase {
 		$target->setId(42);
 		$board = new Board();
 		$board->setId(2);
-		$board->setAllowAiActors(false);
+		$board->setAllowAiActors(true);
 		$attachments->expects(self::once())->method('copyForMovedCard')->with(9, 42, 2)->willReturn([5 => 77]);
 		$cards->expects(self::once())->method('update')->with($target)->willReturn($target);
 
@@ -47,7 +67,7 @@ class CardMoveContentServiceTest extends TestCase {
 		$link->setMime('text/plain');
 		$link->setLinkedBy('alice');
 		$link->setCreatedAt(10);
-		$links->method('findByCard')->with(9)->willReturn([$link]);
+		$links->method('findAllByCardForMove')->with(9)->willReturn([$link]);
 		$links->expects(self::once())->method('insert')->willReturnCallback(function (CardFileLink $copy): CardFileLink {
 			self::assertSame(42, $copy->getCardId());
 			self::assertSame(123, $copy->getFileId());
@@ -57,7 +77,7 @@ class CardMoveContentServiceTest extends TestCase {
 
 		$root = $this->comment(1, null, 'root ![](/apps/kanso/api/cards/9/attachments/5/inline)');
 		$reply = $this->comment(2, 1, 'reply');
-		$comments->method('findByCard')->with(9)->willReturn([$reply, $root]);
+		$comments->method('findAllByCardForMove')->with(9)->willReturn([$reply, $root]);
 		$copied = [];
 		$comments->expects(self::exactly(2))->method('insert')->willReturnCallback(function (Comment $copy) use (&$copied): Comment {
 			$copy->setId(count($copied) + 101);
@@ -80,7 +100,7 @@ class CardMoveContentServiceTest extends TestCase {
 		$service->copy($source, $target, $board);
 		self::assertSame('![a](/apps/kanso/api/cards/42/attachments/77/inline) ![b](https://evil.example/apps/kanso/api/cards/9/attachments/5/inline) ![c](/apps/kanso/api/cards/9/attachments/6/inline)', $target->getDescription());
 		self::assertSame('root ![](/apps/kanso/api/cards/42/attachments/77/inline)', $copied[0]->getBody());
-		self::assertNull($copied[0]->getActorName());
+		self::assertSame('AI agent', $copied[0]->getActorName());
 		self::assertSame(101, $copied[1]->getParentCommentId());
 		self::assertSame(42, $copied[1]->getCardId());
 		self::assertSame(11, $copied[0]->getResolvedAt());

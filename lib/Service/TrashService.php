@@ -13,8 +13,10 @@ use OCA\Kanso\Db\BoardCascade;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardMoveAliasMapper;
 use OCA\Kanso\Db\Change;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IDBConnection;
 
 /**
  * The trash: listing, restoring and permanently deleting soft-deleted cards.
@@ -76,6 +78,8 @@ class TrashService {
 		private BoardAccess $boardAccess,
 		private CardVisibilityGuard $visibilityGuard,
 		private NotificationService $notificationService,
+		private CardMoveAliasMapper $moveAliases,
+		private IDBConnection $db,
 	) {
 	}
 
@@ -131,17 +135,25 @@ class TrashService {
 		// a 400 "not in the trash" ahead of the guards is an existence oracle.
 		$this->assertTrashed($card);
 
-		$card->setDeletedAt(0);
-		$card->setLastModified(time());
-		$card = $this->cardMapper->update($card);
-
-		$this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_CREATE,
-			$actorUid
-		);
+		$this->db->beginTransaction();
+		try {
+			$card->setDeletedAt(0);
+			$card->setLastModified(time());
+			$card = $this->cardMapper->update($card);
+			$this->moveAliases->deleteByOldId($cardId);
+			$this->changeNotifier->recordChange(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$cardId,
+				Change::ACTION_CREATE,
+				$actorUid
+			);
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+		$this->changeNotifier->pushBoardChanged($card->getBoardId());
 
 		return $card;
 	}

@@ -32,6 +32,13 @@ use PHPUnit\Framework\TestCase;
  * lives in tests/e2e/visibility-leak-matrix.spec.js.
  */
 class CommentMapperTest extends TestCase {
+	public function testMoveReadIncludesDeletedCommentsAndRestrictsCard(): void {
+		$predicates = $this->recordQuery(fn (CommentMapper $mapper) => $mapper->findAllByCardForMove(42));
+
+		self::assertSame([42], self::boundValues($predicates, 'eq', 'card_id'));
+		self::assertSame([], self::boundValues($predicates, 'eq', 'deleted_at'));
+	}
+
 	/**
 	 * A spying expression builder recording every comparison as
 	 * (operator, column, bound value). The OCP expression interface references

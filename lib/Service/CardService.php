@@ -122,6 +122,14 @@ class CardService {
 		private CardVisibilityGuard $visibilityGuard,
 		private ChangeDetailMapper $changeDetailMapper,
 		private CardMoveContentService $moveContentService,
+		private CardMoveMetadataService $moveMetadataService,
+		private CardMoveFieldsService $moveFieldsService,
+		private CardMoveGraphService $moveGraphService,
+		private CardMovePersonalService $movePersonalService,
+		private CardMoveReviewService $moveReviewService,
+		private CardMoveHistoryService $moveHistoryService,
+		private CardMoveRecurrenceService $moveRecurrenceService,
+		private CardMoveAliasService $moveAliasService,
 		// Lazily resolved (RecurrenceService depends on CardService) to re-point a
 		// card's repeat when its Start/due date is edited - same pattern as
 		// ChangeNotifier. Only touched on the rare date-edit-of-a-template path.
@@ -458,37 +466,10 @@ class CardService {
 	}
 
 	/**
-	 * MOVES a single card to a stack on ANOTHER board (#3679): the card is
-	 * re-created on the target board and REMOVED from the source, in ONE enclosing
-	 * transaction. Unlike {@see self::copy()} (a standalone duplicate that drops
-	 * assignees/watchers) this is a true relocation - the card leaves the source
-	 * board and lands on the target with as much of its context as the target
-	 * board's ACL permits.
-	 *
-	 * What crosses over:
-	 *   - content: title (unchanged, no " (copy)" suffix), description, priority,
-	 *     type, status timestamps, due/start dates, cover colour, and estimate
-	 *     (dropped when the target board's scale rejects the token);
-	 *   - labels: mapped by title+color to the target board (unmatched drop),
-	 *     exactly like {@see self::copyLabels()} - labels are never auto-created;
-	 *   - checklist items, in order, with their done state;
-	 *   - comments, reactions, file links and attachment bytes;
-	 *   - assignees AND watchers/subscriptions: KEPT only for uids that can READ
-	 *     the target board; any uid that cannot is DROPPED (the leak guard - a move
-	 *     must never carry a card reference to someone who cannot access it).
-	 *
-	 * What does NOT cross over: activity/history, relations/back-links,
-	 * and parent/children links (a moved
-	 * card is detached from its source-board hierarchy). The human KAN-id is
-	 * RE-ISSUED on the target board (a fresh per-board sequence) - the reference
-	 * changes, as it does for a copy.
-	 *
-	 * The whole thing runs in a single begin/commit/rollBack: the target INSERT +
-	 * its label/checklist/assignee/subscription rows + the source soft-delete +
-	 * BOTH boards' `kanso_changes` rows commit together, so a permission or DB
-	 * failure never leaves the card half-moved (created on the target but still on
-	 * the source, or vice versa). Both boards are pushed AFTER commit so realtime /
-	 * ETag advance on each.
+	 * Moves the connected card graph to another board in one transaction.
+	 * Destination definitions and participant access must permit preservation;
+	 * otherwise the move fails without deleting the source cards. New card IDs
+	 * and board sequences are issued on the destination.
 	 *
 	 * @throws DoesNotExistException if the source card, either board or the target stack does not exist or is deleted
 	 * @throws NotPermittedException if the actor lacks EDIT on the source OR the target board
@@ -496,206 +477,195 @@ class CardService {
 	 * @throws \OverflowException if the appended sort key or the board sequence keeps colliding after retries
 	 */
 	public function moveToBoard(int $id, int $targetStackId, string $uid): Card {
-		// Load the source with its description and gate EDIT on its board up-front.
 		$source = $this->loadCard($id);
 		$sourceBoard = $this->loadBoard($source->getBoardId());
 		$this->permissionService->assertPermission($sourceBoard, $uid, PermissionService::PERMISSION_EDIT);
 		$this->visibilityGuard->assertVisible($sourceBoard, $source, $uid);
-
 		$targetStack = $this->loadStack($targetStackId);
 		$targetBoard = $this->loadBoard($targetStack->getBoardId());
-		// EDIT on the target too - asserted up-front so a denial never soft-deletes
-		// the source before the target write is even attempted.
 		$this->permissionService->assertPermission($targetBoard, $uid, PermissionService::PERMISSION_EDIT);
-
-		// A same-board "move to board" is meaningless (and would try to soft-delete
-		// then re-create on one board): route in-board moves through move() instead.
 		if ($targetBoard->getId() === $sourceBoard->getId()) {
 			throw new InvalidInputException('Use the in-board move for a card staying on the same board');
 		}
 
-		// Snapshot the source's carried context ONCE, before the transaction, so a
-		// retry re-reads only the sort-key/sequence neighbours (which can shift
-		// under concurrency), never the whole card graph.
-		$sourceLabelIds = $this->cardLabelMapper->findLabelIdsByCard($id);
-		$sourceItems = $this->checklistItemMapper->findByCard($id);
-		// Assignees / watchers that may cross the boundary: only uids that can READ
-		// the TARGET board. Dropping the rest is the leak guard - a move must never
-		// carry the card to someone who cannot access where it landed.
-		$targetLabelByKey = $this->targetLabelIndex($sourceLabelIds, $targetBoard);
-		// De-duplicate the uid lists after the READ filter: the target rows are
-		// fresh, so the only way a per-uid insert could hit a unique violation is a
-		// duplicate uid in the source - which the retry loop would otherwise
-		// misread as a sort-key/board_seq collision. array_unique keeps that from
-		// happening (and documents that one row per uid is intended).
-		$carriedAssignees = array_values(array_unique($this->filterReadableOnTarget(
-			$this->cardAssigneeMapper->findUserIdsByCard($id),
-			$targetBoard,
-		)));
-		// The carried assignees' optional AI actor names (#352), keyed by uid.
-		// Carried over only when the TARGET board allows AI actors - a move must
-		// not smuggle an AI attribution onto a board that forbids it.
-		$assigneeActorNames = [];
-		if ($targetBoard->getAllowAiActors() === true) {
-			foreach ($this->cardAssigneeMapper->findAssigneesByCard($id) as $a) {
-				if ($a['actorName'] !== null) {
-					$assigneeActorNames[$a['uid']] = $a['actorName'];
+		$graph = $this->moveGraphService->discover($source, $sourceBoard, $uid);
+		$snapshots = [];
+		foreach ($graph['cards'] as $card) {
+			$cardId = $card->getId();
+			$labels = $this->cardLabelMapper->findLabelIdsByCard($cardId);
+			$labelMap = $this->targetLabelIndex($labels, $targetBoard);
+			if (count($labelMap) !== count($labels)) {
+				throw new InvalidInputException('The destination board needs matching labels for every moved card');
+			}
+			$estimate = $card->getEstimate();
+			if ($estimate !== null && !EstimateScale::allows($targetBoard->getEstimateScale(), $estimate, $targetBoard->customEstimates())) {
+				throw new InvalidInputException('The destination board does not support the estimate on a moved card');
+			}
+			$actorNames = [];
+			foreach ($this->cardAssigneeMapper->findAssigneesByCard($cardId) as $assignee) {
+				if ($assignee['actorName'] !== null) {
+					if ($targetBoard->getAllowAiActors() !== true) {
+						throw new InvalidInputException('The destination board does not allow AI-attributed assignments');
+					}
+					$actorNames[$assignee['uid']] = $assignee['actorName'];
 				}
 			}
+			$snapshots[$cardId] = [
+				'labels' => $labels,
+				'labelMap' => $labelMap,
+				'items' => $this->checklistItemMapper->findByCard($cardId),
+				'assignees' => array_values(array_unique($this->cardAssigneeMapper->findUserIdsByCard($cardId))),
+				'watchers' => array_values(array_unique($this->subscriptionMapper->findCardSubscriberUids($cardId))),
+				'actorNames' => $actorNames,
+			];
 		}
-		$carriedWatchers = array_values(array_unique($this->filterReadableOnTarget(
-			$this->subscriptionMapper->findCardSubscriberUids($id),
-			$targetBoard,
-		)));
-
-		$title = $this->validateTitle($source->getTitle());
 
 		for ($attempt = 0; ; $attempt++) {
-			$newId = null;
+			$movedCards = [];
 			$committed = false;
 			$this->db->beginTransaction();
 			try {
-				// Fresh shell on the target: append to the bottom of the target stack
-				// and re-issue the per-board KAN-id (MAX+1 guarded by the unique
-				// (board_id, board_seq) index, like create()).
-				$lastCard = $this->cardMapper->findLastInStack($targetStackId);
-				$sortKey = $lastCard === null
-					? $this->sortKeyService->initial()
-					: $this->sortKeyService->after($lastCard->getSortKey());
-				$boardSeq = $this->cardMapper->nextBoardSeq($targetBoard->getId());
-
 				$now = time();
-				$moved = $this->buildMovedCard($source, $targetBoard, $targetStackId, $sortKey, $boardSeq, $now, $uid);
-				$moved = $this->cardMapper->insert($moved);
-				$newId = $moved->getId();
-				$this->moveContentService->copy($source, $moved, $targetBoard);
+				foreach ($graph['cards'] as $card) {
+					$lastCard = $this->cardMapper->findLastInStack($targetStackId);
+					$sortKey = $lastCard === null
+						? $this->sortKeyService->initial()
+						: $this->sortKeyService->after($lastCard->getSortKey());
+					$boardSeq = $this->cardMapper->nextBoardSeq($targetBoard->getId());
+					$moved = $this->buildMovedCard($card, $targetBoard, $targetStackId, $sortKey, $boardSeq, $now, $uid);
+					$movedCards[$card->getId()] = $this->cardMapper->insert($moved);
+				}
 
-				// Labels: assign the mapped twins directly (no self-committing service
-				// call inside our transaction).
-				foreach ($sourceLabelIds as $labelId) {
-					$twinId = $targetLabelByKey[$labelId] ?? null;
-					if ($twinId !== null) {
-						$this->cardLabelMapper->insertAssignment($newId, $twinId);
+				$attachmentIdsByCard = [];
+				$cardIds = [];
+				foreach ($graph['cards'] as $card) {
+					$moved = $movedCards[$card->getId()];
+					$cardIds[$card->getId()] = $moved->getId();
+					$attachmentIdsByCard[$card->getId()] = $this->moveContentService->copyAttachments($card, $moved, $targetBoard);
+				}
+
+				foreach ($graph['cards'] as $card) {
+					$oldId = $card->getId();
+					$moved = $movedCards[$oldId];
+					$newId = $moved->getId();
+					$data = $snapshots[$oldId];
+					$commentIds = $this->moveContentService->copy($card, $moved, $targetBoard, $attachmentIdsByCard, $cardIds);
+					$this->moveMetadataService->copy($oldId, $newId, $targetBoard->getId());
+					$this->moveFieldsService->copy($oldId, $newId, $sourceBoard->getId(), $targetBoard->getId());
+					$this->movePersonalService->transfer($oldId, $moved, $targetBoard, $commentIds);
+					$this->moveReviewService->transfer($oldId, $sourceBoard->getId(), $moved, $targetBoard);
+					$this->moveHistoryService->copy($oldId, $newId, $sourceBoard->getId());
+
+					foreach ($data['labels'] as $labelId) {
+						$this->cardLabelMapper->insertAssignment($newId, $data['labelMap'][$labelId]);
+					}
+					$itemKey = $this->sortKeyService->initial();
+					foreach ($data['items'] as $index => $item) {
+						if ($index > 0) {
+							$itemKey = $this->sortKeyService->after($itemKey);
+						}
+						$clone = new ChecklistItem();
+						$clone->setCardId($newId);
+						$clone->setTitle($item->getTitle());
+						$clone->setDone($item->getDone());
+						$clone->setSortKey($itemKey);
+						$clone->setCreatedAt($item->getCreatedAt() ?? $now);
+						$clone->setDueDate($item->getDueDate());
+						$clone->setDoneAt($item->getDoneAt());
+						$stepAssignee = $item->getAssignedUser();
+						if ($stepAssignee !== null) {
+							$this->assertMoveParticipantAccess($targetBoard, $moved, $stepAssignee);
+							$clone->setAssignedUser($stepAssignee);
+							$clone->setAssignedRole($this->boardAccess->contextFor($targetBoard, $stepAssignee)->role);
+							$clone->setAssignedAt($item->getAssignedAt());
+						}
+						$this->checklistItemMapper->insert($clone);
+					}
+					foreach ($data['assignees'] as $assigneeUid) {
+						$this->assertMoveParticipantAccess($targetBoard, $moved, $assigneeUid);
+						$this->cardAssigneeMapper->insertAssignment($newId, $assigneeUid, $data['actorNames'][$assigneeUid] ?? null);
+					}
+					foreach ($data['watchers'] as $watcherUid) {
+						$this->assertMoveParticipantAccess($targetBoard, $moved, $watcherUid);
+						$sub = new Subscription();
+						$sub->setSubscriber($watcherUid);
+						$sub->setCardId($newId);
+						$sub->setCommentThreadId(SubscriptionMapper::THREAD_CARD);
+						$sub->setState(Subscription::STATE_SUBSCRIBED);
+						$sub->setCreatedAt($now);
+						$this->subscriptionMapper->insert($sub);
 					}
 				}
 
-				// Checklist items, in display order, carrying their done state.
-				// Clone-path policy for rich steps (#3745): KEEP the step due
-				// date, DROP assignee + done_at - the frozen assigned_role was
-				// resolved against the SOURCE board's ACL and may be wrong on
-				// the target, so the step lands unassigned (like a copy).
-				$itemKey = $this->sortKeyService->initial();
-				foreach ($sourceItems as $index => $item) {
-					if ($index > 0) {
-						$itemKey = $this->sortKeyService->after($itemKey);
-					}
-					$clone = new ChecklistItem();
-					$clone->setCardId($newId);
-					$clone->setTitle($item->getTitle());
-					$clone->setDone($item->getDone());
-					$clone->setSortKey($itemKey);
-					$clone->setCreatedAt($now);
-					$clone->setDueDate($item->getDueDate());
-					$this->checklistItemMapper->insert($clone);
+				$this->moveGraphService->recreate($graph['cards'], $graph['relations'], $movedCards, $targetBoard->getId());
+				$this->moveRecurrenceService->transfer($graph['cards'], $movedCards, $sourceBoard, $targetBoard, $targetStackId, $uid);
+				$this->moveAliasService->record($movedCards);
+				foreach ($graph['cards'] as $card) {
+					$oldId = $card->getId();
+					$trashed = clone $card;
+					$trashed->setParentCardId(null);
+					$trashed->setDeletedAt($now);
+					$trashed->setLastModified($now);
+					$this->cardMapper->update($trashed);
+					$this->changeNotifier->recordChange($targetBoard->getId(), Change::ENTITY_CARD, $movedCards[$oldId]->getId(), Change::ACTION_CREATE, $uid, Change::VERB_CREATED);
+					$this->changeNotifier->recordChange($sourceBoard->getId(), Change::ENTITY_CARD, $oldId, Change::ACTION_DELETE, $uid, Change::VERB_DELETED);
 				}
-
-				// Assignees / watchers that survived the READ filter.
-				foreach ($carriedAssignees as $assigneeUid) {
-					$this->cardAssigneeMapper->insertAssignment($newId, $assigneeUid, $assigneeActorNames[$assigneeUid] ?? null);
-				}
-				foreach ($carriedWatchers as $watcherUid) {
-					$sub = new Subscription();
-					$sub->setSubscriber($watcherUid);
-					$sub->setCardId($newId);
-					$sub->setCommentThreadId(SubscriptionMapper::THREAD_CARD);
-					$sub->setState(Subscription::STATE_SUBSCRIBED);
-					$sub->setCreatedAt($now);
-					$this->subscriptionMapper->insert($sub);
-				}
-
-				// Remove the card from the SOURCE: detach its children (same
-				// self-healing as delete()) then soft-delete it.
-				foreach ($this->cardMapper->findChildren($id) as $child) {
-					$child->setParentCardId(null);
-					$child->setLastModified($now);
-					$this->cardMapper->update($child);
-				}
-				$source->setDeletedAt($now);
-				$source->setLastModified($now);
-				$this->cardMapper->update($source);
-
-				// A change row on BOTH boards so delta-sync/ETag advance on each: a
-				// CREATE on the target, a DELETE on the source.
-				$this->changeNotifier->recordChange(
-					$targetBoard->getId(),
-					Change::ENTITY_CARD,
-					$newId,
-					Change::ACTION_CREATE,
-					$uid,
-					Change::VERB_CREATED,
-				);
-				$this->changeNotifier->recordChange(
-					$sourceBoard->getId(),
-					Change::ENTITY_CARD,
-					$id,
-					Change::ACTION_DELETE,
-					$uid,
-					Change::VERB_DELETED,
-				);
-
 				$this->db->commit();
 				$committed = true;
-
-				// Commit succeeded - broadcast BOTH boards and surface the move in the
-				// Activity stream (best-effort, on the target where the card now lives).
 				$this->changeNotifier->pushBoardChanged($targetBoard->getId());
 				$this->changeNotifier->pushBoardChanged($sourceBoard->getId());
-				$this->changeNotifier->publishCardActivity(
-					$targetBoard->getId(),
-					'card_moved',
-					$moved,
-					$uid,
-				);
-
-				return $moved;
+				$this->changeNotifier->publishCardActivity($targetBoard->getId(), 'card_moved', $movedCards[$id], $uid);
+				return $movedCards[$id];
 			} catch (\OCP\DB\Exception $e) {
 				if ($committed) {
 					throw $e;
 				}
-				$this->rollbackMove($newId);
+				$this->rollbackMove($movedCards);
 				if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 					throw $e;
 				}
-				// A sort-key or board_seq collision on the target: re-derive both and
-				// retry a few times before surfacing a retryable 409.
 				if ($attempt >= self::MAX_CREATE_ATTEMPTS - 1) {
 					throw new \OverflowException('card move key conflict (sort key or board_seq) after retries', 0, $e);
 				}
 			} catch (\Throwable $e) {
 				if (!$committed) {
-					$this->rollbackMove($newId);
+					$this->rollbackMove($movedCards);
 				}
 				throw $e;
 			}
 		}
 	}
 
-	private function rollbackMove(?int $newId): void {
+	private function assertMoveParticipantAccess(Board $board, Card $card, string $uid): void {
+		if (($this->permissionService->getPermissions($board, $uid) & PermissionService::PERMISSION_READ) === 0
+			|| !$this->visibilityGuard->isVisible($board, $card, $uid)) {
+			throw new InvalidInputException('A card participant cannot access the destination card');
+		}
+	}
+
+	/** @param array<int, Card> $movedCards */
+	private function rollbackMove(array $movedCards): void {
+		$cleanupError = null;
 		try {
-			if ($newId !== null) {
-				$this->moveContentService->discardObjects($newId);
+			foreach ($movedCards as $card) {
+				try {
+					$this->moveContentService->discardObjects($card->getId());
+				} catch (\Throwable $e) {
+					$cleanupError ??= $e;
+				}
 			}
 		} finally {
 			$this->db->rollBack();
+		}
+		if ($cleanupError !== null) {
+			throw $cleanupError;
 		}
 	}
 
 	/**
 	 * Builds the target-board card entity for a cross-board move from the source's
-	 * carried content. Estimate is board-scoped (dropped when the target scale
-	 * rejects the token); the title crosses UNCHANGED (a move is not a copy, so no
-	 * " (copy)" suffix). Never a template - a moved card is always an ordinary live
-	 * card.
+	 * carried content. The target scale is validated before this is called and
+	 * the title and template flag are preserved.
 	 *
 	 * Visibility (#3743) crosses over UNCHANGED - a private/internal card must
 	 * never widen to 'public' by being moved. The creator SIDE is re-resolved
@@ -725,10 +695,13 @@ class CardService {
 		}
 		$card->setArchived($source->getArchived());
 		$card->setOwner($source->getOwner());
-		$card->setCreatedAt($now);
+		$card->setCreatedAt($source->getCreatedAt() ?? $now);
+		$card->setDueReminderDayBefore($source->getDueReminderDayBefore());
+		$card->setDueReminderSent($source->getDueReminderSent() ?? 0);
+		$card->setDayBeforeReminderSent($source->getDayBeforeReminderSent() ?? 0);
 		$card->setLastModified($now);
 		$card->setDeletedAt(0);
-		$card->setIsTemplate(false);
+		$card->setIsTemplate($source->getIsTemplate() ?? false);
 		$card->setVisibility($source->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC);
 		$card->setCreatorRole($this->boardAccess->contextFor($targetBoard, $moverUid)->role);
 		return $card;
@@ -749,40 +722,24 @@ class CardService {
 		}
 		$targetByKey = [];
 		foreach ($this->labelMapper->findByBoard($targetBoard->getId()) as $targetLabel) {
-			$targetByKey[$this->labelKey($targetLabel)] ??= $targetLabel->getId();
+			$targetByKey[$this->labelKey($targetLabel)][] = $targetLabel->getId();
 		}
 		$map = [];
+		$used = [];
 		foreach ($sourceLabelIds as $labelId) {
 			try {
 				$sourceLabel = $this->labelMapper->find($labelId);
 			} catch (DoesNotExistException) {
 				continue;
 			}
-			$twinId = $targetByKey[$this->labelKey($sourceLabel)] ?? null;
-			if ($twinId !== null) {
+			$twins = $targetByKey[$this->labelKey($sourceLabel)] ?? [];
+			if (count($twins) === 1 && !isset($used[$twins[0]])) {
+				$twinId = $twins[0];
 				$map[$labelId] = $twinId;
+				$used[$twinId] = true;
 			}
 		}
 		return $map;
-	}
-
-	/**
-	 * Keeps only the uids that can READ the target board - the leak guard for a
-	 * cross-board move's assignees and watchers. A uid with no permission (or an
-	 * unknown uid) is dropped so the moved card never references someone who cannot
-	 * see where it landed. Mirrors the importer/participant read rule.
-	 *
-	 * @param string[] $uids
-	 * @return string[]
-	 */
-	private function filterReadableOnTarget(array $uids, Board $targetBoard): array {
-		$kept = [];
-		foreach ($uids as $candidate) {
-			if (($this->permissionService->getPermissions($targetBoard, $candidate) & PermissionService::PERMISSION_READ) !== 0) {
-				$kept[] = $candidate;
-			}
-		}
-		return $kept;
 	}
 
 	/**

@@ -23,6 +23,7 @@ return [
 		// uniform 404 page. The controller hands the target to the SPA via the
 		// `openCard` initial state.
 		['name' => 'deepLink#card', 'url' => '/card/{id}', 'verb' => 'GET'],
+		['name' => 'cardMoveAlias#resolve', 'url' => '/api/card-navigation/{id}', 'verb' => 'GET'],
 
 		// Public / read-only board share (#3531). UNAUTHENTICATED: `/p/{token}`
 		// renders the read-only SPA shell and `/api/public/{token}` returns the

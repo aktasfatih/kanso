@@ -26,6 +26,15 @@ class SubscriptionMapper extends QBMapper {
 		parent::__construct($db, 'kanso_subscriptions', Subscription::class);
 	}
 
+	/** @return Subscription[] */
+	public function findByCardForMove(int $cardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
+			->orderBy('id', 'ASC');
+		return $this->findEntities($qb);
+	}
+
 	/**
 	 * The subscription row for one (subscriber, card, thread) scope, or null.
 	 *

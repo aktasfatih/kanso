@@ -27,20 +27,33 @@ class CardMoveContentService {
 	) {
 	}
 
-	public function copy(Card $source, Card $target, Board $targetBoard): void {
+	/** @return array<int, int> */
+	public function copyAttachments(Card $source, Card $target, Board $targetBoard): array {
+		return $this->attachmentService->copyForMovedCard($source->getId(), $target->getId(), $targetBoard->getId());
+	}
+
+	/**
+	 * @param array<int, array<int, int>> $attachmentIdsByCard
+	 * @param array<int, int> $cardIds
+	 * @return array<int, int>
+	 */
+	public function copy(Card $source, Card $target, Board $targetBoard, array $attachmentIdsByCard = [], array $cardIds = []): array {
 		$sourceId = $source->getId();
 		$targetId = $target->getId();
-		$attachmentIds = $this->attachmentService->copyForMovedCard($sourceId, $targetId, $targetBoard->getId());
+		if (!array_key_exists($sourceId, $attachmentIdsByCard)) {
+			$attachmentIdsByCard[$sourceId] = $this->copyAttachments($source, $target, $targetBoard);
+			$cardIds[$sourceId] = $targetId;
+		}
 		$description = $source->getDescription();
 		if ($description !== null) {
-			$rewritten = $this->rewriteInlineUrls($description, $sourceId, $targetId, $attachmentIds);
+			$rewritten = $this->rewriteInlineUrls($description, $cardIds, $attachmentIdsByCard);
 			if ($rewritten !== $description) {
 				$target->setDescription($rewritten);
 				$this->cardMapper->update($target);
 			}
 		}
 
-		foreach ($this->fileLinkMapper->findByCard($sourceId) as $link) {
+		foreach ($this->fileLinkMapper->findAllByCardForMove($sourceId) as $link) {
 			$copy = new CardFileLink();
 			$copy->setCardId($targetId);
 			$copy->setFileId($link->getFileId());
@@ -51,7 +64,7 @@ class CardMoveContentService {
 			$this->fileLinkMapper->insert($copy);
 		}
 
-		$comments = $this->commentMapper->findByCard($sourceId);
+		$comments = $this->commentMapper->findAllByCardForMove($sourceId);
 		$commentIds = [];
 		// Process roots first even if imported timestamps order a reply before its parent.
 		foreach ([false, true] as $replies) {
@@ -67,10 +80,13 @@ class CardMoveContentService {
 				$copy->setCardId($targetId);
 				$copy->setParentCommentId($parentId === null ? null : $commentIds[$parentId]);
 				$copy->setAuthor($comment->getAuthor());
+				if ($targetBoard->getAllowAiActors() !== true && $comment->getActorName() !== null) {
+					throw new InvalidInputException('The destination board does not allow AI-attributed comments');
+				}
 				if ($targetBoard->getAllowAiActors() === true) {
 					$copy->setActorName($comment->getActorName());
 				}
-				$copy->setBody($this->rewriteInlineUrls($comment->getBody(), $sourceId, $targetId, $attachmentIds));
+				$copy->setBody($this->rewriteInlineUrls($comment->getBody(), $cardIds, $attachmentIdsByCard));
 				$copy->setCreatedAt($comment->getCreatedAt());
 				$copy->setEditedAt($comment->getEditedAt());
 				$copy->setDeletedAt($comment->getDeletedAt());
@@ -88,6 +104,7 @@ class CardMoveContentService {
 			$copy->setCreatedAt($reaction->getCreatedAt());
 			$this->reactionMapper->insert($copy);
 		}
+		return $commentIds;
 	}
 
 	public function discardObjects(int $cardId): void {
@@ -96,18 +113,22 @@ class CardMoveContentService {
 		}
 	}
 
-	/** @param array<int, int> $attachmentIds */
-	private function rewriteInlineUrls(string $text, int $sourceId, int $targetId, array $attachmentIds): string {
-		if ($attachmentIds === []) {
+	/**
+	 * @param array<int, int> $cardIds
+	 * @param array<int, array<int, int>> $attachmentIdsByCard
+	 */
+	private function rewriteInlineUrls(string $text, array $cardIds, array $attachmentIdsByCard): string {
+		if ($attachmentIdsByCard === []) {
 			return $text;
 		}
 		$pattern = '~(?<![\w:/@.\-])(?P<prefix>/(?:[^/\\\\\s()<>"\'@:?#]+/)*apps/kanso/api)/cards/(?P<card>\d+)/attachments/(?P<attachment>\d+)/inline(?![\w/?#.-])~';
-		return preg_replace_callback($pattern, static function (array $match) use ($sourceId, $targetId, $attachmentIds): string {
+		return preg_replace_callback($pattern, static function (array $match) use ($cardIds, $attachmentIdsByCard): string {
+			$sourceId = (int)$match['card'];
 			$attachmentId = (int)$match['attachment'];
-			if ((int)$match['card'] !== $sourceId || !isset($attachmentIds[$attachmentId])) {
+			if (!isset($cardIds[$sourceId], $attachmentIdsByCard[$sourceId][$attachmentId])) {
 				return $match[0];
 			}
-			return $match['prefix'] . '/cards/' . $targetId . '/attachments/' . $attachmentIds[$attachmentId] . '/inline';
+			return $match['prefix'] . '/cards/' . $cardIds[$sourceId] . '/attachments/' . $attachmentIdsByCard[$sourceId][$attachmentId] . '/inline';
 		}, $text) ?? $text;
 	}
 }

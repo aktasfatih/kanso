@@ -26,6 +26,15 @@ class ProjectCardMapper extends QBMapper {
 		parent::__construct($db, 'kanso_project_cards', ProjectCard::class);
 	}
 
+	/** @return ProjectCard[] */
+	public function findByCardForMove(int $cardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
+			->orderBy('id', 'ASC');
+		return $this->findEntities($qb);
+	}
+
 	/**
 	 * Adds a card to a project. Idempotent per (project, card): a repeat add of
 	 * the same pair is a no-op, swallowing the unique-constraint violation
