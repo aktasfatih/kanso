@@ -3375,6 +3375,32 @@ class CardServiceTest extends TestCase {
 		$this->service->moveToBoard(9, 7, 'alice');
 	}
 
+	public function testMoveDoesNotRetryOrDiscardObjectsWhenCommitRaisesDatabaseError(): void {
+		$sourceBoard = $this->board(1);
+		$targetBoard = $this->board(2);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card(9, 5, 1));
+		$this->boardMapper->method('find')->willReturnMap([[1, $sourceBoard], [2, $targetBoard]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, 2));
+		$this->cardMapper->method('findLastInStack')->willReturn(null);
+		$this->cardMapper->method('nextBoardSeq')->willReturn(1);
+		$this->cardMapper->expects(self::once())->method('insert')->willReturnCallback(function (Card $card): Card {
+			$card->setId(42);
+			return $card;
+		});
+		$this->moveContentService->method('copyAttachments')->willReturnCallback(static function (Card $source, Card $target, Board $board, callable $recordObject): array {
+			$recordObject(42, str_repeat('a', 32));
+			return [];
+		});
+		$this->db->expects(self::once())->method('beginTransaction');
+		$this->db->expects(self::once())->method('commit')->willThrowException($this->uniqueViolation());
+		$this->db->expects(self::once())->method('rollBack');
+		$this->moveCleanupService->expects(self::never())->method('schedule');
+		$this->moveCleanupService->expects(self::never())->method('cleanup');
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+		$this->expectException(\OCP\DB\Exception::class);
+		$this->service->moveToBoard(9, 7, 'alice');
+	}
+
 	public function testMoveDoesNotDiscardObjectsIfNotificationFailsAfterCommit(): void {
 		$sourceBoard = $this->board(1);
 		$targetBoard = $this->board(2);
