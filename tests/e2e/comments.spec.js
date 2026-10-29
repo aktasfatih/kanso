@@ -317,3 +317,71 @@ test.describe('Comments / Discussion', () => {
 		await expect(prose).toContainText('this text must survive a failed post', { timeout: 5000 })
 	})
 })
+
+test.describe('Comment order toggle', () => {
+	const state = { boardId: 0, cardId: 0, cardUrl: '' }
+
+	test.beforeAll(async () => {
+		// Hermetic board + card dedicated to the order toggle, so the thread shape
+		// is fully controlled (the sibling describe shares one card and mutates it).
+		const boards = await api.get('/boards')
+		for (const b of boards) {
+			if (b.title === 'Comment Order E2E Board') {
+				await api.delete(`/boards/${b.id}`)
+			}
+		}
+		const board = await api.post('/boards', { title: 'Comment Order E2E Board' })
+		state.boardId = board.id
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Order Toggle Card' })
+		state.cardId = card.id
+		state.cardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`
+
+		// Two top-level comments in a known order (OLDER posted first → lower id),
+		// plus one reply under OLDER. The server orders comments by created_at ASC,
+		// id ASC, so OLDER is the oldest thread and NEWER the newest.
+		const older = await api.post(`/cards/${state.cardId}/comments`, { body: 'ORDER-OLDER marker' })
+		await api.post(`/cards/${state.cardId}/comments`, { body: 'ORDER-REPLY marker', parentCommentId: older.id })
+		await api.post(`/cards/${state.cardId}/comments`, { body: 'ORDER-NEWER marker' })
+	})
+
+	test.afterAll(async () => {
+		if (state.boardId) {
+			await api.delete(`/boards/${state.boardId}`).catch(() => {})
+		}
+	})
+
+	test('defaults to oldest-first, toggles to newest-first, and persists the choice', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+
+		const groups = page.locator('.card-modal__comment-group')
+		await expect(groups).toHaveCount(2)
+
+		// Default is oldest-first: OLDER group first, NEWER group last.
+		await expect(groups.nth(0)).toContainText('ORDER-OLDER')
+		await expect(groups.nth(1)).toContainText('ORDER-NEWER')
+		// The reply stays attached to its OLDER parent.
+		await expect(groups.nth(0).locator('.card-modal__comment--reply')).toHaveCount(1)
+
+		// Toolbar is present and "Oldest first" is active by default.
+		await expect(page.locator('.card-modal__comment-toolbar')).toBeVisible()
+		await expect(page.locator('.card-modal__comment-order-btn', { hasText: 'Oldest first' })).toHaveClass(/--active/)
+
+		// Switch to newest-first.
+		await page.locator('.card-modal__comment-order-btn', { hasText: 'Newest first' }).click()
+		await expect(page.locator('.card-modal__comment-order-btn', { hasText: 'Newest first' })).toHaveClass(/--active/)
+
+		// Order is now reversed: NEWER first, OLDER last — and the reply still rides with OLDER.
+		await expect(groups.nth(0)).toContainText('ORDER-NEWER')
+		await expect(groups.nth(1)).toContainText('ORDER-OLDER')
+		await expect(groups.nth(1).locator('.card-modal__comment--reply')).toHaveCount(1)
+
+		// The choice persists across a reload (localStorage).
+		await page.reload()
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+		await expect(page.locator('.card-modal__comment-order-btn', { hasText: 'Newest first' })).toHaveClass(/--active/)
+		await expect(page.locator('.card-modal__comment-group').nth(0)).toContainText('ORDER-NEWER')
+	})
+})

@@ -377,7 +377,7 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:5011
+#: src/components/CardDetail.vue:5036
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
@@ -387,7 +387,7 @@ msgid "%n file"
 msgid_plural "%n files"
 msgstr[0] "%n 个文件"
 
-#: src/components/CardDetail.vue:5009
+#: src/components/CardDetail.vue:5034
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
@@ -412,7 +412,7 @@ msgid "%n label was not created and is missing from the imported cards: only boa
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
 msgstr[0] "有 %n 个标签未能创建，导入的卡片中缺少它们：只有看板管理者才能添加新标签。请让管理者添加，然后在卡片上设置它们。"
 
-#: src/components/CardDetail.vue:5007
+#: src/components/CardDetail.vue:5032
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -437,7 +437,7 @@ msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
 
-#: src/components/CardDetail.vue:2309
+#: src/components/CardDetail.vue:2334
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n 条回复"
@@ -1619,6 +1619,10 @@ msgid "Comment"
 msgstr "评论"
 
 #: src/components/CardDetail.vue
+msgid "Comment order"
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "commented"
 msgstr "发表了评论"
 
@@ -1970,7 +1974,7 @@ msgid "Date"
 msgstr "日期"
 
 #: src/components/BoardSettingsModal.vue:2298
-#: src/components/CardDetail.vue:5200
+#: src/components/CardDetail.vue:5225
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -3511,7 +3515,7 @@ msgstr "看板的用途、范围或协作约定。看板中的所有人都可以
 msgid "Jump to the discussion"
 msgstr "跳转到讨论"
 
-#: src/components/CardDetail.vue:7021
+#: src/components/CardDetail.vue:7069
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "跳转到讨论（%n 条评论）"
@@ -3886,7 +3890,7 @@ msgid "Mon"
 msgstr "周一"
 
 #: src/components/BoardSettingsModal.vue:2300
-#: src/components/CardDetail.vue:5202
+#: src/components/CardDetail.vue:5227
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -4072,6 +4076,10 @@ msgstr "新建模板"
 #: src/App.vue
 msgid "New view"
 msgstr "新建视图"
+
+#: src/components/CardDetail.vue
+msgid "Newest first"
+msgstr ""
 
 #: templates/admin-backup.php
 msgid "Newest first."
@@ -4440,6 +4448,10 @@ msgstr "偏移（天）"
 msgid "Offset after (days)"
 msgstr "之后偏移（天）"
 
+#: src/components/CardDetail.vue
+msgid "Oldest first"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "On days"
 msgstr "在这些日子"
@@ -4564,6 +4576,10 @@ msgstr "或在下方粘贴"
 #: src/components/StackColumn.vue
 msgid "Orange"
 msgstr "橙色"
+
+#: src/components/CardDetail.vue
+msgid "Order"
+msgstr ""
 
 #: src/components/MarkdownEditor.vue
 msgid "Ordered list"
@@ -5451,7 +5467,7 @@ msgstr "在卡片下方显示讨论"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:7027
+#: src/components/CardDetail.vue:7075
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -6236,7 +6252,7 @@ msgid "Wed"
 msgstr "周三"
 
 #: src/components/BoardSettingsModal.vue:2299
-#: src/components/CardDetail.vue:5201
+#: src/components/CardDetail.vue:5226
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -6344,7 +6360,7 @@ msgid "wrote"
 msgstr "写道"
 
 #: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5203
+#: src/components/CardDetail.vue:5228
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"

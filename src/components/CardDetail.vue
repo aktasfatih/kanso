@@ -2277,6 +2277,31 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 
 						<div v-if="discussionTab === 'discussion'" class="card-modal__thread-scroll">
+							<!-- Order toggle, sticky inside the scroller so it does not shrink the pane height.
+							     Display-only reorder of top-level threads; replies stay attached. -->
+							<div
+								v-if="commentThread.length > 0"
+								class="card-modal__comment-toolbar">
+								<span class="card-modal__comment-toolbar-label">{{ t('kanso', 'Order') }}</span>
+								<div class="card-modal__comment-order" role="group" :aria-label="t('kanso', 'Comment order')">
+									<button
+										type="button"
+										class="card-modal__comment-order-btn"
+										:class="{ 'card-modal__comment-order-btn--active': commentOrder === 'oldest' }"
+										:aria-pressed="commentOrder === 'oldest'"
+										@click="setCommentOrder('oldest')">
+										{{ t('kanso', 'Oldest first') }}
+									</button>
+									<button
+										type="button"
+										class="card-modal__comment-order-btn"
+										:class="{ 'card-modal__comment-order-btn--active': commentOrder === 'newest' }"
+										:aria-pressed="commentOrder === 'newest'"
+										@click="setCommentOrder('newest')">
+										{{ t('kanso', 'Newest first') }}
+									</button>
+								</div>
+							</div>
 							<div v-if="commentThread.length > 0" class="card-modal__thread">
 								<div
 									v-for="{ comment: topComment, replies } in commentThread"
@@ -5273,8 +5298,31 @@ async function handleVisibilityChange(visibility) {
 	}
 }
 
+// ── Comment order (display-only) ─────────────────────────────────────────────
+// 'oldest' (default) renders top-level threads in server order; 'newest'
+// reverses them. A per-browser view preference persisted in localStorage,
+// mirroring the board-sort control — deliberately NOT a server user setting.
+const COMMENT_ORDERS = ['oldest', 'newest']
+const commentOrder = ref('oldest')
+try {
+	const savedOrder = localStorage.getItem('kanso.commentOrder')
+	if (savedOrder && COMMENT_ORDERS.includes(savedOrder)) commentOrder.value = savedOrder
+} catch (e) { /* default to oldest */ }
+function setCommentOrder(order) {
+	if (!COMMENT_ORDERS.includes(order)) return
+	commentOrder.value = order
+	try {
+		localStorage.setItem('kanso.commentOrder', order)
+	} catch (e) { /* ignore persistence failure */ }
+}
+
 const flatComments = computed(() => commentsQuery.data.value ?? [])
-const commentThread = computed(() => buildCommentTree(flatComments.value))
+const commentThread = computed(() => {
+	const tree = buildCommentTree(flatComments.value)
+	// Newest-first is a display-only reverse of the TOP-LEVEL threads; replies
+	// stay attached to their parent and keep oldest-first order within a thread.
+	return commentOrder.value === 'newest' ? [...tree].reverse() : tree
+})
 
 // ── Resolved threads ─────────────────────────────────────────────────────────
 // A resolved thread (server-side `resolvedAt > 0` on its top-level comment)
@@ -9320,6 +9368,46 @@ async function handleToggleProject(projectId) {
 	gap: 4px;
 	padding: 8px 12px;
 }
+/* Comment order toolbar — sticky inside the thread scroller so it does not
+   shrink the pane height (the #10657 height contract) while staying visible. */
+.card-modal__comment-toolbar {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 16px;
+	background: var(--color-main-background);
+	border-bottom: 1px solid var(--color-border);
+}
+.card-modal__comment-toolbar-label {
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--color-text-maxcontrast);
+}
+.card-modal__comment-order {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
+}
+.card-modal__comment-order-btn {
+	padding: 4px 10px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.75rem;
+	font-weight: 600;
+	cursor: pointer;
+	white-space: nowrap;
+}
+.card-modal__comment-order-btn:hover { background: var(--color-background-hover); }
+.card-modal__comment-order-btn--active {
+	background: var(--color-primary-element-light);
+	color: var(--color-main-text);
+}
 .card-modal__discussion-tab {
 	display: inline-flex;
 	align-items: center;
@@ -10068,6 +10156,12 @@ async function handleToggleProject(projectId) {
 		position: sticky;
 		bottom: 0;
 		z-index: 10;
+	}
+	/* The order toolbar is sticky in the side layout, but in the bottom layout the
+	   discussion tabs also pin at top:0 with a higher z-index and would paint over
+	   it, so keep it in normal flow there. */
+	.card-modal--discussion-bottom .card-modal__comment-toolbar {
+		position: static;
 	}
 }
 
