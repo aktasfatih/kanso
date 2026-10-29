@@ -29,7 +29,7 @@ class Version007100Date20261029000000 extends SimpleMigrationStep {
 		$table->addColumn('actor', Types::STRING, ['notnull' => false, 'length' => 64]);
 		$table->addColumn('verb', Types::INTEGER, ['notnull' => false]);
 		$table->addColumn('created_at', Types::BIGINT, ['notnull' => true, 'length' => 8]);
-		$table->addColumn('has_detail', Types::BOOLEAN, ['notnull' => true, 'default' => false]);
+		$table->addColumn('has_detail', Types::BOOLEAN, ['notnull' => false, 'default' => false]);
 		$table->addColumn('from_text', Types::TEXT, ['notnull' => false]);
 		$table->addColumn('to_text', Types::TEXT, ['notnull' => false]);
 		$table->setPrimaryKey(['id'], 'kanso_chist_pk');
