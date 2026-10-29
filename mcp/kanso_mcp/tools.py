@@ -454,18 +454,20 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
 
         Requires edit permission on BOTH boards. The move is atomic, but it is
         implemented as re-create-on-target + delete-on-source, so the semantics
-        are lossy and are probably not what you assume:
+        can be lossy:
 
         - The card gets a NEW id and a NEW per-board number (e.g. KAN-12
           becomes KAN-87 on the target). Read the returned card for both; any
           id you were holding is dead. Links elsewhere to the old card break.
-        - LEFT BEHIND on the deleted source card: comments, attachments,
-          custom-field values, time entries, review requests, reminders, and
+        - LEFT BEHIND on the deleted source card: custom-field values, time
+          entries, review requests, reminders, and
           all relations (blocks / blocked-by / duplicates / relates). Subtasks
           are detached from the card rather than moved with it.
         - CARRIED OVER: title, description, checklist items (unassigned, but
           keeping their done state and due dates), due/start dates, priority,
-          type, done state, cover colour and visibility.
+          type, done state, cover colour and visibility. Servers with move
+          preservation support also carry comments, attachments and Files
+          links; older servers leave these on the source card.
         - REMAPPED: labels match a target-board label with the same name and
           colour, and drop when the target has no twin — they are never
           auto-created. Assignees and watchers are kept only for people who can
@@ -477,9 +479,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         labels and assignees, which a manual recreate would not.
 
         Before calling, check the card with `kanso_get_card`: if it has
-        comments or attachments (`commentCount` / `attachmentCount` above 0),
-        TELL THE USER those will stay behind on the source board and let them
-        confirm before you move it.
+        comments, attachments or Files links and the server's version is not
+        known to preserve them, tell the user they may stay behind and let
+        them confirm before you move it.
 
         Args:
             card_id: The card to move.

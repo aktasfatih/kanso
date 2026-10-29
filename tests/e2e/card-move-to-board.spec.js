@@ -1,7 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { test, expect, BASE, api, ncLogin } from './helpers.js'
+import { test, expect, BASE, API, api, currentAuth, me, ncLogin } from './helpers.js'
+
+const PNG = Uint8Array.from(Buffer.from(
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGNgAAEAAAUA' +
+	'AQ0KLbQAAAAASUVORK5CYII=',
+	'base64',
+))
 
 // Live (non-archived) cards in a stack, top-to-bottom, from the board payload.
 async function stackTitles(boardId, stackId) {
@@ -91,5 +97,78 @@ test.describe('Move card to another board (card ⋯ menu)', () => {
 		// The original id is gone (soft-deleted on the source): its detail 404s.
 		const r = await api.raw('GET', `/cards/${state.srcId}`)
 		expect(r.status).toBe(404)
+	})
+
+	test('preserves discussion, linked files and attachment contents across a move and source purge', async () => {
+		const filename = `kanso-move-linked-${Date.now()}.txt`
+		const fileUrl = `${BASE}/remote.php/dav/files/${encodeURIComponent(me)}/${filename}`
+		const put = await fetch(fileUrl, {
+			method: 'PUT',
+			headers: { Authorization: currentAuth },
+			body: 'linked file content',
+		})
+		expect(put.ok).toBe(true)
+		const fileId = Number.parseInt(put.headers.get('oc-fileid'), 10)
+		expect(fileId).toBeGreaterThan(0)
+
+		try {
+			const card = await api.post('/cards', { stackId: state.srcStackId, title: 'Discussion and files' })
+			await api.post(`/cards/${card.id}/file-links`, { fileId })
+			await api.post(`/cards/${card.id}/attachments/from-file`, { fileId })
+
+			const form = new FormData()
+			form.append('file', new Blob([PNG], { type: 'image/png' }), 'move-image.png')
+			const uploaded = await fetch(`${API}/cards/${card.id}/attachments`, {
+				method: 'POST',
+				headers: { Authorization: currentAuth, 'OCS-APIREQUEST': 'true' },
+				body: form,
+			})
+			expect(uploaded.ok).toBe(true)
+			const image = await uploaded.json()
+			const imageUrl = `/apps/kanso/api/cards/${card.id}/attachments/${image.id}/inline`
+			await api.patch(`/cards/${card.id}`, { description: `Image: ![photo](${imageUrl})` })
+			const thread = await api.post(`/cards/${card.id}/comments`, { body: `Picture: ![photo](${imageUrl})` })
+			await api.post(`/cards/${card.id}/comments`, { body: 'A reply', parentCommentId: thread.id })
+			await api.put(`/comments/${thread.id}/reactions/${encodeURIComponent('👍')}`)
+
+			const moved = await api.post(`/cards/${card.id}/move-to-board`, { targetStackId: state.dstStackId })
+			const links = await api.get(`/cards/${moved.id}/file-links`)
+			expect(links.map((link) => link.fileId)).toContain(fileId)
+
+			const attachments = await api.get(`/cards/${moved.id}/attachments`)
+			expect(attachments.map((attachment) => attachment.filename).sort()).toEqual([filename, 'move-image.png'].sort())
+			const copiedFile = attachments.find((attachment) => attachment.filename === filename)
+			const copiedImage = attachments.find((attachment) => attachment.filename === 'move-image.png')
+			const movedImageUrl = `/apps/kanso/api/cards/${moved.id}/attachments/${copiedImage.id}/inline`
+
+			const detail = await api.get(`/cards/${moved.id}`)
+			expect(detail.description).toBe(`Image: ![photo](${movedImageUrl})`)
+			const comments = await api.get(`/cards/${moved.id}/comments`)
+			expect(comments).toHaveLength(2)
+			const movedThread = comments.find((comment) => comment.parentCommentId === null)
+			const reply = comments.find((comment) => comment.body === 'A reply')
+			expect(movedThread.body).toBe(`Picture: ![photo](${movedImageUrl})`)
+			expect(movedThread.author).toBe(me)
+			expect(reply.parentCommentId).toBe(movedThread.id)
+			expect(movedThread.reactions).toEqual(expect.arrayContaining([
+				expect.objectContaining({ emoji: '👍', count: 1, mine: true }),
+			]))
+
+			await api.delete(`/cards/${card.id}/purge`)
+			const download = await fetch(`${API}/cards/${moved.id}/attachments/${copiedFile.id}`, {
+				headers: { Authorization: currentAuth, 'OCS-APIREQUEST': 'true' },
+			})
+			expect(download.ok).toBe(true)
+			expect(await download.text()).toBe('linked file content')
+			const inline = await fetch(`${BASE}${movedImageUrl}`, {
+				headers: { Authorization: currentAuth, 'OCS-APIREQUEST': 'true' },
+			})
+			expect(inline.ok).toBe(true)
+			expect(new Uint8Array(await inline.arrayBuffer())).toEqual(PNG)
+			expect((await api.get(`/cards/${moved.id}/file-links`)).map((link) => link.fileId)).toContain(fileId)
+			expect(await api.get(`/cards/${moved.id}/comments`)).toHaveLength(2)
+		} finally {
+			await fetch(fileUrl, { method: 'DELETE', headers: { Authorization: currentAuth } }).catch(() => {})
+		}
 	})
 })

@@ -60,6 +60,18 @@ class CommentReactionMapper extends QBMapper {
 		return $qb->executeStatement();
 	}
 
+	/** @return CommentReaction[] */
+	public function findEntitiesByComments(array $commentIds): array {
+		if ($commentIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->in('comment_id', $qb->createNamedParameter($commentIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->orderBy('id', 'ASC');
+		return $this->findEntities($qb);
+	}
+
 	/**
 	 * All reactions on the given comments, so the controller can fold them into
 	 * per-comment / per-emoji summaries in one query for a whole thread. Ordered

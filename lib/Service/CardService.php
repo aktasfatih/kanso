@@ -121,6 +121,7 @@ class CardService {
 		private BoardAccess $boardAccess,
 		private CardVisibilityGuard $visibilityGuard,
 		private ChangeDetailMapper $changeDetailMapper,
+		private CardMoveContentService $moveContentService,
 		// Lazily resolved (RecurrenceService depends on CardService) to re-point a
 		// card's repeat when its Start/due date is edited - same pattern as
 		// ChangeNotifier. Only touched on the rare date-edit-of-a-template path.
@@ -471,12 +472,13 @@ class CardService {
 	 *   - labels: mapped by title+color to the target board (unmatched drop),
 	 *     exactly like {@see self::copyLabels()} - labels are never auto-created;
 	 *   - checklist items, in order, with their done state;
+	 *   - comments, reactions, file links and attachment bytes;
 	 *   - assignees AND watchers/subscriptions: KEPT only for uids that can READ
 	 *     the target board; any uid that cannot is DROPPED (the leak guard - a move
 	 *     must never carry a card reference to someone who cannot access it).
 	 *
-	 * What does NOT cross over (mirrors copy / the charter non-goals): comments,
-	 * activity/history, relations/back-links, and parent/children links (a moved
+	 * What does NOT cross over: activity/history, relations/back-links,
+	 * and parent/children links (a moved
 	 * card is detached from its source-board hierarchy). The human KAN-id is
 	 * RE-ISSUED on the target board (a fresh per-board sequence) - the reference
 	 * changes, as it does for a copy.
@@ -549,6 +551,8 @@ class CardService {
 		$title = $this->validateTitle($source->getTitle());
 
 		for ($attempt = 0; ; $attempt++) {
+			$newId = null;
+			$committed = false;
 			$this->db->beginTransaction();
 			try {
 				// Fresh shell on the target: append to the bottom of the target stack
@@ -564,6 +568,7 @@ class CardService {
 				$moved = $this->buildMovedCard($source, $targetBoard, $targetStackId, $sortKey, $boardSeq, $now, $uid);
 				$moved = $this->cardMapper->insert($moved);
 				$newId = $moved->getId();
+				$this->moveContentService->copy($source, $moved, $targetBoard);
 
 				// Labels: assign the mapped twins directly (no self-committing service
 				// call inside our transaction).
@@ -639,6 +644,7 @@ class CardService {
 				);
 
 				$this->db->commit();
+				$committed = true;
 
 				// Commit succeeded - broadcast BOTH boards and surface the move in the
 				// Activity stream (best-effort, on the target where the card now lives).
@@ -653,7 +659,10 @@ class CardService {
 
 				return $moved;
 			} catch (\OCP\DB\Exception $e) {
-				$this->db->rollBack();
+				if ($committed) {
+					throw $e;
+				}
+				$this->rollbackMove($newId);
 				if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 					throw $e;
 				}
@@ -663,9 +672,21 @@ class CardService {
 					throw new \OverflowException('card move key conflict (sort key or board_seq) after retries', 0, $e);
 				}
 			} catch (\Throwable $e) {
-				$this->db->rollBack();
+				if (!$committed) {
+					$this->rollbackMove($newId);
+				}
 				throw $e;
 			}
+		}
+	}
+
+	private function rollbackMove(?int $newId): void {
+		try {
+			if ($newId !== null) {
+				$this->moveContentService->discardObjects($newId);
+			}
+		} finally {
+			$this->db->rollBack();
 		}
 	}
 

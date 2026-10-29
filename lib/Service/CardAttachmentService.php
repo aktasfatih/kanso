@@ -496,6 +496,46 @@ class CardAttachmentService {
 	}
 
 	/**
+	 * Copies stored files for a new card inside the caller's transaction.
+	 * The caller must discard the new card's objects on rollback.
+	 *
+	 * @return array<int, int> old attachment id to new attachment id
+	 */
+	public function copyForMovedCard(int $sourceId, int $targetId, int $targetBoardId): array {
+		$attachments = $this->attachmentMapper->findByCard($sourceId);
+		$total = array_sum(array_map(static fn (CardAttachment $a): int => $a->getSize(), $attachments));
+		if ($total > 0) {
+			$this->assertStorageHeadroom($total);
+		}
+		$ids = [];
+		foreach ($attachments as $attachment) {
+			$stream = $this->openStoredObject($sourceId, $attachment->getStorageKey());
+			if ($stream === null) {
+				throw new \RuntimeException('Cannot copy a missing card attachment');
+			}
+			try {
+				$this->cardFolder($targetId)->newFile($attachment->getStorageKey(), $stream);
+			} finally {
+				if (is_resource($stream)) {
+					fclose($stream);
+				}
+			}
+			$copy = new CardAttachment();
+			$copy->setCardId($targetId);
+			$copy->setBoardId($targetBoardId);
+			$copy->setFilename($attachment->getFilename());
+			$copy->setMime($attachment->getMime());
+			$copy->setSize($attachment->getSize());
+			$copy->setStorageKey($attachment->getStorageKey());
+			$copy->setUploadedBy($attachment->getUploadedBy());
+			$copy->setCreatedAt($attachment->getCreatedAt());
+			$copy = $this->attachmentMapper->insert($copy);
+			$ids[$attachment->getId()] = $copy->getId();
+		}
+		return $ids;
+	}
+
+	/**
 	 * Opens the stored bytes of ONE attachment object as a read stream, for an
 	 * internal consumer that has ALREADY authorized the read - today only the
 	 * board archive writer ({@see BoardArchiveService}), which walks a card set

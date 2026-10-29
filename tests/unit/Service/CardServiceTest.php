@@ -56,6 +56,7 @@ class CardServiceTest extends TestCase {
 	private BoardAccess&MockObject $boardAccess;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private ChangeDetailMapper&MockObject $changeDetailMapper;
+	private \OCA\Kanso\Service\CardMoveContentService&MockObject $moveContentService;
 	/** The role the BoardAccess mock resolves creators to (#3741 freeze). */
 	private string $resolvedRole = ViewerContext::ROLE_INTERNAL;
 	private CardService $service;
@@ -94,6 +95,7 @@ class CardServiceTest extends TestCase {
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
+		$this->moveContentService = $this->createMock(\OCA\Kanso\Service\CardMoveContentService::class);
 		// Default: any detail write returns a row (the typed return must not be null,
 		// or a move/update inside the transaction would TypeError and roll back).
 		// Tests asserting specific from/to values override this.
@@ -124,6 +126,7 @@ class CardServiceTest extends TestCase {
 			$this->boardAccess,
 			$this->visibilityGuard,
 			$this->changeDetailMapper,
+			$this->moveContentService,
 			$container
 		);
 	}
@@ -3317,6 +3320,75 @@ class CardServiceTest extends TestCase {
 	}
 
 	// ---- moveToBoard (#3679) ----------------------------------------------
+
+	public function testMoveDoesNotDiscardObjectsIfNotificationFailsAfterCommit(): void {
+		$sourceBoard = $this->board(1);
+		$targetBoard = $this->board(2);
+		$source = $this->card(9, 5, 1);
+		$this->cardMapper->method('find')->with(9)->willReturn($source);
+		$this->boardMapper->method('find')->willReturnMap([[1, $sourceBoard], [2, $targetBoard]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, 2));
+		$this->cardMapper->method('findLastInStack')->willReturn(null);
+		$this->cardMapper->method('nextBoardSeq')->willReturn(1);
+		$this->cardMapper->method('insert')->willReturnCallback(function (Card $card): Card {
+			$card->setId(42);
+			return $card;
+		});
+		$this->db->expects(self::once())->method('commit');
+		$this->db->expects(self::never())->method('rollBack');
+		$this->moveContentService->expects(self::never())->method('discardObjects');
+		$this->changeNotifier->method('pushBoardChanged')->willThrowException(new \RuntimeException('push failure'));
+		$this->expectExceptionMessage('push failure');
+		$this->service->moveToBoard(9, 7, 'alice');
+	}
+
+	public function testMoveRollsBackWhenStorageCleanupFails(): void {
+		$sourceBoard = $this->board(1);
+		$targetBoard = $this->board(2);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card(9, 5, 1));
+		$this->boardMapper->method('find')->willReturnMap([[1, $sourceBoard], [2, $targetBoard]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, 2));
+		$this->cardMapper->method('findLastInStack')->willReturn(null);
+		$this->cardMapper->method('nextBoardSeq')->willReturn(1);
+		$this->cardMapper->method('insert')->willReturnCallback(function (Card $card): Card {
+			$card->setId(42);
+			return $card;
+		});
+		$this->moveContentService->method('copy')->willThrowException(new \RuntimeException('copy failed'));
+		$this->moveContentService->method('discardObjects')->willThrowException(new \RuntimeException('cleanup failed'));
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+		$this->expectExceptionMessage('cleanup failed');
+		$this->service->moveToBoard(9, 7, 'alice');
+	}
+
+	public function testMoveToBoardRollsBackAndDiscardsCopiedObjectsWhenContentCopyFails(): void {
+		$sourceBoard = $this->board(1);
+		$targetBoard = $this->board(2);
+		$source = $this->card(9, 5, 1);
+		$targetStack = $this->stack(7, 2);
+		$this->cardMapper->method('find')->with(9)->willReturn($source);
+		$this->boardMapper->method('find')->willReturnMap([[1, $sourceBoard], [2, $targetBoard]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($targetStack);
+		$this->cardMapper->method('findLastInStack')->willReturn(null);
+		$this->cardMapper->method('nextBoardSeq')->willReturn(1);
+		$this->cardMapper->method('insert')->willReturnCallback(function (Card $card): Card {
+			$card->setId(42);
+			return $card;
+		});
+		$this->moveContentService->expects(self::once())->method('copy')->willThrowException(new \RuntimeException('storage failure'));
+		$cleaned = false;
+		$this->moveContentService->expects(self::once())->method('discardObjects')->with(42)->willReturnCallback(function () use (&$cleaned): void {
+			$cleaned = true;
+		});
+		$this->db->expects(self::once())->method('rollBack')->willReturnCallback(function () use (&$cleaned): void {
+			self::assertTrue($cleaned);
+		});
+		$this->db->expects(self::never())->method('commit');
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->expectExceptionMessage('storage failure');
+		$this->service->moveToBoard(9, 7, 'alice');
+	}
 
 	/**
 	 * Cross-board MOVE happy path: the card is re-created on the target board
