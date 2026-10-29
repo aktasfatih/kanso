@@ -41,6 +41,37 @@ class CardMoveContentServiceTest extends TestCase {
 		self::assertSame('![other](/apps/kanso/api/cards/43/attachments/88/inline)', $target->getDescription());
 	}
 
+	public function testCopiesLiveReplyAndDeletedRootTogether(): void {
+		$comments = $this->createMock(CommentMapper::class);
+		$root = $this->comment(1, null, 'deleted root');
+		$root->setDeletedAt(100);
+		$reply = $this->comment(2, 1, 'live reply');
+		$comments->method('findAllByCardForMove')->with(9)->willReturn([$root, $reply]);
+		$copies = [];
+		$comments->expects(self::exactly(2))->method('insert')->willReturnCallback(function (Comment $comment) use (&$copies): Comment {
+			$comment->setId(101 + count($copies));
+			$copies[] = $comment;
+			return $comment;
+		});
+		$service = new CardMoveContentService(
+			$this->createMock(CardMapper::class),
+			$comments,
+			$this->createMock(CommentReactionMapper::class),
+			$this->createMock(CardFileLinkMapper::class),
+			$this->createMock(CardAttachmentService::class),
+		);
+		$source = new Card();
+		$source->setId(9);
+		$target = new Card();
+		$target->setId(42);
+		$board = new Board();
+		$board->setAllowAiActors(true);
+		self::assertSame([1 => 101, 2 => 102], $service->copy($source, $target, $board, [9 => []], [9 => 42]));
+		self::assertSame(100, $copies[0]->getDeletedAt());
+		self::assertSame(101, $copies[1]->getParentCommentId());
+		self::assertSame(0, $copies[1]->getDeletedAt());
+	}
+
 	public function testCopiesDiscussionLinksAndRewritesOnlyOwnInlineUrls(): void {
 		$cards = $this->createMock(CardMapper::class);
 		$comments = $this->createMock(CommentMapper::class);
@@ -72,6 +103,8 @@ class CardMoveContentServiceTest extends TestCase {
 			self::assertSame(42, $copy->getCardId());
 			self::assertSame(123, $copy->getFileId());
 			self::assertSame('alice', $copy->getLinkedBy());
+			self::assertSame('doc.txt', $copy->getName());
+			self::assertSame('text/plain', $copy->getMime());
 			return $copy;
 		});
 

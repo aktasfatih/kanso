@@ -65,6 +65,7 @@ class CardServiceTest extends TestCase {
 	private \OCA\Kanso\Service\CardMoveHistoryService&MockObject $moveHistoryService;
 	private \OCA\Kanso\Service\CardMoveRecurrenceService&MockObject $moveRecurrenceService;
 	private \OCA\Kanso\Service\CardMoveAliasService&MockObject $moveAliasService;
+	private \OCA\Kanso\Service\CardMoveCleanupService&MockObject $moveCleanupService;
 	/** The role the BoardAccess mock resolves creators to (#3741 freeze). */
 	private string $resolvedRole = ViewerContext::ROLE_INTERNAL;
 	private CardService $service;
@@ -113,6 +114,7 @@ class CardServiceTest extends TestCase {
 		$this->moveHistoryService = $this->createMock(\OCA\Kanso\Service\CardMoveHistoryService::class);
 		$this->moveRecurrenceService = $this->createMock(\OCA\Kanso\Service\CardMoveRecurrenceService::class);
 		$this->moveAliasService = $this->createMock(\OCA\Kanso\Service\CardMoveAliasService::class);
+		$this->moveCleanupService = $this->createMock(\OCA\Kanso\Service\CardMoveCleanupService::class);
 		// Default: any detail write returns a row (the typed return must not be null,
 		// or a move/update inside the transaction would TypeError and roll back).
 		// Tests asserting specific from/to values override this.
@@ -152,6 +154,7 @@ class CardServiceTest extends TestCase {
 			$this->moveHistoryService,
 			$this->moveRecurrenceService,
 			$this->moveAliasService,
+			$this->moveCleanupService,
 			$container
 		);
 	}
@@ -3346,6 +3349,32 @@ class CardServiceTest extends TestCase {
 
 	// ---- moveToBoard (#3679) ----------------------------------------------
 
+	public function testMoveDoesNotDiscardObjectsWhenCommitOutcomeIsUnknown(): void {
+		$sourceBoard = $this->board(1);
+		$targetBoard = $this->board(2);
+		$source = $this->card(9, 5, 1);
+		$this->cardMapper->method('find')->with(9)->willReturn($source);
+		$this->boardMapper->method('find')->willReturnMap([[1, $sourceBoard], [2, $targetBoard]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, 2));
+		$this->cardMapper->method('findLastInStack')->willReturn(null);
+		$this->cardMapper->method('nextBoardSeq')->willReturn(1);
+		$this->cardMapper->expects(self::once())->method('insert')->willReturnCallback(function (Card $card): Card {
+			$card->setId(42);
+			return $card;
+		});
+		$this->moveContentService->method('copyAttachments')->willReturnCallback(static function (Card $source, Card $target, Board $board, callable $recordObject): array {
+			$recordObject(42, str_repeat('a', 32));
+			return [];
+		});
+		$this->db->expects(self::once())->method('commit')->willThrowException(new \RuntimeException('commit response lost'));
+		$this->db->expects(self::once())->method('rollBack')->willThrowException(new \RuntimeException('connection closed'));
+		$this->moveCleanupService->expects(self::never())->method('schedule');
+		$this->moveCleanupService->expects(self::never())->method('cleanup');
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+		$this->expectExceptionMessage('commit response lost');
+		$this->service->moveToBoard(9, 7, 'alice');
+	}
+
 	public function testMoveDoesNotDiscardObjectsIfNotificationFailsAfterCommit(): void {
 		$sourceBoard = $this->board(1);
 		$targetBoard = $this->board(2);
@@ -3361,7 +3390,8 @@ class CardServiceTest extends TestCase {
 		});
 		$this->db->expects(self::once())->method('commit');
 		$this->db->expects(self::never())->method('rollBack');
-		$this->moveContentService->expects(self::never())->method('discardObjects');
+		$this->moveCleanupService->expects(self::never())->method('schedule');
+		$this->moveCleanupService->expects(self::never())->method('cleanup');
 		$this->changeNotifier->method('pushBoardChanged')->willThrowException(new \RuntimeException('push failure'));
 		$this->expectExceptionMessage('push failure');
 		$this->service->moveToBoard(9, 7, 'alice');
@@ -3380,10 +3410,39 @@ class CardServiceTest extends TestCase {
 			return $card;
 		});
 		$this->moveContentService->method('copy')->willThrowException(new \RuntimeException('copy failed'));
-		$this->moveContentService->method('discardObjects')->willThrowException(new \RuntimeException('cleanup failed'));
+		$this->moveContentService->method('copyAttachments')->willReturnCallback(static function (Card $source, Card $target, Board $board, callable $recordObject): array {
+			$recordObject(42, str_repeat('a', 32));
+			return [];
+		});
+		$this->moveCleanupService->expects(self::once())->method('schedule')->with([['cardId' => 42, 'key' => str_repeat('a', 32)]]);
+		$this->moveCleanupService->method('cleanup')->willThrowException(new \RuntimeException('cleanup failed'));
 		$this->db->expects(self::once())->method('rollBack');
 		$this->db->expects(self::never())->method('commit');
 		$this->expectExceptionMessage('cleanup failed');
+		$this->service->moveToBoard(9, 7, 'alice');
+	}
+
+	public function testMoveKeepsObjectsWhenCleanupJobCannotBeScheduled(): void {
+		$sourceBoard = $this->board(1);
+		$targetBoard = $this->board(2);
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card(9, 5, 1));
+		$this->boardMapper->method('find')->willReturnMap([[1, $sourceBoard], [2, $targetBoard]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, 2));
+		$this->cardMapper->method('findLastInStack')->willReturn(null);
+		$this->cardMapper->method('nextBoardSeq')->willReturn(1);
+		$this->cardMapper->method('insert')->willReturnCallback(function (Card $card): Card {
+			$card->setId(42);
+			return $card;
+		});
+		$this->moveContentService->method('copyAttachments')->willReturnCallback(static function (Card $source, Card $target, Board $board, callable $recordObject): array {
+			$recordObject(42, str_repeat('a', 32));
+			return [];
+		});
+		$this->moveContentService->method('copy')->willThrowException(new \RuntimeException('copy failed'));
+		$this->db->expects(self::once())->method('rollBack');
+		$this->moveCleanupService->expects(self::once())->method('schedule')->willThrowException(new \RuntimeException('queue unavailable'));
+		$this->moveCleanupService->expects(self::never())->method('cleanup');
+		$this->expectExceptionMessage('queue unavailable');
 		$this->service->moveToBoard(9, 7, 'alice');
 	}
 
@@ -3402,12 +3461,22 @@ class CardServiceTest extends TestCase {
 			return $card;
 		});
 		$this->moveContentService->expects(self::once())->method('copy')->willThrowException(new \RuntimeException('storage failure'));
-		$cleaned = false;
-		$this->moveContentService->expects(self::once())->method('discardObjects')->with(42)->willReturnCallback(function () use (&$cleaned): void {
-			$cleaned = true;
+		$objects = [['cardId' => 42, 'key' => str_repeat('a', 32)]];
+		$this->moveContentService->method('copyAttachments')->willReturnCallback(static function (Card $source, Card $target, Board $board, callable $recordObject): array {
+			$recordObject(42, str_repeat('a', 32));
+			return [];
 		});
-		$this->db->expects(self::once())->method('rollBack')->willReturnCallback(function () use (&$cleaned): void {
-			self::assertTrue($cleaned);
+		$rolledBack = false;
+		$scheduled = false;
+		$this->db->expects(self::once())->method('rollBack')->willReturnCallback(function () use (&$rolledBack): void {
+			$rolledBack = true;
+		});
+		$this->moveCleanupService->expects(self::once())->method('schedule')->with($objects)->willReturnCallback(function () use (&$rolledBack, &$scheduled): void {
+			self::assertTrue($rolledBack);
+			$scheduled = true;
+		});
+		$this->moveCleanupService->expects(self::once())->method('cleanup')->with($objects)->willReturnCallback(function () use (&$scheduled): void {
+			self::assertTrue($scheduled);
 		});
 		$this->db->expects(self::never())->method('commit');
 		$this->cardMapper->expects(self::never())->method('update');

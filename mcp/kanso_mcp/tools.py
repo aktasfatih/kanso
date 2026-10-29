@@ -472,10 +472,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         original — it preserves relationships and remaps board-specific data
         when supported by the server.
 
-        Before calling, check the card with `kanso_get_card`: if it has
-        data and the server's version is not known to preserve it, tell the
-        user it may stay behind and let
-        them confirm before you move it.
+        Before calling, if the server's version is not known to preserve
+        comments, attachments and Files links, tell the user that data may
+        stay behind and let them confirm before you move it.
 
         Args:
             card_id: The card to move.

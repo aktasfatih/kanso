@@ -60,16 +60,24 @@ class CommentReactionMapper extends QBMapper {
 		return $qb->executeStatement();
 	}
 
-	/** @return CommentReaction[] */
+	/**
+	 * @param int[] $commentIds
+	 * @return CommentReaction[]
+	 */
 	public function findEntitiesByComments(array $commentIds): array {
 		if ($commentIds === []) {
 			return [];
 		}
-		$qb = $this->db->getQueryBuilder();
-		$qb->select('*')->from($this->getTableName())
-			->where($qb->expr()->in('comment_id', $qb->createNamedParameter($commentIds, IQueryBuilder::PARAM_INT_ARRAY)))
-			->orderBy('id', 'ASC');
-		return $this->findEntities($qb);
+		$reactions = [];
+		foreach (array_chunk(array_values(array_unique($commentIds)), 500) as $chunk) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('*')->from($this->getTableName())
+				->where($qb->expr()->in('comment_id', $qb->createNamedParameter($chunk, IQueryBuilder::PARAM_INT_ARRAY)))
+				->orderBy('id', 'ASC');
+			array_push($reactions, ...$this->findEntities($qb));
+		}
+		usort($reactions, static fn (CommentReaction $a, CommentReaction $b): int => $a->getId() <=> $b->getId());
+		return $reactions;
 	}
 
 	/**

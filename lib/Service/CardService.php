@@ -130,6 +130,7 @@ class CardService {
 		private CardMoveHistoryService $moveHistoryService,
 		private CardMoveRecurrenceService $moveRecurrenceService,
 		private CardMoveAliasService $moveAliasService,
+		private CardMoveCleanupService $moveCleanupService,
 		// Lazily resolved (RecurrenceService depends on CardService) to re-point a
 		// card's repeat when its Start/due date is edited - same pattern as
 		// ChangeNotifier. Only touched on the rare date-edit-of-a-template path.
@@ -522,7 +523,9 @@ class CardService {
 
 		for ($attempt = 0; ; $attempt++) {
 			$movedCards = [];
+			$copiedObjects = [];
 			$committed = false;
+			$commitStarted = false;
 			$this->db->beginTransaction();
 			try {
 				$now = time();
@@ -541,7 +544,12 @@ class CardService {
 				foreach ($graph['cards'] as $card) {
 					$moved = $movedCards[$card->getId()];
 					$cardIds[$card->getId()] = $moved->getId();
-					$attachmentIdsByCard[$card->getId()] = $this->moveContentService->copyAttachments($card, $moved, $targetBoard);
+					$attachmentIdsByCard[$card->getId()] = $this->moveContentService->copyAttachments(
+						$card, $moved, $targetBoard,
+						static function (int $cardId, string $key) use (&$copiedObjects): void {
+							$copiedObjects[] = ['cardId' => $cardId, 'key' => $key];
+						},
+					);
 				}
 
 				foreach ($graph['cards'] as $card) {
@@ -610,6 +618,7 @@ class CardService {
 					$this->changeNotifier->recordChange($targetBoard->getId(), Change::ENTITY_CARD, $movedCards[$oldId]->getId(), Change::ACTION_CREATE, $uid, Change::VERB_CREATED);
 					$this->changeNotifier->recordChange($sourceBoard->getId(), Change::ENTITY_CARD, $oldId, Change::ACTION_DELETE, $uid, Change::VERB_DELETED);
 				}
+				$commitStarted = true;
 				$this->db->commit();
 				$committed = true;
 				$this->changeNotifier->pushBoardChanged($targetBoard->getId());
@@ -620,7 +629,11 @@ class CardService {
 				if ($committed) {
 					throw $e;
 				}
-				$this->rollbackMove($movedCards);
+				if ($commitStarted) {
+					$this->rollbackUncertainCommit();
+					throw $e;
+				}
+				$this->rollbackMove($copiedObjects);
 				if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 					throw $e;
 				}
@@ -629,10 +642,23 @@ class CardService {
 				}
 			} catch (\Throwable $e) {
 				if (!$committed) {
-					$this->rollbackMove($movedCards);
+					if ($commitStarted) {
+						$this->rollbackUncertainCommit();
+					} else {
+						$this->rollbackMove($copiedObjects);
+					}
 				}
 				throw $e;
 			}
+		}
+	}
+
+	private function rollbackUncertainCommit(): void {
+		// A lost commit response can mean the database committed; retain the files.
+		try {
+			$this->db->rollBack();
+		} catch (\Throwable) {
+			// The connection may already be closed or the transaction committed.
 		}
 	}
 
@@ -643,23 +669,11 @@ class CardService {
 		}
 	}
 
-	/** @param array<int, Card> $movedCards */
-	private function rollbackMove(array $movedCards): void {
-		$cleanupError = null;
-		try {
-			foreach ($movedCards as $card) {
-				try {
-					$this->moveContentService->discardObjects($card->getId());
-				} catch (\Throwable $e) {
-					$cleanupError ??= $e;
-				}
-			}
-		} finally {
-			$this->db->rollBack();
-		}
-		if ($cleanupError !== null) {
-			throw $cleanupError;
-		}
+	/** @param list<array{cardId: int, key: string}> $copiedObjects */
+	private function rollbackMove(array $copiedObjects): void {
+		$this->db->rollBack();
+		$this->moveCleanupService->schedule($copiedObjects);
+		$this->moveCleanupService->cleanup($copiedObjects);
 	}
 
 	/**

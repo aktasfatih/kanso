@@ -27,9 +27,12 @@ class CardMoveContentService {
 	) {
 	}
 
-	/** @return array<int, int> */
-	public function copyAttachments(Card $source, Card $target, Board $targetBoard): array {
-		return $this->attachmentService->copyForMovedCard($source->getId(), $target->getId(), $targetBoard->getId());
+	/**
+	 * @param callable(int, string): void|null $recordObject
+	 * @return array<int, int>
+	 */
+	public function copyAttachments(Card $source, Card $target, Board $targetBoard, ?callable $recordObject = null): array {
+		return $this->attachmentService->copyForMovedCard($source->getId(), $target->getId(), $targetBoard->getId(), $recordObject);
 	}
 
 	/**
@@ -105,12 +108,6 @@ class CardMoveContentService {
 			$this->reactionMapper->insert($copy);
 		}
 		return $commentIds;
-	}
-
-	public function discardObjects(int $cardId): void {
-		if ($this->attachmentService->deleteObjectsForCards([$cardId]) !== 0) {
-			throw new \RuntimeException('Could not clean up attachments for the failed card move');
-		}
 	}
 
 	/**

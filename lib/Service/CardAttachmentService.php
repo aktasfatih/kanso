@@ -499,9 +499,10 @@ class CardAttachmentService {
 	 * Copies stored files for a new card inside the caller's transaction.
 	 * The caller must discard the new card's objects on rollback.
 	 *
+	 * @param callable(int, string): void|null $recordObject
 	 * @return array<int, int> old attachment id to new attachment id
 	 */
-	public function copyForMovedCard(int $sourceId, int $targetId, int $targetBoardId): array {
+	public function copyForMovedCard(int $sourceId, int $targetId, int $targetBoardId, ?callable $recordObject = null): array {
 		$attachments = $this->attachmentMapper->findByCard($sourceId);
 		$total = array_sum(array_map(static fn (CardAttachment $a): int => $a->getSize(), $attachments));
 		if ($total > 0) {
@@ -513,8 +514,12 @@ class CardAttachmentService {
 			if ($stream === null) {
 				throw new \RuntimeException('Cannot copy a missing card attachment');
 			}
+			$storageKey = $this->secureRandom->generate(32, ISecureRandom::CHAR_LOWER . ISecureRandom::CHAR_DIGITS);
 			try {
-				$this->cardFolder($targetId)->newFile($attachment->getStorageKey(), $stream);
+				if ($recordObject !== null) {
+					$recordObject($targetId, $storageKey);
+				}
+				$this->cardFolder($targetId)->newFile($storageKey, $stream);
 			} finally {
 				if (is_resource($stream)) {
 					fclose($stream);
@@ -526,7 +531,7 @@ class CardAttachmentService {
 			$copy->setFilename($attachment->getFilename());
 			$copy->setMime($attachment->getMime());
 			$copy->setSize($attachment->getSize());
-			$copy->setStorageKey($attachment->getStorageKey());
+			$copy->setStorageKey($storageKey);
 			$copy->setUploadedBy($attachment->getUploadedBy());
 			$copy->setCreatedAt($attachment->getCreatedAt());
 			$copy = $this->attachmentMapper->insert($copy);
@@ -654,6 +659,37 @@ class CardAttachmentService {
 			}
 		}
 
+		return $failures;
+	}
+
+	/**
+	 * @param list<array{cardId: int, key: string}> $objects
+	 * @return int number of objects that could not be removed
+	 */
+	public function deleteUnreferencedMoveObjects(array $objects): int {
+		$byCard = [];
+		foreach ($objects as $object) {
+			$byCard[$object['cardId']][] = $object['key'];
+		}
+		$failures = 0;
+		foreach ($byCard as $cardId => $keys) {
+			$referenced = [];
+			foreach ($this->attachmentMapper->findByCard($cardId) as $attachment) {
+				$referenced[$attachment->getStorageKey()] = true;
+			}
+			foreach (array_unique($keys) as $key) {
+				if (isset($referenced[$key])) {
+					continue;
+				}
+				try {
+					$this->appData->getFolder(self::FOLDER_PREFIX . $cardId)->getFile($key)->delete();
+				} catch (NotFoundException) {
+					// The object has already been removed.
+				} catch (\Throwable) {
+					$failures++;
+				}
+			}
+		}
 		return $failures;
 	}
 
