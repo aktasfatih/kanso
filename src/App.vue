@@ -130,7 +130,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<template #actions>
 								<NcActionButton close-after-click @click="toggleProjectPin(project)">
 									<template #icon>
-										<StarIcon :size="20" />
+										<PinIcon :size="20" />
 									</template>
 									{{ t('kanso', 'Unpin project') }}
 								</NcActionButton>
@@ -152,7 +152,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					     folders (#3529), so you can jump between the ones you care
 					     about without returning to the board list. Folders render
 					     first (collapsible, collapse state persisted per user), then
-					     any Ungrouped boards. A star toggle on each item pins/unpins.
+					     any Ungrouped boards. A pin toggle on each item pins/unpins.
 					     Zero-pins fallback: a user with no pins sees ALL boards. -->
 					<template #default>
 						<NcAppNavigationItem
@@ -183,8 +183,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<template #actions>
 										<NcActionButton close-after-click @click="togglePin(board)">
 											<template #icon>
-												<StarIcon v-if="board.pinned" :size="20" />
-												<StarOutlineIcon v-else :size="20" />
+												<PinIcon v-if="board.pinned" :size="20" />
+												<PinOutlineIcon v-else :size="20" />
 											</template>
 											{{ board.pinned ? t('kanso', 'Unpin board') : t('kanso', 'Pin board') }}
 										</NcActionButton>
@@ -209,8 +209,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<template #actions>
 								<NcActionButton close-after-click @click="togglePin(board)">
 									<template #icon>
-										<StarIcon v-if="board.pinned" :size="20" />
-										<StarOutlineIcon v-else :size="20" />
+										<PinIcon v-if="board.pinned" :size="20" />
+										<PinOutlineIcon v-else :size="20" />
 									</template>
 									{{ board.pinned ? t('kanso', 'Unpin board') : t('kanso', 'Pin board') }}
 								</NcActionButton>
@@ -340,8 +340,8 @@ import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
 import BellOutlineIcon from 'vue-material-design-icons/BellOutline.vue'
 import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleOutline.vue'
 import FolderOutlineIcon from 'vue-material-design-icons/FolderOutline.vue'
-import StarIcon from 'vue-material-design-icons/Star.vue'
-import StarOutlineIcon from 'vue-material-design-icons/StarOutline.vue'
+import PinIcon from 'vue-material-design-icons/Pin.vue'
+import PinOutlineIcon from 'vue-material-design-icons/PinOutline.vue'
 import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import PencilOutlineIcon from 'vue-material-design-icons/PencilOutline.vue'
