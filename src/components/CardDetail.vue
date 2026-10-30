@@ -4,6 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
 	<div
+		ref="cardRoot"
 		class="card-modal"
 		:class="[
 			`card-modal--tab-${viewMode}`,
@@ -677,6 +678,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					     manager) the repeat rule, all of them writes. -->
 					<div v-if="canEdit || cardData.duedate" class="card-modal__attr">
 						<component
+							ref="duePickerButton"
 							:is="canEdit ? 'button' : 'span'"
 							class="card-modal__pill"
 							data-pill="due"
@@ -694,6 +696,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ cardData.duedate ? dueDateLabel : t('kanso', 'Due date') }}
 						</component>
 						<div v-if="openPicker === 'due'" class="card-modal__popover card-modal__popover--pad card-modal__popover--date">
+							<button class="card-modal__date-popover-close" type="button" :aria-label="t('kanso', 'Close')" @click="closeDuePicker($event.detail === 0)">
+								<CloseIcon :size="20" />
+							</button>
 							<!-- A timed card is a Start → End window; an all-day card is a
 							     single day, so it collapses to one date field (no time). -->
 							<template v-if="!isAllDay">
@@ -4132,6 +4137,10 @@ async function handleSetCoverColor(hex) {
 // and value drop "HH:MM"). The stored duedate is unchanged (at 00:00).
 const isAllDay = computed(() => cardData.value?.allDay === true)
 const savingDayBeforeReminder = ref(false)
+function setDateSaveError(message) {
+	saveError.value = message
+	if (openPicker.value !== 'due') showError(message)
+}
 
 // datetime-local needs "YYYY-MM-DDTHH:mm"; an all-day input is just "YYYY-MM-DD".
 const dueDateInputValue = computed(() => {
@@ -4157,7 +4166,7 @@ async function handleDueDateChange(event) {
 	try {
 		await updateCard.mutateAsync({ data: { duedate: iso } })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update due date.')
+		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to update due date.'))
 	}
 }
 
@@ -4170,7 +4179,7 @@ async function toggleAllDay(checked) {
 	try {
 		await updateCard.mutateAsync({ data })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update due date.')
+		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to update due date.'))
 	}
 }
 
@@ -4188,7 +4197,7 @@ async function toggleDayBeforeReminder(event) {
 			: current)
 	} catch (err) {
 		if (isStillCurrentCard(forCard)) {
-			saveError.value = err?.response?.data?.error || t('kanso', 'Failed to save.')
+			setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to save.'))
 		}
 	} finally {
 		savingDayBeforeReminder.value = false
@@ -4199,7 +4208,7 @@ async function clearDueDate() {
 	try {
 		await updateCard.mutateAsync({ data: { duedate: '' } })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to clear due date.')
+		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to clear due date.'))
 	}
 }
 
@@ -4222,7 +4231,7 @@ async function handleStartDateChange(event) {
 	try {
 		await updateCard.mutateAsync({ data: { startDate: iso } })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update start date.')
+		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to update start date.'))
 	}
 }
 
@@ -4230,7 +4239,7 @@ async function clearStartDate() {
 	try {
 		await updateCard.mutateAsync({ data: { startDate: '' } })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to clear start date.')
+		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to clear start date.'))
 	}
 }
 
@@ -6187,11 +6196,31 @@ function onDocumentMousedown(event) {
 	}
 	requestClose()
 }
+function onDocumentTouchStart(event) {
+	const target = event.target
+	if (openPicker.value !== 'due' || !(target instanceof Element)
+		|| !cardRoot.value?.contains(target) || target.closest('.card-modal__popover')
+		|| target.closest('[aria-expanded="true"]')) {
+		return
+	}
+	closeDuePicker()
+}
+function closeDuePicker(restoreFocus = false) {
+	const focused = document.activeElement
+	if (focused instanceof HTMLElement && cardRoot.value?.contains(focused)
+		&& focused.closest('.card-modal__popover--date')) {
+		focused.blur()
+	}
+	openPicker.value = null
+	if (restoreFocus) nextTick(() => duePickerButton.value?.focus({ preventScroll: true }))
+}
 onMounted(() => {
 	document.addEventListener('mousedown', onDocumentMousedown, true)
+	document.addEventListener('touchstart', onDocumentTouchStart, { capture: true, passive: true })
 })
 onBeforeUnmount(() => {
 	document.removeEventListener('mousedown', onDocumentMousedown, true)
+	document.removeEventListener('touchstart', onDocumentTouchStart, true)
 	if (highlightTimer) clearTimeout(highlightTimer)
 	stopPinningTarget()
 })
@@ -7303,6 +7332,8 @@ const statusChipLabel = computed(() =>
 
 // One attribute-bar popover open at a time:
 // 'priority' | 'due' | 'estimate' | 'assign' | 'label' | 'review' | null
+const cardRoot = ref(null)
+const duePickerButton = ref(null)
 const openPicker = ref(null)
 const labelPickerButton = ref(null)
 
@@ -8100,6 +8131,9 @@ async function handleToggleProject(projectId) {
 .card-modal__popover--pad {
 	padding: 10px 12px;
 	gap: 6px;
+}
+.card-modal__date-popover-close {
+	display: none;
 }
 /* The date popover packs the Due date + Start date + the whole Repeat control, so
    the shared 200px min-width left it cramped and the 320px cap made it scroll.
@@ -10279,6 +10313,24 @@ async function handleToggleProject(projectId) {
 		min-width: 0;
 		max-width: none;
 		max-height: 60vh;
+	}
+	.card-modal__date-popover-close {
+		display: flex;
+		position: sticky;
+		top: 0;
+		z-index: 1;
+		align-self: flex-end;
+		align-items: center;
+		justify-content: center;
+		flex: 0 0 44px;
+		width: 44px;
+		height: 44px;
+		padding: 0;
+		border: 0;
+		border-radius: var(--border-radius-element);
+		color: var(--color-main-text);
+		background: var(--color-main-background);
+		cursor: pointer;
 	}
 	.card-modal__body { grid-template-columns: 1fr; }
 	/* Panes stack: the persisted split width and its drag handle are ignored. */
