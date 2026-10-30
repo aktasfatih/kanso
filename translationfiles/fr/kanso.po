@@ -698,6 +698,7 @@ msgstr "Anciennes (>{days} j)"
 
 #: src/views/BoardList.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/MyWorkView.vue
 msgid "All boards"
 msgstr "Tous les tableaux"
@@ -706,6 +707,10 @@ msgstr "Tous les tableaux"
 msgid "All day (no time)"
 msgstr "Journée entière (sans heure)"
 
+#: src/views/MyCardsView.vue
+msgid "All due dates"
+msgstr "Toutes les échéances"
+
 #: src/components/BoardSettingsModal.vue
 msgid "All issues"
 msgstr "Tous les tickets"
@@ -713,6 +718,10 @@ msgstr "Tous les tickets"
 #: src/components/CardDetail.vue
 msgid "All requested reviews must be approved before this card can be marked done. Waiting on {names}."
 msgstr "Toutes les revues demandées doivent être approuvées avant de pouvoir marquer cette carte comme terminée. En attente de {names}."
+
+#: src/views/MyCardsView.vue
+msgid "All statuses"
+msgstr "Tous les statuts"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Allow AI actors"
@@ -1045,6 +1054,8 @@ msgstr "Bleu"
 #: src/views/BoardStats.vue
 #: src/views/BoardView.vue
 #: src/views/CardPage.vue
+#: src/views/MyCardsView.vue
+#: src/views/MyWorkView.vue
 #: src/views/ProjectView.vue
 #: src/views/PublicBoard.vue
 #: src/views/TrashView.vue
@@ -2366,6 +2377,7 @@ msgstr "Échéance {date}"
 #: src/components/CardDetail.vue
 #: src/components/CsvImportModal.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Due date"
 msgstr "Date d'échéance"
@@ -3264,6 +3276,10 @@ msgstr "Filtrer les cartes supprimées"
 msgid "Filter trash…"
 msgstr "Filtrer la corbeille…"
 
+#: src/views/MyCardsView.vue
+msgid "Filters and sorting apply to loaded open tasks."
+msgstr "Les filtres et le tri s’appliquent aux tâches ouvertes chargées."
+
 #: src/components/CardDetail.vue
 msgid "Find the card on board"
 msgstr "Trouver la carte sur le tableau"
@@ -3500,6 +3516,7 @@ msgstr "Dans un dossier Fichiers, une sauvegarde élaguée part dans la corbeill
 #: src/components/CardTile.vue
 #: src/components/StackColumn.vue
 #: src/composables/useSwimlanes.js
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 msgid "In progress"
 msgstr "En cours"
@@ -3804,6 +3821,7 @@ msgid "Linking…"
 msgstr "Liaison…"
 
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "List"
 msgstr "Liste"
@@ -4332,6 +4350,10 @@ msgstr "Aucune limite"
 msgid "No matches for \"{q}\""
 msgstr "Aucune correspondance pour « {q} »"
 
+#: src/views/MyCardsView.vue
+msgid "No matching tasks"
+msgstr "Aucune tâche correspondante"
+
 #: src/views/ProjectView.vue
 msgid "No notes yet. Start a discussion log for this project."
 msgstr "Aucune note pour l'instant. Démarrez un journal de discussion pour ce projet."
@@ -4453,6 +4475,7 @@ msgstr "Partagé avec personne pour l'instant."
 #: src/components/BoardListView.vue
 #: src/components/BoardTimelineView.vue
 #: src/components/CardDetail.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 msgid "Not started"
 msgstr "Non démarrée"
@@ -4537,6 +4560,10 @@ msgstr "Seuls les liens https://github.com sont pris en charge"
 #: src/components/BoardSettingsModal.vue
 msgid "Only issues with a label"
 msgstr "Uniquement les tickets portant une étiquette"
+
+#: src/views/MyCardsView.vue
+msgid "Only loaded tasks are shown."
+msgstr "Seules les tâches chargées sont affichées."
 
 #: src/views/MyCardsView.vue
 msgid "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list."
@@ -4808,6 +4835,7 @@ msgstr "Aperçu"
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Priority"
 msgstr "Priorité"
@@ -5377,6 +5405,10 @@ msgstr "Rechercher des personnes…"
 msgid "Search results"
 msgstr "Résultats de recherche"
 
+#: src/views/MyCardsView.vue
+msgid "Search tasks"
+msgstr "Rechercher des tâches"
+
 #: src/components/CardDetail.vue
 msgid "Search the people with access to this board"
 msgstr "Rechercher parmi les personnes ayant accès à ce tableau"
@@ -5627,6 +5659,7 @@ msgstr "Quelqu'un d'autre a modifié cette description pendant que vous l'éditi
 msgid "Sort"
 msgstr "Tri"
 
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Sort by"
 msgstr "Trier par"
@@ -5707,6 +5740,7 @@ msgstr "STARTTLS (143)"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 #: src/views/ViewPage.vue
 msgid "Status"
@@ -5791,6 +5825,10 @@ msgstr "Colonne cible"
 #: src/composables/useCardType.js
 msgid "Task"
 msgstr "Tâche"
+
+#: src/views/MyCardsView.vue
+msgid "Tasks"
+msgstr "Tâches"
 
 #: src/views/MyCardsView.vue
 msgid "Tasks you completed in the last {days} days."
@@ -6014,6 +6052,7 @@ msgstr "Astuce : appuyez sur ? pour les raccourcis clavier"
 
 #: src/components/CsvImportModal.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 #: src/views/ViewPage.vue
@@ -6079,6 +6118,10 @@ msgstr "La corbeille est vide"
 #: src/views/BoardList.vue
 msgid "Trello (.json)"
 msgstr "Trello (.json)"
+
+#: src/views/MyCardsView.vue
+msgid "Try changing your filters or search."
+msgstr "Essayez de modifier vos filtres ou votre recherche."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Tue"
@@ -6257,6 +6300,7 @@ msgid "Velocity — completed per week"
 msgstr "Vélocité — terminées par semaine"
 
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "View"
 msgstr "Vue"

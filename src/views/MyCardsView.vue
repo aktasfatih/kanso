@@ -8,6 +8,55 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<h1 class="my-cards-view__title">{{ t('kanso', 'My tasks') }}</h1>
 		</div>
 
+		<div v-if="!isLoading && !isError" class="my-cards-view__controls">
+			<label class="my-cards-view__control my-cards-view__search">
+				<span>{{ t('kanso', 'Search tasks') }}</span>
+				<input v-model="preferences.search" type="search" :placeholder="t('kanso', 'Search tasks')">
+			</label>
+			<label v-if="!embedded" class="my-cards-view__control">
+				<span>{{ t('kanso', 'Board') }}</span>
+				<select v-model="preferences.board" :aria-label="t('kanso', 'Board')">
+					<option value="">{{ t('kanso', 'All boards') }}</option>
+					<option v-for="board in boardOptions" :key="board.id" :value="String(board.id)">{{ board.title }}</option>
+				</select>
+			</label>
+			<label class="my-cards-view__control">
+				<span>{{ t('kanso', 'Status') }}</span>
+				<select v-model="preferences.status" :aria-label="t('kanso', 'Status')">
+					<option value="all">{{ t('kanso', 'All statuses') }}</option>
+					<option value="not-started">{{ t('kanso', 'Not started') }}</option>
+					<option value="in-progress">{{ t('kanso', 'In progress') }}</option>
+				</select>
+			</label>
+			<label class="my-cards-view__control">
+				<span>{{ t('kanso', 'Due date') }}</span>
+				<select v-model="preferences.due" :aria-label="t('kanso', 'Due date')">
+					<option value="all">{{ t('kanso', 'All due dates') }}</option>
+					<option value="overdue">{{ t('kanso', 'Overdue') }}</option>
+					<option value="today">{{ t('kanso', 'Today') }}</option>
+					<option value="upcoming">{{ t('kanso', 'Upcoming') }}</option>
+					<option value="none">{{ t('kanso', 'No due date') }}</option>
+				</select>
+			</label>
+			<label class="my-cards-view__control">
+				<span>{{ t('kanso', 'Sort by') }}</span>
+				<select v-model="preferences.sort" :aria-label="t('kanso', 'Sort by')">
+					<option value="due">{{ t('kanso', 'Due date') }}</option>
+					<option value="title">{{ t('kanso', 'Title') }}</option>
+					<option value="priority">{{ t('kanso', 'Priority') }}</option>
+					<option value="board">{{ t('kanso', 'Board') }}</option>
+				</select>
+			</label>
+			<label class="my-cards-view__control">
+				<span>{{ t('kanso', 'View') }}</span>
+				<select v-model="preferences.view" :aria-label="t('kanso', 'View')">
+					<option value="list">{{ t('kanso', 'List') }}</option>
+					<option value="board">{{ t('kanso', 'Board') }}</option>
+				</select>
+			</label>
+		</div>
+		<p v-if="!isLoading && !isError" class="my-cards-view__controls-hint">{{ t('kanso', 'Filters and sorting apply to loaded open tasks.') }}</p>
+
 		<!-- Loading state -->
 		<div v-if="isLoading" class="my-cards-view__loading" aria-live="polite">
 			<span class="my-cards-view__spinner" aria-hidden="true" />
@@ -31,10 +80,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		</NcEmptyContent>
 
 		<!-- Grouped sections -->
-		<template v-else>
+		<div v-else :class="{ 'my-cards-view__board-layout': preferences.view === 'board' }">
 			<section
 				v-for="group in filteredGroups"
-				v-show="group.cards.length"
+				v-show="group.cards.length || preferences.view === 'board'"
 				:key="group.key"
 				class="my-cards-view__section">
 				<h2
@@ -62,13 +111,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<span
 							v-if="card.duedate"
 							class="my-cards-view__due"
-							:class="{ 'my-cards-view__due--overdue': group.key === 'overdue' }">
+							:class="{ 'my-cards-view__due--overdue': dueGroup(card, dayBounds()) === 'overdue' }">
 							{{ formatDue(card.duedate) }}
 						</span>
 					</li>
 				</ul>
 			</section>
-		</template>
+		</div>
 
 		<!-- The feed is capped server-side. Say so, rather than letting a
 		     truncated window read as the whole of someone's workload. The
@@ -150,7 +199,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
@@ -158,8 +207,10 @@ import FormatListChecksIcon from 'vue-material-design-icons/FormatListChecks.vue
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import { useMyCards } from '../composables/useMyCards.js'
+import { useBoards } from '../composables/useBoards.js'
 import { useMyRecentlyDoneCards } from '../composables/useMyRecentlyDoneCards.js'
 import { myCardsFeed, recentlyDoneFeed } from '../services/myCardsFeed.js'
+import { myTaskPreferences as preferences } from '../services/myTaskPreferences.js'
 import { usePageTitle } from '../composables/usePageTitle.js'
 
 const props = defineProps({
@@ -173,6 +224,7 @@ usePageTitle(() => (props.embedded ? '' : t('kanso', 'My tasks')))
 
 const router = useRouter()
 const { data, isLoading, isError } = useMyCards()
+const { data: boardsData } = useBoards()
 
 /** { cards, truncated, limit } — the server caps the feed and reports the cap. */
 const feed = computed(() => myCardsFeed(data.value))
@@ -185,29 +237,60 @@ const truncated = computed(() => feed.value.truncated)
 /** The server-side row cap, for the truncation notice. */
 const limit = computed(() => feed.value.limit)
 
-/** Cards after applying the optional board filter from the hub. */
-const filteredCards = computed(() =>
-	props.boardFilter === null
-		? cards.value
-		: cards.value.filter((c) => c.boardId === props.boardFilter),
-)
+const boardOptions = computed(() => {
+	return (boardsData.value ?? []).filter((board) => !board.archived)
+		.slice().sort((a, b) => a.title.localeCompare(b.title) || a.id - b.id)
+})
 
-/**
- * Empty-state copy. The block is gated on the FILTERED list, so with a board
- * filter applied the unfiltered wording ("no tasks assigned to you") would
- * state something false — the user may well have tasks on other boards.
- */
-const emptyName = computed(() =>
-	props.boardFilter === null
-		? t('kanso', 'No tasks assigned to you')
-		: t('kanso', 'No tasks on this board'),
-)
+watch(boardsData, (boards) => {
+	if (Array.isArray(boards) && preferences.board && !boards.some((board) => !board.archived && String(board.id) === preferences.board)) {
+		preferences.board = ''
+	}
+}, { immediate: true })
 
-const emptyDescription = computed(() =>
-	props.boardFilter === null
+const activeBoard = computed(() => props.embedded ? props.boardFilter : (preferences.board ? Number(preferences.board) : null))
+const hasTaskFilters = computed(() => Boolean(preferences.search.trim() || preferences.status !== 'all' || preferences.due !== 'all'))
+
+function dueGroup(card, { start, tomorrow }) {
+	if (!card.duedate) return 'none'
+	const due = new Date(card.duedate)
+	if (due < start) return 'overdue'
+	if (due < tomorrow) return 'today'
+	return 'upcoming'
+}
+
+const filteredCards = computed(() => {
+	const bounds = dayBounds()
+	const search = preferences.search.trim().toLocaleLowerCase()
+	const matched = cards.value.filter((card) => {
+		if (activeBoard.value !== null && card.boardId !== activeBoard.value) return false
+		if (search && !card.title.toLocaleLowerCase().includes(search)) return false
+		if (preferences.status === 'not-started' && card.startedAt) return false
+		if (preferences.status === 'in-progress' && !card.startedAt) return false
+		return preferences.due === 'all' || dueGroup(card, bounds) === preferences.due
+	})
+	return matched.sort((a, b) => {
+		let order = 0
+		if (preferences.sort === 'title') order = a.title.localeCompare(b.title)
+		else if (preferences.sort === 'board') order = a.boardTitle.localeCompare(b.boardTitle)
+		else if (preferences.sort === 'priority') order = (b.priority || 0) - (a.priority || 0)
+		else order = (a.duedate ? Date.parse(a.duedate) : Infinity) - (b.duedate ? Date.parse(b.duedate) : Infinity)
+		return order || a.title.localeCompare(b.title) || a.id - b.id
+	})
+})
+
+const emptyName = computed(() => {
+	if (hasTaskFilters.value || truncated.value) return t('kanso', 'No matching tasks')
+	return activeBoard.value === null ? t('kanso', 'No tasks assigned to you') : t('kanso', 'No tasks on this board')
+})
+
+const emptyDescription = computed(() => {
+	if (truncated.value) return t('kanso', 'Only loaded tasks are shown.')
+	if (hasTaskFilters.value) return t('kanso', 'Try changing your filters or search.')
+	return activeBoard.value === null
 		? t('kanso', 'Cards assigned to you across your boards will appear here.')
-		: t('kanso', 'Nothing on the selected board is assigned to you. Choose “All boards” to see everything assigned to you.'),
-)
+		: t('kanso', 'Nothing on the selected board is assigned to you. Choose “All boards” to see everything assigned to you.')
+})
 
 /**
  * Recently done (#10061) — opt-in.
@@ -242,9 +325,9 @@ const doneWindowDays = computed(() => doneFeed.value.windowDays)
 
 /** Recently-done cards after the hub's optional board filter. */
 const filteredDoneCards = computed(() =>
-	props.boardFilter === null
+	activeBoard.value === null
 		? doneFeed.value.cards
-		: doneFeed.value.cards.filter((c) => c.boardId === props.boardFilter),
+		: doneFeed.value.cards.filter((c) => c.boardId === activeBoard.value),
 )
 
 /** Local midnight boundaries used to bucket cards by due date. */
@@ -257,29 +340,20 @@ function dayBounds() {
 }
 
 const filteredGroups = computed(() => {
-	const { start, tomorrow } = dayBounds()
-	const overdue = []
-	const today = []
-	const upcoming = []
-	const none = []
-
-	for (const card of filteredCards.value) {
-		if (!card.duedate) {
-			none.push(card)
-			continue
-		}
-		const due = new Date(card.duedate)
-		if (due < start) overdue.push(card)
-		else if (due < tomorrow) today.push(card)
-		else upcoming.push(card)
+	if (preferences.view === 'board') {
+		return [
+			{ key: 'not-started', label: t('kanso', 'Not started'), cards: filteredCards.value.filter((card) => !card.startedAt) },
+			{ key: 'in-progress', label: t('kanso', 'In progress'), cards: filteredCards.value.filter((card) => card.startedAt) },
+		]
 	}
-
+	if (preferences.sort !== 'due') return [{ key: 'tasks', label: t('kanso', 'Tasks'), cards: filteredCards.value }]
+	const bounds = dayBounds()
 	return [
-		{ key: 'overdue', label: t('kanso', 'Overdue'), cards: overdue },
-		{ key: 'today', label: t('kanso', 'Today'), cards: today },
-		{ key: 'upcoming', label: t('kanso', 'Upcoming'), cards: upcoming },
-		{ key: 'none', label: t('kanso', 'No due date'), cards: none },
-	]
+		{ key: 'overdue', label: t('kanso', 'Overdue') },
+		{ key: 'today', label: t('kanso', 'Today') },
+		{ key: 'upcoming', label: t('kanso', 'Upcoming') },
+		{ key: 'none', label: t('kanso', 'No due date') },
+	].map((group) => ({ ...group, cards: filteredCards.value.filter((card) => dueGroup(card, bounds) === group.key) }))
 })
 
 function formatDue(iso) {
@@ -312,6 +386,38 @@ function openCard(card) {
 	padding: 24px 32px;
 	max-width: 860px;
 }
+
+.my-cards-view__controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	align-items: end;
+}
+
+.my-cards-view__control {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 110px;
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.my-cards-view__control input,
+.my-cards-view__control select {
+	width: 100%;
+	min-height: 36px;
+	color: var(--color-main-text);
+	background: var(--color-main-background);
+	border: 1px solid var(--color-border-dark);
+	border-radius: var(--border-radius, 4px);
+	padding: 6px 8px;
+}
+
+.my-cards-view__search { flex: 1 1 180px; }
+.my-cards-view__controls-hint { margin: 8px 0 18px; color: var(--color-text-maxcontrast); font-size: 0.8rem; }
+.my-cards-view__board-layout { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 16px; overflow-x: auto; }
+.my-cards-view__board-layout .my-cards-view__section { background: var(--color-background-dark); border-radius: var(--border-radius-large, 8px); padding: 12px; }
 
 .my-cards-view__header {
 	margin-bottom: 24px;

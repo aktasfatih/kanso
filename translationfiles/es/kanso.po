@@ -698,6 +698,7 @@ msgstr "Antiguas (>{days} d)"
 
 #: src/views/BoardList.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/MyWorkView.vue
 msgid "All boards"
 msgstr "Todos los tableros"
@@ -706,6 +707,10 @@ msgstr "Todos los tableros"
 msgid "All day (no time)"
 msgstr "Todo el día (sin hora)"
 
+#: src/views/MyCardsView.vue
+msgid "All due dates"
+msgstr "Todas las fechas de vencimiento"
+
 #: src/components/BoardSettingsModal.vue
 msgid "All issues"
 msgstr "Todas las incidencias"
@@ -713,6 +718,10 @@ msgstr "Todas las incidencias"
 #: src/components/CardDetail.vue
 msgid "All requested reviews must be approved before this card can be marked done. Waiting on {names}."
 msgstr "Todas las revisiones solicitadas deben estar aprobadas antes de poder marcar esta tarjeta como terminada. En espera de {names}."
+
+#: src/views/MyCardsView.vue
+msgid "All statuses"
+msgstr "Todos los estados"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Allow AI actors"
@@ -1045,6 +1054,8 @@ msgstr "Azul"
 #: src/views/BoardStats.vue
 #: src/views/BoardView.vue
 #: src/views/CardPage.vue
+#: src/views/MyCardsView.vue
+#: src/views/MyWorkView.vue
 #: src/views/ProjectView.vue
 #: src/views/PublicBoard.vue
 #: src/views/TrashView.vue
@@ -2366,6 +2377,7 @@ msgstr "Vence {date}"
 #: src/components/CardDetail.vue
 #: src/components/CsvImportModal.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Due date"
 msgstr "Fecha de vencimiento"
@@ -3264,6 +3276,10 @@ msgstr "Filtrar las tarjetas eliminadas"
 msgid "Filter trash…"
 msgstr "Filtrar la papelera…"
 
+#: src/views/MyCardsView.vue
+msgid "Filters and sorting apply to loaded open tasks."
+msgstr "Los filtros y el orden se aplican a las tareas abiertas cargadas."
+
 #: src/components/CardDetail.vue
 msgid "Find the card on board"
 msgstr "Encontrar la tarjeta en el tablero"
@@ -3500,6 +3516,7 @@ msgstr "En una carpeta de Archivos, una copia de seguridad descartada va a la pa
 #: src/components/CardTile.vue
 #: src/components/StackColumn.vue
 #: src/composables/useSwimlanes.js
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 msgid "In progress"
 msgstr "En curso"
@@ -3804,6 +3821,7 @@ msgid "Linking…"
 msgstr "Enlazando…"
 
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "List"
 msgstr "Lista"
@@ -4332,6 +4350,10 @@ msgstr "Sin límite"
 msgid "No matches for \"{q}\""
 msgstr "No hay coincidencias para «{q}»"
 
+#: src/views/MyCardsView.vue
+msgid "No matching tasks"
+msgstr "No hay tareas coincidentes"
+
 #: src/views/ProjectView.vue
 msgid "No notes yet. Start a discussion log for this project."
 msgstr "Todavía no hay notas. Empieza un registro de la conversación de este proyecto."
@@ -4453,6 +4475,7 @@ msgstr "Todavía no se ha compartido con nadie."
 #: src/components/BoardListView.vue
 #: src/components/BoardTimelineView.vue
 #: src/components/CardDetail.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 msgid "Not started"
 msgstr "Sin empezar"
@@ -4537,6 +4560,10 @@ msgstr "Solo se admiten enlaces de https://github.com"
 #: src/components/BoardSettingsModal.vue
 msgid "Only issues with a label"
 msgstr "Solo las incidencias con una etiqueta"
+
+#: src/views/MyCardsView.vue
+msgid "Only loaded tasks are shown."
+msgstr "Solo se muestran las tareas cargadas."
 
 #: src/views/MyCardsView.vue
 msgid "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list."
@@ -4808,6 +4835,7 @@ msgstr "Vista previa"
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Priority"
 msgstr "Prioridad"
@@ -5377,6 +5405,10 @@ msgstr "Buscar personas…"
 msgid "Search results"
 msgstr "Resultados de la búsqueda"
 
+#: src/views/MyCardsView.vue
+msgid "Search tasks"
+msgstr "Buscar tareas"
+
 #: src/components/CardDetail.vue
 msgid "Search the people with access to this board"
 msgstr "Buscar entre las personas con acceso a este tablero"
@@ -5627,6 +5659,7 @@ msgstr "Otra persona ha cambiado esta descripción mientras la editabas. Tu text
 msgid "Sort"
 msgstr "Orden"
 
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Sort by"
 msgstr "Ordenar por"
@@ -5707,6 +5740,7 @@ msgstr "STARTTLS (143)"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 #: src/views/ViewPage.vue
 msgid "Status"
@@ -5791,6 +5825,10 @@ msgstr "Columna de destino"
 #: src/composables/useCardType.js
 msgid "Task"
 msgstr "Tarea"
+
+#: src/views/MyCardsView.vue
+msgid "Tasks"
+msgstr "Tareas"
 
 #: src/views/MyCardsView.vue
 msgid "Tasks you completed in the last {days} days."
@@ -6014,6 +6052,7 @@ msgstr "Consejo: pulsa ? para ver los atajos de teclado"
 
 #: src/components/CsvImportModal.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 #: src/views/ViewPage.vue
@@ -6079,6 +6118,10 @@ msgstr "La papelera está vacía"
 #: src/views/BoardList.vue
 msgid "Trello (.json)"
 msgstr "Trello (.json)"
+
+#: src/views/MyCardsView.vue
+msgid "Try changing your filters or search."
+msgstr "Prueba a cambiar los filtros o la búsqueda."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Tue"
@@ -6257,6 +6300,7 @@ msgid "Velocity — completed per week"
 msgstr "Velocidad: terminadas por semana"
 
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "View"
 msgstr "Vista"

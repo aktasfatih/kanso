@@ -698,6 +698,7 @@ msgstr "Bekleyen (>{days}g)"
 
 #: src/views/BoardList.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/MyWorkView.vue
 msgid "All boards"
 msgstr "Tüm panolar"
@@ -706,6 +707,10 @@ msgstr "Tüm panolar"
 msgid "All day (no time)"
 msgstr "Tüm gün (saatsiz)"
 
+#: src/views/MyCardsView.vue
+msgid "All due dates"
+msgstr "Tüm son tarihler"
+
 #: src/components/BoardSettingsModal.vue
 msgid "All issues"
 msgstr "Tüm sorunlar"
@@ -713,6 +718,10 @@ msgstr "Tüm sorunlar"
 #: src/components/CardDetail.vue
 msgid "All requested reviews must be approved before this card can be marked done. Waiting on {names}."
 msgstr "Bu kartın tamamlandı olarak işaretlenebilmesi için istenen tüm incelemelerin onaylanması gerekir. {names} bekleniyor."
+
+#: src/views/MyCardsView.vue
+msgid "All statuses"
+msgstr "Tüm durumlar"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Allow AI actors"
@@ -1045,6 +1054,8 @@ msgstr "Mavi"
 #: src/views/BoardStats.vue
 #: src/views/BoardView.vue
 #: src/views/CardPage.vue
+#: src/views/MyCardsView.vue
+#: src/views/MyWorkView.vue
 #: src/views/ProjectView.vue
 #: src/views/PublicBoard.vue
 #: src/views/TrashView.vue
@@ -2366,6 +2377,7 @@ msgstr "Bitiş {date}"
 #: src/components/CardDetail.vue
 #: src/components/CsvImportModal.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Due date"
 msgstr "Bitiş tarihi"
@@ -3264,6 +3276,10 @@ msgstr "Silinen kartları filtrele"
 msgid "Filter trash…"
 msgstr "Çöp kutusunu filtrele…"
 
+#: src/views/MyCardsView.vue
+msgid "Filters and sorting apply to loaded open tasks."
+msgstr "Filtreler ve sıralama yüklenen açık görevlere uygulanır."
+
 #: src/components/CardDetail.vue
 msgid "Find the card on board"
 msgstr "Kartı panoda bul"
@@ -3500,6 +3516,7 @@ msgstr "Bir Dosyalar klasöründe, budanan bir yedek o hesabın çöp kutusuna t
 #: src/components/CardTile.vue
 #: src/components/StackColumn.vue
 #: src/composables/useSwimlanes.js
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 msgid "In progress"
 msgstr "Devam ediyor"
@@ -3804,6 +3821,7 @@ msgid "Linking…"
 msgstr "Bağlanıyor…"
 
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "List"
 msgstr "Liste"
@@ -4332,6 +4350,10 @@ msgstr "Sınır yok"
 msgid "No matches for \"{q}\""
 msgstr "\"{q}\" için eşleşme yok"
 
+#: src/views/MyCardsView.vue
+msgid "No matching tasks"
+msgstr "Eşleşen görev yok"
+
 #: src/views/ProjectView.vue
 msgid "No notes yet. Start a discussion log for this project."
 msgstr "Henüz not yok. Bu proje için bir tartışma günlüğü başlat."
@@ -4453,6 +4475,7 @@ msgstr "Henüz kimseyle paylaşılmadı."
 #: src/components/BoardListView.vue
 #: src/components/BoardTimelineView.vue
 #: src/components/CardDetail.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 msgid "Not started"
 msgstr "Başlamadı"
@@ -4537,6 +4560,10 @@ msgstr "Yalnızca https://github.com bağlantıları desteklenir"
 #: src/components/BoardSettingsModal.vue
 msgid "Only issues with a label"
 msgstr "Yalnızca şu etikete sahip sorunlar"
+
+#: src/views/MyCardsView.vue
+msgid "Only loaded tasks are shown."
+msgstr "Yalnızca yüklenen görevler gösterilir."
 
 #: src/views/MyCardsView.vue
 msgid "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list."
@@ -4808,6 +4835,7 @@ msgstr "Önizleme"
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Priority"
 msgstr "Öncelik"
@@ -5377,6 +5405,10 @@ msgstr "Kişi ara…"
 msgid "Search results"
 msgstr "Arama sonuçları"
 
+#: src/views/MyCardsView.vue
+msgid "Search tasks"
+msgstr "Görevlerde ara"
+
 #: src/components/CardDetail.vue
 msgid "Search the people with access to this board"
 msgstr "Bu panoya erişimi olan kişiler arasında ara"
@@ -5627,6 +5659,7 @@ msgstr "Sen düzenlerken başka biri bu açıklamayı değiştirdi. Senin metnin
 msgid "Sort"
 msgstr "Sırala"
 
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Sort by"
 msgstr "Sıralama ölçütü"
@@ -5707,6 +5740,7 @@ msgstr "STARTTLS (143)"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 #: src/views/ViewPage.vue
 msgid "Status"
@@ -5791,6 +5825,10 @@ msgstr "Hedef sütun"
 #: src/composables/useCardType.js
 msgid "Task"
 msgstr "Görev"
+
+#: src/views/MyCardsView.vue
+msgid "Tasks"
+msgstr "Görevler"
 
 #: src/views/MyCardsView.vue
 msgid "Tasks you completed in the last {days} days."
@@ -6014,6 +6052,7 @@ msgstr "İpucu: klavye kısayolları için ? tuşuna bas"
 
 #: src/components/CsvImportModal.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 #: src/views/ViewPage.vue
@@ -6079,6 +6118,10 @@ msgstr "Çöp kutusu boş"
 #: src/views/BoardList.vue
 msgid "Trello (.json)"
 msgstr "Trello (.json)"
+
+#: src/views/MyCardsView.vue
+msgid "Try changing your filters or search."
+msgstr "Filtrelerinizi veya aramanızı değiştirmeyi deneyin."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Tue"
@@ -6257,6 +6300,7 @@ msgid "Velocity — completed per week"
 msgstr "Hız — haftada tamamlanan"
 
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "View"
 msgstr "Görünüm"

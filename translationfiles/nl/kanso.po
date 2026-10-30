@@ -698,6 +698,7 @@ msgstr "Verouderd (>{days}d)"
 
 #: src/views/BoardList.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/MyWorkView.vue
 msgid "All boards"
 msgstr "Alle borden"
@@ -706,6 +707,10 @@ msgstr "Alle borden"
 msgid "All day (no time)"
 msgstr "Hele dag (geen tijd)"
 
+#: src/views/MyCardsView.vue
+msgid "All due dates"
+msgstr "Alle vervaldatums"
+
 #: src/components/BoardSettingsModal.vue
 msgid "All issues"
 msgstr "Alle issues"
@@ -713,6 +718,10 @@ msgstr "Alle issues"
 #: src/components/CardDetail.vue
 msgid "All requested reviews must be approved before this card can be marked done. Waiting on {names}."
 msgstr "Alle aangevraagde reviews moeten goedgekeurd zijn voordat deze kaart als klaar kan worden gemarkeerd. Wacht op {names}."
+
+#: src/views/MyCardsView.vue
+msgid "All statuses"
+msgstr "Alle statussen"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Allow AI actors"
@@ -1045,6 +1054,8 @@ msgstr "Blauw"
 #: src/views/BoardStats.vue
 #: src/views/BoardView.vue
 #: src/views/CardPage.vue
+#: src/views/MyCardsView.vue
+#: src/views/MyWorkView.vue
 #: src/views/ProjectView.vue
 #: src/views/PublicBoard.vue
 #: src/views/TrashView.vue
@@ -2366,6 +2377,7 @@ msgstr "Einddatum {date}"
 #: src/components/CardDetail.vue
 #: src/components/CsvImportModal.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Due date"
 msgstr "Einddatum"
@@ -3264,6 +3276,10 @@ msgstr "Verwijderde kaarten filteren"
 msgid "Filter trash…"
 msgstr "Prullenbak filteren…"
 
+#: src/views/MyCardsView.vue
+msgid "Filters and sorting apply to loaded open tasks."
+msgstr "Filters en sortering gelden voor geladen open taken."
+
 #: src/components/CardDetail.vue
 msgid "Find the card on board"
 msgstr "Kaart op het bord zoeken"
@@ -3500,6 +3516,7 @@ msgstr "In een map in Bestanden gaat een opgeruimde back-up naar de prullenbak v
 #: src/components/CardTile.vue
 #: src/components/StackColumn.vue
 #: src/composables/useSwimlanes.js
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 msgid "In progress"
 msgstr "Bezig"
@@ -3804,6 +3821,7 @@ msgid "Linking…"
 msgstr "Koppelen…"
 
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "List"
 msgstr "Lijst"
@@ -4332,6 +4350,10 @@ msgstr "Geen limiet"
 msgid "No matches for \"{q}\""
 msgstr "Geen resultaten voor \"{q}\""
 
+#: src/views/MyCardsView.vue
+msgid "No matching tasks"
+msgstr "Geen overeenkomende taken"
+
 #: src/views/ProjectView.vue
 msgid "No notes yet. Start a discussion log for this project."
 msgstr "Nog geen notities. Begin een discussielogboek voor dit project."
@@ -4453,6 +4475,7 @@ msgstr "Nog met niemand gedeeld."
 #: src/components/BoardListView.vue
 #: src/components/BoardTimelineView.vue
 #: src/components/CardDetail.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 msgid "Not started"
 msgstr "Niet gestart"
@@ -4537,6 +4560,10 @@ msgstr "Alleen links naar https://github.com worden ondersteund"
 #: src/components/BoardSettingsModal.vue
 msgid "Only issues with a label"
 msgstr "Alleen issues met een label"
+
+#: src/views/MyCardsView.vue
+msgid "Only loaded tasks are shown."
+msgstr "Alleen geladen taken worden weergegeven."
 
 #: src/views/MyCardsView.vue
 msgid "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list."
@@ -4808,6 +4835,7 @@ msgstr "Voorbeeld"
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Priority"
 msgstr "Prioriteit"
@@ -5377,6 +5405,10 @@ msgstr "Personen zoeken…"
 msgid "Search results"
 msgstr "Zoekresultaten"
 
+#: src/views/MyCardsView.vue
+msgid "Search tasks"
+msgstr "Taken zoeken"
+
 #: src/components/CardDetail.vue
 msgid "Search the people with access to this board"
 msgstr "Zoek de personen met toegang tot dit bord"
@@ -5627,6 +5659,7 @@ msgstr "Iemand anders heeft deze beschrijving gewijzigd terwijl jij aan het bewe
 msgid "Sort"
 msgstr "Sorteren"
 
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Sort by"
 msgstr "Sorteren op"
@@ -5707,6 +5740,7 @@ msgstr "STARTTLS (143)"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 #: src/views/ViewPage.vue
 msgid "Status"
@@ -5791,6 +5825,10 @@ msgstr "Doelkolom"
 #: src/composables/useCardType.js
 msgid "Task"
 msgstr "Taak"
+
+#: src/views/MyCardsView.vue
+msgid "Tasks"
+msgstr "Taken"
 
 #: src/views/MyCardsView.vue
 msgid "Tasks you completed in the last {days} days."
@@ -6014,6 +6052,7 @@ msgstr "Tip: druk op ? voor de sneltoetsen"
 
 #: src/components/CsvImportModal.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 #: src/views/ViewPage.vue
@@ -6079,6 +6118,10 @@ msgstr "De prullenbak is leeg"
 #: src/views/BoardList.vue
 msgid "Trello (.json)"
 msgstr "Trello (.json)"
+
+#: src/views/MyCardsView.vue
+msgid "Try changing your filters or search."
+msgstr "Probeer uw filters of zoekopdracht te wijzigen."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Tue"
@@ -6257,6 +6300,7 @@ msgid "Velocity — completed per week"
 msgstr "Velocity — afgerond per week"
 
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "View"
 msgstr "Weergave"

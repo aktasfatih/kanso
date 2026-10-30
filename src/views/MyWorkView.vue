@@ -69,12 +69,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import { useBoards } from '../composables/useBoards.js'
 import { usePageTitle } from '../composables/usePageTitle.js'
+import { myTaskPreferences } from '../services/myTaskPreferences.js'
 import MyCardsView from './MyCardsView.vue'
 import MyReviewsView from './MyReviewsView.vue'
 import InboxView from './InboxView.vue'
@@ -104,10 +105,20 @@ const boardOptions = computed(() => [
 ])
 
 /** The currently selected NcSelect option object. */
-const selectedBoardOption = ref(ALL_BOARDS_OPTION)
+const selectedBoardOption = computed({
+	get: () => boardOptions.value.find((option) => option.value === myTaskPreferences.hubBoard)
+		?? { label: t('kanso', 'Board'), value: myTaskPreferences.hubBoard },
+	set: (option) => { myTaskPreferences.hubBoard = option?.value ?? null },
+})
+
+watch(boardsData, (items) => {
+	if (Array.isArray(items) && myTaskPreferences.hubBoard !== null && !items.some((board) => !board.archived && board.id === myTaskPreferences.hubBoard)) {
+		myTaskPreferences.hubBoard = null
+	}
+}, { immediate: true })
 
 /** The boardId to pass as :board-filter, or null for "all". */
-const boardFilter = computed(() => selectedBoardOption.value?.value ?? null)
+const boardFilter = computed(() => myTaskPreferences.hubBoard)
 </script>
 
 <style scoped>

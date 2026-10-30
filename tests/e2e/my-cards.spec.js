@@ -4,12 +4,13 @@
 import { test, expect, api, ncLogin, BASE, me, currentAuth } from './helpers.js'
 
 test.describe('My tasks (#3441)', () => {
-	const state = { boardId: 0, stackId: 0, assignedCardId: 0, unassignedCardId: 0, title: '', emptyBoardId: 0, emptyBoardTitle: '', doneCardId: 0, doneTitle: '' }
+	const state = { boardId: 0, boardTitle: '', stackId: 0, assignedCardId: 0, unassignedCardId: 0, title: '', emptyBoardId: 0, emptyBoardTitle: '', doneCardId: 0, doneTitle: '' }
 
 	test.beforeAll(async () => {
 		state.title = 'MyTask ' + Math.floor(Date.now() / 1000)
 		const board = await api.post('/boards', { title: 'MyTasks ' + Math.floor(Date.now() / 1000) })
 		state.boardId = board.id
+		state.boardTitle = board.title
 		state.stackId = (await api.post('/stacks', { boardId: board.id, title: 'To do' })).id
 		state.assignedCardId = (await api.post('/cards', { stackId: state.stackId, title: state.title })).id
 		state.unassignedCardId = (await api.post('/cards', { stackId: state.stackId, title: 'Not mine ' + Math.floor(Date.now() / 1000) })).id
@@ -123,6 +124,43 @@ test.describe('My tasks (#3441)', () => {
 		await expect(empty).toBeVisible()
 		await expect(empty).toContainText('No tasks on this board')
 		await expect(empty).not.toContainText('No tasks assigned to you')
+	})
+
+	test('the My Work board filter remains selected after opening and closing a task', async ({ page }) => {
+		const otherBoard = await api.post('/boards', { title: 'Other tasks ' + Date.now() })
+		try {
+			const otherStack = await api.post('/stacks', { boardId: otherBoard.id, title: 'To do' })
+			const otherTitle = 'Other assigned task ' + Date.now()
+			const otherCard = await api.post('/cards', { stackId: otherStack.id, title: otherTitle })
+			await api.put(`/cards/${otherCard.id}/assignees/${me}`)
+
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/my-work`)
+			const otherRow = page.locator('.my-cards-view__row', { hasText: otherTitle })
+			await expect(otherRow).toBeVisible()
+
+			const filter = page.locator('#my-work-board-filter')
+			await filter.click()
+			await filter.fill(state.boardTitle)
+			await page.locator('li[role="option"]', { hasText: state.boardTitle }).first().click()
+			await expect(otherRow).toHaveCount(0)
+			const assignedRow = page.locator('.my-cards-view__row', { hasText: state.title })
+			await expect(assignedRow).toBeVisible()
+			await page.getByLabel('Sort by').selectOption({ label: 'Title' })
+			await page.getByLabel('View', { exact: true }).selectOption({ label: 'Board' })
+			await assignedRow.click()
+			await expect(page.locator('.card-modal__content')).toBeVisible()
+			await page.keyboard.press('Escape')
+
+			await expect(page).toHaveURL(/#\/my-work/)
+			await expect(page.locator('.my-work-view__board-filter')).toContainText(state.boardTitle)
+			await expect(page.getByLabel('Sort by')).toHaveValue('title')
+			await expect(page.getByLabel('View', { exact: true })).toHaveValue('board')
+			await expect(page.locator('.my-cards-view__row', { hasText: state.title })).toBeVisible()
+			await expect(page.locator('.my-cards-view__row', { hasText: otherTitle })).toHaveCount(0)
+		} finally {
+			await api.delete(`/boards/${otherBoard.id}`).catch(() => {})
+		}
 	})
 
 	// #10068/4 — the 200-row cap used to be silent, and the nav badge counted

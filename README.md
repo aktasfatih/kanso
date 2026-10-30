@@ -147,7 +147,9 @@ your work, on your own Nextcloud, laid out plainly.
   labels, assignees, priority and other attributes.
 - **My Work** hub gathers, across every board: **My tasks** (cards assigned to
   you), **Reviews** (waiting on you), and an **Inbox** of mentions and activity
-  on cards you watch — filterable to a single board.
+  on cards you watch — filterable to a single board. My tasks also supports
+  searching, status and due-date filters, sorting, and a read-only status board;
+  these controls apply to the loaded open tasks.
 - **Projects**: cross-board card collections with a start and target date, a
   forecast finish date from your recent pace, an on-track / at-risk / late
   status, a burn-up chart, estimates normalized across boards, blocked and
