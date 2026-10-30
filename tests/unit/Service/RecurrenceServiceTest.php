@@ -399,7 +399,7 @@ class RecurrenceServiceTest extends TestCase {
 	 *     stale between versions - so they are refused rather than trusted.
 	 *
 	 * Note where the first and third loops live: INSIDE a single next() call. That is
-	 * why the step cap ({@see self::testComputeNextOccurrenceCapsAnAncientAnchorsWalk})
+	 * why the step cap ({@see self::testComputeNextOccurrenceRejectsWalkBeyondStepLimit})
 	 * cannot cover them and this allowlist is load-bearing - PHP cannot interrupt a
 	 * loop inside a library call.
 	 *
@@ -480,33 +480,11 @@ class RecurrenceServiceTest extends TestCase {
 		self::assertGreaterThan($anchor, $next, $rrule . ' must still produce an occurrence');
 	}
 
-	/**
-	 * The version-independent half of the guard: a cap on how many occurrences one
-	 * call may step through.
-	 *
-	 * The lever is the ANCHOR, not the rule. A rule's DTSTART is the template card's
-	 * Start date (see anchorFor()), and DueDateParser happily accepts year 0001 - so
-	 * a card dated 0001-01-01 with a perfectly legal `FREQ=HOURLY` makes
-	 * fastForward() step roughly 17.7 MILLION entirely valid occurrences to reach
-	 * today. Nothing about that rule is malformed; no allowlist can see it coming.
-	 *
-	 * Unlike every other case in this file the walk here is bounded by construction
-	 * (each step advances an hour, so it ends), which is why this one may safely ask
-	 * for an occurrence after the anchor: the failure mode being guarded against is
-	 * minutes of pinned CPU, not an endless loop.
-	 */
-	public function testComputeNextOccurrenceCapsAnAncientAnchorsWalk(): void {
-		$anchor = (new \DateTimeImmutable('0001-01-01T00:00:00Z'))->getTimestamp();
-		$started = microtime(true);
-		try {
-			$this->service->computeNextOccurrence('FREQ=HOURLY', self::NOW, $anchor, 'UTC');
-			self::fail('An anchor two millennia back must be refused, not walked');
-		} catch (InvalidInputException $e) {
-			// The cap is worthless if reaching it is itself the expense. 50k steps
-			// measured at 0.7-3.7us each; a whole second is a very loose ceiling that
-			// still fails loudly if the cap is ever removed.
-			self::assertLessThan(1.0, microtime(true) - $started, 'the cap must be cheap to hit');
-		}
+	public function testComputeNextOccurrenceRejectsWalkBeyondStepLimit(): void {
+		$anchor = self::NOW - 50001 * 3600;
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('Recurrence rule needs too many steps');
+		$this->service->computeNextOccurrence('FREQ=HOURLY', self::NOW, $anchor, 'UTC');
 	}
 
 	/**

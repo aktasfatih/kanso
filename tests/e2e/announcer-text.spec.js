@@ -3,8 +3,6 @@
 
 import { test, expect, api, ncLogin, BASE, OCS, adminAuth, provisionUser, deleteUser } from './helpers.js'
 
-test.use({ storageState: { cookies: [], origins: [] } })
-
 test('assignee and label announcements preserve special characters as text', async ({ page }) => {
 	const stamp = `${Date.now()}`
 	const user = `announcement_${stamp}`
@@ -26,7 +24,9 @@ test('assignee and label announcements preserve special characters as text', asy
 
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${boardId}`)
-		await page.locator('.card-tile').filter({ hasText: 'Announcement card' }).click()
+		const card = page.locator('.card-tile').filter({ hasText: 'Announcement card' })
+		await expect(card).toBeVisible()
+		await card.click()
 		const attrbar = page.locator('.card-modal__attrbar')
 		await attrbar.locator('button[data-pill="assign"]').click()
 		const person = attrbar.locator('.card-modal__assign-option').filter({ hasText: name })
