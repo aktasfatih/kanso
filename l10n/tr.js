@@ -1244,6 +1244,7 @@ OC.L10N.register(
     "Select a person…" : "Bir kişi seç…",
     "Select a stack…" : "Bir sütun seç…",
     "Select multiple cards" : "Birden çok kart seç",
+    "Select or deselect the focused card" : "Odaklanan kartı seç veya seçimini kaldır",
     "Set" : "Ayarla",
     "Set a target date to see whether you are on track." : "Yolunda olup olmadığını görmek için bir hedef tarih belirle.",
     "Set due date" : "Bitiş tarihi ayarla",

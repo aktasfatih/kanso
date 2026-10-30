@@ -415,7 +415,7 @@ msgid_plural "%n hours ago"
 msgstr[0] "il y a %n heure"
 msgstr[1] "il y a %n heures"
 
-#: src/views/BoardView.vue:2640
+#: src/views/BoardView.vue:2663
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n identifiant copié."
@@ -5421,6 +5421,10 @@ msgstr "Sélectionner une colonne…"
 #: src/views/TrashView.vue
 msgid "Select multiple cards"
 msgstr "Sélectionner plusieurs cartes"
+
+#: src/views/BoardView.vue
+msgid "Select or deselect the focused card"
+msgstr "Sélectionner ou désélectionner la carte active"
 
 #: src/components/CardDetail.vue
 msgid "Set"

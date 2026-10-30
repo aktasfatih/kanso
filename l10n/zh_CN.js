@@ -1244,6 +1244,7 @@ OC.L10N.register(
     "Select a person…" : "选择成员…",
     "Select a stack…" : "选择列…",
     "Select multiple cards" : "选择多张卡片",
+    "Select or deselect the focused card" : "选择或取消选择当前焦点卡片",
     "Set" : "设置",
     "Set a target date to see whether you are on track." : "设置目标日期以查看进度是否正常。",
     "Set due date" : "设置截止日期",

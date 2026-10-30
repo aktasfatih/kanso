@@ -1244,6 +1244,7 @@ OC.L10N.register(
     "Select a person…" : "Seleziona una persona…",
     "Select a stack…" : "Seleziona una colonna…",
     "Select multiple cards" : "Seleziona più schede",
+    "Select or deselect the focused card" : "Seleziona o deseleziona la scheda attiva",
     "Set" : "Imposta",
     "Set a target date to see whether you are on track." : "Imposta una data obiettivo per vedere se sei nei tempi.",
     "Set due date" : "Imposta la scadenza",

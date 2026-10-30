@@ -392,7 +392,7 @@ msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
 
-#: src/views/BoardView.vue:2640
+#: src/views/BoardView.vue:2663
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "已复制 %n 个 ID。"
@@ -5370,6 +5370,10 @@ msgstr "选择列…"
 #: src/views/TrashView.vue
 msgid "Select multiple cards"
 msgstr "选择多张卡片"
+
+#: src/views/BoardView.vue
+msgid "Select or deselect the focused card"
+msgstr "选择或取消选择当前焦点卡片"
 
 #: src/components/CardDetail.vue
 msgid "Set"

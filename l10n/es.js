@@ -1244,6 +1244,7 @@ OC.L10N.register(
     "Select a person…" : "Selecciona una persona…",
     "Select a stack…" : "Selecciona una columna…",
     "Select multiple cards" : "Seleccionar varias tarjetas",
+    "Select or deselect the focused card" : "Seleccionar o deseleccionar la tarjeta enfocada",
     "Set" : "Aplicar",
     "Set a target date to see whether you are on track." : "Establece una fecha objetivo para ver si vas según lo previsto.",
     "Set due date" : "Definir la fecha de vencimiento",

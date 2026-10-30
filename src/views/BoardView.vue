@@ -390,7 +390,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- Stacks row (Board view). Kept mounted under v-show so its drag-and-drop
 		     monitors stay attached when the List view is showing. -->
-		<div v-show="viewMode === 'board' && swimlaneMode === 'none'" ref="stacksWrapRef" class="board-view__stacks-wrap">
+		<div v-show="viewMode === 'board' && swimlaneMode === 'none'" ref="stacksWrapRef" class="board-view__stacks-wrap" @focusin="handleBoardFocus">
 			<!-- Skeleton stacks on cold load -->
 			<template v-if="isLoading">
 				<div v-for="n in 3" :key="n" class="stack-skeleton">
@@ -574,6 +574,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<tr>
 							<td class="shortcuts-modal__key"><kbd>Space</kbd></td>
 							<td>{{ t('kanso', 'Quick preview of the hovered / focused card') }}</td>
+						</tr>
+						<tr v-if="canEditBoard && viewMode === 'board' && swimlaneMode === 'none'">
+							<td class="shortcuts-modal__key"><kbd>x</kbd></td>
+							<td>{{ t('kanso', 'Select or deselect the focused card') }}</td>
 						</tr>
 						<!-- The two shortcuts the handler now refuses for a read-only
 						     member (#9978) — don't teach a viewer a key that is gated.
@@ -1741,6 +1745,19 @@ const nonEmptyStacks = computed(() =>
  * 3. querySelector and .focus()
  */
 let navSeq = 0
+let navPending = false
+
+function handleBoardFocus(event) {
+	const tile = event.target.closest('.card-tile')
+	if (!tile) return
+	const id = Number(tile.dataset.cardId)
+	if (!findCardPosition(id)) return
+	if (navPending && id !== focusedCardId.value) {
+		navSeq++
+		navPending = false
+	}
+	focusedCardId.value = id
+}
 
 async function navigateTo(stackId, cardIdx) {
 	const cards = cardsByStack.value.get(stackId) ?? []
@@ -1753,10 +1770,12 @@ async function navigateTo(stackId, cardIdx) {
 	// Rapid keypresses race here: only the newest navigation may focus,
 	// or an older one resolving late would drag DOM focus backwards.
 	const seq = ++navSeq
+	navPending = true
 	await nextTick()
 	await new Promise((resolve) => requestAnimationFrame(resolve))
 	if (seq !== navSeq) return
 	document.querySelector(`[data-card-id="${card.id}"]`)?.focus()
+	navPending = false
 }
 
 // Clear focusedCardId / hoveredCardId when the card disappears from cardsByStack
@@ -1957,6 +1976,29 @@ function handleKeydown(e) {
 
 	// Guard: settings modal or shortcuts overlay open
 	if (showSettings.value || showShortcuts.value) return
+
+	if ((e.key === 'x' || e.key === 'Escape') && !e.repeat && !e.defaultPrevented
+		&& !showCommandPalette.value && previewCardId.value == null
+		&& viewMode.value === 'board' && swimlaneMode.value === 'none') {
+		const boardTile = target.matches('.card-tile') && stacksWrapRef.value?.contains(target)
+		const bar = target.closest('.bulk-action-bar')
+		if (e.key === 'Escape' && bulk.selectionMode.value
+			&& (boardTile || (bar && !bar.querySelector('[aria-expanded="true"]')))) {
+			e.preventDefault()
+			bulk.exitMode()
+			return
+		}
+		const pos = findCardPosition(focusedCardId.value)
+		if (e.key === 'x' && canEditBoard.value
+			&& (boardTile || (navPending && target === document.body))
+			&& (navPending || Number(target.dataset.cardId) === focusedCardId.value)
+			&& pos && !isStackCollapsed(sortedStacks.value[pos.stackIdx].id)) {
+			e.preventDefault()
+			bulk.enterMode()
+			bulk.toggle(focusedCardId.value)
+			return
+		}
+	}
 
 	// Vim-style aliases for the arrow navigation below. The typing-context
 	// guard above has already bailed, so h/j/k/l still type normally in

@@ -438,7 +438,7 @@ msgstr[0] "%n час назад"
 msgstr[1] "%n часа назад"
 msgstr[2] "%n часов назад"
 
-#: src/views/BoardView.vue:2640
+#: src/views/BoardView.vue:2663
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "Скопирован %n идентификатор."
@@ -5472,6 +5472,10 @@ msgstr "Выберите колонку…"
 #: src/views/TrashView.vue
 msgid "Select multiple cards"
 msgstr "Выбрать несколько карточек"
+
+#: src/views/BoardView.vue
+msgid "Select or deselect the focused card"
+msgstr "Выбрать карточку в фокусе или снять выбор"
 
 #: src/components/CardDetail.vue
 msgid "Set"

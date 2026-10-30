@@ -1244,6 +1244,7 @@ OC.L10N.register(
     "Select a person…" : "Kies een persoon…",
     "Select a stack…" : "Kies een kolom…",
     "Select multiple cards" : "Meerdere kaarten selecteren",
+    "Select or deselect the focused card" : "De geselecteerde kaart selecteren of deselecteren",
     "Set" : "Instellen",
     "Set a target date to see whether you are on track." : "Stel een streefdatum in om te zien of je op schema ligt.",
     "Set due date" : "Einddatum instellen",
