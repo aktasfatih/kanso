@@ -392,7 +392,7 @@ msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
 
-#: src/views/BoardView.vue:2663
+#: src/views/BoardView.vue:2664
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "已复制 %n 个 ID。"
@@ -432,7 +432,7 @@ msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n 点"
 
-#: src/components/CardDetail.vue:1245
+#: src/components/CardDetail.vue:1255
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
@@ -4259,6 +4259,10 @@ msgid "No label"
 msgstr "无标签"
 
 #: src/components/CardDetail.vue
+msgid "No labels match."
+msgstr "没有匹配的标签。"
+
+#: src/components/CardDetail.vue
 msgid "No labels on this board yet."
 msgstr "此看板上还没有标签。"
 
@@ -5302,6 +5306,10 @@ msgstr "搜索卡片…"
 #: src/components/CardDetail.vue
 msgid "Search contacts…"
 msgstr "搜索联系人…"
+
+#: src/components/CardDetail.vue
+msgid "Search labels…"
+msgstr "搜索标签…"
 
 #: src/components/CardDetail.vue
 msgid "Search people…"

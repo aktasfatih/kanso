@@ -1142,15 +1142,26 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<div v-if="canEdit" class="card-modal__attr">
 						<button
 							class="card-modal__pill card-modal__pill--dashed card-modal__pill--sm"
+							ref="labelPickerButton"
 							data-pill="label"
 							:aria-expanded="openPicker === 'label'"
-							@click="togglePicker('label')">
+							@click="toggleLabelPicker">
 							<PlusIcon :size="12" />
 							{{ t('kanso', 'Label') }}
 						</button>
 						<div v-if="openPicker === 'label'" class="card-modal__popover">
+							<input
+								ref="labelSearchInput"
+								v-model="labelQuery"
+								type="search"
+								class="card-modal__label-search"
+								:placeholder="t('kanso', 'Search labels…')"
+								:aria-label="t('kanso', 'Search labels…')">
 							<div v-if="boardLabels.length === 0" class="card-modal__popover-empty">
 								{{ t('kanso', 'No labels on this board yet.') }}
+							</div>
+							<div v-else-if="filteredBoardLabels.length === 0" class="card-modal__popover-empty">
+								{{ t('kanso', 'No labels match.') }}
 							</div>
 							<!-- Same rule as the assign rows above (#10705): `aria-busy`,
 							     never `disabled`, so activating a label by keyboard does not
@@ -1159,7 +1170,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							     queue, which also keeps a label picked mid-write from being
 							     dropped (#10920). -->
 							<button
-								v-for="label in boardLabels"
+								v-for="label in filteredBoardLabels"
 								:key="label.id"
 								class="card-modal__label-toggle"
 								:class="{
@@ -3032,6 +3043,12 @@ function retryCardLoad() {
 // Read board data from cache (same queryKey as BoardView - no extra request).
 const { data: boardData } = useBoard(boardId)
 const boardLabels = computed(() => boardData.value?.labels ?? [])
+const labelQuery = ref('')
+const labelSearchInput = ref(null)
+const filteredBoardLabels = computed(() => {
+	const query = labelQuery.value.trim().toLocaleLowerCase()
+	return query ? boardLabels.value.filter((label) => label.title.toLocaleLowerCase().includes(query)) : boardLabels.value
+})
 const boardReviewTypes = computed(() => boardData.value?.reviewTypes ?? [])
 const boardCardFields = computed(() => boardData.value?.cardFields ?? [])
 // Built-in card sections this board's manager left switched on (#5894). Read
@@ -6101,7 +6118,13 @@ function onRootEscape() {
 		escapeClaimed = false
 	}, 0)
 	if (openPicker.value !== null) {
+		const wasLabelPicker = openPicker.value === 'label'
 		openPicker.value = null
+		if (wasLabelPicker) {
+			nextTick(() => {
+				if (openPicker.value === null) labelPickerButton.value?.focus()
+			})
+		}
 		return
 	}
 	if (props.mode === 'modal') {
@@ -7240,12 +7263,20 @@ const statusChipLabel = computed(() =>
 // One attribute-bar popover open at a time:
 // 'priority' | 'due' | 'estimate' | 'assign' | 'label' | 'review' | null
 const openPicker = ref(null)
+const labelPickerButton = ref(null)
 
 watch(() => openPicker.value === 'estimate', (open) => {
 	if (open) numberEstimateDraft.value = currentEstimate.value
 })
 function togglePicker(name) {
 	openPicker.value = openPicker.value === name ? null : name
+}
+async function toggleLabelPicker() {
+	togglePicker('label')
+	if (openPicker.value !== 'label') return
+	labelQuery.value = ''
+	await nextTick()
+	if (openPicker.value === 'label') labelSearchInput.value?.focus()
 }
 
 // Attribute-bar display helpers
@@ -8137,7 +8168,8 @@ async function handleToggleProject(projectId) {
 }
 /* Contacts picker (#3530) */
 .card-modal__contact-search,
-.card-modal__assign-search {
+.card-modal__assign-search,
+.card-modal__label-search {
 	width: 100%;
 	margin-bottom: 4px;
 	padding: 4px 8px;

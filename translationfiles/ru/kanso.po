@@ -438,7 +438,7 @@ msgstr[0] "%n час назад"
 msgstr[1] "%n часа назад"
 msgstr[2] "%n часов назад"
 
-#: src/views/BoardView.vue:2663
+#: src/views/BoardView.vue:2664
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "Скопирован %n идентификатор."
@@ -494,7 +494,7 @@ msgstr[0] "%n балл"
 msgstr[1] "%n балла"
 msgstr[2] "%n баллов"
 
-#: src/components/CardDetail.vue:1245
+#: src/components/CardDetail.vue:1255
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n проект"
@@ -4357,6 +4357,10 @@ msgid "No label"
 msgstr "Без метки"
 
 #: src/components/CardDetail.vue
+msgid "No labels match."
+msgstr "Подходящих меток нет."
+
+#: src/components/CardDetail.vue
 msgid "No labels on this board yet."
 msgstr "На этой доске пока нет меток."
 
@@ -5400,6 +5404,10 @@ msgstr "Поиск карточек…"
 #: src/components/CardDetail.vue
 msgid "Search contacts…"
 msgstr "Поиск контактов…"
+
+#: src/components/CardDetail.vue
+msgid "Search labels…"
+msgstr "Поиск меток…"
 
 #: src/components/CardDetail.vue
 msgid "Search people…"

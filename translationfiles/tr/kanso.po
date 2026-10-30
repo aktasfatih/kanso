@@ -415,7 +415,7 @@ msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
 msgstr[1] "%n saat önce"
 
-#: src/views/BoardView.vue:2663
+#: src/views/BoardView.vue:2664
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n kimlik kopyalandı."
@@ -463,7 +463,7 @@ msgid_plural "%n points"
 msgstr[0] "%n puan"
 msgstr[1] "%n puan"
 
-#: src/components/CardDetail.vue:1245
+#: src/components/CardDetail.vue:1255
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n proje"
@@ -4308,6 +4308,10 @@ msgid "No label"
 msgstr "Etiket yok"
 
 #: src/components/CardDetail.vue
+msgid "No labels match."
+msgstr "Eşleşen etiket yok."
+
+#: src/components/CardDetail.vue
 msgid "No labels on this board yet."
 msgstr "Bu panoda henüz etiket yok."
 
@@ -5351,6 +5355,10 @@ msgstr "Kartlarda ara…"
 #: src/components/CardDetail.vue
 msgid "Search contacts…"
 msgstr "Kişilerde ara…"
+
+#: src/components/CardDetail.vue
+msgid "Search labels…"
+msgstr "Etiketleri ara…"
 
 #: src/components/CardDetail.vue
 msgid "Search people…"

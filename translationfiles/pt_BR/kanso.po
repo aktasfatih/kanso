@@ -415,7 +415,7 @@ msgid_plural "%n hours ago"
 msgstr[0] "há %n hora"
 msgstr[1] "há %n horas"
 
-#: src/views/BoardView.vue:2663
+#: src/views/BoardView.vue:2664
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n ID copiado."
@@ -463,7 +463,7 @@ msgid_plural "%n points"
 msgstr[0] "%n ponto"
 msgstr[1] "%n pontos"
 
-#: src/components/CardDetail.vue:1245
+#: src/components/CardDetail.vue:1255
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n projeto"
@@ -4308,6 +4308,10 @@ msgid "No label"
 msgstr "Sem etiqueta"
 
 #: src/components/CardDetail.vue
+msgid "No labels match."
+msgstr "Nenhuma etiqueta correspondente."
+
+#: src/components/CardDetail.vue
 msgid "No labels on this board yet."
 msgstr "Nenhuma etiqueta neste quadro ainda."
 
@@ -5351,6 +5355,10 @@ msgstr "Pesquisar cartões…"
 #: src/components/CardDetail.vue
 msgid "Search contacts…"
 msgstr "Pesquisar contatos…"
+
+#: src/components/CardDetail.vue
+msgid "Search labels…"
+msgstr "Pesquisar etiquetas…"
 
 #: src/components/CardDetail.vue
 msgid "Search people…"

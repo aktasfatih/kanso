@@ -462,7 +462,7 @@ msgid_plural "%n points"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:1245
+#: src/components/CardDetail.vue:1256
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] ""
@@ -4307,6 +4307,10 @@ msgid "No label"
 msgstr ""
 
 #: src/components/CardDetail.vue
+msgid "No labels match."
+msgstr ""
+
+#: src/components/CardDetail.vue
 msgid "No labels on this board yet."
 msgstr ""
 
@@ -5349,6 +5353,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Search contacts…"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Search labels…"
 msgstr ""
 
 #: src/components/CardDetail.vue
