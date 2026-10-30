@@ -11,6 +11,7 @@ use OCA\Kanso\Service\MailIntakeService;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
 use OCP\IUserSession;
@@ -92,6 +93,7 @@ class MailIntakeController extends Controller {
 	 * message on screen rather than a five-minute wait for cron.
 	 */
 	#[NoAdminRequired]
+	#[UserRateLimit(limit: 10, period: 300)]
 	public function test(int $id): JSONResponse {
 		return $this->respond(function () use ($id): JSONResponse {
 			return new JSONResponse($this->mailIntakeService->testConnection($id, $this->currentUserId()));
