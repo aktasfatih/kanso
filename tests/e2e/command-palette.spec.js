@@ -90,6 +90,60 @@ test.describe('Command Palette', () => {
 		await expect(page.locator('.command-palette')).toBeVisible()
 	})
 
+	test('opens from the board while the non-modal settings rail is open', async ({ page }) => {
+		await goToBoard(page)
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
+		const settings = page.getByRole('dialog', { name: 'Board settings' })
+		await expect(settings).toBeVisible()
+		const card = page.locator('.card-tile').filter({ hasText: 'Quartz timepiece sync' })
+		await card.focus()
+		await expect(card).toBeFocused()
+		await page.keyboard.press('Control+k')
+		await expect(page.locator('.command-palette')).toBeVisible()
+		await expect(settings).toBeVisible()
+	})
+
+	test('opens from the focused non-modal settings rail', async ({ page }) => {
+		await goToBoard(page)
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
+		const settings = page.getByRole('dialog', { name: 'Board settings' })
+		await expect(settings.locator('[role="tab"][aria-selected="true"]')).toBeFocused()
+		await page.keyboard.press('Control+k')
+		await expect(page.locator('.command-palette')).toBeVisible()
+		await expect(settings).toBeVisible()
+	})
+
+	test('does not open behind a nested settings dialog', async ({ page }) => {
+		await goToBoard(page)
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
+		const settings = page.getByRole('dialog', { name: 'Board settings' })
+		await settings.evaluate((panel) => {
+			const dialog = document.createElement('div')
+			dialog.setAttribute('role', 'dialog')
+			dialog.style.cssText = 'width: 100px; height: 100px'
+			panel.append(dialog)
+		})
+		await page.keyboard.press('Control+k')
+		await expect(page.locator('.command-palette')).toHaveCount(0)
+	})
+
+	test('does not open behind a visible alert dialog when focus is outside', async ({ page }) => {
+		await goToBoard(page)
+		const card = page.locator('.card-tile').filter({ hasText: 'Quartz timepiece sync' })
+		await card.focus()
+		await page.evaluate(() => {
+			const alert = document.createElement('div')
+			alert.setAttribute('role', 'alertdialog')
+			alert.style.cssText = 'width: 100px; height: 100px'
+			document.body.append(alert)
+		})
+		await page.keyboard.press('Control+k')
+		await expect(page.locator('.command-palette')).toHaveCount(0)
+	})
+
 	// ── Tests ──────────────────────────────────────────────────────────────────
 
 	test('Ctrl+K opens the command palette with a focused search input', async ({ page }) => {

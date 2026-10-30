@@ -371,8 +371,8 @@ function handleCommandPaletteKeydown(event) {
 		|| !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') return
 	const target = event.target
 	if (!(target instanceof Element)
-		|| target.closest('input, textarea, [contenteditable], [role="dialog"], [role="menu"]')
-		|| [...document.querySelectorAll('[role="dialog"], dialog[open]')]
+		|| target.closest('input, textarea, [contenteditable], [role="dialog"]:not(.bs-modal), [role="alertdialog"], [role="menu"]')
+		|| [...document.querySelectorAll('[role="dialog"]:not(.bs-modal), [role="alertdialog"], dialog[open]')]
 			.some((dialog) => dialog.getClientRects().length > 0
 				&& getComputedStyle(dialog).visibility === 'visible'
 				&& !dialog.closest('[aria-hidden="true"], [hidden], [inert]'))) return
