@@ -109,9 +109,6 @@ function goToBoard() {
 	padding: 10px 16px;
 	border-bottom: 1px solid var(--color-border);
 	background: var(--color-main-background);
-	position: sticky;
-	top: 0;
-	z-index: 2;
 }
 
 .card-page__back {

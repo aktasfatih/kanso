@@ -10449,5 +10449,35 @@ async function handleToggleProject(projectId) {
 	/* Full-page view fills the available width (the content panes keep their own
 	   inner padding, so text isn't flush to the edges). */
 	width: 100%;
+	flex: none;
+}
+
+.card-modal--mode-page .card-modal__body {
+	flex: none;
+	grid-template-rows: auto;
+	overflow: visible;
+}
+
+.card-modal--mode-page .card-modal__content,
+.card-modal--mode-page .card-modal__discussion,
+.card-modal--mode-page .card-modal__activity,
+.card-modal--mode-page .card-modal__thread-scroll {
+	max-height: none;
+	overflow: visible;
+}
+
+.card-modal--mode-page .card-modal__discussion {
+	align-self: start;
+}
+
+.card-modal--mode-page .card-modal__tabbar,
+.card-modal--mode-page .card-modal__discussion-tabs,
+.card-modal--mode-page .card-modal__comment-toolbar,
+.card-modal--mode-page .card-modal__composer {
+	position: static;
+}
+
+.card-modal--mode-page .card-modal__content {
+	--kanso-editor-toolbar-top: 0px;
 }
 </style>
