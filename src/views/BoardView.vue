@@ -623,12 +623,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				@open="openPreviewCard" />
 		</template>
 
-		<!-- Command palette (Ctrl/Cmd+K, or "Open command palette" in the More
-		     menu - the touch-reachable trigger, #10066) -->
-		<CommandPalette
-			:open="showCommandPalette"
-			@close="showCommandPalette = false" />
-
 		<!-- Child route: CardModal renders over this view -->
 		<router-view />
 
@@ -675,7 +669,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, provide, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, inject, provide, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { showError, showSuccess, showWarning } from '@nextcloud/dialogs'
@@ -735,7 +729,7 @@ import BoardSettingsModal from '../components/BoardSettingsModal.vue'
 import ManageTemplatesModal from '../components/ManageTemplatesModal.vue'
 import BoardAttachmentsModal from '../components/BoardAttachmentsModal.vue'
 import BoardDescriptionModal from '../components/BoardDescriptionModal.vue'
-import CommandPalette from '../components/CommandPalette.vue'
+import { COMMAND_PALETTE_OPEN } from '../services/commandPalette.js'
 import CardPreview from '../components/CardPreview.vue'
 import { useBoard } from '../composables/useBoard.js'
 import { usePageTitle } from '../composables/usePageTitle.js'
@@ -1314,7 +1308,7 @@ function openCardFromAttachments(cardId) {
 }
 
 // ── Command palette visibility ────────────────────────────────────────────────
-const showCommandPalette = ref(false)
+const showCommandPalette = inject(COMMAND_PALETTE_OPEN)
 
 // ── Keyboard shortcuts overlay ────────────────────────────────────────────────
 const showShortcuts = ref(false)
@@ -1906,19 +1900,7 @@ onUnmounted(() => {
 function handleKeydown(e) {
 	// Guard: composing (IME)
 	if (e.isComposing) return
-	// Cmd/Ctrl+K → open command palette.
-	// Handled BEFORE the modifier-key early-return guard (same technique as '?'
-	// and '/' which are handled before the overlay-open guard).
-	// Respects the same typing-context guard: don't trigger while the user is
-	// typing in an input/textarea/contenteditable.
-	if ((e.ctrlKey || e.metaKey) && e.key === 'k' && !e.altKey) {
-		const target = e.target
-		if (!target.closest('input, textarea, [contenteditable]')) {
-			e.preventDefault()
-			showCommandPalette.value = !showCommandPalette.value
-			return
-		}
-	}
+	if (showCommandPalette.value) return
 	// Guard: modifier keys held (but allow Shift for '?')
 	if (e.ctrlKey || e.metaKey || e.altKey) return
 	// Guard: typing context
