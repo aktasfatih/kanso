@@ -157,33 +157,85 @@ test.describe('Project colour indicator on the board tile', () => {
 		}
 	})
 
-	// #c3cca00 — the project dots share the card title's visual row (the tile
-	// does not grow an extra row for them), so the dot's vertical centre sits
-	// within the title's bounding box and the dot is to the right of the title.
-	test('the project dot sits on the same visual row as the card title', async ({ page }) => {
+	test('project dots sit immediately after the reference in both densities', async ({ page }) => {
+		const second = await api.post('/projects', { title: 'Blue initiative', color: '1565c0' })
+		try {
+			await api.put(`/projects/${second.id}/cards/${state.cardId}`)
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+
+			const tile = page.locator('.card-tile', { hasText: 'Colored project card' })
+			await expect(tile).toBeVisible()
+			const dots = tile.locator('.card-tile__project-dot')
+			await expect(dots).toHaveCount(2)
+			const reference = tile.locator('.card-tile__ref')
+			const title = tile.locator('.card-tile__title')
+			const checkPosition = async () => {
+				const refBox = await reference.boundingBox()
+				const dotBox = await dots.first().boundingBox()
+				const titleBox = await title.boundingBox()
+				expect(dotBox.x).toBeGreaterThanOrEqual(refBox.x + refBox.width)
+				expect(Math.abs((dotBox.y + dotBox.height / 2) - (refBox.y + refBox.height / 2))).toBeLessThan(2)
+				expect(dotBox.y + dotBox.height).toBeLessThanOrEqual(titleBox.y)
+			}
+			await checkPosition()
+			await page.locator('.board-view__display-menu button').first().click()
+			await page.getByRole('menuitemradio', { name: 'Compact', exact: true }).click()
+			await page.keyboard.press('Escape')
+			await expect(tile).toHaveClass(/card-tile--compact/)
+			await checkPosition()
+		} finally {
+			await api.delete(`/projects/${second.id}`).catch(() => {})
+		}
+	})
+
+	test('many project dots stay clear of the selection checkbox in a narrow tile', async ({ page }) => {
+		const projects = []
+		try {
+			for (let i = 0; i < 12; i++) {
+				const project = await api.post('/projects', { title: `Narrow project ${i}`, color: '1565c0' })
+				projects.push(project)
+				await api.put(`/projects/${project.id}/cards/${state.cardId}`)
+			}
+			await api.patch(`/cards/${state.cardId}`, { title: `Colored project card ${'long '.repeat(14)}` })
+			await page.setViewportSize({ width: 480, height: 800 })
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+			const tile = page.locator('.card-tile', { hasText: 'Colored project card' })
+			await expect(tile.locator('.card-tile__project-dot')).toHaveCount(13)
+			await tile.evaluate((el) => { el.style.width = '220px' })
+			await tile.focus()
+			await page.keyboard.press('x')
+			const checkbox = tile.locator('.card-tile__select')
+			await expect(checkbox).toBeVisible()
+			const checkboxBox = await checkbox.boundingBox()
+			const tileBox = await tile.boundingBox()
+			const refBox = await tile.locator('.card-tile__ref').boundingBox()
+			const firstDotBox = await tile.locator('.card-tile__project-dot').first().boundingBox()
+			expect(firstDotBox.x).toBeGreaterThanOrEqual(refBox.x + refBox.width)
+			expect(Math.abs((firstDotBox.y + firstDotBox.height / 2) - (refBox.y + refBox.height / 2))).toBeLessThan(2)
+			for (const dot of await tile.locator('.card-tile__project-dot').all()) {
+				const box = await dot.boundingBox()
+				expect(box.x).toBeGreaterThanOrEqual(tileBox.x)
+				expect(box.x + box.width).toBeLessThanOrEqual(tileBox.x + tileBox.width)
+				expect(box.x + box.width <= checkboxBox.x || box.y >= checkboxBox.y + checkboxBox.height).toBe(true)
+			}
+		} finally {
+			for (const project of projects) await api.delete(`/projects/${project.id}`).catch(() => {})
+		}
+	})
+
+	test('a card without a reference still shows its project dot', async ({ page }) => {
 		await ncLogin(page)
+		await page.route(`**/apps/kanso/api/boards/${state.boardId}`, async (route) => {
+			const response = await route.fetch()
+			const body = await response.json()
+			body.cards.find((card) => card.id === state.cardId).boardSeq = null
+			await route.fulfill({ response, json: body })
+		})
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
-
 		const tile = page.locator('.card-tile', { hasText: 'Colored project card' })
-		await expect(tile).toBeVisible()
-		const dot = tile.locator('.card-tile__project-dot')
-		await expect(dot).toBeVisible()
-		const title = tile.locator('.card-tile__title')
-		await expect(title).toBeVisible()
-
-		const dotBox = await dot.boundingBox()
-		const titleBox = await title.boundingBox()
-		expect(dotBox, 'dot must have a bounding box').not.toBeNull()
-		expect(titleBox, 'title must have a bounding box').not.toBeNull()
-
-		// The dot's vertical centre falls within the title's bounding box (a few
-		// px of tolerance for the title's line-height/clamp), so the two share one
-		// visual row rather than the dot wrapping to its own line.
-		const dotCenterY = dotBox.y + dotBox.height / 2
-		const tolerance = 4
-		expect(dotCenterY).toBeGreaterThanOrEqual(titleBox.y - tolerance)
-		expect(dotCenterY).toBeLessThanOrEqual(titleBox.y + titleBox.height + tolerance)
-		// And the dot sits to the right of the title's left edge (after it).
-		expect(dotBox.x).toBeGreaterThanOrEqual(titleBox.x)
+		await expect(tile.locator('.card-tile__project-dot')).toBeVisible()
+		await expect(tile.locator('.card-tile__ref')).toHaveCount(0)
 	})
 })
