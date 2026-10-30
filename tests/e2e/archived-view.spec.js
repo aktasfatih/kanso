@@ -126,11 +126,14 @@ test.describe('Restore many archived cards at once (#10440)', () => {
 
 		// Archive the whole Sprint column the way the board offers it (#10430) —
 		// the one-click gesture whose reverse trip this card is about.
+		const laterColumn = page.locator('.stack-column').filter({ hasText: 'Later' })
+		const laterActions = laterColumn.getByRole('button', { name: 'Column actions' })
+		await laterActions.click()
+		await expect(page.getByRole('dialog').getByRole('button', { name: 'Archive 2 cards' })).toBeVisible()
+		await laterActions.click()
 		const sprintColumn = page.locator('.stack-column').filter({ hasText: 'Sprint' })
-		await sprintColumn.locator('.stack-column__actions button').first().click()
-		const menu = page.locator('[role="dialog"]').first()
-		await expect(menu).toBeVisible()
-		await menu.getByRole('button', { name: 'Archive 3 cards' }).click()
+		await sprintColumn.getByRole('button', { name: 'Column actions' }).click()
+		await page.getByRole('dialog').getByRole('button', { name: 'Archive 3 cards' }).click()
 		await expect(page.locator('.card-tile')).toHaveCount(2)
 
 		// Archive the OTHER column's cards too, over the API. The Archived page then

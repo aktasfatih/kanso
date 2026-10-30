@@ -52,6 +52,20 @@ class CardRelationMapper extends QBMapper {
 		return $row !== false;
 	}
 
+	/** @return CardRelation[] */
+	public function findTouching(int $cardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->orX(
+				$qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)),
+				$qb->expr()->eq('other_card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)),
+			))
+			->orderBy('id', 'ASC');
+
+		return $this->findEntities($qb);
+	}
+
 	/**
 	 * Relations where $cardId is the source (card_id), joined to the OTHER card.
 	 *

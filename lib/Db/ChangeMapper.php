@@ -72,6 +72,18 @@ class ChangeMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
+	/** @return Change[] */
+	public function findEntityPage(int $boardId, int $entityType, int $entityId, int $afterId, int $limit): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('entity_type', $qb->createNamedParameter($entityType, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('entity_id', $qb->createNamedParameter($entityId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gt('id', $qb->createNamedParameter($afterId, IQueryBuilder::PARAM_INT)))
+			->orderBy('id', 'ASC')->setMaxResults($limit);
+		return $this->findEntities($qb);
+	}
+
 	/**
 	 * Recent card-status change rows for the Inbox follow-feed: the given verbs,
 	 * on the followed cards, restricted to the viewer's readable board set,

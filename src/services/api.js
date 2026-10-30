@@ -9,6 +9,9 @@ import { toBoundedPage } from './boundedList.js'
 
 const url = (path) => generateUrl('/apps/kanso' + path)
 
+export const resolveCardNavigation = (cardId) =>
+	axios.get(url(`/api/card-navigation/${cardId}`), { timeout: 5000 }).then((r) => r.data)
+
 // A rate-limited request answers with NOTHING to show the user.
 //
 // Every endpoint carrying `#[UserRateLimit]` — attachment upload and

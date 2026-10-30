@@ -40,6 +40,64 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
 class CardAttachmentServiceTest extends TestCase {
+	public function testMoveCopyUsesFreshKeyAndRecordsItBeforeWriting(): void {
+		$source = $this->attachment(7, 'source-key');
+		$source->setSize(4);
+		$source->setFilename('note.txt');
+		$source->setMime('text/plain');
+		$source->setUploadedBy('alice');
+		$source->setCreatedAt(123);
+		$this->attachmentMapper->method('findByCard')->with(9)->willReturn([$source]);
+		$file = $this->createMock(ISimpleFile::class);
+		$file->method('read')->willReturnCallback(static function () {
+			$stream = fopen('php://temp', 'r+');
+			fwrite($stream, 'data');
+			rewind($stream);
+			return $stream;
+		});
+		$this->folder->method('getFile')->with('source-key')->willReturn($file);
+		$recorded = [];
+		$this->folder->expects(self::once())->method('newFile')->willReturnCallback(function (string $key) use (&$recorded): ISimpleFile {
+			self::assertSame([['cardId' => 42, 'key' => $key]], $recorded);
+			return $this->createMock(ISimpleFile::class);
+		});
+		$this->attachmentMapper->expects(self::once())->method('insert')->willReturnCallback(function (CardAttachment $copy): CardAttachment {
+			self::assertSame('deadbeefdeadbeefdeadbeefdeadbeef', $copy->getStorageKey());
+			self::assertSame(42, $copy->getCardId());
+			$copy->setId(17);
+			return $copy;
+		});
+		$ids = $this->service->copyForMovedCard(9, 42, 2, static function (int $cardId, string $key) use (&$recorded): void {
+			$recorded[] = ['cardId' => $cardId, 'key' => $key];
+		});
+		self::assertSame([7 => 17], $ids);
+	}
+
+	public function testFailedMoveCleanupLeavesReferencedObjectsAndRemovesOnlyRecordedOrphans(): void {
+		$referenced = $this->attachment(1, 'kept');
+		$this->attachmentMapper->method('findByCard')->with(9)->willReturn([$referenced]);
+		$orphan = $this->createMock(ISimpleFile::class);
+		$orphan->expects(self::once())->method('delete');
+		$this->folder->expects(self::once())->method('getFile')->with('orphan')->willReturn($orphan);
+		self::assertSame(0, $this->service->deleteUnreferencedMoveObjects([
+			['cardId' => 9, 'key' => 'kept'],
+			['cardId' => 9, 'key' => 'orphan'],
+		]));
+	}
+
+	public function testFailedMoveCleanupReportsStorageFailureAndContinues(): void {
+		$this->attachmentMapper->method('findByCard')->with(9)->willReturn([]);
+		$failed = $this->createMock(ISimpleFile::class);
+		$failed->method('delete')->willThrowException(new \RuntimeException('storage unavailable'));
+		$other = $this->createMock(ISimpleFile::class);
+		$other->expects(self::once())->method('delete');
+		$this->folder->method('getFile')->willReturnMap([['first', $failed], ['second', $other]]);
+		self::assertSame(1, $this->service->deleteUnreferencedMoveObjects([
+			['cardId' => 9, 'key' => 'first'],
+			['cardId' => 9, 'key' => 'second'],
+		]));
+	}
+
 	private CardAttachmentMapper&MockObject $attachmentMapper;
 	private CardMapper&MockObject $cardMapper;
 	private BoardMapper&MockObject $boardMapper;

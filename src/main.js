@@ -10,7 +10,7 @@ import './styles/toast-action.css'
 import { createApp } from 'vue'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import App from './App.vue'
-import { router } from './router/index.js'
+import { configureCardNavigation, router } from './router/index.js'
 import { initRealtime } from './services/realtime.js'
 import { syncBoardDelta, onBoardChangesApplied } from './composables/useBoardDelta.js'
 import { invalidateMyWork } from './composables/queryKeys.js'
@@ -27,6 +27,7 @@ const queryClient = new QueryClient({
 		},
 	},
 })
+configureCardNavigation(queryClient)
 
 // Server-rendered initial state: NC renders each provideInitialState() key as a
 // base64-JSON <input>. Hand-rolled reader (the elements are trivial) - no extra

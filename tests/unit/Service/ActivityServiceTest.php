@@ -10,6 +10,8 @@ namespace OCA\Kanso\Tests\Unit\Service;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
+use OCA\Kanso\Db\CardActivityHistory;
+use OCA\Kanso\Db\CardActivityHistoryMapper;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeDetail;
@@ -32,6 +34,7 @@ class ActivityServiceTest extends TestCase {
 	private IUserManager&MockObject $userManager;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private ChangeDetailMapper&MockObject $changeDetailMapper;
+	private CardActivityHistoryMapper&MockObject $historyMapper;
 	private ActivityService $service;
 
 	protected function setUp(): void {
@@ -44,6 +47,7 @@ class ActivityServiceTest extends TestCase {
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->visibilityGuard->method('isVisible')->willReturn(true);
 		$this->changeDetailMapper = $this->createMock(ChangeDetailMapper::class);
+		$this->historyMapper = $this->createMock(CardActivityHistoryMapper::class);
 		// Default: no detail rows. Tests exercising the diff override this.
 		$this->changeDetailMapper->method('findByChangeIds')->willReturn([]);
 		$this->service = new ActivityService(
@@ -54,6 +58,7 @@ class ActivityServiceTest extends TestCase {
 			$this->userManager,
 			$this->visibilityGuard,
 			$this->changeDetailMapper,
+			$this->historyMapper,
 		);
 	}
 
@@ -140,6 +145,7 @@ class ActivityServiceTest extends TestCase {
 			$this->userManager,
 			$this->visibilityGuard,
 			$this->changeDetailMapper,
+			$this->historyMapper,
 		);
 
 		$result = $this->service->getCardActivity(9, 'bob');
@@ -185,6 +191,7 @@ class ActivityServiceTest extends TestCase {
 			$this->userManager,
 			$this->visibilityGuard,
 			$this->changeDetailMapper,
+			$this->historyMapper,
 		);
 
 		$result = $this->service->getCardActivity(9, 'bob');
@@ -210,15 +217,48 @@ class ActivityServiceTest extends TestCase {
 		self::assertNull($result[0]['detail']);
 	}
 
+	public function testIncludesCopiedHistoryAfterLiveChanges(): void {
+		$this->cardMapper->method('find')->willReturn($this->card());
+		$this->boardMapper->method('find')->willReturn($this->board());
+		$this->changeMapper->method('findByEntity')->willReturn([
+			$this->change(Change::VERB_MOVED, Change::ACTION_MOVE, 'alice', 300, 70),
+		]);
+		$this->userManager->method('get')->willReturn(null);
+		$history = new CardActivityHistory();
+		$history->setId(70);
+		$history->setActor('alice');
+		$history->setAction(Change::ACTION_UPDATE);
+		$history->setVerb(Change::VERB_DESCRIPTION_UPDATED);
+		$history->setCreatedAt(200);
+		$history->setHasDetail(true);
+		$history->setFromText('old');
+		$history->setToText('new');
+		$this->historyMapper->expects(self::once())->method('findLatest')->with(9, 49)->willReturn([$history]);
+		$result = $this->service->getCardActivity(9, 'bob');
+		self::assertSame([70, -70], array_column($result, 'id'));
+		self::assertSame(['from' => 'old', 'to' => 'new'], $result[1]['detail']);
+		self::assertSame('alice', $result[1]['actorName']);
+	}
+
 	public function testAssertsReadPermission(): void {
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->permissionService->method('assertPermission')
 			->willThrowException(new NotPermittedException());
 		$this->changeMapper->expects(self::never())->method('findByEntity');
+		$this->historyMapper->expects(self::never())->method('findLatest');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->getCardActivity(9, 'stranger');
+	}
+
+	public function testHiddenCardDoesNotExposeCopiedHistory(): void {
+		$this->cardMapper->method('find')->willReturn($this->card());
+		$this->boardMapper->method('find')->willReturn($this->board());
+		$this->visibilityGuard->method('assertVisible')->willThrowException(new \OCP\AppFramework\Db\DoesNotExistException('not found'));
+		$this->historyMapper->expects(self::never())->method('findLatest');
+		$this->expectException(\OCP\AppFramework\Db\DoesNotExistException::class);
+		$this->service->getCardActivity(9, 'bob');
 	}
 
 	public function testFallsBackToUidWhenUserUnknown(): void {

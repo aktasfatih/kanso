@@ -65,6 +65,17 @@ class CardLinkMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
+	/** @return CardLink[] */
+	public function findAllByCard(int $cardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
+			->orderBy('id', 'ASC');
+
+		return $this->findEntities($qb);
+	}
+
 	/**
 	 * How many links a card carries. Unbounded on purpose - it is the cap check,
 	 * so it must see rows beyond {@see self::MAX_PER_CARD} too.

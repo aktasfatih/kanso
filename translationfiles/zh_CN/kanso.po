@@ -377,7 +377,7 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:5036
+#: src/components/CardDetail.vue:5039
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
@@ -387,7 +387,7 @@ msgid "%n file"
 msgid_plural "%n files"
 msgstr[0] "%n 个文件"
 
-#: src/components/CardDetail.vue:5034
+#: src/components/CardDetail.vue:5037
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
@@ -412,7 +412,7 @@ msgid "%n label was not created and is missing from the imported cards: only boa
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
 msgstr[0] "有 %n 个标签未能创建，导入的卡片中缺少它们：只有看板管理者才能添加新标签。请让管理者添加，然后在卡片上设置它们。"
 
-#: src/components/CardDetail.vue:5032
+#: src/components/CardDetail.vue:5035
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -1974,7 +1974,7 @@ msgid "Date"
 msgstr "日期"
 
 #: src/components/BoardSettingsModal.vue:2298
-#: src/components/CardDetail.vue:5225
+#: src/components/CardDetail.vue:5228
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -3515,7 +3515,7 @@ msgstr "看板的用途、范围或协作约定。看板中的所有人都可以
 msgid "Jump to the discussion"
 msgstr "跳转到讨论"
 
-#: src/components/CardDetail.vue:7069
+#: src/components/CardDetail.vue:7072
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "跳转到讨论（%n 条评论）"
@@ -3890,7 +3890,7 @@ msgid "Mon"
 msgstr "周一"
 
 #: src/components/BoardSettingsModal.vue:2300
-#: src/components/CardDetail.vue:5227
+#: src/components/CardDetail.vue:5230
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -3968,8 +3968,8 @@ msgid "moved this card from {from} to {to}"
 msgstr "把这张卡片从 {from} 移动到 {to}"
 
 #: src/components/CardDetail.vue
-msgid "Moves the card to another board and removes it from here. Assignees and watchers are kept only if they can access the target board."
-msgstr "把卡片移动到另一个看板，并从此处移除。只有在能访问目标看板时，负责人和关注者才会保留。"
+msgid "Moves this card and all connected cards to the selected column. Everyone involved must be able to access the destination cards."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Moving…"
@@ -5467,7 +5467,7 @@ msgstr "在卡片下方显示讨论"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:7075
+#: src/components/CardDetail.vue:7078
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -5779,6 +5779,10 @@ msgstr "CSV 需要一行表头和至少一行数据。"
 #: src/views/BoardList.vue
 msgid "The Deck app is not installed on this server, so there is nothing to import."
 msgstr "此服务器上未安装 Deck 应用，因此没有可导入的内容。"
+
+#: src/components/CardDetail.vue
+msgid "The destination board must have matching labels, custom fields and review types used by the moved cards."
+msgstr ""
 
 #: templates/admin-backup.php
 msgid "The file goes to that account's trashbin and keeps using space until that is emptied."
@@ -6252,7 +6256,7 @@ msgid "Wed"
 msgstr "周三"
 
 #: src/components/BoardSettingsModal.vue:2299
-#: src/components/CardDetail.vue:5226
+#: src/components/CardDetail.vue:5229
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -6360,7 +6364,7 @@ msgid "wrote"
 msgstr "写道"
 
 #: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5228
+#: src/components/CardDetail.vue:5231
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"

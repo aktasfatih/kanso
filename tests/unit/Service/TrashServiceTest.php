@@ -14,6 +14,7 @@ use OCA\Kanso\Db\BoardCascade;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardMoveAliasMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Service\CardAttachmentService;
 use OCA\Kanso\Service\CardVisibilityGuard;
@@ -24,6 +25,7 @@ use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\TrashService;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IDBConnection;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -37,6 +39,8 @@ class TrashServiceTest extends TestCase {
 	private BoardAccess&MockObject $boardAccess;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private NotificationService&MockObject $notifications;
+	private CardMoveAliasMapper&MockObject $moveAliases;
+	private IDBConnection&MockObject $db;
 	private TrashService $service;
 
 	/** @var list<string> ordered log of the destructive steps taken */
@@ -57,6 +61,8 @@ class TrashServiceTest extends TestCase {
 		// Default: every card is visible to the actor (assertVisible passes).
 		$this->visibilityGuard = $this->createMock(CardVisibilityGuard::class);
 		$this->notifications = $this->createMock(NotificationService::class);
+		$this->moveAliases = $this->createMock(CardMoveAliasMapper::class);
+		$this->db = $this->createMock(IDBConnection::class);
 		$this->service = new TrashService(
 			$this->cardMapper,
 			$this->boardMapper,
@@ -67,6 +73,8 @@ class TrashServiceTest extends TestCase {
 			$this->boardAccess,
 			$this->visibilityGuard,
 			$this->notifications,
+			$this->moveAliases,
+			$this->db,
 		);
 	}
 
@@ -162,12 +170,67 @@ class TrashServiceTest extends TestCase {
 				return $c;
 			});
 		$this->changeNotifier->expects(self::once())
-			->method('notify')
+			->method('recordChange')
 			->with(1, Change::ENTITY_CARD, 9, Change::ACTION_CREATE, 'alice')
 			->willReturn(new Change());
 
 		$restored = $this->service->restore(9, 'alice');
 		self::assertSame(0, $restored->getDeletedAt());
+	}
+
+	public function testRestoreClearsOnlyItsOutgoingAliasBeforeCommit(): void {
+		$card = $this->trashedCard(9);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$events = [];
+		$this->db->expects(self::once())->method('beginTransaction')->willReturnCallback(function () use (&$events): void {
+			$events[] = 'begin';
+		});
+		$this->cardMapper->expects(self::once())->method('update')->willReturnCallback(function (Card $card) use (&$events): Card {
+			$events[] = 'restore';
+			return $card;
+		});
+		$this->moveAliases->expects(self::once())->method('deleteByOldId')->with(9)->willReturnCallback(function () use (&$events): void {
+			$events[] = 'alias';
+		});
+		$this->changeNotifier->expects(self::once())->method('recordChange')->willReturnCallback(function () use (&$events): Change {
+			$events[] = 'change';
+			return new Change();
+		});
+		$this->db->expects(self::once())->method('commit')->willReturnCallback(function () use (&$events): void {
+			$events[] = 'commit';
+		});
+		$this->changeNotifier->expects(self::once())->method('pushBoardChanged')->with(1)->willReturnCallback(function () use (&$events): void {
+			$events[] = 'push';
+		});
+		$this->service->restore(9, 'alice');
+		self::assertSame(['begin', 'restore', 'alias', 'change', 'commit', 'push'], $events);
+	}
+
+	public function testRestoreRollsBackIfAliasRemovalFails(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->trashedCard(9));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->moveAliases->method('deleteByOldId')->willThrowException(new \RuntimeException('alias removal failed'));
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+		$this->expectExceptionMessage('alias removal failed');
+		$this->service->restore(9, 'alice');
+	}
+
+	public function testRestoreRollsBackIfChangeLogFailsAfterAliasRemoval(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->trashedCard(9));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->moveAliases->expects(self::once())->method('deleteByOldId')->with(9);
+		$this->changeNotifier->method('recordChange')->willThrowException(new \RuntimeException('change log failed'));
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+		$this->expectExceptionMessage('change log failed');
+		$this->service->restore(9, 'alice');
 	}
 
 	public function testRestoreOfACardWhoseStackIsGoneStillSucceeds(): void {
@@ -188,7 +251,7 @@ class TrashServiceTest extends TestCase {
 				return $c;
 			});
 		$this->changeNotifier->expects(self::once())
-			->method('notify')
+			->method('recordChange')
 			->willReturn(new Change());
 
 		$restored = $this->service->restore(9, 'alice');

@@ -1063,7 +1063,6 @@
         "Move to…": "Sposta in…",
         "moved this card": "ha spostato questa scheda",
         "moved this card from {from} to {to}": "ha spostato questa scheda da {from} a {to}",
-        "Moves the card to another board and removes it from here. Assignees and watchers are kept only if they can access the target board.": "Sposta la scheda in un'altra bacheca e la rimuove da qui. Assegnatari e osservatori vengono mantenuti solo se possono accedere alla bacheca di destinazione.",
         "Moving…": "Spostamento in corso…",
         "My Boards": "Le mie bacheche",
         "My first board": "La mia prima bacheca",

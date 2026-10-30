@@ -139,6 +139,8 @@ class ArchitectureTest extends TestCase {
 	 * - Service/CalendarFeedService.php .. anonymous feed; the PUBLIC-ONLY
 	 *                                      scope is applied inside
 	 *                                      CardMapper::findWithDuedateByBoard
+	 * - Service/CardMoveContentService.php  writes the already-authorized target
+	 *                                      supplied by CardService; it reads no cards
 	 * - Service/CsvImportService.php ..... importer, creates cards only
 	 * - Service/DeckImportService.php .... importer, creates cards only
 	 * - Service/PublicShareService.php ... anonymous snapshot; PUBLIC-ONLY is
@@ -161,6 +163,7 @@ class ArchitectureTest extends TestCase {
 		'Service/BoardPurgeService.php',
 		'Service/BulkCardService.php',
 		'Service/CalendarFeedService.php',
+		'Service/CardMoveContentService.php',
 		'Service/CsvImportService.php',
 		'Service/DeckImportService.php',
 		'Service/PublicShareService.php',

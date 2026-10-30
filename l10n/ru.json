@@ -1112,7 +1112,6 @@
         "Move to…": "Переместить в…",
         "moved this card": "переместил эту карточку",
         "moved this card from {from} to {to}": "переместил эту карточку из {from} в {to}",
-        "Moves the card to another board and removes it from here. Assignees and watchers are kept only if they can access the target board.": "Карточка переносится на другую доску и удаляется отсюда. Исполнители и наблюдатели сохраняются, только если у них есть доступ к целевой доске.",
         "Moving…": "Перемещение…",
         "My Boards": "Мои доски",
         "My first board": "Моя первая доска",

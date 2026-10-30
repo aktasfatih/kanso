@@ -61,6 +61,26 @@ class CommentReactionMapper extends QBMapper {
 	}
 
 	/**
+	 * @param int[] $commentIds
+	 * @return CommentReaction[]
+	 */
+	public function findEntitiesByComments(array $commentIds): array {
+		if ($commentIds === []) {
+			return [];
+		}
+		$reactions = [];
+		foreach (array_chunk(array_values(array_unique($commentIds)), 500) as $chunk) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('*')->from($this->getTableName())
+				->where($qb->expr()->in('comment_id', $qb->createNamedParameter($chunk, IQueryBuilder::PARAM_INT_ARRAY)))
+				->orderBy('id', 'ASC');
+			array_push($reactions, ...$this->findEntities($qb));
+		}
+		usort($reactions, static fn (CommentReaction $a, CommentReaction $b): int => $a->getId() <=> $b->getId());
+		return $reactions;
+	}
+
+	/**
 	 * All reactions on the given comments, so the controller can fold them into
 	 * per-comment / per-emoji summaries in one query for a whole thread. Ordered
 	 * so the reactor list is stable (oldest reactor first). Empty id set → [].

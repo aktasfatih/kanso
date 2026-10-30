@@ -446,10 +446,11 @@ test.describe('Card modal two-column layout', () => {
 	// it does not switch to top-aligned for 3+ lines.
 	//
 	// Measured, not eyeballed: compare the two bounding-box vertical centres.
-	async function refVsTitleCentres(page, cardId) {
+	async function refVsTitleCentres(page, cardId, title) {
 		const cardUrl = `${BASE}/index.php/apps/kanso#/board/${state.boardId}/card/${cardId}`
 		await page.goto(cardUrl)
 		await expect(page.locator('.card-modal__ref')).toBeVisible({ timeout: 15_000 })
+		await expect(page.locator('.card-modal__title')).toHaveText(title)
 		const refBox = await page.locator('.card-modal__ref').boundingBox()
 		const titleBox = await page.locator('.card-modal__title').boundingBox()
 		expect(refBox).not.toBeNull()
@@ -474,7 +475,7 @@ test.describe('Card modal two-column layout', () => {
 			await ncLogin(page)
 
 			// 1) One-line title: the chip's centre matches the title's centre.
-			const one = await refVsTitleCentres(page, shortCard.id)
+			const one = await refVsTitleCentres(page, shortCard.id, shortCard.title)
 			expect(
 				Math.abs(one.refCentre - one.titleCentre),
 				`one-line: ref centre ${one.refCentre} vs title centre ${one.titleCentre} (title h=${one.titleHeight})`,
@@ -482,7 +483,7 @@ test.describe('Card modal two-column layout', () => {
 
 			// 2) Wrapped title: it really did wrap (≈2× the one-line box height), and the
 			//    chip centres on the WHOLE two-line block, not on its first line.
-			const two = await refVsTitleCentres(page, longCard.id)
+			const two = await refVsTitleCentres(page, longCard.id, longCard.title)
 			expect(
 				two.titleHeight,
 				`long title did not wrap: h=${two.titleHeight} vs one-line h=${one.titleHeight}`,

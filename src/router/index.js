@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { resolveCardNavigation } from '../services/api.js'
+import { resolveCardRoute } from './cardNavigation.js'
 
 const routes = [
 	{
@@ -102,3 +104,11 @@ export const router = createRouter({
 	history: createWebHashHistory(),
 	routes,
 })
+
+let navigationQueryClient
+
+export function configureCardNavigation(queryClient) {
+	navigationQueryClient = queryClient
+}
+
+router.beforeEach((to, from) => resolveCardRoute(to, from, navigationQueryClient, resolveCardNavigation))

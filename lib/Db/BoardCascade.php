@@ -98,6 +98,7 @@ class BoardCascade {
 		'kanso_card_contacts' => ['card_id'],
 		'kanso_card_field_values' => ['card_id'],
 		'kanso_card_file_links' => ['card_id'],
+		'kanso_card_history' => ['card_id'],
 		'kanso_card_labels' => ['card_id'],
 		'kanso_card_links' => ['card_id'],
 		'kanso_card_relations' => ['card_id', 'other_card_id'],
@@ -150,6 +151,7 @@ class BoardCascade {
 	 */
 	public const NOT_BOARD_SCOPED = [
 		'kanso_board_groups',
+		'kanso_card_move_aliases',
 		'kanso_projects',
 		'kanso_project_comments',
 		'kanso_project_pins',

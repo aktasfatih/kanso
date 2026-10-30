@@ -917,7 +917,6 @@ OC.L10N.register(
     "Move to…" : "Şuraya taşı…",
     "moved this card" : "bu kartı taşıdı",
     "moved this card from {from} to {to}" : "bu kartı taşıdı: {from} → {to}",
-    "Moves the card to another board and removes it from here. Assignees and watchers are kept only if they can access the target board." : "Kartı başka bir panoya taşır ve buradan kaldırır. Atananlar ve izleyiciler yalnızca hedef panoya erişebiliyorsa korunur.",
     "Moving…" : "Taşınıyor…",
     "My Boards" : "Panolarım",
     "My first board" : "İlk panom",

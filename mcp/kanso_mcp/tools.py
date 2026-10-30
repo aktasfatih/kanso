@@ -452,34 +452,29 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         for a stack on the card's own board — this tool rejects a same-board
         target, and that one rejects a cross-board one.
 
-        Requires edit permission on BOTH boards. The move is atomic, but it is
-        implemented as re-create-on-target + delete-on-source, so the semantics
-        are lossy and are probably not what you assume:
+        Requires edit permission on BOTH boards. Newer servers move the whole
+        connected graph (parents, children, relations and recurrence links)
+        to the chosen column in one operation. They preserve the card data,
+        but reject the move if access or target-board definitions prevent it.
+        Recurrence may require manage permissions on both boards.
 
         - The card gets a NEW id and a NEW per-board number (e.g. KAN-12
-          becomes KAN-87 on the target). Read the returned card for both; any
-          id you were holding is dead. Links elsewhere to the old card break.
-        - LEFT BEHIND on the deleted source card: comments, attachments,
-          custom-field values, time entries, review requests, reminders, and
-          all relations (blocks / blocked-by / duplicates / relates). Subtasks
-          are detached from the card rather than moved with it.
-        - CARRIED OVER: title, description, checklist items (unassigned, but
-          keeping their done state and due dates), due/start dates, priority,
-          type, done state, cover colour and visibility.
-        - REMAPPED: labels match a target-board label with the same name and
-          colour, and drop when the target has no twin — they are never
-          auto-created. Assignees and watchers are kept only for people who can
-          read the target board, and silently dropped otherwise. An estimate
-          the target board's scale does not allow is dropped too.
+          becomes KAN-87 on the target). Read the returned card for both;
+          mutation tools require the new id. Supported servers resolve old
+          numeric navigation links, but older human-readable references and
+          comment or checklist fragments may not resolve.
+        - Older Kanso servers move only the selected card and can leave behind
+          comments, attachments, relations and other data. Verify the server's
+          behavior before moving a card on an older server.
+        - Existing Nextcloud notifications may still link to the old card.
 
         Prefer this over recreating the card yourself and deleting the
-        original — it is a single atomic operation and it at least remaps
-        labels and assignees, which a manual recreate would not.
+        original — it preserves relationships and remaps board-specific data
+        when supported by the server.
 
-        Before calling, check the card with `kanso_get_card`: if it has
-        comments or attachments (`commentCount` / `attachmentCount` above 0),
-        TELL THE USER those will stay behind on the source board and let them
-        confirm before you move it.
+        Before calling, if the server's version is not known to preserve
+        comments, attachments and Files links, tell the user that data may
+        stay behind and let them confirm before you move it.
 
         Args:
             card_id: The card to move.

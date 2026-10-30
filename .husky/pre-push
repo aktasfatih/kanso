@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+set -e
+
+tmp_dir=$(mktemp -d)
+trap 'rm -rf "$tmp_dir"' 0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+	case "$local_sha" in
+		*[!0]*) ;;
+		*) continue ;;
+	esac
+
+	rm -rf "$tmp_dir/tree" "$tmp_dir/commit.tar"
+	mkdir "$tmp_dir/tree"
+	git archive --format=tar -o "$tmp_dir/commit.tar" "$local_sha"
+	tar -xf "$tmp_dir/commit.tar" -C "$tmp_dir/tree"
+
+	if ! (
+		unset $(git rev-parse --local-env-vars)
+		cd "$tmp_dir/tree"
+		git init -q
+		git add -- translationfiles/ l10n/
+		npm run l10n:check
+	); then
+		echo "Translation check failed for $local_ref ($local_sha)." >&2
+		echo "Run npm run l10n:check, commit the generated files, and push again." >&2
+		exit 1
+	fi
+done

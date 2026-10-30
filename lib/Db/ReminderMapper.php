@@ -22,6 +22,15 @@ class ReminderMapper extends QBMapper {
 		parent::__construct($db, 'kanso_reminders', Reminder::class);
 	}
 
+	/** @return Reminder[] */
+	public function findByCardForMove(int $cardId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
+			->orderBy('id', 'ASC');
+		return $this->findEntities($qb);
+	}
+
 	/**
 	 * A single reminder row by id, or null.
 	 *

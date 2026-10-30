@@ -917,7 +917,6 @@ OC.L10N.register(
     "Move to…" : "Przenieś do…",
     "moved this card" : "przeniósł tę kartę",
     "moved this card from {from} to {to}" : "przeniósł tę kartę z {from} do {to}",
-    "Moves the card to another board and removes it from here. Assignees and watchers are kept only if they can access the target board." : "Przenosi kartę na inną tablicę i usuwa ją stąd. Osoby przypisane i obserwujący zostają zachowani tylko wtedy, gdy mają dostęp do tablicy docelowej.",
     "Moving…" : "Przenoszenie…",
     "My Boards" : "Moje tablice",
     "My first board" : "Moja pierwsza tablica",

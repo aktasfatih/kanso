@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n linha de dados detectada"
 msgstr[1] "%n linhas de dados detectadas"
 
-#: src/components/CardDetail.vue:5036
+#: src/components/CardDetail.vue:5039
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "há %n dia"
@@ -409,7 +409,7 @@ msgid_plural "%n files"
 msgstr[0] "%n arquivo"
 msgstr[1] "%n arquivos"
 
-#: src/components/CardDetail.vue:5034
+#: src/components/CardDetail.vue:5037
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "há %n hora"
@@ -439,7 +439,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etiqueta não foi criada e está faltando nos cartões importados: só quem gerencia o quadro pode adicionar novas etiquetas. Peça a essa pessoa para adicioná-la e depois defina-a nos cartões."
 msgstr[1] "%n etiquetas não foram criadas e estão faltando nos cartões importados: só quem gerencia o quadro pode adicionar novas etiquetas. Peça a essa pessoa para adicioná-las e depois defina-as nos cartões."
 
-#: src/components/CardDetail.vue:5032
+#: src/components/CardDetail.vue:5035
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "há %n minuto"
@@ -2015,7 +2015,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:2298
-#: src/components/CardDetail.vue:5225
+#: src/components/CardDetail.vue:5228
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dia"
@@ -3562,7 +3562,7 @@ msgstr "Seu propósito, escopo ou regras. Todos os membros do quadro podem lê-l
 msgid "Jump to the discussion"
 msgstr "Ir para a discussão"
 
-#: src/components/CardDetail.vue:7069
+#: src/components/CardDetail.vue:7072
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Ir para a discussão (%n comentário)"
@@ -3938,7 +3938,7 @@ msgid "Mon"
 msgstr "Seg"
 
 #: src/components/BoardSettingsModal.vue:2300
-#: src/components/CardDetail.vue:5227
+#: src/components/CardDetail.vue:5230
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mês"
@@ -4017,8 +4017,8 @@ msgid "moved this card from {from} to {to}"
 msgstr "moveu este cartão de {from} para {to}"
 
 #: src/components/CardDetail.vue
-msgid "Moves the card to another board and removes it from here. Assignees and watchers are kept only if they can access the target board."
-msgstr "Move o cartão para outro quadro e o remove daqui. Responsáveis e observadores são mantidos apenas se puderem acessar o quadro de destino."
+msgid "Moves this card and all connected cards to the selected column. Everyone involved must be able to access the destination cards."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Moving…"
@@ -5518,7 +5518,7 @@ msgstr "Mostrar a discussão abaixo do cartão"
 msgid "Show the discussion panel"
 msgstr "Mostrar o painel de discussão"
 
-#: src/components/CardDetail.vue:7075
+#: src/components/CardDetail.vue:7078
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostrar o painel de discussão (%n comentário)"
@@ -5831,6 +5831,10 @@ msgstr "O CSV precisa de uma linha de cabeçalho e pelo menos uma linha de dados
 #: src/views/BoardList.vue
 msgid "The Deck app is not installed on this server, so there is nothing to import."
 msgstr "O aplicativo Deck não está instalado neste servidor, então não há nada para importar."
+
+#: src/components/CardDetail.vue
+msgid "The destination board must have matching labels, custom fields and review types used by the moved cards."
+msgstr ""
 
 #: templates/admin-backup.php
 msgid "The file goes to that account's trashbin and keeps using space until that is emptied."
@@ -6304,7 +6308,7 @@ msgid "Wed"
 msgstr "Qua"
 
 #: src/components/BoardSettingsModal.vue:2299
-#: src/components/CardDetail.vue:5226
+#: src/components/CardDetail.vue:5229
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "semana"
@@ -6413,7 +6417,7 @@ msgid "wrote"
 msgstr "escreveu"
 
 #: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5228
+#: src/components/CardDetail.vue:5231
 msgid "year"
 msgid_plural "years"
 msgstr[0] "ano"
