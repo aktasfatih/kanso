@@ -168,4 +168,34 @@ test.describe('Personal reminders (remind me)', () => {
 		// No new console errors from Kanso's own code on the reminder flow.
 		expect(errors, `console errors: ${errors.join('\n')}`).toEqual([])
 	})
+	test('a reminder cannot be cancelled until the server saves it', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.cardUrl)
+		await expect(page.locator('.card-modal')).toBeVisible()
+		let release
+		let signalStarted
+		const started = new Promise((resolve) => { signalStarted = resolve })
+		const hold = new Promise((resolve) => { release = resolve })
+		await page.route(`**/api/cards/${state.cardId}/reminders`, async (route) => {
+			if (route.request().method() !== 'POST') return route.continue()
+			signalStarted()
+			await hold
+			await route.continue()
+		})
+		try {
+			await page.locator('.card-modal__actions-menu button').first().click()
+			await page.getByText('Remind me later today').click()
+			await started
+			const cancel = page.locator('.card-modal__reminder-cancel').first()
+			await expect(cancel).toBeDisabled()
+			release()
+			await expect(cancel).toBeEnabled()
+			await cancel.click()
+			await expect(page.locator('.card-modal__reminder-chip')).toHaveCount(0)
+		} finally {
+			release()
+			await page.unrouteAll({ behavior: 'wait' })
+		}
+	})
+
 })

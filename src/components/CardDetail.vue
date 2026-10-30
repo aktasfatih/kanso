@@ -569,7 +569,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<button
 							class="card-modal__reminder-cancel"
 							:title="t('kanso', 'Cancel reminder')"
-							:disabled="cancelReminder.isPending.value"
+							:disabled="cancelReminder.isPending.value || String(reminder.id).startsWith('optimistic-')"
 							@click="handleCancelReminder(reminder)">
 							<CloseIcon :size="12" />
 						</button>
@@ -3726,6 +3726,7 @@ async function submitCustomReminder() {
 }
 
 async function handleCancelReminder(reminder) {
+	if (String(reminder.id).startsWith('optimistic-')) return
 	reminderError.value = ''
 	try {
 		await cancelReminder.mutateAsync({ cardId: props.cardId, reminderId: reminder.id })

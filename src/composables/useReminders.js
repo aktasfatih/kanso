@@ -16,6 +16,8 @@ import {
  * server rows (with real ids / fired state) win. Personal per-user: only the
  * card detail cache carries these, never the board summary.
  */
+let optimisticReminderSequence = 0
+
 export function useReminders() {
 	const queryClient = useQueryClient()
 
@@ -29,12 +31,13 @@ export function useReminders() {
 			const cardKey = cardKeyFor(cardId)
 			await queryClient.cancelQueries({ queryKey: cardKey })
 			const previousCard = queryClient.getQueryData(cardKey)
+			const optimisticId = `optimistic-${++optimisticReminderSequence}`
 
 			queryClient.setQueryData(cardKey, (old) => {
 				if (!old) return old
 				const existing = Array.isArray(old.myReminders) ? old.myReminders : []
 				const optimistic = {
-					id: `optimistic-${remindAt}-${commentId ?? 'card'}`,
+					id: optimisticId,
 					cardId,
 					commentId: commentId ?? null,
 					remindAt,
@@ -46,12 +49,24 @@ export function useReminders() {
 				return { ...old, myReminders: updated }
 			})
 
-			return { previousCard, cardKey }
+			return { hadCard: !!previousCard, cardKey, optimisticId }
+		},
+
+		onSuccess: (created, _vars, context) => {
+			if (!context?.hadCard || !Number.isInteger(created?.id)) return
+			queryClient.setQueryData(context.cardKey, (old) => {
+				if (!old || !Array.isArray(old.myReminders)) return old
+				return { ...old, myReminders: old.myReminders.map((reminder) =>
+					reminder.id === context.optimisticId ? created : reminder) }
+			})
 		},
 
 		onError: (_err, _vars, context) => {
-			if (context?.previousCard !== undefined && context?.cardKey) {
-				queryClient.setQueryData(context.cardKey, context.previousCard)
+			if (context?.hadCard) {
+				queryClient.setQueryData(context.cardKey, (old) => old && ({
+					...old,
+					myReminders: (old.myReminders ?? []).filter((reminder) => reminder.id !== context.optimisticId),
+				}))
 			}
 		},
 
@@ -62,9 +77,13 @@ export function useReminders() {
 
 	// ── Cancel a pending reminder ────────────────────────────────────────────────
 	const cancelReminder = useMutation({
-		mutationFn: ({ cardId, reminderId }) => apiDeleteReminder(cardId, reminderId),
+		mutationFn: ({ cardId, reminderId }) => {
+			if (String(reminderId).startsWith('optimistic-')) throw new Error('Reminder has not been saved yet')
+			return apiDeleteReminder(cardId, reminderId)
+		},
 
 		onMutate: async ({ cardId, reminderId }) => {
+			if (String(reminderId).startsWith('optimistic-')) return undefined
 			const cardKey = cardKeyFor(cardId)
 			await queryClient.cancelQueries({ queryKey: cardKey })
 			const previousCard = queryClient.getQueryData(cardKey)
@@ -77,12 +96,17 @@ export function useReminders() {
 				return { ...old, myReminders: updated }
 			})
 
-			return { previousCard, cardKey }
+			return { hadCard: !!previousCard, cardKey, removed: previousCard?.myReminders?.find((reminder) => reminder.id === reminderId) }
 		},
 
 		onError: (_err, _vars, context) => {
-			if (context?.previousCard !== undefined && context?.cardKey) {
-				queryClient.setQueryData(context.cardKey, context.previousCard)
+			if (context?.hadCard && context.removed) {
+				queryClient.setQueryData(context.cardKey, (old) => {
+					if (!old) return old
+					const reminders = Array.isArray(old.myReminders) ? old.myReminders : []
+					if (reminders.some((reminder) => reminder.id === context.removed.id)) return old
+					return { ...old, myReminders: [...reminders, context.removed].sort((a, b) => a.remindAt - b.remindAt) }
+				})
 			}
 		},
 
