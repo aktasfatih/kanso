@@ -89,6 +89,7 @@ your work, on your own Nextcloud, laid out plainly.
 - **Import from Trello or a CSV**: hand Kanso a Trello board's JSON export, or a
   CSV of cards plus a mapping of which column is the title, the description, the
   due date and so on. Both sit in the same **Import** menu on the board list.
+  Trello board descriptions longer than 4,000 characters are truncated on import.
 - **Export, duplicate, back up**: download any board as a zip (its attachments
   included) and import that zip back on any instance; or duplicate a board, with
   or without its cards. Administrators can additionally schedule **periodic

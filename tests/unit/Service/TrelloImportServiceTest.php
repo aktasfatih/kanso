@@ -104,6 +104,50 @@ class TrelloImportServiceTest extends TestCase {
 
 	// ── happy path ──────────────────────────────────────────────────────────────
 
+	public function testImportsBoardDescription(): void {
+		$board = $this->newBoard('Board');
+		$this->boardService->expects(self::once())->method('create')->with('Board', null, 'alice')->willReturn($board);
+		$this->boardService->expects(self::once())->method('update')
+			->with(900, null, null, null, 'alice', null, null, null, null, null, null, 'Notes for the team')
+			->willReturn($board);
+		$this->db->expects(self::once())->method('commit');
+
+		$result = $this->service->import(json_encode(['name' => 'Board', 'desc' => '  Notes for the team  ', 'lists' => [], 'cards' => []]), 'alice');
+
+		self::assertSame(900, $result['boardId']);
+	}
+
+	public function testTruncatesMultibyteBoardDescriptionAndNormalizesTheCut(): void {
+		$board = $this->newBoard('Board');
+		$this->boardService->method('create')->willReturn($board);
+		$this->boardService->expects(self::once())->method('update')
+			->with(900, null, null, null, 'alice', null, null, null, null, null, null, str_repeat('é', 3999))
+			->willReturn($board);
+		$this->db->expects(self::once())->method('commit');
+
+		$this->service->import(json_encode(['name' => 'Board', 'desc' => str_repeat('é', 3999) . ' after the limit', 'lists' => [], 'cards' => []]), 'alice');
+	}
+
+	public function testMissingOrBlankBoardDescriptionsDoNotTriggerUpdate(): void {
+		$this->boardService->method('create')->willReturn($this->newBoard('Board'));
+		$this->boardService->expects(self::never())->method('update');
+		$this->db->expects(self::exactly(5))->method('commit');
+
+		foreach ([[], ['desc' => null], ['desc' => ''], ['desc' => " \n "], ['desc' => ['unexpected']]] as $fields) {
+			$this->service->import(json_encode(['name' => 'Board', 'lists' => [], 'cards' => []] + $fields), 'alice');
+		}
+	}
+
+	public function testBoardDescriptionUpdateFailureRollsBackImport(): void {
+		$this->boardService->method('create')->willReturn($this->newBoard('Board'));
+		$this->boardService->method('update')->willThrowException(new \RuntimeException('update failed'));
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+		$this->expectException(\RuntimeException::class);
+
+		$this->service->import(json_encode(['name' => 'Board', 'desc' => 'Notes', 'lists' => [], 'cards' => []]), 'alice');
+	}
+
 	public function testImportMapsStructureCardsLabelsChecklists(): void {
 		$this->db->expects(self::once())->method('beginTransaction');
 		$this->db->expects(self::once())->method('commit');

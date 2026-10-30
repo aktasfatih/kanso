@@ -153,6 +153,15 @@ class TrelloImportService {
 			? $this->title($doc['name']) : 'Imported Trello board';
 		$board = $this->boardService->create($title, null, $actorUid);
 		$boardId = $board->getId();
+		$description = BoardService::normalizeDescription(
+			isset($doc['desc']) && is_string($doc['desc']) ? $doc['desc'] : null
+		);
+		if ($description !== null && mb_strlen($description) > BoardService::MAX_DESCRIPTION_LENGTH) {
+			$description = BoardService::normalizeDescription(mb_substr($description, 0, BoardService::MAX_DESCRIPTION_LENGTH));
+		}
+		if ($description !== null) {
+			$this->boardService->update($boardId, null, null, null, $actorUid, description: $description);
+		}
 		$now = time();
 
 		$labelIdMap = $this->importLabels($doc, $boardId);
