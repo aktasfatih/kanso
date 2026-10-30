@@ -9,9 +9,7 @@
 // persisted PER USER via the shared `dismissed_hints` settings key, so it stays
 // hidden after a reload.
 
-import { test, expect, ncLogin, adminAuth } from './helpers.js'
-
-const BASE = 'http://localhost:8891'
+import { test, expect, ncLogin, adminAuth, BASE } from './helpers.js'
 
 // A hermetic, throwaway user so the board list is genuinely empty. The name is
 // made per-worker-unique in beforeAll (worker index) so parallel workers never
@@ -62,6 +60,21 @@ test.describe('First-run onboarding (#3413)', () => {
 		const templateCta = page.locator('[data-test="empty-start-template"]')
 		await expect(createCta).toBeVisible()
 		await expect(templateCta).toBeVisible()
+		for (const width of [1280, 375, 320]) {
+			await page.setViewportSize({ width, height: 900 })
+			const createBox = await createCta.boundingBox()
+			const templateBox = await templateCta.boundingBox()
+			expect(createBox).not.toBeNull()
+			expect(templateBox).not.toBeNull()
+			expect(templateBox.y - (createBox.y + createBox.height)).toBeGreaterThanOrEqual(8)
+			for (const box of [createBox, templateBox]) {
+				expect(box.x).toBeGreaterThanOrEqual(0)
+				expect(box.x + box.width).toBeLessThanOrEqual(width)
+			}
+		}
+		await page.setViewportSize({ width: 1280, height: 900 })
+		await createCta.click()
+		await expect(page.locator('.new-board-form__input')).toBeVisible()
 
 		// "Start with a template" seeds the starter board and navigates to it.
 		await templateCta.click()

@@ -304,24 +304,26 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<ViewColumnIcon :size="64" />
 					</template>
 					<template #action>
-						<NcButton
-							type="primary"
-							data-test="empty-create-board"
-							@click="showCreate = true">
-							<template #icon>
-								<PlusIcon :size="20" />
-							</template>
-							{{ t('kanso', 'Create your first board') }}
-						</NcButton>
-						<NcButton
-							:disabled="seedingTemplate"
-							data-test="empty-start-template"
-							@click="seedStarterBoard">
-							<template #icon>
-								<ViewDashboardOutlineIcon :size="20" />
-							</template>
-							{{ seedingTemplate ? t('kanso', 'Setting up…') : t('kanso', 'Start with a template') }}
-						</NcButton>
+						<div class="board-list-empty-actions">
+							<NcButton
+								type="primary"
+								data-test="empty-create-board"
+								@click="showCreate = true">
+								<template #icon>
+									<PlusIcon :size="20" />
+								</template>
+								{{ t('kanso', 'Create your first board') }}
+							</NcButton>
+							<NcButton
+								:disabled="seedingTemplate"
+								data-test="empty-start-template"
+								@click="seedStarterBoard">
+								<template #icon>
+									<ViewDashboardOutlineIcon :size="20" />
+								</template>
+								{{ seedingTemplate ? t('kanso', 'Setting up…') : t('kanso', 'Start with a template') }}
+							</NcButton>
+						</div>
 					</template>
 				</NcEmptyContent>
 				<p v-if="seedError" class="board-list__import-error" data-test="empty-template-error">
@@ -1007,6 +1009,13 @@ function onCsvOpenBoard({ boardId }) {
 	align-items: center;
 	gap: 12px;
 	flex-wrap: wrap;
+}
+
+.board-list-empty-actions {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
 }
 
 .board-list-title {
