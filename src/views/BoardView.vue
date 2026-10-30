@@ -368,8 +368,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<button type="button" data-test="relation-picker-cancel" @click="returnFromRelationPicker(null)">{{ t('kanso', 'Cancel') }}</button>
 		</div>
 
-		<!-- Screen-reader live region: announces the user's own card moves and
-		     label/assignee changes (drag-and-drop has no visible SR feedback). -->
+		<!-- Announcements use unescaped translations and must remain text-bound. -->
 		<div class="board-view__sr-only" aria-live="polite" role="status">
 			{{ announceMessage }}
 		</div>
@@ -1157,7 +1156,7 @@ async function nestCard(cardId, targetData, sourceStackId, sourceParentId) {
 		showWarning(err?.response?.data?.error || t('kanso', 'Couldn\'t make this card a sub-card.'))
 		return
 	}
-	announce(t('kanso', '{card} is now a sub-card of {parent}', { card: movedTitle, parent: parentTitle }))
+	announce(t('kanso', '{card} is now a sub-card of {parent}', { card: movedTitle, parent: parentTitle }, { escape: false, sanitize: false }))
 
 	// setParent does not touch the column, and the list view only indents a child
 	// under a parent in the SAME group - so a cross-column nest also moves the
@@ -1228,11 +1227,11 @@ async function applyCardDrop({ cardId, sourceParentId, parentChange, move }) {
 			return
 		}
 		announce(parentChange.parentCardId === null
-			? t('kanso', '{card} is no longer a sub-card', { card: movedTitle })
+			? t('kanso', '{card} is no longer a sub-card', { card: movedTitle }, { escape: false, sanitize: false })
 			: t('kanso', '{card} is now a sub-card of {parent}', {
 				card: movedTitle,
 				parent: cardTitleById(parentChange.parentCardId),
-			}))
+			}, { escape: false, sanitize: false }))
 	}
 
 	if (!move) return
@@ -1248,7 +1247,7 @@ async function applyCardDrop({ cardId, sourceParentId, parentChange, move }) {
 		card: (cardsByStack.value.get(move.targetStackId) ?? []).find((c) => c.id === cardId)?.title
 			|| cardTitleById(cardId),
 		stack: stackTitleById(move.targetStackId),
-	}))
+	}, { escape: false, sanitize: false }))
 }
 const { toggle: boardWatchToggle } = useBoardSubscription(boardId)
 // The chosen background preset resolved to its CSS gradient (null = none). The
@@ -1943,7 +1942,7 @@ async function revealCard(cardId) {
 	announce(t('kanso', '{card} is in {stack}', {
 		card: card.title,
 		stack: stackTitleById(card.stackId),
-	}))
+	}, { escape: false, sanitize: false }))
 }
 
 onUnmounted(() => {

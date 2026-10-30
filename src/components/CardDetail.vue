@@ -3246,8 +3246,8 @@ async function handleToggleLabel(label) {
 		// sent, so there is nothing to announce either.
 		if (result === TOGGLE_ALREADY_PENDING) return
 		announceMove(assign
-			? t('kanso', 'Label {label} added', { label: label.title })
-			: t('kanso', 'Label {label} removed', { label: label.title }))
+			? t('kanso', 'Label {label} added', { label: label.title }, { escape: false, sanitize: false })
+			: t('kanso', 'Label {label} removed', { label: label.title }, { escape: false, sanitize: false }))
 	} catch (err) {
 		labelToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update label.')
 	}
@@ -3536,8 +3536,8 @@ async function handleToggleAssignee(uid, assign) {
 		if (result === TOGGLE_ALREADY_PENDING) return
 		const who = participantName(uid)
 		announceMove(assign
-			? t('kanso', '{user} assigned', { user: who })
-			: t('kanso', '{user} unassigned', { user: who }))
+			? t('kanso', '{user} assigned', { user: who }, { escape: false, sanitize: false })
+			: t('kanso', '{user} unassigned', { user: who }, { escape: false, sanitize: false }))
 	} catch (err) {
 		assigneeError.value = err?.response?.data?.error || t('kanso', 'Failed to update assignee.')
 	}
@@ -6949,7 +6949,7 @@ function moveWithinBoard(targetStackId, afterCardId) {
 	announceMove(t('kanso', '{card} moved to {stack}', {
 		card: cardData.value?.title || t('kanso', 'Card'),
 		stack: stackTitle,
-	}))
+	}, { escape: false, sanitize: false }))
 }
 
 // afterCardId=null → top; last card in the stack → bottom.
