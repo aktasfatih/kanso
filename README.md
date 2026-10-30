@@ -141,6 +141,8 @@ your work, on your own Nextcloud, laid out plainly.
 <img src="docs/kanso-timeline.png" alt="Kanso Timeline (Gantt) view: cards plotted on a date axis by start → due, with a due-only card shown as a milestone" width="900">
 
 ### 🧭 Cross-board hub & projects
+- **Custom Views** collect cards across readable boards and filter them by
+  labels, assignees, priority and other attributes.
 - **My Work** hub gathers, across every board: **My tasks** (cards assigned to
   you), **Reviews** (waiting on you), and an **Inbox** of mentions and activity
   on cards you watch — filterable to a single board.

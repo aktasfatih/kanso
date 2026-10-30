@@ -51,8 +51,8 @@ class LabelMapper extends QBMapper {
 	/**
 	 * The BOARD-SET twin of {@see self::findByBoard()} (#10298): the labels of
 	 * MANY boards in ONE query, for the cross-board Views feed - whose label
-	 * union must not cost one query per readable board. Grouped BY BOARD (label
-	 * ids are only unique per board) and each group still in creation order, so
+	 * union must not cost one query per readable board. Grouped BY BOARD, with
+	 * each group still in creation order, so
 	 * a caller walking its board list emits exactly the sequence the per-board
 	 * loop did. Boards with no labels are absent from the map.
 	 *

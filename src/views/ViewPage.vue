@@ -25,35 +25,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</h1>
 
 			<div class="view-page__controls">
-				<!-- Filter editor: the SAME progressive filter control the board uses
-				     (#3815 reuses useBoardFilters + BoardFilterBar). Editing the state
-				     re-filters the loaded rows live AND refetches the feed with the
-				     filter applied server-side (#9862); the save button persists it to
-				     the View. `participants` is the server-supplied cross-board uid
-				     vocabulary.
-				     `labels` is deliberately NOT passed, so the label facet stays
-				     hidden in a View. Label ids are board-scoped and COLLIDE across
-				     boards (see ViewService.php:139-144): the envelope's union is keyed
-				     by id, so board A's label 5 "Bug" and board B's label 5 "Urgent"
-				     become one chip (last board wins) while the predicate matches the
-				     bare id — picking "Bug" would return the other board's "Urgent"
-				     cards. Wrong results are worse than a missing facet; a
-				     board-qualified label identity is follow-up work. Hiding the facet
-				     is also what keeps this View's saved label filter safe from the
-				     bar's "Clear filters", which only clears what it renders (#10091)
-				     — hence `locked-dimensions`: the bar now re-surfaces a facet it
-				     has nothing to offer for WHILE it is actively constraining the
-				     surface (otherwise the constraint is unclearable), and the facets
-				     withheld here must be exempt, because such a constraint IS the
-				     View rather than something the user applied.
-				     `estimate-scale` is deliberately not passed either — an estimate
-				     scale is board-scoped and a cross-board View can span two of them;
-				     it is locked for the same reason labels is.
-				     Nor `saved-filters`: saved views are a board-surface concept, and
-				     the bar drops that whole section when it is given none. -->
 				<BoardFilterBar
 					:state="filterState"
 					:participants="participants"
+					:labels="viewLabels"
 					:locked-dimensions="LOCKED_DIMENSIONS"
 					show-archived
 					@save="onSaveFromBar" />
@@ -236,6 +211,7 @@ import CardModal from '../components/CardModal.vue'
 import { useViews } from '../composables/useViews.js'
 import { usePageTitle } from '../composables/usePageTitle.js'
 import { useViewCards } from '../composables/useViewCards.js'
+import { useBoards } from '../composables/useBoards.js'
 import {
 	createFilterState,
 	serializeFilter,
@@ -307,18 +283,12 @@ const sortMenuName = computed(() => (sortMode.value === 'default'
 const filterState = createFilterState()
 const filterQuery = computed(() => filterToQuery(serializeFilter(filterState)))
 
-// Dimensions this surface OWNS: hidden even while active, and never cleared by
-// the bar's "Clear filters" (#10091). Exactly the two facets this page withholds
-// because they are board-scoped (see the filter-bar comment in the template):
-// labels and estimates. This page has no URL↔filter sync — the ONLY thing that
-// can seed a constraint on a facet it does not render is the saved View's own
-// blob (the `view` watch below), i.e. the View's identity, so the elsewhere-right
-// "re-surface it so it can be cleared" rule must not apply here.
-// Hoisted out of the template so the prop keeps a stable identity across renders.
-const LOCKED_DIMENSIONS = ['labels', 'estimates']
+// Estimates use board-specific scales and remain part of the saved View's identity.
+const LOCKED_DIMENSIONS = ['estimates']
 
 const { data: viewsData, save, rename } = useViews()
 const { data: cardsData, isLoading, isError } = useViewCards(sort, filterQuery)
+const { data: boardsData } = useBoards()
 
 const view = computed(() => (viewsData.value ?? []).find((v) => String(v.id) === String(props.id)) ?? null)
 
@@ -465,6 +435,14 @@ const groups = computed(() =>
 const participants = computed(() =>
 	[...nameByUid.value.entries()].map(([uid, displayName]) => ({ uid, displayName })),
 )
+
+const viewLabels = computed(() => {
+	const boards = new Map((boardsData.value ?? []).map((board) => [Number(board.id), board.title]))
+	return (cardsData.value?.labels ?? []).map((label) => ({
+		...label,
+		boardTitle: boards.get(Number(label.boardId)) ?? '',
+	}))
+})
 
 // Real cross-board labelsById map (#3950): the feed envelope carries the union of
 // label metadata (id/title/color) across the readable boards, so card tiles render

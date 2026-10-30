@@ -165,7 +165,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:style="{ '--filter-dot-color': label.color ? '#' + label.color : 'var(--color-border)' }"
 								@click="toggleSet('labels', label.id)">
 								<span class="board-filter-bar__opt-dot" />
-								<span class="board-filter-bar__opt-text">{{ label.title }}</span>
+								<span class="board-filter-bar__opt-text">
+									<span class="board-filter-bar__label-title">{{ label.title }}</span>
+									<span v-if="label.boardTitle" class="board-filter-bar__label-board">{{ label.boardTitle }}</span>
+								</span>
 								<CheckIcon v-if="state.labels.has(label.id)" class="board-filter-bar__opt-check" :size="20" />
 							</button>
 						</li>
@@ -377,10 +380,8 @@ const props = defineProps({
 	    ever runs), so the facet would be a control that does nothing there. The
 	    View surface, which owns its own archived baseline, opts in. */
 	showArchived: { type: Boolean, default: false },
-	/** Dimension keys this surface OWNS and must keep hidden even while they
-	    carry an active constraint — the View page's seeded label filter is the
-	    one case (it IS the View's identity, so surfacing it would also make
-	    "Clear filters" destroy the View). Distinct from a facet that is merely
+	/** Dimension keys this surface owns and must keep hidden even while they
+	    carry an active constraint. Distinct from a facet that is merely
 	    unavailable here (no labels on the board, no estimation scale, no
 	    participants): those DO come back while active, so the user can clear
 	    them. See the `dimensions` computed. */
@@ -431,7 +432,7 @@ function setSummary(set, resolveLabel) {
 
 const labelTitleById = computed(() => {
 	const m = new Map()
-	for (const l of props.labels) m.set(l.id, l.title)
+	for (const l of props.labels) m.set(l.id, l.boardTitle ? `${l.title} · ${l.boardTitle}` : l.title)
 	return m
 })
 const participantNameByUid = computed(() => {
@@ -602,10 +603,7 @@ const dimensions = computed(() => {
 	// label, switching the estimation scale to "none") retroactively makes an
 	// active facet unavailable. Without this the board renders filtered — or
 	// empty — with a `Filter · N` badge, no row to open and no Clear button.
-	// LOCKED dimensions are the exception: a surface that OWNS a dimension (the
-	// View page seeds its saved label filter into this same state) keeps it
-	// hidden even while active, because there it is the surface's identity rather
-	// than a filter the user applied — see `lockedDimensions` and #10091.
+	// LOCKED dimensions stay hidden even while active and are never cleared here.
 	//
 	// The lock is checked OUTSIDE the disjunction on purpose: a locked dimension
 	// is never rendered, so "locked ⇒ never cleared" holds unconditionally rather
@@ -654,16 +652,8 @@ function setSingleRadio(dim, value) {
 // Clear every dimension this control RENDERS — and only those. The invariant is
 // that a control may only clear what it shows (#10091): a surface can hide a
 // dimension while still holding a constraint on it, and wiping that invisibly is
-// destructive with no way back. The View page is the case that bites — it hides
-// the Labels facet on purpose (board-scoped label ids collide across boards) yet
-// seeds the View's own saved label filter into this same state, so a blanket
-// clear silently destroyed the View's identity and widened the page to the whole
-// unfiltered cross-board feed, recoverable only by reloading. That case is now
-// expressed as a LOCKED dimension, so it stays hidden (and uncleared) while a
-// merely-unavailable facet that is actively constraining the surface renders and
-// therefore clears — the invariant holds either way. Driving off
-// `visibleDimensions` also keeps this in step with the dimension list instead of
-// being a hand-maintained parallel copy of it.
+// destructive with no way back. A locked dimension remains hidden and uncleared;
+// an unavailable but active facet is rendered so it can still be cleared.
 function clearAll() {
 	for (const dim of visibleDimensions.value) {
 		if (SINGLE_SELECT_DIMS.includes(dim.key)) props.state[dim.key] = null
@@ -818,6 +808,18 @@ watch(saveName, () => { saveError.value = '' })
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.board-filter-bar__label-title,
+.board-filter-bar__label-board {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.board-filter-bar__label-board {
+	color: var(--color-text-maxcontrast);
+	font-size: 0.85em;
 }
 
 .board-filter-bar__opt-check {
