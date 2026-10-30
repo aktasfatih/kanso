@@ -41,14 +41,6 @@ async function putFile(name, content) {
 	return id
 }
 
-// "Share from Files" (#3645): copy a file from the actor's own Nextcloud Files
-// onto a card. The API path (below) is the security-critical surface and is
-// fully covered here end-to-end. NOTE / COVERAGE GAP: driving the Files-app UI
-// action ("Add to Kanso…" in a file's action menu → picker dialog → this same
-// endpoint) is not automated - it depends on the Files app's own action-menu
-// markup, which is brittle to script across NC versions. The action registration
-// itself is a thin wrapper over @nextcloud/files' registerFileAction; the copy
-// semantics it invokes are what these API + PHPUnit tests lock down.
 test.describe('Share from Files', () => {
 	let boardId = 0
 	let stackId = 0
@@ -120,5 +112,47 @@ test.describe('Share from Files', () => {
 			return !!(actions && typeof actions.has === 'function' && actions.has('kanso-add-to-card'))
 		})
 		expect(registered).toBe(true)
+		const eligibility = await page.evaluate(() => {
+			const action = window._nc_files_scope.v4_0.fileActions.get('kanso-add-to-card')
+			const file = { type: 'file', permissions: 1 }
+			return [
+				action.enabled({ nodes: [file] }),
+				action.enabled({ nodes: [{ type: 'folder', permissions: 1 }] }),
+				action.enabled({ nodes: [{ type: 'file', permissions: 0 }] }),
+				action.enabled({ nodes: [] }),
+				action.enabled({ nodes: [file, file] }),
+			]
+		})
+		expect(eligibility).toEqual([true, false, false, false, false])
+	})
+
+	test('adds a file to a card from the Files row menu', async ({ page }) => {
+		const title = 'Files action target'
+		const target = await api('POST', '/cards', { stackId, title })
+		expect(target.ok).toBe(true)
+
+		await ncLogin(page)
+		await page.goto(BASE + '/index.php/apps/files')
+		const row = page.locator('[data-cy-files-list-row-name="kanso-share-from-files.txt"]')
+		await expect(row).toBeVisible()
+		await row.getByRole('button', { name: 'Actions' }).click()
+		const action = page.getByRole('menuitem', { name: 'Add to Kanso…' })
+		await expect(action).toBeVisible()
+		await action.click()
+		const dialog = page.getByRole('dialog', { name: 'Add to Kanso' })
+		await expect(dialog).toBeVisible()
+		await dialog.getByPlaceholder('Search cards across all boards…').fill(title)
+		await dialog.getByRole('button', { name: new RegExp(title) }).click()
+		await expect(dialog).toBeHidden()
+
+		const attachments = await api('GET', `/cards/${target.body.id}/attachments`)
+		expect(attachments.ok).toBe(true)
+		expect(attachments.body).toHaveLength(1)
+		expect(attachments.body[0].filename).toBe('kanso-share-from-files.txt')
+		const download = await fetch(`${API}/cards/${target.body.id}/attachments/${attachments.body[0].id}`, {
+			headers: { Authorization: currentAuth, 'OCS-APIREQUEST': 'true' },
+		})
+		expect(download.ok).toBe(true)
+		expect(await download.text()).toBe('from the files app')
 	})
 })

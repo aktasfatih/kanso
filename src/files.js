@@ -55,7 +55,7 @@ registerFileAction({
 	// Single readable FILE only - never a folder, never a batch. The action just
 	// offers to copy; the server re-checks the actor can read the node and can
 	// EDIT the target card, so this is a UX gate, not the security boundary.
-	enabled: (nodes) => {
+	enabled: ({ nodes }) => {
 		if (!Array.isArray(nodes) || nodes.length !== 1) {
 			return false
 		}
@@ -64,7 +64,7 @@ registerFileAction({
 			&& (node.permissions & Permission.READ) !== 0
 	},
 
-	async exec(node) {
+	async exec({ nodes: [node] }) {
 		await openPicker(node)
 		// The dialog owns success/error toasts; report a silent (null) result so
 		// the Files app does not emit its own generic toast.
