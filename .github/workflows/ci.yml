@@ -1069,6 +1069,7 @@ jobs:
       - name: Dump push + Nextcloud logs on failure
         if: ${{ failure() }}
         run: |
+          docker logs kanso-dev-db --tail 200 || true
           docker logs kanso-dev-push --tail 200 || true
           docker exec -u www-data kanso-dev php occ notify_push:self-test || true
           docker logs kanso-dev --tail 200 || true
