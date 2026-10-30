@@ -191,6 +191,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 <script setup>
 import { ref, computed, watch, nextTick, provide } from 'vue'
+import { useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
@@ -208,6 +209,7 @@ import BoardTimelineView from '../components/BoardTimelineView.vue'
 import ViewKanban from '../components/ViewKanban.vue'
 import BoardFilterBar from '../components/BoardFilterBar.vue'
 import CardModal from '../components/CardModal.vue'
+import { relationPicker } from '../services/relationPicker.js'
 import { useViews } from '../composables/useViews.js'
 import { usePageTitle } from '../composables/usePageTitle.js'
 import { useViewCards } from '../composables/useViewCards.js'
@@ -461,8 +463,10 @@ const labelsById = computed(() => {
 // returns to the View (never the card's board). We track the card id + its own board
 // id (Views are cross-board — CardDetail needs the board for its board-scoped fetches
 // and can also derive it from the loaded card, but passing it avoids a first-paint gap).
-const selectedCardId = ref(null)
-const selectedBoardId = ref(null)
+const relationReturn = relationPicker.value?.phase === 'returning' && relationPicker.value.controlled
+	&& relationPicker.value.originPath === useRoute().fullPath ? relationPicker.value : null
+const selectedCardId = ref(relationReturn ? String(relationReturn.sourceId) : null)
+const selectedBoardId = ref(relationReturn ? relationReturn.boardId : null)
 function openCard(card) {
 	selectedCardId.value = String(card.id)
 	selectedBoardId.value = card.boardId != null ? String(card.boardId) : null

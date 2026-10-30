@@ -439,6 +439,7 @@
             "Progreso de la lista de tareas: {done} de {total}, %n pasos vencidos"
         ],
         "Choose a board…": "Elige un tablero…",
+        "Choose a card on this board to add a relation.": "Elige una tarjeta de este tablero para añadir una relación.",
         "Choose a column…": "Elige una columna…",
         "Choose a CSV file": "Elige un archivo CSV",
         "Choose a file to attach": "Elige un archivo para adjuntar",
@@ -1230,6 +1231,7 @@
         "Pick color": "Elegir color",
         "Pick color for new label": "Elegir el color de la nueva etiqueta",
         "Pick color for new review type": "Elegir el color del nuevo tipo de revisión",
+        "Pick on board": "Elegir en el tablero",
         "Pin board": "Fijar el tablero",
         "Pin to sidebar": "Fijar en la barra lateral",
         "Pinned": "Fijados",

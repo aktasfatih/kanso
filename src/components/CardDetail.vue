@@ -2186,9 +2186,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<option value="">{{ t('kanso', 'Pick a card…') }}</option>
 									<option v-for="c in boardCardsForRelation" :key="c.id" :value="c.id">{{ c.title }}</option>
 								</select>
+								<button ref="relationBoardPickerButton" class="card-modal__relation-add-btn" data-test="relation-board-picker" @click="pickRelationOnBoard">
+									{{ t('kanso', 'Pick on board') }}
+								</button>
 								<button
 									class="card-modal__relation-add-btn"
-									:disabled="!newRelationTargetId || addRelation.isPending.value"
+									:disabled="!hasValidRelationTarget || addRelation.isPending.value"
 									@click="handleAddRelation">
 									{{ t('kanso', 'Add') }}
 								</button>
@@ -2877,6 +2880,7 @@ import { normalizeCardFeatures } from '../services/cardFeatures.js'
 import { renderMarkdown, buildCardRefMap } from '../services/markdown.js'
 import { useEditorPrefs } from '../composables/useEditorPrefs.js'
 import { useCardPrefs } from '../composables/useCardPrefs.js'
+import { relationPicker, beginRelationPick, clearRelationPick } from '../services/relationPicker.js'
 
 /**
  * Given a hex background color return '#000' or '#fff' for readable contrast.
@@ -7012,12 +7016,48 @@ const hasAnyRelation = computed(() => relationGroups.value.some((g) => g.items.l
 const newRelationKind = ref('blocks')
 const newRelationTargetId = ref('')
 const relationError = ref('')
+const relationBoardPickerButton = ref(null)
+const focusRelationPickerOnReturn = ref(false)
+
+watch(relationBoardPickerButton, (button) => {
+	if (button && focusRelationPickerOnReturn.value) {
+		focusRelationPickerOnReturn.value = false
+		button.focus()
+	}
+})
+
+async function pickRelationOnBoard() {
+	if (!canEdit.value || !cardData.value || boardId.value == null || !confirmDiscardUnsaved()) return
+	const onOwnBoard = route.name === 'card-modal' && String(route.params.id) === String(boardId.value)
+	beginRelationPick({
+		boardId: String(boardId.value),
+		sourceId: Number(cardData.value.id),
+		kind: newRelationKind.value,
+		previousTargetId: newRelationTargetId.value || null,
+		originPath: route.fullPath,
+		controlled: props.controlled,
+	})
+	const failure = await router.push({ name: 'board', params: { id: String(boardId.value) }, query: onOwnBoard ? route.query : {} })
+	if (failure) clearRelationPick()
+}
+
+watch([() => props.cardId, boardId, relationPicker], () => {
+	const session = relationPicker.value
+	if (!session || session.phase !== 'returning' || Number(props.cardId) !== session.sourceId
+		|| String(boardId.value) !== session.boardId || route.fullPath !== session.originPath) return
+	newRelationKind.value = session.kind
+	newRelationTargetId.value = session.targetId ?? ''
+	focusRelationPickerOnReturn.value = true
+	showRelationEditor.value = true
+	clearRelationPick()
+}, { immediate: true })
 
 // Cards on this board available for selection (excluding the current card)
 const boardCardsForRelation = computed(() => {
 	const cards = boardData.value?.cards ?? []
 	return cards.filter((c) => c.id !== Number(props.cardId) && !c.archived)
 })
+const hasValidRelationTarget = computed(() => boardCardsForRelation.value.some((card) => Number(card.id) === Number(newRelationTargetId.value)))
 
 const addRelation = useMutation({
 	mutationFn: ({ otherCardId, kind }) =>
@@ -7039,7 +7079,7 @@ const removeRelation = useMutation({
 
 async function handleAddRelation() {
 	const targetId = Number(newRelationTargetId.value)
-	if (!targetId) return
+	if (!targetId || !boardCardsForRelation.value.some((card) => Number(card.id) === targetId)) return
 	relationError.value = ''
 	try {
 		await addRelation.mutateAsync({ otherCardId: targetId, kind: newRelationKind.value })

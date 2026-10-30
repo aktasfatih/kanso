@@ -439,6 +439,7 @@
             "Progresso do checklist: {done} de {total}, %n etapas atrasadas"
         ],
         "Choose a board…": "Escolha um quadro…",
+        "Choose a card on this board to add a relation.": "Escolha um cartão neste quadro para adicionar uma relação.",
         "Choose a column…": "Escolha uma coluna…",
         "Choose a CSV file": "Escolha um arquivo CSV",
         "Choose a file to attach": "Escolha um arquivo para anexar",
@@ -1230,6 +1231,7 @@
         "Pick color": "Escolher cor",
         "Pick color for new label": "Escolher a cor da nova etiqueta",
         "Pick color for new review type": "Escolher a cor do novo tipo de revisão",
+        "Pick on board": "Escolher no quadro",
         "Pin board": "Fixar quadro",
         "Pin to sidebar": "Fixar na barra lateral",
         "Pinned": "Fixados",

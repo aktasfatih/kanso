@@ -439,6 +439,7 @@
             "Voortgang van de checklist {done} van {total}, %n stappen te laat"
         ],
         "Choose a board…": "Kies een bord…",
+        "Choose a card on this board to add a relation.": "Kies een kaart op dit bord om een relatie toe te voegen.",
         "Choose a column…": "Kies een kolom…",
         "Choose a CSV file": "Kies een CSV-bestand",
         "Choose a file to attach": "Kies een bestand om bij te voegen",
@@ -1230,6 +1231,7 @@
         "Pick color": "Kies een kleur",
         "Pick color for new label": "Kies een kleur voor het nieuwe label",
         "Pick color for new review type": "Kies een kleur voor het nieuwe reviewtype",
+        "Pick on board": "Kiezen op het bord",
         "Pin board": "Bord vastzetten",
         "Pin to sidebar": "Vastzetten in zijbalk",
         "Pinned": "Vastgezet",

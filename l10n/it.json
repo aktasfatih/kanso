@@ -439,6 +439,7 @@
             "Avanzamento della lista di controllo: {done} di {total}, %n elementi in ritardo"
         ],
         "Choose a board…": "Scegli una bacheca…",
+        "Choose a card on this board to add a relation.": "Scegli una scheda su questa bacheca per aggiungere una relazione.",
         "Choose a column…": "Scegli una colonna…",
         "Choose a CSV file": "Scegli un file CSV",
         "Choose a file to attach": "Scegli un file da allegare",
@@ -1230,6 +1231,7 @@
         "Pick color": "Scegli il colore",
         "Pick color for new label": "Scegli il colore della nuova etichetta",
         "Pick color for new review type": "Scegli il colore del nuovo tipo di revisione",
+        "Pick on board": "Scegli sulla bacheca",
         "Pin board": "Fissa la bacheca",
         "Pin to sidebar": "Fissa nella barra laterale",
         "Pinned": "Fissate",

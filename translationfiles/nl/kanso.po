@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— geen —"
 
-#: src/components/BoardSettingsModal.vue:4893
+#: src/components/BoardSettingsModal.vue:4898
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n keer"
@@ -136,7 +136,7 @@ msgstr[1] "{count} kaarten hebben geen schatting en tellen elk als de typische s
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "{count} kaart(en) hebben een schatting die niet in de nieuwe schaal past; die wordt gewist. Dit kan niet ongedaan worden gemaakt."
 
-#: src/components/BoardSettingsModal.vue:145
+#: src/components/BoardSettingsModal.vue:148
 msgid "{count} character left"
 msgid_plural "{count} characters left"
 msgstr[0] "{count} teken over"
@@ -367,7 +367,7 @@ msgid_plural "%n cards"
 msgstr[0] "%n kaart"
 msgstr[1] "%n kaarten"
 
-#: src/components/StackColumn.vue:1066
+#: src/components/StackColumn.vue:1070
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "%n kaart gearchiveerd"
@@ -415,7 +415,7 @@ msgid_plural "%n hours ago"
 msgstr[0] "%n uur geleden"
 msgstr[1] "%n uur geleden"
 
-#: src/views/BoardView.vue:2664
+#: src/views/BoardView.vue:2723
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n ID gekopieerd."
@@ -463,7 +463,7 @@ msgid_plural "%n points"
 msgstr[0] "%n punt"
 msgstr[1] "%n punten"
 
-#: src/components/CardDetail.vue:1255
+#: src/components/CardDetail.vue:1256
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n project"
@@ -1189,6 +1189,7 @@ msgstr "Kan delen"
 #: src/components/CardDetail.vue
 #: src/components/ManageTemplatesModal.vue
 #: src/views/BoardList.vue
+#: src/views/BoardView.vue
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 #: src/views/TrashView.vue
@@ -1464,7 +1465,7 @@ msgstr "Voortgang van de checklist {done} van {total}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:519
+#: src/components/CardTile.vue:523
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Voortgang van de checklist {done} van {total}, %n stap te laat"
@@ -1473,6 +1474,10 @@ msgstr[1] "Voortgang van de checklist {done} van {total}, %n stappen te laat"
 #: src/components/CsvImportModal.vue
 msgid "Choose a board…"
 msgstr "Kies een bord…"
+
+#: src/views/BoardView.vue
+msgid "Choose a card on this board to add a relation."
+msgstr "Kies een kaart op dit bord om een relatie toe te voegen."
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CsvImportModal.vue
@@ -2570,7 +2575,7 @@ msgstr "Elke"
 msgid "Every card in this project is done."
 msgstr "Alle kaarten in dit project zijn klaar."
 
-#: src/components/BoardSettingsModal.vue:4873
+#: src/components/BoardSettingsModal.vue:4878
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Elke dag"
@@ -2580,19 +2585,19 @@ msgstr[1] "Elke %n dagen"
 msgid "Every estimate needs a label."
 msgstr "Elke schatting heeft een label nodig."
 
-#: src/components/BoardSettingsModal.vue:4883
+#: src/components/BoardSettingsModal.vue:4888
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Elke maand"
 msgstr[1] "Elke %n maanden"
 
-#: src/components/BoardSettingsModal.vue:4875
+#: src/components/BoardSettingsModal.vue:4880
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Elke week"
 msgstr[1] "Elke %n weken"
 
-#: src/components/BoardSettingsModal.vue:4885
+#: src/components/BoardSettingsModal.vue:4890
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Elk jaar"
@@ -4735,6 +4740,10 @@ msgstr "Kies een kleur voor het nieuwe label"
 #: src/components/BoardSettingsModal.vue
 msgid "Pick color for new review type"
 msgstr "Kies een kleur voor het nieuwe reviewtype"
+
+#: src/components/CardDetail.vue
+msgid "Pick on board"
+msgstr "Kiezen op het bord"
 
 #: src/App.vue
 #: src/components/BoardTileMenu.vue

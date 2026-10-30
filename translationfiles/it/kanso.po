@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— nessuno —"
 
-#: src/components/BoardSettingsModal.vue:4893
+#: src/components/BoardSettingsModal.vue:4898
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n volta"
@@ -136,7 +136,7 @@ msgstr[1] "{count} schede non hanno una stima e ciascuna conta come la stima tip
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "{count} schede hanno una stima non compatibile con la nuova scala e verranno azzerate. L'operazione non può essere annullata."
 
-#: src/components/BoardSettingsModal.vue:145
+#: src/components/BoardSettingsModal.vue:148
 msgid "{count} character left"
 msgid_plural "{count} characters left"
 msgstr[0] "{count} carattere rimanente"
@@ -367,7 +367,7 @@ msgid_plural "%n cards"
 msgstr[0] "%n scheda"
 msgstr[1] "%n schede"
 
-#: src/components/StackColumn.vue:1066
+#: src/components/StackColumn.vue:1070
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "%n scheda archiviata"
@@ -415,7 +415,7 @@ msgid_plural "%n hours ago"
 msgstr[0] "%n ora fa"
 msgstr[1] "%n ore fa"
 
-#: src/views/BoardView.vue:2664
+#: src/views/BoardView.vue:2723
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n ID copiato."
@@ -463,7 +463,7 @@ msgid_plural "%n points"
 msgstr[0] "%n punto"
 msgstr[1] "%n punti"
 
-#: src/components/CardDetail.vue:1255
+#: src/components/CardDetail.vue:1256
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n progetto"
@@ -1189,6 +1189,7 @@ msgstr "Può condividere"
 #: src/components/CardDetail.vue
 #: src/components/ManageTemplatesModal.vue
 #: src/views/BoardList.vue
+#: src/views/BoardView.vue
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 #: src/views/TrashView.vue
@@ -1464,7 +1465,7 @@ msgstr "Avanzamento della lista di controllo: {done} di {total}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:519
+#: src/components/CardTile.vue:523
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Avanzamento della lista di controllo: {done} di {total}, %n elemento in ritardo"
@@ -1473,6 +1474,10 @@ msgstr[1] "Avanzamento della lista di controllo: {done} di {total}, %n elementi 
 #: src/components/CsvImportModal.vue
 msgid "Choose a board…"
 msgstr "Scegli una bacheca…"
+
+#: src/views/BoardView.vue
+msgid "Choose a card on this board to add a relation."
+msgstr "Scegli una scheda su questa bacheca per aggiungere una relazione."
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CsvImportModal.vue
@@ -2570,7 +2575,7 @@ msgstr "Ogni"
 msgid "Every card in this project is done."
 msgstr "Tutte le schede di questo progetto sono completate."
 
-#: src/components/BoardSettingsModal.vue:4873
+#: src/components/BoardSettingsModal.vue:4878
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Ogni giorno"
@@ -2580,19 +2585,19 @@ msgstr[1] "Ogni %n giorni"
 msgid "Every estimate needs a label."
 msgstr "Ogni stima deve avere un'etichetta."
 
-#: src/components/BoardSettingsModal.vue:4883
+#: src/components/BoardSettingsModal.vue:4888
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Ogni mese"
 msgstr[1] "Ogni %n mesi"
 
-#: src/components/BoardSettingsModal.vue:4875
+#: src/components/BoardSettingsModal.vue:4880
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Ogni settimana"
 msgstr[1] "Ogni %n settimane"
 
-#: src/components/BoardSettingsModal.vue:4885
+#: src/components/BoardSettingsModal.vue:4890
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Ogni anno"
@@ -4735,6 +4740,10 @@ msgstr "Scegli il colore della nuova etichetta"
 #: src/components/BoardSettingsModal.vue
 msgid "Pick color for new review type"
 msgstr "Scegli il colore del nuovo tipo di revisione"
+
+#: src/components/CardDetail.vue
+msgid "Pick on board"
+msgstr "Scegli sulla bacheca"
 
 #: src/App.vue
 #: src/components/BoardTileMenu.vue

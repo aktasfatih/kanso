@@ -537,7 +537,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 <script setup>
 import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -575,6 +575,7 @@ import { useProjectComments } from '../composables/useProjectComments.js'
 import { buildCommentTree } from '../composables/useComments.js'
 import CardSearchPicker from '../components/CardSearchPicker.vue'
 import CardModal from '../components/CardModal.vue'
+import { relationPicker } from '../services/relationPicker.js'
 import ProjectHealth from '../components/ProjectHealth.vue'
 import ProjectBurnup from '../components/ProjectBurnup.vue'
 import BoardTimelineView from '../components/BoardTimelineView.vue'
@@ -718,8 +719,10 @@ function formatDue(iso) {
 }
 
 // Cards open as an overlay on the project, so closing returns here.
-const selectedCardId = ref(null)
-const selectedBoardId = ref(null)
+const relationReturn = relationPicker.value?.phase === 'returning' && relationPicker.value.controlled
+	&& relationPicker.value.originPath === useRoute().fullPath ? relationPicker.value : null
+const selectedCardId = ref(relationReturn ? String(relationReturn.sourceId) : null)
+const selectedBoardId = ref(relationReturn ? relationReturn.boardId : null)
 
 function openCard(card) {
 	selectedCardId.value = String(card.id)

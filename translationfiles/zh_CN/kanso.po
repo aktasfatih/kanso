@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— 无 —"
 
-#: src/components/BoardSettingsModal.vue:4893
+#: src/components/BoardSettingsModal.vue:4898
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n 次"
@@ -132,7 +132,7 @@ msgstr[0] "{count} 张卡片没有估算，每张按典型估算值 {points} 计
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "有 {count} 张卡片的估算值不适用于新刻度，将被清除。此操作无法撤销。"
 
-#: src/components/BoardSettingsModal.vue:145
+#: src/components/BoardSettingsModal.vue:148
 msgid "{count} character left"
 msgid_plural "{count} characters left"
 msgstr[0] "还剩 {count} 个字符"
@@ -352,7 +352,7 @@ msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] "%n 张卡片"
 
-#: src/components/StackColumn.vue:1066
+#: src/components/StackColumn.vue:1070
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "已归档 %n 张卡片"
@@ -392,7 +392,7 @@ msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
 
-#: src/views/BoardView.vue:2664
+#: src/views/BoardView.vue:2723
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "已复制 %n 个 ID。"
@@ -432,7 +432,7 @@ msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n 点"
 
-#: src/components/CardDetail.vue:1255
+#: src/components/CardDetail.vue:1256
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
@@ -1149,6 +1149,7 @@ msgstr "可共享"
 #: src/components/CardDetail.vue
 #: src/components/ManageTemplatesModal.vue
 #: src/views/BoardList.vue
+#: src/views/BoardView.vue
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 #: src/views/TrashView.vue
@@ -1424,7 +1425,7 @@ msgstr "清单进度 {total} 中的 {done}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:519
+#: src/components/CardTile.vue:523
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "清单进度 {total} 中的 {done}，%n 个步骤已逾期"
@@ -1432,6 +1433,10 @@ msgstr[0] "清单进度 {total} 中的 {done}，%n 个步骤已逾期"
 #: src/components/CsvImportModal.vue
 msgid "Choose a board…"
 msgstr "选择看板…"
+
+#: src/views/BoardView.vue
+msgid "Choose a card on this board to add a relation."
+msgstr "选择此看板上的一张卡片以添加关联。"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CsvImportModal.vue
@@ -2528,7 +2533,7 @@ msgstr "每"
 msgid "Every card in this project is done."
 msgstr "此项目中的所有卡片均已完成。"
 
-#: src/components/BoardSettingsModal.vue:4873
+#: src/components/BoardSettingsModal.vue:4878
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "每 %n 天"
@@ -2537,17 +2542,17 @@ msgstr[0] "每 %n 天"
 msgid "Every estimate needs a label."
 msgstr "每个估算值都需要一个标签。"
 
-#: src/components/BoardSettingsModal.vue:4883
+#: src/components/BoardSettingsModal.vue:4888
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "每 %n 个月"
 
-#: src/components/BoardSettingsModal.vue:4875
+#: src/components/BoardSettingsModal.vue:4880
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "每 %n 周"
 
-#: src/components/BoardSettingsModal.vue:4885
+#: src/components/BoardSettingsModal.vue:4890
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "每 %n 年"
@@ -4686,6 +4691,10 @@ msgstr "为新标签选择颜色"
 #: src/components/BoardSettingsModal.vue
 msgid "Pick color for new review type"
 msgstr "为新评审类型选择颜色"
+
+#: src/components/CardDetail.vue
+msgid "Pick on board"
+msgstr "在看板上选择"
 
 #: src/App.vue
 #: src/components/BoardTileMenu.vue

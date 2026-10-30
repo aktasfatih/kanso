@@ -398,6 +398,7 @@
             "清单进度 {total} 中的 {done}，%n 个步骤已逾期"
         ],
         "Choose a board…": "选择看板…",
+        "Choose a card on this board to add a relation.": "选择此看板上的一张卡片以添加关联。",
         "Choose a column…": "选择列…",
         "Choose a CSV file": "选择 CSV 文件",
         "Choose a file to attach": "选择要附加的文件",
@@ -1181,6 +1182,7 @@
         "Pick color": "选择颜色",
         "Pick color for new label": "为新标签选择颜色",
         "Pick color for new review type": "为新评审类型选择颜色",
+        "Pick on board": "在看板上选择",
         "Pin board": "置顶看板",
         "Pin to sidebar": "置顶到侧边栏",
         "Pinned": "已置顶",

@@ -439,6 +439,7 @@
             "Checklisten-Fortschritt {done} von {total}, %n überfällige Schritte"
         ],
         "Choose a board…": "Board auswählen…",
+        "Choose a card on this board to add a relation.": "Wähle eine Karte auf diesem Board aus, um eine Beziehung hinzuzufügen.",
         "Choose a column…": "Spalte auswählen…",
         "Choose a CSV file": "CSV-Datei auswählen",
         "Choose a file to attach": "Datei zum Anhängen auswählen",
@@ -1230,6 +1231,7 @@
         "Pick color": "Farbe wählen",
         "Pick color for new label": "Farbe für neues Label wählen",
         "Pick color for new review type": "Farbe für neuen Review-Typ wählen",
+        "Pick on board": "Auf dem Board auswählen",
         "Pin board": "Board anheften",
         "Pin to sidebar": "An Seitenleiste anheften",
         "Pinned": "Angeheftet",

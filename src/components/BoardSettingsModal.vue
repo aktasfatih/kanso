@@ -5,6 +5,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <template>
 	<Teleport to="#content-vue">
 		<aside
+			v-show="!suspended"
+			:inert="suspended || undefined"
+			:aria-hidden="suspended ? 'true' : undefined"
 			class="bs-modal"
 			:class="{ 'bs-modal--maximized': maximized }"
 			role="dialog"
@@ -2706,6 +2709,7 @@ import {
 } from '../services/api.js'
 
 const props = defineProps({
+	suspended: { type: Boolean, default: false },
 	boardId: {
 		type: [String, Number],
 		required: true,
@@ -2769,6 +2773,7 @@ const emit = defineEmits(['close', 'leave'])
 
 // ── Escape key dismissal ──────────────────────────────────────────────────────
 function onKeydown(e) {
+	if (props.suspended) return
 	if (e.key !== 'Escape') return
 	// A destructive confirm takes Escape first — dismiss it instead of tearing
 	// down the whole settings modal.

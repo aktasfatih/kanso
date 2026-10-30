@@ -480,6 +480,7 @@
             "Прогресс чек-листа: {done} из {total}, %n просроченных пунктов"
         ],
         "Choose a board…": "Выберите доску…",
+        "Choose a card on this board to add a relation.": "Выберите карточку на этой доске, чтобы добавить связь.",
         "Choose a column…": "Выберите колонку…",
         "Choose a CSV file": "Выберите файл CSV",
         "Choose a file to attach": "Выберите файл для прикрепления",
@@ -1279,6 +1280,7 @@
         "Pick color": "Выбрать цвет",
         "Pick color for new label": "Выберите цвет новой метки",
         "Pick color for new review type": "Выберите цвет нового типа проверки",
+        "Pick on board": "Выбрать на доске",
         "Pin board": "Закрепить доску",
         "Pin to sidebar": "Закрепить на боковой панели",
         "Pinned": "Закрепленные",

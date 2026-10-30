@@ -11,13 +11,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			ref="el"
 			class="card-tile"
 			:class="{ 'card-tile--done': isDone, 'card-tile--selected': selected, 'card-tile--compact': compact, 'card-tile--nest-target': isNestTarget, 'card-tile--revealed': revealed }"
+			:aria-disabled="pickMode && pickDisabled ? 'true' : undefined"
 			:data-card-id="card.id"
 			@click="onTileClick"
 			@mouseenter="$emit('hover', card.id)"
 			@mouseleave="$emit('hover', null)">
 			<!-- Selection checkbox - shown in multi-select mode -->
 			<input
-				v-if="selectionMode"
+				v-if="selectionMode && !pickMode"
 				type="checkbox"
 				class="card-tile__select"
 				:checked="selected"
@@ -331,6 +332,8 @@ const props = defineProps({
 		type: Boolean,
 		default: false,
 	},
+	pickMode: { type: Boolean, default: false },
+	pickDisabled: { type: Boolean, default: false },
 	/** Whether this tile is currently in the multi-select selection. */
 	selected: {
 		type: Boolean,
@@ -365,6 +368,7 @@ const cardHumanId = computed(() => humanId(props.boardPrefix, props.card.boardSe
 const emit = defineEmits(['click', 'hover', 'select'])
 
 function onTileClick(event) {
+	if (props.pickMode && props.pickDisabled) return
 	if (props.selectionMode) {
 		emit('select', { id: props.card.id, shiftKey: event.shiftKey })
 	} else {
@@ -420,7 +424,7 @@ function syncDragHandle() {
 	// class.
 	isDragging.value = false
 	dragCleanup = () => {}
-	if (!el.value || !canEditBoard.value) return
+	if (!el.value || !canEditBoard.value || props.pickMode) return
 	dragCleanup = draggable({
 		element: el.value,
 		getInitialData: () => buildCardDragData(props.card, props.laneKey),
@@ -429,7 +433,7 @@ function syncDragHandle() {
 	})
 }
 
-watch(canEditBoard, syncDragHandle)
+watch([canEditBoard, () => props.pickMode], syncDragHandle)
 
 onMounted(() => {
 	if (!el.value) return

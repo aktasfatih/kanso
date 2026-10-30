@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— нет —"
 
-#: src/components/BoardSettingsModal.vue:4893
+#: src/components/BoardSettingsModal.vue:4898
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· повторов: %n"
@@ -140,7 +140,7 @@ msgstr[2] "{count} карточек без оценки, для каждой б�
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "Карточек с оценкой, не подходящей под новую шкалу: {count}. Их оценки будут очищены. Это действие нельзя отменить."
 
-#: src/components/BoardSettingsModal.vue:145
+#: src/components/BoardSettingsModal.vue:148
 msgid "{count} character left"
 msgid_plural "{count} characters left"
 msgstr[0] "Остался {count} символ"
@@ -382,7 +382,7 @@ msgstr[0] "%n карточка"
 msgstr[1] "%n карточки"
 msgstr[2] "%n карточек"
 
-#: src/components/StackColumn.vue:1066
+#: src/components/StackColumn.vue:1070
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "Архивирована %n карточка"
@@ -438,7 +438,7 @@ msgstr[0] "%n час назад"
 msgstr[1] "%n часа назад"
 msgstr[2] "%n часов назад"
 
-#: src/views/BoardView.vue:2664
+#: src/views/BoardView.vue:2723
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "Скопирован %n идентификатор."
@@ -494,7 +494,7 @@ msgstr[0] "%n балл"
 msgstr[1] "%n балла"
 msgstr[2] "%n баллов"
 
-#: src/components/CardDetail.vue:1255
+#: src/components/CardDetail.vue:1256
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n проект"
@@ -1229,6 +1229,7 @@ msgstr "Может делиться"
 #: src/components/CardDetail.vue
 #: src/components/ManageTemplatesModal.vue
 #: src/views/BoardList.vue
+#: src/views/BoardView.vue
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 #: src/views/TrashView.vue
@@ -1504,7 +1505,7 @@ msgstr "Прогресс чек-листа: {done} из {total}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:519
+#: src/components/CardTile.vue:523
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Прогресс чек-листа: {done} из {total}, %n просроченный пункт"
@@ -1514,6 +1515,10 @@ msgstr[2] "Прогресс чек-листа: {done} из {total}, %n прос�
 #: src/components/CsvImportModal.vue
 msgid "Choose a board…"
 msgstr "Выберите доску…"
+
+#: src/views/BoardView.vue
+msgid "Choose a card on this board to add a relation."
+msgstr "Выберите карточку на этой доске, чтобы добавить связь."
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CsvImportModal.vue
@@ -2612,7 +2617,7 @@ msgstr "Каждые"
 msgid "Every card in this project is done."
 msgstr "Все карточки в этом проекте готовы."
 
-#: src/components/BoardSettingsModal.vue:4873
+#: src/components/BoardSettingsModal.vue:4878
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Каждый %n день"
@@ -2623,21 +2628,21 @@ msgstr[2] "Каждые %n дней"
 msgid "Every estimate needs a label."
 msgstr "У каждой оценки должна быть метка."
 
-#: src/components/BoardSettingsModal.vue:4883
+#: src/components/BoardSettingsModal.vue:4888
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Каждый %n месяц"
 msgstr[1] "Каждые %n месяца"
 msgstr[2] "Каждые %n месяцев"
 
-#: src/components/BoardSettingsModal.vue:4875
+#: src/components/BoardSettingsModal.vue:4880
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Каждую %n неделю"
 msgstr[1] "Каждые %n недели"
 msgstr[2] "Каждые %n недель"
 
-#: src/components/BoardSettingsModal.vue:4885
+#: src/components/BoardSettingsModal.vue:4890
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Каждый %n год"
@@ -4784,6 +4789,10 @@ msgstr "Выберите цвет новой метки"
 #: src/components/BoardSettingsModal.vue
 msgid "Pick color for new review type"
 msgstr "Выберите цвет нового типа проверки"
+
+#: src/components/CardDetail.vue
+msgid "Pick on board"
+msgstr "Выбрать на доске"
 
 #: src/App.vue
 #: src/components/BoardTileMenu.vue

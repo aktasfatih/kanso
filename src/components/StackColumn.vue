@@ -388,6 +388,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:lane-key="laneKey"
 						:compact="compact"
 						:selection-mode="selectionMode"
+						:pick-mode="pickMode"
+						:pick-disabled="Number(cards[vRow.index].id) === pickSourceId"
 						:selected="selectedIds.has(cards[vRow.index].id)"
 						:revealed="revealedCardId === cards[vRow.index].id"
 						@click="openCard(cards[vRow.index].id)"
@@ -627,6 +629,8 @@ const props = defineProps({
 		type: Boolean,
 		default: false,
 	},
+	pickMode: { type: Boolean, default: false },
+	pickSourceId: { type: Number, default: null },
 	/** Set of selected card ids - passed down to each CardTile for highlight. */
 	selectedIds: {
 		type: Set,

@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— yok —"
 
-#: src/components/BoardSettingsModal.vue:4893
+#: src/components/BoardSettingsModal.vue:4898
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n kez"
@@ -136,7 +136,7 @@ msgstr[1] "{count} kartın tahmini yok ve her biri tipik tahmin olan {points} sa
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "{count} kartın tahmini yeni ölçeğe uymuyor ve temizlenecek. Bu geri alınamaz."
 
-#: src/components/BoardSettingsModal.vue:145
+#: src/components/BoardSettingsModal.vue:148
 msgid "{count} character left"
 msgid_plural "{count} characters left"
 msgstr[0] "{count} karakter kaldı"
@@ -367,7 +367,7 @@ msgid_plural "%n cards"
 msgstr[0] "%n kart"
 msgstr[1] "%n kart"
 
-#: src/components/StackColumn.vue:1066
+#: src/components/StackColumn.vue:1070
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "%n kart arşivlendi"
@@ -415,7 +415,7 @@ msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
 msgstr[1] "%n saat önce"
 
-#: src/views/BoardView.vue:2664
+#: src/views/BoardView.vue:2723
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n kimlik kopyalandı."
@@ -463,7 +463,7 @@ msgid_plural "%n points"
 msgstr[0] "%n puan"
 msgstr[1] "%n puan"
 
-#: src/components/CardDetail.vue:1255
+#: src/components/CardDetail.vue:1256
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n proje"
@@ -1189,6 +1189,7 @@ msgstr "Paylaşabilir"
 #: src/components/CardDetail.vue
 #: src/components/ManageTemplatesModal.vue
 #: src/views/BoardList.vue
+#: src/views/BoardView.vue
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 #: src/views/TrashView.vue
@@ -1464,7 +1465,7 @@ msgstr "Kontrol listesi ilerlemesi: {total} adımdan {done} tanesi"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:519
+#: src/components/CardTile.vue:523
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Kontrol listesi ilerlemesi: {total} adımdan {done} tanesi, %n adım gecikmiş"
@@ -1473,6 +1474,10 @@ msgstr[1] "Kontrol listesi ilerlemesi: {total} adımdan {done} tanesi, %n adım 
 #: src/components/CsvImportModal.vue
 msgid "Choose a board…"
 msgstr "Bir pano seç…"
+
+#: src/views/BoardView.vue
+msgid "Choose a card on this board to add a relation."
+msgstr "İlişki eklemek için bu panodan bir kart seçin."
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CsvImportModal.vue
@@ -2570,7 +2575,7 @@ msgstr "Her"
 msgid "Every card in this project is done."
 msgstr "Bu projedeki tüm kartlar tamamlandı."
 
-#: src/components/BoardSettingsModal.vue:4873
+#: src/components/BoardSettingsModal.vue:4878
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Her gün"
@@ -2580,19 +2585,19 @@ msgstr[1] "Her %n günde bir"
 msgid "Every estimate needs a label."
 msgstr "Her tahminin bir etiketi olmalı."
 
-#: src/components/BoardSettingsModal.vue:4883
+#: src/components/BoardSettingsModal.vue:4888
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Her ay"
 msgstr[1] "Her %n ayda bir"
 
-#: src/components/BoardSettingsModal.vue:4875
+#: src/components/BoardSettingsModal.vue:4880
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Her hafta"
 msgstr[1] "Her %n haftada bir"
 
-#: src/components/BoardSettingsModal.vue:4885
+#: src/components/BoardSettingsModal.vue:4890
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Her yıl"
@@ -4735,6 +4740,10 @@ msgstr "Yeni etiket için renk seç"
 #: src/components/BoardSettingsModal.vue
 msgid "Pick color for new review type"
 msgstr "Yeni inceleme türü için renk seç"
+
+#: src/components/CardDetail.vue
+msgid "Pick on board"
+msgstr "Panodan seç"
 
 #: src/App.vue
 #: src/components/BoardTileMenu.vue

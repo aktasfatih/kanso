@@ -41,6 +41,8 @@ your work, on your own Nextcloud, laid out plainly.
   priorities.
 - **Checklists / sub-tasks**, **parent ↔ child cards**, and **threaded
   comments**.
+- **Card relations**: link related, duplicate or blocking cards from a list or
+  pick the target directly on the board.
 - **Attachments**: upload files to a card (up to 100 MiB each). They live in
   Kanso's own app storage, not in your personal Files.
 - **Custom fields** defined per board — text, number, date or a select list —
