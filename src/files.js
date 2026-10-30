@@ -47,7 +47,7 @@ function openPicker(node) {
 	})
 }
 
-registerFileAction({
+const action = {
 	id: 'kanso-add-to-card',
 	displayName: () => t('kanso', 'Add to Kanso…'),
 	iconSvgInline: () => kansoSvg,
@@ -70,4 +70,15 @@ registerFileAction({
 		// the Files app does not emit its own generic toast.
 		return null
 	},
-})
+}
+
+registerFileAction(action)
+
+// Older Files releases use the legacy registry and node-based callbacks.
+if (Array.isArray(window._nc_fileactions) && !window._nc_fileactions.some((entry) => entry.id === action.id)) {
+	window._nc_fileactions.push({
+		...action,
+		enabled: (nodes) => action.enabled({ nodes }),
+		exec: (node) => action.exec({ nodes: [node] }),
+	})
+}
