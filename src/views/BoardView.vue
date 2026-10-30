@@ -304,7 +304,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<NcActionButton
 					class="board-view__settings-btn"
 					:aria-expanded="showSettings ? 'true' : 'false'"
-					@click="moreMenuOpen = false; settingsInitialTab = 'labels'; showSettings = !showSettings">
+					@click="toggleSettings">
 					<template #icon>
 						<CogIcon :size="20" />
 					</template>
@@ -339,7 +339,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:current-user-id="currentUserId"
 			:stacks="boardData.stacks ?? []"
 			:cards="boardData.cards ?? []"
-			@close="showSettings = false"
+			@close="closeSettings"
 			@leave="showSettings = false" />
 
 		<!-- Card-template manager (#3634): view / edit / delete / unmark / create the
@@ -1395,8 +1395,34 @@ const showDescription = ref(false)
 // the description, which lives in General.
 const settingsInitialTab = ref('labels')
 const settingsPanelRef = ref(null)
+let settingsFocusTarget = null
+
+function closeSettings(returnFocus = false) {
+	const focusInside = returnFocus === true || settingsPanelRef.value?.containsFocus()
+	showSettings.value = false
+	if (focusInside) {
+		const target = settingsFocusTarget?.isConnected && settingsFocusTarget.getClientRects().length
+			? settingsFocusTarget
+			: headerRef.value?.querySelector('.board-view__more-menu button')
+		if (target?.isConnected && target.getClientRects().length) target.focus({ preventScroll: true })
+	}
+}
+
+function toggleSettings() {
+	moreMenuOpen.value = false
+	if (showSettings.value) {
+		settingsFocusTarget = headerRef.value?.querySelector('.board-view__more-menu button')
+		closeSettings(true)
+		return
+	}
+	settingsFocusTarget = headerRef.value?.querySelector('.board-view__more-menu button')
+	settingsInitialTab.value = 'labels'
+	showSettings.value = true
+}
+
 function openSettingsOnDescription() {
 	showDescription.value = false
+	settingsFocusTarget = headerRef.value?.querySelector('[data-test="board-description-btn"]')
 	// Seeds a COLD open: the panel then mounts on General directly, with no
 	// visible hop through Labels.
 	settingsInitialTab.value = 'general'
