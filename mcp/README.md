@@ -137,6 +137,9 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
   cards are excluded unless you pass `include_archived=true`)
 - `kanso_list_board_members` — list assignable users (uid + name) for a board
 - `kanso_create_board` / `kanso_update_board` / `kanso_delete_board`
+  — update can set the estimate scale, custom estimate labels and values, and
+  whether new cards go on top. Changing estimates can clear card estimates that
+  no longer fit the scale.
 
 **Stacks (columns)**
 

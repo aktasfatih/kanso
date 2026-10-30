@@ -204,6 +204,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         description: Optional[str] = None,
         allow_ai_actors: Optional[bool] = None,
         auto_complete_parent: Optional[bool] = None,
+        estimate_scale: Optional[str] = None,
+        estimate_custom: Optional[List[Dict[str, Any]]] = None,
+        new_cards_on_top: Optional[bool] = None,
     ) -> dict:
         """Update a board. Only the fields you pass are changed.
 
@@ -223,6 +226,16 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             auto_complete_parent: Whether a parent card is stamped done
                 automatically once all of its sub-issues are done/archived.
                 OFF by default (the parent stays open for a human to close).
+            estimate_scale: One of "none", "number", "custom", "fibonacci",
+                "fibonacci_mod", "powers2", "tshirt", "linear", "roman",
+                "hours" or "days". Changing the scale clears card estimates
+                that do not fit the new scale.
+            estimate_custom: Custom scale entries in display order, e.g.
+                [{"label": "S", "value": 1}, {"label": "M", "value": 3}].
+                Provide 1–20 unique, non-empty labels (up to 24 characters)
+                and numeric values from 0 to 100000. Changing the custom tokens
+                can clear incompatible estimates when the custom scale is active.
+            new_cards_on_top: Whether new cards are placed at the top of columns.
         """
         return (
             await client.update_board(
@@ -234,6 +247,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
                 description=description,
                 allow_ai_actors=allow_ai_actors,
                 auto_complete_parent=auto_complete_parent,
+                estimate_scale=estimate_scale,
+                estimate_custom=estimate_custom,
+                new_cards_on_top=new_cards_on_top,
             )
         ).model_dump()
 
