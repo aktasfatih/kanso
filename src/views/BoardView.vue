@@ -2093,7 +2093,10 @@ function handleKeydown(e) {
 			stackId = first.id
 		}
 		const col = columnRefs.get(stackId)
-		if (col) col.focusComposer()
+		if (col?.focusComposer()) {
+			navSeq++
+			navPending = false
+		}
 		return
 	}
 

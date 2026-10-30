@@ -283,6 +283,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:placeholder="t('kanso', 'Add card…')"
 					:disabled="isPending"
 					@paste="onComposerPaste"
+					@blur="composerReturnFocus = null"
+					@keydown.esc="leaveComposer"
 					@keydown.enter.prevent="submitCard" />
 			</form>
 			<!-- "+ from template" picker (#3409): lists the board's card templates
@@ -859,6 +861,7 @@ const wipBadgeText = computed(() => {
 const canQuickAdd = computed(() => typeof props.onCreateCard === 'function')
 
 const composerInputRef = ref(null)
+let composerReturnFocus = null
 const cardListRef = ref(null)
 const columnRef = ref(null)
 const headerRef = ref(null)
@@ -1036,7 +1039,24 @@ function scrollToIndex(index) {
  * Focus the inline card composer input for rapid card creation.
  */
 function focusComposer() {
+	const active = document.activeElement
+	composerReturnFocus = active instanceof HTMLElement && active.matches('.card-tile')
+		&& columnRef.value?.contains(active) ? active : null
 	composerInputRef.value?.focus()
+	return !!composerInputRef.value && document.activeElement === composerInputRef.value
+}
+
+function leaveComposer(event) {
+	if (event.isComposing || event.keyCode === 229 || event.defaultPrevented || event.repeat
+		|| event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
+	event.preventDefault()
+	event.stopPropagation()
+	const target = composerReturnFocus
+	if (target?.isConnected && target.getClientRects().length && !target.closest('[inert], [aria-hidden="true"]')) {
+		target.focus()
+	} else {
+		event.currentTarget.blur()
+	}
 }
 
 async function handleDeleteStack() {

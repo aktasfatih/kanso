@@ -171,8 +171,9 @@ your work, on your own Nextcloud, laid out plainly.
 - **Command palette** (`Ctrl`/`Cmd`+`K` from anywhere in Kanso) and full-text
   **search** across cards and comments.
 - **Keyboard-first** navigation: use `h`/`j`/`k`/`l` to move between cards,
-  `x` to select cards on a flat board, and `Esc` to exit selection. Undo toasts
-  and a trash with restore help recover from destructive actions.
+  `x` to select cards on a flat board, and `Esc` to exit selection. Press `n`
+  to enter the card composer and `Esc` to leave it without losing the draft.
+  Undo toasts and a trash with restore help recover from destructive actions.
 
 ### 🌍 Localization
 - **Follows your Nextcloud language** automatically. Kanso ships translations for
