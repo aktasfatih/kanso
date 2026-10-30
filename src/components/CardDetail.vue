@@ -746,6 +746,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									@change="toggleAllDay($event.target.checked)">
 								{{ t('kanso', 'All day (no time)') }}
 							</label>
+							<label v-if="cardData.duedate" class="card-modal__reminder-day-before">
+								<input
+									type="checkbox"
+									:checked="cardData.dueReminderDayBefore === true"
+									:disabled="savingDayBeforeReminder || updateCard.isPending.value"
+									@change="toggleDayBeforeReminder">
+								{{ t('kanso', 'Remind assignees and card watchers one day before') }}
+							</label>
 							<!-- Surface date-save failures here (e.g. the end-before-start
 							     guard's 400) - otherwise a rejected date edit is silent. -->
 							<span v-if="saveError" class="card-modal__save-error">{{ saveError }}</span>
@@ -4101,6 +4109,7 @@ async function handleSetCoverColor(hex) {
 // All-day due dates hide the time-of-day (input becomes a plain date; the pill
 // and value drop "HH:MM"). The stored duedate is unchanged (at 00:00).
 const isAllDay = computed(() => cardData.value?.allDay === true)
+const savingDayBeforeReminder = ref(false)
 
 // datetime-local needs "YYYY-MM-DDTHH:mm"; an all-day input is just "YYYY-MM-DD".
 const dueDateInputValue = computed(() => {
@@ -4140,6 +4149,27 @@ async function toggleAllDay(checked) {
 		await updateCard.mutateAsync({ data })
 	} catch (err) {
 		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update due date.')
+	}
+}
+
+async function toggleDayBeforeReminder(event) {
+	const input = event.target
+	const checked = input.checked
+	const forCard = props.cardId
+	input.checked = cardData.value?.dueReminderDayBefore === true
+	saveError.value = ''
+	savingDayBeforeReminder.value = true
+	try {
+		const saved = await updateCard.mutateAsync({ data: { dueReminderDayBefore: checked } })
+		queryClient.setQueryData(['card', forCard], (current) => current
+			? { ...current, dueReminderDayBefore: saved.dueReminderDayBefore }
+			: current)
+	} catch (err) {
+		if (isStillCurrentCard(forCard)) {
+			saveError.value = err?.response?.data?.error || t('kanso', 'Failed to save.')
+		}
+	} finally {
+		savingDayBeforeReminder.value = false
 	}
 }
 
@@ -8303,7 +8333,8 @@ async function handleToggleProject(projectId) {
 	color: var(--color-main-text);
 	font: inherit;
 }
-.card-modal__allday {
+.card-modal__allday,
+.card-modal__reminder-day-before {
 	display: flex;
 	align-items: center;
 	gap: 6px;

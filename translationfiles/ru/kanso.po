@@ -494,7 +494,7 @@ msgstr[0] "%n балл"
 msgstr[1] "%n балла"
 msgstr[2] "%n баллов"
 
-#: src/components/CardDetail.vue:1237
+#: src/components/CardDetail.vue:1245
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n проект"
@@ -4967,6 +4967,10 @@ msgstr "Связи"
 #: src/components/ProjectHealth.vue
 msgid "Remaining"
 msgstr "Осталось"
+
+#: src/components/CardDetail.vue
+msgid "Remind assignees and card watchers one day before"
+msgstr "Напомнить назначенным пользователям и наблюдателям карточки за день"
 
 #: src/components/CardDetail.vue
 msgid "Remind me about this comment at"

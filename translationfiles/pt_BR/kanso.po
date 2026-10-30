@@ -463,7 +463,7 @@ msgid_plural "%n points"
 msgstr[0] "%n ponto"
 msgstr[1] "%n pontos"
 
-#: src/components/CardDetail.vue:1237
+#: src/components/CardDetail.vue:1245
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n projeto"
@@ -4918,6 +4918,10 @@ msgstr "Relações"
 #: src/components/ProjectHealth.vue
 msgid "Remaining"
 msgstr "Restante"
+
+#: src/components/CardDetail.vue
+msgid "Remind assignees and card watchers one day before"
+msgstr "Lembrar as pessoas atribuídas e quem acompanha o cartão um dia antes"
 
 #: src/components/CardDetail.vue
 msgid "Remind me about this comment at"

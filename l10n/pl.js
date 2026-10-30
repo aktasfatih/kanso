@@ -1126,6 +1126,7 @@ OC.L10N.register(
     "Relates to" : "Powiązana z",
     "Relations" : "Powiązania",
     "Remaining" : "Pozostało",
+    "Remind assignees and card watchers one day before" : "Przypomnij przypisanym osobom i obserwującym kartę jeden dzień wcześniej",
     "Remind me about this comment at" : "Przypomnij mi o tym komentarzu o",
     "Remind me at" : "Przypomnij mi o",
     "Remind me at a custom time…" : "Przypomnij mi o wybranej porze…",

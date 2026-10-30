@@ -1126,6 +1126,7 @@ OC.L10N.register(
     "Relates to" : "Связана с",
     "Relations" : "Связи",
     "Remaining" : "Осталось",
+    "Remind assignees and card watchers one day before" : "Напомнить назначенным пользователям и наблюдателям карточки за день",
     "Remind me about this comment at" : "Напомнить об этом комментарии в",
     "Remind me at" : "Напомнить в",
     "Remind me at a custom time…" : "Напомнить в другое время…",

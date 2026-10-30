@@ -494,7 +494,7 @@ msgstr[0] "%n punkt"
 msgstr[1] "%n punkty"
 msgstr[2] "%n punktów"
 
-#: src/components/CardDetail.vue:1237
+#: src/components/CardDetail.vue:1245
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n projekt"
@@ -4967,6 +4967,10 @@ msgstr "Powiązania"
 #: src/components/ProjectHealth.vue
 msgid "Remaining"
 msgstr "Pozostało"
+
+#: src/components/CardDetail.vue
+msgid "Remind assignees and card watchers one day before"
+msgstr "Przypomnij przypisanym osobom i obserwującym kartę jeden dzień wcześniej"
 
 #: src/components/CardDetail.vue
 msgid "Remind me about this comment at"

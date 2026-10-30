@@ -51,6 +51,8 @@ your work, on your own Nextcloud, laid out plainly.
 - **Reminders**: nudge yourself about a card, or about a single comment —
   later today, tomorrow, next week, or a time you pick. Private to you, and
   delivered as a Nextcloud notification (so it needs cron).
+- **Due-date reminders**: card assignees and card watchers are notified when
+  a card is due; editors can also enable a reminder one day beforehand.
 
 <img src="docs/kanso-card.png" alt="A Kanso card with a markdown description, a checklist, priority, due date, an assignee and a threaded discussion" width="900">
 
