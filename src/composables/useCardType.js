@@ -60,20 +60,17 @@ export function useCardType(boardId, cardId) {
 	}
 
 	const setType = useMutation({
-		mutationFn: ({ type }) =>
-			apiUpdateCard(resolve(cardId), { type }),
+		mutationFn: ({ type, cardKey }) =>
+			apiUpdateCard(cardKey[1], { type }),
 
-		onMutate: async ({ type }) => {
-			const boardKey = getBoardKey()
-			const cardKey = getCardKey()
-
+		onMutate: async ({ type, boardKey, cardKey }) => {
 			await queryClient.cancelQueries({ queryKey: boardKey })
 			await queryClient.cancelQueries({ queryKey: cardKey })
 
 			// Board card ids are numbers; the resolved cardId is the string route
 			// param, so coerce (matches usePriority). Resolved once here so the
 			// rollback addresses the same card the patch did.
-			const numericCardId = Number(resolve(cardId))
+			const numericCardId = Number(cardKey[1])
 
 			// Snapshot ONLY `type`, not the whole cached objects (#10927). The
 			// attribute pickers in the card modal save independently, so a type
@@ -111,7 +108,7 @@ export function useCardType(boardId, cardId) {
 				return { ...old, type }
 			})
 
-			return { previousDetailType, previousSummaryType, cardKey, numericCardId }
+			return { previousDetailType, previousSummaryType, cardKey, boardKey, numericCardId }
 		},
 
 		onError: (_err, _vars, context) => {
@@ -119,7 +116,7 @@ export function useCardType(boardId, cardId) {
 			// holds at rollback time (the functional updater form) rather than over
 			// the top of it. See the snapshot comment in onMutate.
 			if (context?.previousSummaryType !== undefined) {
-				queryClient.setQueryData(getBoardKey(), (old) => {
+				queryClient.setQueryData(context.boardKey, (old) => {
 					if (!old) return old
 					return {
 						...old,
@@ -137,9 +134,9 @@ export function useCardType(boardId, cardId) {
 			}
 		},
 
-		onSettled: () => {
-			queryClient.invalidateQueries({ queryKey: getCardKey() })
-			queryClient.invalidateQueries({ queryKey: getBoardKey() })
+		onSettled: (_data, _err, _vars, context) => {
+			if (context?.cardKey) queryClient.invalidateQueries({ queryKey: context.cardKey })
+			if (context?.boardKey) queryClient.invalidateQueries({ queryKey: context.boardKey })
 			// Type is a View group-by dimension and filter facet, and it is set from
 			// the same card detail the View opens as an overlay - so the feed needs
 			// the settle invalidation even though type is not a My Work membership
@@ -148,5 +145,14 @@ export function useCardType(boardId, cardId) {
 		},
 	})
 
-	return { setType }
+	function withKeys(variables) {
+		return { ...variables, boardKey: getBoardKey(), cardKey: getCardKey() }
+	}
+	return {
+		setType: {
+			...setType,
+			mutate: (variables, options) => setType.mutate(withKeys(variables), options),
+			mutateAsync: (variables, options) => setType.mutateAsync(withKeys(variables), options),
+		},
+	}
 }

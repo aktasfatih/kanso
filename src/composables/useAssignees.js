@@ -89,9 +89,8 @@ export function useAssignees(boardId) {
 		mutationFn: ({ cardId, userId, assign }) =>
 			assign ? apiAssignUser(cardId, userId) : apiUnassignUser(cardId, userId),
 
-		onMutate: async ({ cardId, userId, assign }) => {
+		onMutate: async ({ cardId, userId, assign, boardKey }) => {
 			// Cancel in-flight queries so they don't overwrite the patches
-			const boardKey = getBoardKey()
 			const cardKey = ['card', String(cardId)]
 			await queryClient.cancelQueries({ queryKey: boardKey })
 			await queryClient.cancelQueries({ queryKey: cardKey })
@@ -131,14 +130,14 @@ export function useAssignees(boardId) {
 				return { ...old, assigneeIds: patchIds(Array.isArray(old.assigneeIds) ? old.assigneeIds : []) }
 			})
 
-			return { previousDetailIds, previousSummaryIds, cardKey }
+			return { previousDetailIds, previousSummaryIds, cardKey, boardKey }
 		},
 
 		onError: (_err, { cardId }, context) => {
 			// Put `assigneeIds` back, and ONLY `assigneeIds` - layered onto
 			// whatever the cache holds at rollback time. See onMutate.
 			if (context?.previousSummaryIds !== undefined) {
-				queryClient.setQueryData(getBoardKey(), (old) => {
+				queryClient.setQueryData(context.boardKey, (old) => {
 					if (!old) return old
 					return {
 						...old,
@@ -156,10 +155,10 @@ export function useAssignees(boardId) {
 			}
 		},
 
-		onSettled: (_data, _err, { cardId }) => {
+		onSettled: (_data, _err, { cardId }, context) => {
 			// Sync card detail query and board query with server truth
 			queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })
-			queryClient.invalidateQueries({ queryKey: getBoardKey() })
+			if (context?.boardKey) queryClient.invalidateQueries({ queryKey: context.boardKey })
 			// Assign/unassign changes My Tasks membership (#3766, #9859).
 			invalidateCrossBoardFeeds(queryClient)
 		},
@@ -183,7 +182,7 @@ export function useAssignees(boardId) {
 	 *   double-submit, or rejects with this pick's error.
 	 */
 	function enqueueToggle({ cardId, userId, assign }) {
-		return enqueue({ cardId, userId, assign })
+		return enqueue({ cardId, userId, assign, boardKey: getBoardKey() })
 	}
 
 	/**

@@ -94,9 +94,8 @@ export function useLabels(boardId) {
 		mutationFn: ({ cardId, labelId, assign }) =>
 			assign ? apiAssignLabel(cardId, labelId) : apiUnassignLabel(cardId, labelId),
 
-		onMutate: async ({ cardId, labelId, assign }) => {
+		onMutate: async ({ cardId, labelId, assign, boardKey }) => {
 			// Cancel in-flight queries so they don't overwrite the patches
-			const boardKey = getBoardKey()
 			const cardKey = ['card', String(cardId)]
 			await queryClient.cancelQueries({ queryKey: boardKey })
 			await queryClient.cancelQueries({ queryKey: cardKey })
@@ -142,7 +141,7 @@ export function useLabels(boardId) {
 				return { ...old, labelIds: patchIds(Array.isArray(old.labelIds) ? old.labelIds : []) }
 			})
 
-			return { previousDetailIds, previousSummaryIds, cardKey }
+			return { previousDetailIds, previousSummaryIds, cardKey, boardKey }
 		},
 
 		onError: (_err, { cardId }, context) => {
@@ -150,7 +149,7 @@ export function useLabels(boardId) {
 			// cache holds at rollback time (the functional updater form) rather
 			// than over the top of it. See the snapshot comment in onMutate.
 			if (context?.previousSummaryIds !== undefined) {
-				queryClient.setQueryData(getBoardKey(), (old) => {
+				queryClient.setQueryData(context.boardKey, (old) => {
 					if (!old) return old
 					return {
 						...old,
@@ -168,10 +167,10 @@ export function useLabels(boardId) {
 			}
 		},
 
-		onSettled: (_data, _err, { cardId }) => {
+		onSettled: (_data, _err, { cardId }, context) => {
 			// Sync card detail query and board query with server truth
 			queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })
-			queryClient.invalidateQueries({ queryKey: getBoardKey() })
+			if (context?.boardKey) queryClient.invalidateQueries({ queryKey: context.boardKey })
 			// A label is both a View filter dimension and a chip the View renders,
 			// and the card detail opens as an overlay ON the View - so without this
 			// a toggle never reaches the feed (#9859).
@@ -202,7 +201,7 @@ export function useLabels(boardId) {
 	 *   double-submit, or rejects with this pick's error.
 	 */
 	function enqueueToggle({ cardId, labelId, assign }) {
-		return enqueue({ cardId, labelId, assign })
+		return enqueue({ cardId, labelId, assign, boardKey: getBoardKey() })
 	}
 
 	/**
