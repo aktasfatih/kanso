@@ -1445,6 +1445,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:upload-image="(file) => uploadAttachment.mutateAsync(file)"
 										:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
 										:show-toolbar="!editorToolbarHidden"
+										:sticky-toolbar="true"
 										@submit="saveDescription"
 										@escape="cancelDescriptionEdit"
 										@image-error="(msg) => { descPasteError = msg || t('kanso', 'Failed to upload image.') }" />
@@ -10288,6 +10289,10 @@ async function handleToggleProject(projectId) {
 	.card-modal__discussion-toggle { display: none; }
 	.card-modal__content,
 	.card-modal__discussion { max-height: none; }
+	.card-modal__content {
+		overflow: visible;
+		--kanso-editor-toolbar-top: 45px;
+	}
 	.card-modal__discussion { border-left: none; border-top: 1px solid var(--color-border); }
 	/* #122 — on a phone the title and two date chips cannot share one line
 	   without crushing the title to an ellipsis, so the dates drop to a second

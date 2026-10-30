@@ -37,7 +37,7 @@ your work, on your own Nextcloud, laid out plainly.
   when nothing changed — with a light polling fallback everywhere else.
 
 ### 🗂️ Rich cards
-- Markdown descriptions (sanitized), searchable **labels**, due dates, **assignees**, and
+- Markdown descriptions (sanitized) with a scrolling formatting toolbar, searchable **labels**, due dates, **assignees**, and
   priorities.
 - **Checklists / sub-tasks**, **parent ↔ child cards**, and **threaded
   comments**.

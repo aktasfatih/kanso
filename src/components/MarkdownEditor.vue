@@ -38,6 +38,7 @@ Emits:
 		<div
 			v-if="showToolbar && editor"
 			class="kanso-md-editor__toolbar"
+			:class="{ 'kanso-md-editor__toolbar--sticky': stickyToolbar }"
 			@mousedown.prevent>
 			<button
 				type="button"
@@ -269,6 +270,10 @@ const props = defineProps({
 	showToolbar: {
 		type: Boolean,
 		default: true,
+	},
+	stickyToolbar: {
+		type: Boolean,
+		default: false,
 	},
 })
 
@@ -632,6 +637,14 @@ defineExpose({
 	gap: 2px;
 	padding: 4px 8px;
 	border-bottom: 1px solid var(--color-border);
+}
+
+.kanso-md-editor__toolbar--sticky {
+	position: sticky;
+	top: var(--kanso-editor-toolbar-top, 0px);
+	z-index: 2;
+	background: var(--color-main-background);
+	border-radius: 9px 9px 0 0;
 }
 
 .kanso-md-editor__tb-btn {
