@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n ligne de données détectée"
 msgstr[1] "%n lignes de données détectées"
 
-#: src/components/CardDetail.vue:5039
+#: src/components/CardDetail.vue:5025
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "il y a %n jour"
@@ -409,7 +409,7 @@ msgid_plural "%n files"
 msgstr[0] "%n fichier"
 msgstr[1] "%n fichiers"
 
-#: src/components/CardDetail.vue:5037
+#: src/components/CardDetail.vue:5023
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "il y a %n heure"
@@ -439,7 +439,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n étiquette n'a pas été créée et manque dans les cartes importées : seuls les gestionnaires du tableau peuvent ajouter de nouvelles étiquettes. Demandez à un gestionnaire de l'ajouter, puis définissez-la sur les cartes."
 msgstr[1] "%n étiquettes n'ont pas été créées et manquent dans les cartes importées : seuls les gestionnaires du tableau peuvent ajouter de nouvelles étiquettes. Demandez à un gestionnaire de les ajouter, puis définissez-les sur les cartes."
 
-#: src/components/CardDetail.vue:5035
+#: src/components/CardDetail.vue:5021
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "il y a %n minute"
@@ -469,7 +469,7 @@ msgid_plural "%n projects"
 msgstr[0] "%n projet"
 msgstr[1] "%n projets"
 
-#: src/components/CardDetail.vue:2334
+#: src/components/CardDetail.vue:2320
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n réponse"
@@ -2015,7 +2015,7 @@ msgid "Date"
 msgstr "Date"
 
 #: src/components/BoardSettingsModal.vue:2298
-#: src/components/CardDetail.vue:5228
+#: src/components/CardDetail.vue:5214
 msgid "day"
 msgid_plural "days"
 msgstr[0] "jour"
@@ -3562,7 +3562,7 @@ msgstr "Objectif, périmètre ou règles. Tous les membres du tableau peuvent la
 msgid "Jump to the discussion"
 msgstr "Aller à la discussion"
 
-#: src/components/CardDetail.vue:7072
+#: src/components/CardDetail.vue:7058
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Aller à la discussion (%n commentaire)"
@@ -3938,7 +3938,7 @@ msgid "Mon"
 msgstr "Lun"
 
 #: src/components/BoardSettingsModal.vue:2300
-#: src/components/CardDetail.vue:5230
+#: src/components/CardDetail.vue:5216
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mois"
@@ -4625,10 +4625,6 @@ msgstr "ou collez ci-dessous"
 #: src/components/StackColumn.vue
 msgid "Orange"
 msgstr "Orange"
-
-#: src/components/CardDetail.vue
-msgid "Order"
-msgstr ""
 
 #: src/components/MarkdownEditor.vue
 msgid "Ordered list"
@@ -5518,7 +5514,7 @@ msgstr "Afficher la discussion sous la carte"
 msgid "Show the discussion panel"
 msgstr "Afficher le panneau de discussion"
 
-#: src/components/CardDetail.vue:7078
+#: src/components/CardDetail.vue:7064
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Afficher le panneau de discussion (%n commentaire)"
@@ -6308,7 +6304,7 @@ msgid "Wed"
 msgstr "Mer"
 
 #: src/components/BoardSettingsModal.vue:2299
-#: src/components/CardDetail.vue:5229
+#: src/components/CardDetail.vue:5215
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "semaine"
@@ -6417,7 +6413,7 @@ msgid "wrote"
 msgstr "a écrit"
 
 #: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5231
+#: src/components/CardDetail.vue:5217
 msgid "year"
 msgid_plural "years"
 msgstr[0] "an"

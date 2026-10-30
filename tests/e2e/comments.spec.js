@@ -353,6 +353,7 @@ test.describe('Comment order toggle', () => {
 
 	test('defaults to oldest-first, toggles to newest-first, and persists the choice', async ({ page }) => {
 		await ncLogin(page)
+		await page.evaluate(() => localStorage.removeItem('kanso.commentOrder'))
 		await page.goto(state.cardUrl)
 		await page.waitForSelector('.card-modal', { timeout: 15_000 })
 
@@ -365,13 +366,13 @@ test.describe('Comment order toggle', () => {
 		// The reply stays attached to its OLDER parent.
 		await expect(groups.nth(0).locator('.card-modal__comment--reply')).toHaveCount(1)
 
-		// Toolbar is present and "Oldest first" is active by default.
-		await expect(page.locator('.card-modal__comment-toolbar')).toBeVisible()
-		await expect(page.locator('.card-modal__comment-order-btn', { hasText: 'Oldest first' })).toHaveClass(/--active/)
+		const order = page.getByRole('combobox', { name: 'Comment order' })
+		await expect(order).toBeVisible()
+		await expect(order).toHaveValue('oldest')
 
 		// Switch to newest-first.
-		await page.locator('.card-modal__comment-order-btn', { hasText: 'Newest first' }).click()
-		await expect(page.locator('.card-modal__comment-order-btn', { hasText: 'Newest first' })).toHaveClass(/--active/)
+		await order.selectOption('newest')
+		await expect(order).toHaveValue('newest')
 
 		// Order is now reversed: NEWER first, OLDER last — and the reply still rides with OLDER.
 		await expect(groups.nth(0)).toContainText('ORDER-NEWER')
@@ -381,7 +382,34 @@ test.describe('Comment order toggle', () => {
 		// The choice persists across a reload (localStorage).
 		await page.reload()
 		await page.waitForSelector('.card-modal', { timeout: 15_000 })
-		await expect(page.locator('.card-modal__comment-order-btn', { hasText: 'Newest first' })).toHaveClass(/--active/)
+		await expect(order).toHaveValue('newest')
 		await expect(page.locator('.card-modal__comment-group').nth(0)).toContainText('ORDER-NEWER')
+
+		await page.locator('.card-modal__discussion-tab', { hasText: 'Activity' }).click()
+		await expect(order).toBeHidden()
+		await page.locator('.card-modal__discussion-tab', { hasText: 'Discussion' }).click()
+		await expect(order).toHaveValue('newest')
 	})
+
+	for (const width of [1280, 375]) {
+		test(`keeps the order control in the discussion header at ${width}px`, async ({ page }) => {
+			await page.setViewportSize({ width, height: 800 })
+			await ncLogin(page)
+			await page.goto(state.cardUrl)
+			if (width < 680) await page.locator('.card-modal__tab', { hasText: 'Discussion' }).click()
+
+			const header = page.locator('.card-modal__discussion-head')
+			const order = header.getByRole('combobox', { name: 'Comment order' })
+			await expect(order).toBeVisible()
+			await expect(page.locator('.card-modal__thread-scroll .card-modal__comment-order')).toHaveCount(0)
+			const [headerBox, orderBox, scrollBox] = await Promise.all([
+				header.boundingBox(), order.boundingBox(), page.locator('.card-modal__thread-scroll').boundingBox(),
+			])
+			expect(orderBox.x).toBeGreaterThanOrEqual(headerBox.x)
+			expect(orderBox.x + orderBox.width).toBeLessThanOrEqual(headerBox.x + headerBox.width + 1)
+			expect(orderBox.y + orderBox.height).toBeLessThanOrEqual(scrollBox.y + 1)
+			await order.selectOption('newest')
+			await expect(page.locator('.card-modal__comment-group').first()).toContainText('ORDER-NEWER')
+		})
+	}
 })

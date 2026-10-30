@@ -207,7 +207,7 @@ test.describe('Card view: discussion panel placement (#10408)', () => {
 		const b = await body.boundingBox()
 		expect(d.y).toBeGreaterThanOrEqual(c.y + c.height - 2)
 		expect(Math.abs(d.x - c.x)).toBeLessThanOrEqual(2)
-		expect(Math.abs(d.width - b.width)).toBeLessThanOrEqual(2)
+		expect(Math.abs(d.width - await body.evaluate((el) => el.clientWidth))).toBeLessThanOrEqual(2)
 
 		// The split handle belongs to the side layout only.
 		await expect(page.locator('.card-modal__resizer')).toBeHidden()

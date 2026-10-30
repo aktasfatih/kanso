@@ -2203,26 +2203,37 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<!-- tabindex="-1" so the header's "jump to the discussion" button can
 					     move focus here (#10408) without adding the pane to the tab order. -->
 					<aside :id="discussionPaneId" class="card-modal__discussion" tabindex="-1">
-						<div class="card-modal__discussion-head card-modal__discussion-tabs" role="tablist">
-							<button
-								class="card-modal__discussion-tab"
-								:class="{ 'card-modal__discussion-tab--active': discussionTab === 'discussion' }"
-								role="tab"
-								:aria-selected="discussionTab === 'discussion'"
-								@click="discussionTab = 'discussion'">
-								<CommentMultipleOutlineIcon :size="16" />
-								{{ t('kanso', 'Discussion') }}
-								<span v-if="commentCount > 0" class="card-modal__discussion-count">{{ commentCount }}</span>
-							</button>
-							<button
-								class="card-modal__discussion-tab"
-								:class="{ 'card-modal__discussion-tab--active': discussionTab === 'activity' }"
-								role="tab"
-								:aria-selected="discussionTab === 'activity'"
-								@click="discussionTab = 'activity'">
-								<HistoryIcon :size="16" />
-								{{ t('kanso', 'Activity') }}
-							</button>
+						<div class="card-modal__discussion-head card-modal__discussion-tabs">
+							<div class="card-modal__discussion-tablist" role="tablist">
+								<button
+									class="card-modal__discussion-tab"
+									:class="{ 'card-modal__discussion-tab--active': discussionTab === 'discussion' }"
+									role="tab"
+									:aria-selected="discussionTab === 'discussion'"
+									@click="discussionTab = 'discussion'">
+									<CommentMultipleOutlineIcon :size="16" />
+									{{ t('kanso', 'Discussion') }}
+									<span v-if="commentCount > 0" class="card-modal__discussion-count">{{ commentCount }}</span>
+								</button>
+								<button
+									class="card-modal__discussion-tab"
+									:class="{ 'card-modal__discussion-tab--active': discussionTab === 'activity' }"
+									role="tab"
+									:aria-selected="discussionTab === 'activity'"
+									@click="discussionTab = 'activity'">
+									<HistoryIcon :size="16" />
+									{{ t('kanso', 'Activity') }}
+								</button>
+							</div>
+							<select
+								v-if="discussionTab === 'discussion' && commentThread.length > 0"
+								class="card-modal__comment-order"
+								:aria-label="t('kanso', 'Comment order')"
+								:value="commentOrder"
+								@change="setCommentOrder($event.target.value)">
+								<option value="oldest">{{ t('kanso', 'Oldest first') }}</option>
+								<option value="newest">{{ t('kanso', 'Newest first') }}</option>
+							</select>
 						</div>
 
 						<!-- Activity feed (read-only view over the change log) -->
@@ -2277,31 +2288,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 
 						<div v-if="discussionTab === 'discussion'" class="card-modal__thread-scroll">
-							<!-- Order toggle, sticky inside the scroller so it does not shrink the pane height.
-							     Display-only reorder of top-level threads; replies stay attached. -->
-							<div
-								v-if="commentThread.length > 0"
-								class="card-modal__comment-toolbar">
-								<span class="card-modal__comment-toolbar-label">{{ t('kanso', 'Order') }}</span>
-								<div class="card-modal__comment-order" role="group" :aria-label="t('kanso', 'Comment order')">
-									<button
-										type="button"
-										class="card-modal__comment-order-btn"
-										:class="{ 'card-modal__comment-order-btn--active': commentOrder === 'oldest' }"
-										:aria-pressed="commentOrder === 'oldest'"
-										@click="setCommentOrder('oldest')">
-										{{ t('kanso', 'Oldest first') }}
-									</button>
-									<button
-										type="button"
-										class="card-modal__comment-order-btn"
-										:class="{ 'card-modal__comment-order-btn--active': commentOrder === 'newest' }"
-										:aria-pressed="commentOrder === 'newest'"
-										@click="setCommentOrder('newest')">
-										{{ t('kanso', 'Newest first') }}
-									</button>
-								</div>
-							</div>
 							<div v-if="commentThread.length > 0" class="card-modal__thread">
 								<div
 									v-for="{ comment: topComment, replies } in commentThread"
@@ -9368,48 +9354,25 @@ async function handleToggleProject(projectId) {
 }
 /* Discussion | Activity tab bar */
 .card-modal__discussion-tabs {
+	flex-wrap: wrap;
 	gap: 4px;
 	padding: 8px 12px;
 }
-/* Comment order toolbar — sticky inside the thread scroller so it does not
-   shrink the pane height (the #10657 height contract) while staying visible. */
-.card-modal__comment-toolbar {
-	position: sticky;
-	top: 0;
-	z-index: 1;
+.card-modal__discussion-tablist {
 	display: flex;
-	flex-wrap: wrap;
 	align-items: center;
-	gap: 8px;
-	padding: 6px 16px;
-	background: var(--color-main-background);
-	border-bottom: 1px solid var(--color-border);
-}
-.card-modal__comment-toolbar-label {
-	font-size: 0.75rem;
-	font-weight: 600;
-	color: var(--color-text-maxcontrast);
+	gap: 4px;
 }
 .card-modal__comment-order {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 2px;
-}
-.card-modal__comment-order-btn {
-	padding: 4px 10px;
-	border: none;
+	margin-left: auto;
+	max-width: 100%;
+	padding: 4px 8px;
+	border: 1px solid var(--color-border);
 	border-radius: 6px;
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	font-size: 0.75rem;
-	font-weight: 600;
-	cursor: pointer;
-	white-space: nowrap;
-}
-.card-modal__comment-order-btn:hover { background: var(--color-background-hover); }
-.card-modal__comment-order-btn--active {
-	background: var(--color-primary-element-light);
+	background: var(--color-main-background);
 	color: var(--color-main-text);
+	font-size: 0.75rem;
+	cursor: pointer;
 }
 .card-modal__discussion-tab {
 	display: inline-flex;
@@ -10159,12 +10122,6 @@ async function handleToggleProject(projectId) {
 		position: sticky;
 		bottom: 0;
 		z-index: 10;
-	}
-	/* The order toolbar is sticky in the side layout, but in the bottom layout the
-	   discussion tabs also pin at top:0 with a higher z-index and would paint over
-	   it, so keep it in normal flow there. */
-	.card-modal--discussion-bottom .card-modal__comment-toolbar {
-		position: static;
 	}
 }
 
