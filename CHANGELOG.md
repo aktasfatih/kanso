@@ -11,6 +11,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.43.0](https://github.com/aktasfatih/kanso/compare/v0.42.0...v0.43.0) (2026-10-30)
+
+
+### Bug Fixes
+
+* allow nullable card history boolean ([9a24cf6](https://github.com/aktasfatih/kanso/commit/9a24cf65f86f21f2b09fcbc3aa197b52b17c1091))
+* **cards:** keep discussions and files when moving boards ([39d4b7e](https://github.com/aktasfatih/kanso/commit/39d4b7edc84931e51c1803c20583e46b9cb28572)), closes [#212](https://github.com/aktasfatih/kanso/issues/212)
+* **cards:** preserve connected cards when moving boards ([aa47d08](https://github.com/aktasfatih/kanso/commit/aa47d084da8c8766e3da963c3e5d5b9dcaef0634)), closes [#212](https://github.com/aktasfatih/kanso/issues/212)
+* **cards:** protect attachments when a move fails ([a31b09f](https://github.com/aktasfatih/kanso/commit/a31b09fc9eff81f6f7e8ecdea5fa30c8ea7a2184))
+* **comments:** keep the discussion pane at full height with the order toggle ([813c20a](https://github.com/aktasfatih/kanso/commit/813c20acb63a0ecf8aa35330dd78618074177a2a)), closes [#10657](https://github.com/aktasfatih/kanso/issues/10657)
+* **comments:** keep the order toolbar usable in the bottom layout and narrow panes ([6d4bcbe](https://github.com/aktasfatih/kanso/commit/6d4bcbeb5745c54232186cdd70342e0080385658))
+* **icons:** show a pin instead of a star on the pin/unpin toggle ([8cc352c](https://github.com/aktasfatih/kanso/commit/8cc352c368252209571ee3bd13ea9df3b97dd6ac)), closes [#140](https://github.com/aktasfatih/kanso/issues/140)
+
+
+### Features
+
+* **comments:** add a newest-first / oldest-first toggle for card discussion comments ([4048e7a](https://github.com/aktasfatih/kanso/commit/4048e7a826b9bfffe270dd1f064ad1155fe01d49)), closes [#200](https://github.com/aktasfatih/kanso/issues/200)
+
 # [0.42.0](https://github.com/aktasfatih/kanso/compare/v0.41.0...v0.42.0) (2026-10-28)
 
 
