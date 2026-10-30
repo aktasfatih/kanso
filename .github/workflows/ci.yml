@@ -442,6 +442,8 @@ jobs:
       # (negative assertions, `state: 'hidden'`, `short-budget-ok`) are not.
       - name: e2e timeout guard self-tests
         run: npm run test:e2e-timeouts
+      - name: e2e report summary self-tests
+        run: node --test scripts/summarize-e2e-report.test.mjs
       - name: Guard e2e wait budgets
         run: npm run lint:e2e-timeouts
 
@@ -896,10 +898,20 @@ jobs:
       # is the wall. To go past 2, tune the backend (pm.max_children /
       # postgres max_connections) and raise the runner CPU limit first.
       - name: Run e2e tests
-        run: npm run test:e2e
+        id: browser_tests
+        run: |
+          node -e "require('fs').rmSync(process.env.E2E_JSON_REPORT, { force: true })"
+          npm run test:e2e
         env:
           E2E_ISOLATE: '1'
           E2E_WORKERS: '2'
+          E2E_JSON_REPORT: ${{ runner.temp }}/kanso-e2e-summary.json
+
+      - name: Summarize e2e execution
+        if: ${{ always() && steps.browser_tests.outcome != 'skipped' }}
+        run: node scripts/summarize-e2e-report.mjs "$E2E_JSON_REPORT"
+        env:
+          E2E_JSON_REPORT: ${{ runner.temp }}/kanso-e2e-summary.json
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
@@ -1053,7 +1065,18 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run the realtime spec against a live push daemon
-        run: npx playwright test tests/e2e/realtime.spec.js --project=desktop
+        id: browser_tests
+        run: |
+          node -e "require('fs').rmSync(process.env.E2E_JSON_REPORT, { force: true })"
+          npx playwright test tests/e2e/realtime.spec.js --project=desktop
+        env:
+          E2E_JSON_REPORT: ${{ runner.temp }}/kanso-e2e-push-summary.json
+
+      - name: Summarize realtime test execution
+        if: ${{ always() && steps.browser_tests.outcome != 'skipped' }}
+        run: node scripts/summarize-e2e-report.mjs "$E2E_JSON_REPORT"
+        env:
+          E2E_JSON_REPORT: ${{ runner.temp }}/kanso-e2e-push-summary.json
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}

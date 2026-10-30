@@ -64,7 +64,7 @@ export default defineConfig({
 	// it finishes (so a stuck test is the one right after the last printed line);
 	// also emit the HTML report to populate the uploaded CI artifact.
 	reporter: process.env.CI
-		? [['list'], ['html', { open: 'never' }]]
+		? [['list'], ['html', { open: 'never' }], ...(process.env.E2E_JSON_REPORT ? [['json', { outputFile: process.env.E2E_JSON_REPORT }]] : [])]
 		: 'list',
 	use: {
 		baseURL: 'http://localhost:8891',
