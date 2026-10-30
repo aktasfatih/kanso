@@ -1074,3 +1074,97 @@ jobs:
           docker exec -u www-data kanso-dev php occ notify_push:self-test || true
           docker logs kanso-dev --tail 200 || true
           docker exec kanso-dev tail -n 100 /var/www/html/data/nextcloud.log || true
+
+  # A small Chromium smoke on the newest supported Nextcloud: board list, card
+  # opening, and anonymous sharing. This is not the full NC 35 browser suite.
+  # This separate check is not in the repository's required-checks list.
+  e2e-latest:
+    runs-on: kanso-runners
+    timeout-minutes: 45
+    name: e2e (latest Nextcloud smoke)
+    env:
+      NC_VERSION: '35'
+      KANSO_SKIP_OPTIONAL_APPS: '1'
+      KANSO_SKIP_NOTIFY_PUSH: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Ensure docker compose plugin
+        run: |
+          if ! docker compose version >/dev/null 2>&1; then
+            mkdir -p ~/.docker/cli-plugins
+            curl -fsSL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 \
+              -o ~/.docker/cli-plugins/docker-compose
+            chmod +x ~/.docker/cli-plugins/docker-compose
+          fi
+          docker compose version
+
+      - name: Pre-pull dev stack images (with retry)
+        working-directory: dev
+        continue-on-error: true
+        run: |
+          set -u
+          [ -f .db.env ] || : > .db.env
+
+          profile="${KANSO_DB:-postgres}"
+          if [ "$profile" = "mariadb" ]; then profile=mysql; fi
+
+          pulled=0
+          for attempt in 1 2 3; do
+            echo "Pre-pull attempt ${attempt}/3 (profile=${profile}, NC_VERSION=${NC_VERSION:-34})"
+            if docker compose --profile "$profile" pull; then
+              pulled=1
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Pull attempt ${attempt} failed; retrying in 15s"
+              sleep 15
+            fi
+          done
+
+          if [ "$pulled" = 1 ]; then
+            echo "Dev stack images are in the local cache."
+          else
+            echo "Pre-pull did not succeed after 3 attempts — continuing anyway;"
+            echo "dev/setup.sh's own 'docker compose up -d' will retry the pull."
+          fi
+          exit 0
+
+      - name: Boot dev Nextcloud stack
+        run: ./dev/setup.sh
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run latest Nextcloud browser smoke
+        run: |
+          npx playwright test tests/e2e/boards-grid.spec.js --project=desktop --grep 'renders the grid with stat meta'
+          npx playwright test tests/e2e/card-full-page.spec.js --project=desktop --grep 'the expand button in the modal navigates to the full-page view'
+          npx playwright test tests/e2e/public-share.spec.js --project=desktop --grep 'the public page renders read-only with no edit affordances or people'
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-latest
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Dump Nextcloud logs on failure
+        if: ${{ failure() }}
+        run: |
+          docker logs kanso-dev-db --tail 200 || true
+          docker logs kanso-dev --tail 200 || true
+          docker exec kanso-dev tail -n 100 /var/www/html/data/nextcloud.log || true
