@@ -52,6 +52,14 @@ test('completed, flaky and intentional skips are not misclassified as interrupti
 	assert.match(result.stdout, /1 flaky, 1 skipped, 1 global errors/)
 })
 
+test('expected failures are not counted as passed tests', () => {
+	const fixture = report([
+		entry('expected', 'passed', 'passed'),
+		entry('expected', 'failed', 'failed'),
+	], { expected: 2, unexpected: 0, flaky: 0, skipped: 0 })
+	assert.match(run(fixture).stdout, /1 passed, 1 expected failures, 0 failed/)
+})
+
 test('missing, invalid, empty or inconsistent reports are unknown', () => {
 	for (const fixture of [undefined, '{"suites":', {}, report([], { expected: 0, unexpected: 0, flaky: 0, skipped: 0 }), report([entry('expected', 'passed', 'passed')], { expected: 2, unexpected: 0, flaky: 0, skipped: 0 })]) {
 		const result = run(fixture)

@@ -1170,9 +1170,9 @@ jobs:
 
       - name: Run latest Nextcloud browser smoke
         run: |
-          npx playwright test tests/e2e/boards-grid.spec.js --project=desktop --grep 'renders the grid with stat meta'
-          npx playwright test tests/e2e/card-full-page.spec.js --project=desktop --grep 'the expand button in the modal navigates to the full-page view'
-          npx playwright test tests/e2e/public-share.spec.js --project=desktop --grep 'the public page renders read-only with no edit affordances or people'
+          PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report/boards npx playwright test tests/e2e/boards-grid.spec.js --output=test-results/boards --project=desktop --grep 'renders the grid with stat meta'
+          PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report/card npx playwright test tests/e2e/card-full-page.spec.js --output=test-results/card --project=desktop --grep 'the expand button in the modal navigates to the full-page view'
+          PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report/public npx playwright test tests/e2e/public-share.spec.js --output=test-results/public --project=desktop --grep 'the public page renders read-only with no edit affordances or people'
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}

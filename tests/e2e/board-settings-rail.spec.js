@@ -65,6 +65,21 @@ test.describe('Board settings section rail', () => {
 		await expect(more).not.toBeFocused()
 	})
 
+	test('Escape closes the foreground description without closing settings', async ({ page }) => {
+		await api.patch(`/boards/${state.boardId}`, { description: 'A board description' })
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
+		const settings = page.getByRole('dialog', { name: 'Board settings' })
+		await expect(settings).toBeVisible()
+		await page.locator('[data-test="board-description-btn"]').click()
+		await expect(page.locator('[data-test="board-description"]')).toBeVisible()
+		await page.keyboard.press('Escape')
+		await expect(page.locator('[data-test="board-description"]')).toHaveCount(0)
+		await expect(settings).toBeVisible()
+	})
+
 	test('description edit places focus in settings and returns it to the description control', async ({ page }) => {
 		await api.patch(`/boards/${state.boardId}`, { description: 'Board description' })
 		await ncLogin(page)

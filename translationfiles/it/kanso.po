@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— nessuno —"
 
-#: src/components/BoardSettingsModal.vue:4898
+#: src/components/BoardSettingsModal.vue:4932
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n volta"
@@ -367,7 +367,7 @@ msgid_plural "%n cards"
 msgstr[0] "%n scheda"
 msgstr[1] "%n schede"
 
-#: src/components/StackColumn.vue:1070
+#: src/components/StackColumn.vue:1090
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "%n scheda archiviata"
@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n riga di dati rilevata"
 msgstr[1] "%n righe di dati rilevate"
 
-#: src/components/CardDetail.vue:5025
+#: src/components/CardDetail.vue:5093
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n giorno fa"
@@ -409,13 +409,13 @@ msgid_plural "%n files"
 msgstr[0] "%n file"
 msgstr[1] "%n file"
 
-#: src/components/CardDetail.vue:5023
+#: src/components/CardDetail.vue:5091
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n ora fa"
 msgstr[1] "%n ore fa"
 
-#: src/views/BoardView.vue:2723
+#: src/views/BoardView.vue:2751
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n ID copiato."
@@ -439,7 +439,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etichetta non è stata creata e manca dalle schede importate: solo i gestori della bacheca possono aggiungere nuove etichette. Chiedi a un gestore di aggiungerla, poi impostala sulle schede."
 msgstr[1] "%n etichette non sono state create e mancano dalle schede importate: solo i gestori della bacheca possono aggiungere nuove etichette. Chiedi a un gestore di aggiungerle, poi impostale sulle schede."
 
-#: src/components/CardDetail.vue:5021
+#: src/components/CardDetail.vue:5089
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuto fa"
@@ -463,13 +463,13 @@ msgid_plural "%n points"
 msgstr[0] "%n punto"
 msgstr[1] "%n punti"
 
-#: src/components/CardDetail.vue:1256
+#: src/components/CardDetail.vue:1261
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n progetto"
 msgstr[1] "%n progetti"
 
-#: src/components/CardDetail.vue:2320
+#: src/components/CardDetail.vue:2348
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n risposta"
@@ -487,7 +487,7 @@ msgid_plural "%n unscheduled cards"
 msgstr[0] "%n scheda non pianificata"
 msgstr[1] "%n schede non pianificate"
 
-#: src/components/CardDetail.vue:324
+#: src/components/CardDetail.vue:325
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n osservatore"
@@ -1476,7 +1476,7 @@ msgstr "Avanzamento della lista di controllo: {done} di {total}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:523
+#: src/components/CardTile.vue:520
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Avanzamento della lista di controllo: {done} di {total}, %n elemento in ritardo"
@@ -1587,6 +1587,7 @@ msgid "close"
 msgstr "chiudi"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/CardDetail.vue
 #: src/components/CsvImportModal.vue
 #: src/views/BoardList.vue
 #: src/views/PublicBoard.vue
@@ -2030,8 +2031,8 @@ msgstr "Zona pericolosa"
 msgid "Date"
 msgstr "Data"
 
-#: src/components/BoardSettingsModal.vue:2298
-#: src/components/CardDetail.vue:5214
+#: src/components/BoardSettingsModal.vue:2301
+#: src/components/CardDetail.vue:5282
 msgid "day"
 msgid_plural "days"
 msgstr[0] "giorno"
@@ -2587,7 +2588,7 @@ msgstr "Ogni"
 msgid "Every card in this project is done."
 msgstr "Tutte le schede di questo progetto sono completate."
 
-#: src/components/BoardSettingsModal.vue:4878
+#: src/components/BoardSettingsModal.vue:4912
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Ogni giorno"
@@ -2597,19 +2598,19 @@ msgstr[1] "Ogni %n giorni"
 msgid "Every estimate needs a label."
 msgstr "Ogni stima deve avere un'etichetta."
 
-#: src/components/BoardSettingsModal.vue:4888
+#: src/components/BoardSettingsModal.vue:4922
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Ogni mese"
 msgstr[1] "Ogni %n mesi"
 
-#: src/components/BoardSettingsModal.vue:4880
+#: src/components/BoardSettingsModal.vue:4914
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Ogni settimana"
 msgstr[1] "Ogni %n settimane"
 
-#: src/components/BoardSettingsModal.vue:4890
+#: src/components/BoardSettingsModal.vue:4924
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Ogni anno"
@@ -3584,7 +3585,7 @@ msgstr "Scopo, ambito o regole. Tutti i membri della bacheca possono leggerla da
 msgid "Jump to the discussion"
 msgstr "Vai alla discussione"
 
-#: src/components/CardDetail.vue:7058
+#: src/components/CardDetail.vue:7187
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Vai alla discussione (%n commento)"
@@ -3960,8 +3961,8 @@ msgstr "Modalità"
 msgid "Mon"
 msgstr "Lun"
 
-#: src/components/BoardSettingsModal.vue:2300
-#: src/components/CardDetail.vue:5216
+#: src/components/BoardSettingsModal.vue:2303
+#: src/components/CardDetail.vue:5284
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mese"
@@ -5571,7 +5572,7 @@ msgstr "Mostra la discussione sotto la scheda"
 msgid "Show the discussion panel"
 msgstr "Mostra il pannello della discussione"
 
-#: src/components/CardDetail.vue:7064
+#: src/components/CardDetail.vue:7193
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostra il pannello della discussione (%n commento)"
@@ -6372,8 +6373,8 @@ msgstr "Webhook attivo"
 msgid "Wed"
 msgstr "Mer"
 
-#: src/components/BoardSettingsModal.vue:2299
-#: src/components/CardDetail.vue:5215
+#: src/components/BoardSettingsModal.vue:2302
+#: src/components/CardDetail.vue:5283
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "settimana"
@@ -6481,8 +6482,8 @@ msgstr "Scritto il"
 msgid "wrote"
 msgstr "ha scritto"
 
-#: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5217
+#: src/components/BoardSettingsModal.vue:2304
+#: src/components/CardDetail.vue:5285
 msgid "year"
 msgid_plural "years"
 msgstr[0] "anno"

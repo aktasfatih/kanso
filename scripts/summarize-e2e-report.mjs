@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 function summarize(report) {
 	if (!report || !Array.isArray(report.suites) || !Array.isArray(report.errors) || !report.stats) throw new Error('invalid report')
-	const counts = { expected: 0, unexpected: 0, flaky: 0, skipped: 0, interrupted: 0, didNotRun: 0 }
+	const counts = { expected: 0, expectedFailures: 0, unexpected: 0, flaky: 0, skipped: 0, interrupted: 0, didNotRun: 0 }
 	function visit(suite) {
 		if (!suite || !Array.isArray(suite.specs) || (suite.suites !== undefined && !Array.isArray(suite.suites))) throw new Error('invalid suite')
 		for (const spec of suite.specs) {
@@ -15,6 +15,7 @@ function summarize(report) {
 					|| test.results.some((result) => !result || !['passed', 'failed', 'timedOut', 'skipped', 'interrupted'].includes(result.status))) throw new Error('invalid test')
 				if (test.status !== 'skipped') {
 					counts[test.status]++
+					if (test.status === 'expected' && test.expectedStatus === 'failed') counts.expectedFailures++
 				} else if (test.results.some((result) => result.status === 'interrupted')) {
 					counts.interrupted++
 				} else if (test.results.length === 0 || test.expectedStatus !== 'skipped') {
@@ -36,7 +37,7 @@ function summarize(report) {
 
 try {
 	const counts = summarize(JSON.parse(readFileSync(process.argv[2], 'utf8')))
-	const details = `${counts.expected} passed, ${counts.unexpected} failed, ${counts.flaky} flaky, ${counts.skipped} skipped, ${counts.errors} global errors`
+	const details = `${counts.expected - counts.expectedFailures} passed, ${counts.expectedFailures} expected failures, ${counts.unexpected} failed, ${counts.flaky} flaky, ${counts.skipped} skipped, ${counts.errors} global errors`
 	if (counts.interrupted || counts.didNotRun) {
 		console.log(`::warning::Playwright run incomplete: ${counts.interrupted} interrupted, ${counts.didNotRun} did not run; ${details}. The suite did not finish. Inspect any reported failures separately.`)
 	} else {

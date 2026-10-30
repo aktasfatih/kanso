@@ -2789,6 +2789,11 @@ function focusActiveTab() {
 function onKeydown(e) {
 	if (props.suspended) return
 	if (e.key !== 'Escape') return
+	if ([...document.querySelectorAll('[role="dialog"]:not(.bs-modal), [role="alertdialog"], dialog[open]')]
+		.some((dialog) => !dialog.classList.contains('bs-delete-confirm')
+			&& dialog.getClientRects().length > 0
+			&& getComputedStyle(dialog).visibility === 'visible'
+			&& !dialog.closest('[aria-hidden="true"], [hidden], [inert]'))) return
 	// A destructive confirm takes Escape first — dismiss it instead of tearing
 	// down the whole settings modal.
 	if (showDeleteBoardConfirm.value) {
@@ -2798,13 +2803,13 @@ function onKeydown(e) {
 	emit('close')
 }
 onMounted(() => {
-	document.addEventListener('keydown', onKeydown)
+	document.addEventListener('keydown', onKeydown, true)
 	document.addEventListener('focusin', trackFocus)
 	document.addEventListener('pointerdown', trackFocus)
 	focusActiveTab()
 })
 onUnmounted(() => {
-	document.removeEventListener('keydown', onKeydown)
+	document.removeEventListener('keydown', onKeydown, true)
 	document.removeEventListener('focusin', trackFocus)
 	document.removeEventListener('pointerdown', trackFocus)
 })

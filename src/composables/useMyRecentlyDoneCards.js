@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { useQuery } from '@tanstack/vue-query'
+import { computed, unref } from 'vue'
 import { getMyRecentlyDoneCards as apiGetMyRecentlyDoneCards } from '../services/api.js'
 
 /**
@@ -36,10 +37,10 @@ export const MY_RECENTLY_DONE_QUERY_KEY = ['my-recently-done']
  * @param {import('vue').Ref<boolean>|boolean} enabled - true once the user has expanded the section
  * @return {object} the TanStack Query result
  */
-export function useMyRecentlyDoneCards(enabled) {
+export function useMyRecentlyDoneCards(enabled, boardId = null) {
 	return useQuery({
-		queryKey: MY_RECENTLY_DONE_QUERY_KEY,
-		queryFn: apiGetMyRecentlyDoneCards,
+		queryKey: computed(() => [...MY_RECENTLY_DONE_QUERY_KEY, unref(boardId)]),
+		queryFn: ({ queryKey }) => apiGetMyRecentlyDoneCards(queryKey[1]),
 		enabled,
 		refetchOnWindowFocus: false,
 		refetchOnMount: false,

@@ -126,6 +126,7 @@ test.describe('Share from Files', () => {
 		expect(eligibility).toEqual([true, false, false, false, false])
 	})
 
+
 	test('adds a file to a card from the Files row menu', async ({ page }) => {
 		const title = 'Files action target'
 		const target = await api('POST', '/cards', { stackId, title })
@@ -155,4 +156,21 @@ test.describe('Share from Files', () => {
 		expect(download.ok).toBe(true)
 		expect(await download.text()).toBe('from the files app')
 	})
+})
+
+test('the legacy Files action forwards node-based callbacks', async ({ page }) => {
+	await page.addInitScript(() => { window._nc_fileactions = [] })
+	await ncLogin(page)
+	await page.goto(BASE + '/index.php/apps/files')
+	await expect.poll(() => page.evaluate(() => window._nc_fileactions?.some(action => action.id === 'kanso-add-to-card'))).toBe(true)
+	const eligibility = await page.evaluate(() => {
+		const action = window._nc_fileactions.find(entry => entry.id === 'kanso-add-to-card')
+		return [action.enabled([{ type: 'file', permissions: 1 }]), action.enabled([{ type: 'folder', permissions: 1 }]), action.enabled([])]
+	})
+	expect(eligibility).toEqual([true, false, false])
+	await page.evaluate(() => {
+		const action = window._nc_fileactions.find(entry => entry.id === 'kanso-add-to-card')
+		void action.exec({ fileid: 123, basename: 'legacy-file.txt' })
+	})
+	await expect(page.getByRole('dialog', { name: 'Add to Kanso' })).toBeVisible()
 })

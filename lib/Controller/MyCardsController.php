@@ -70,9 +70,9 @@ class MyCardsController extends Controller {
 	 * reported in headers.
 	 */
 	#[NoAdminRequired]
-	public function recentlyDone(): JSONResponse {
-		return $this->respond(function (): JSONResponse {
-			$feed = $this->myCardsService->findMineRecentlyDone($this->currentUserId());
+	public function recentlyDone(?int $boardId = null): JSONResponse {
+		return $this->respond(function () use ($boardId): JSONResponse {
+			$feed = $this->myCardsService->findMineRecentlyDone($this->currentUserId(), $boardId);
 			$response = new JSONResponse($feed['cards']);
 			$response->addHeader(self::HEADER_LIMIT, (string)$feed['limit']);
 			$response->addHeader(self::HEADER_TRUNCATED, $feed['truncated'] ? '1' : '0');

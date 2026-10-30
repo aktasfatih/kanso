@@ -169,7 +169,8 @@ your work, on your own Nextcloud, laid out plainly.
 <img src="docs/kanso-analytics.png" alt="Kanso board analytics: cards by stack, priority and label, plus a weekly velocity trend" width="900">
 
 ### ⌨️ Power-user UX
-- **Command palette** (`Ctrl`/`Cmd`+`K` from anywhere in Kanso) and full-text
+- **Command palette** (`Ctrl`/`Cmd`+`K`, except while typing, inside a menu, or
+  while a blocking dialog is open) and full-text
   **search** across cards and comments.
 - **Keyboard-first** navigation: use `h`/`j`/`k`/`l` to move between cards,
   `x` to select cards on a flat board, and `Esc` to exit selection. Press `n`

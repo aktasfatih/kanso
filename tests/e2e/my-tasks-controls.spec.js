@@ -74,6 +74,8 @@ test('sorting orders the displayed tasks and board view groups by status', async
 
 	await page.getByLabel('Sort by').selectOption({ label: 'Priority' })
 	await expect(rows.locator('.my-cards-view__card-title')).toHaveText(['Cedar task', 'Bravo task', 'Alpha task'])
+	await page.getByLabel('Sort by').selectOption({ label: 'Board' })
+	await expect(rows.locator('.my-cards-view__card-title')).toHaveText(['Bravo task', 'Cedar task', 'Alpha task'])
 
 	await page.getByLabel('View', { exact: true }).selectOption({ label: 'Board' })
 	const notStarted = page.locator('.my-cards-view__section', { has: page.getByRole('heading', { name: /Not started/ }) })
@@ -84,6 +86,35 @@ test('sorting orders the displayed tasks and board view groups by status', async
 	await expect(inProgress.locator('.my-cards-view__row')).toHaveCount(1)
 	await expect(inProgress).toContainText('Alpha task')
 	await expect(page.getByRole('button', { name: 'Recently done' })).toBeVisible()
+})
+
+test('the today filter refreshes at local midnight without a data change', async ({ page }) => {
+	const beforeMidnight = new Date()
+	beforeMidnight.setHours(23, 59, 55, 0)
+	await page.clock.install({ time: beforeMidnight })
+	await openTasks(page)
+	await page.getByLabel('Due date', { exact: true }).selectOption({ label: 'Today' })
+	await expect(page.locator('.my-cards-view__row', { hasText: 'Alpha task' })).toBeVisible()
+	await page.clock.fastForward(10_000)
+	await expect(page.locator('.my-cards-view__row', { hasText: 'Alpha task' })).toHaveCount(0)
+})
+
+test('recently completed tasks are requested for the selected board', async ({ page }) => {
+	const requested = []
+	await page.route('**/apps/kanso/api/my-cards/recently-done**', (route) => {
+		const boardId = new URL(route.request().url()).searchParams.get('boardId')
+		requested.push(boardId)
+		const results = boardId === '501' ? [{ ...cards()[0], doneAt: 1700000000 }] : []
+		return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'X-Kanso-Limit': '50', 'X-Kanso-Done-Window-Days': '14', 'X-Kanso-Truncated': '0' }, body: JSON.stringify(results) })
+	})
+	await openTasks(page)
+	await page.getByLabel('Board', { exact: true }).selectOption({ label: 'Alpha board' })
+	await page.getByRole('button', { name: 'Recently done' }).click()
+	await expect.poll(() => requested).toContain('501')
+	await expect(page.locator('.my-cards-view__row--done', { hasText: 'Cedar task' })).toBeVisible()
+	await page.getByLabel('Board', { exact: true }).selectOption({ label: 'Beta board' })
+	await expect.poll(() => requested).toContain('502')
+	await expect(page.locator('.my-cards-view__row--done', { hasText: 'Cedar task' })).toHaveCount(0)
 })
 
 test('a filter with no matches still discloses a truncated feed', async ({ page }) => {

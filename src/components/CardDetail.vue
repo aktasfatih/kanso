@@ -2886,7 +2886,7 @@ import { normalizeCardFeatures } from '../services/cardFeatures.js'
 import { renderMarkdown, buildCardRefMap } from '../services/markdown.js'
 import { useEditorPrefs } from '../composables/useEditorPrefs.js'
 import { useCardPrefs } from '../composables/useCardPrefs.js'
-import { relationPicker, beginRelationPick, clearRelationPick } from '../services/relationPicker.js'
+import { relationPicker, beginRelationPick, clearRelationPick, navigateRelationPick } from '../services/relationPicker.js'
 
 /**
  * Given a hex background color return '#000' or '#fff' for readable contrast.
@@ -4138,7 +4138,8 @@ async function handleSetCoverColor(hex) {
 // and value drop "HH:MM"). The stored duedate is unchanged (at 00:00).
 const isAllDay = computed(() => cardData.value?.allDay === true)
 const savingDayBeforeReminder = ref(false)
-function setDateSaveError(message) {
+function setDateSaveError(message, forCard) {
+	if (!isStillCurrentCard(forCard)) return
 	saveError.value = message
 	if (openPicker.value !== 'due') showError(message)
 }
@@ -4158,6 +4159,7 @@ const dueDateInputValue = computed(() => {
 // Commit on blur/Enter instead: the value is bound straight to the computed and
 // only saved once the user leaves the field.
 async function handleDueDateChange(event) {
+	const forCard = props.cardId
 	const val = event.target.value
 	if (!val) return
 	// Leaving the field without editing it shouldn't fire a redundant PATCH.
@@ -4167,11 +4169,12 @@ async function handleDueDateChange(event) {
 	try {
 		await updateCard.mutateAsync({ data: { duedate: iso } })
 	} catch (err) {
-		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to update due date.'))
+		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to update due date.'), forCard)
 	}
 }
 
 async function toggleAllDay(checked) {
+	const forCard = props.cardId
 	// An all-day card is a single day (a due date only) — the Start field is hidden.
 	// Clear any start date when switching to all-day so it can't linger invisibly,
 	// which would otherwise trip the end-before-start guard or silently anchor a
@@ -4180,7 +4183,7 @@ async function toggleAllDay(checked) {
 	try {
 		await updateCard.mutateAsync({ data })
 	} catch (err) {
-		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to update due date.'))
+		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to update due date.'), forCard)
 	}
 }
 
@@ -4198,7 +4201,7 @@ async function toggleDayBeforeReminder(event) {
 			: current)
 	} catch (err) {
 		if (isStillCurrentCard(forCard)) {
-			setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to save.'))
+			setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to save.'), forCard)
 		}
 	} finally {
 		savingDayBeforeReminder.value = false
@@ -4206,10 +4209,11 @@ async function toggleDayBeforeReminder(event) {
 }
 
 async function clearDueDate() {
+	const forCard = props.cardId
 	try {
 		await updateCard.mutateAsync({ data: { duedate: '' } })
 	} catch (err) {
-		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to clear due date.'))
+		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to clear due date.'), forCard)
 	}
 }
 
@@ -4224,6 +4228,7 @@ const startDateInputValue = computed(() => {
 })
 
 async function handleStartDateChange(event) {
+	const forCard = props.cardId
 	const val = event.target.value
 	if (!val) return
 	// Leaving the field without editing it shouldn't fire a redundant PATCH.
@@ -4232,15 +4237,16 @@ async function handleStartDateChange(event) {
 	try {
 		await updateCard.mutateAsync({ data: { startDate: iso } })
 	} catch (err) {
-		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to update start date.'))
+		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to update start date.'), forCard)
 	}
 }
 
 async function clearStartDate() {
+	const forCard = props.cardId
 	try {
 		await updateCard.mutateAsync({ data: { startDate: '' } })
 	} catch (err) {
-		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to clear start date.'))
+		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to clear start date.'), forCard)
 	}
 }
 
@@ -7068,8 +7074,7 @@ async function pickRelationOnBoard() {
 		originPath: route.fullPath,
 		controlled: props.controlled,
 	})
-	const failure = await router.push({ name: 'board', params: { id: String(boardId.value) }, query: onOwnBoard ? route.query : {} })
-	if (failure) clearRelationPick()
+	await navigateRelationPick(router, { name: 'board', params: { id: String(boardId.value) }, query: onOwnBoard ? route.query : {} })
 }
 
 watch([() => props.cardId, boardId, relationPicker], () => {

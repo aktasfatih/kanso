@@ -17,3 +17,14 @@ export function finishRelationPick(targetId = null) {
 export function clearRelationPick() {
 	relationPicker.value = null
 }
+
+export async function navigateRelationPick(router, target) {
+	const session = relationPicker.value
+	try {
+		const failure = await router.push(target)
+		if (failure && relationPicker.value === session) clearRelationPick()
+	} catch (error) {
+		if (relationPicker.value === session) clearRelationPick()
+		throw error
+	}
+}

@@ -23,6 +23,7 @@ test.describe('Mobile due date scrolling', () => {
 	let boardId
 	let cardId
 	let lastCommentId
+	let otherCardId
 
 	test.beforeAll(async () => {
 		const board = await api.post('/boards', { title: 'Mobile due date scrolling' })
@@ -30,6 +31,7 @@ test.describe('Mobile due date scrolling', () => {
 		const stack = await api.post('/stacks', { boardId, title: 'To do' })
 		const card = await api.post('/cards', { stackId: stack.id, title: 'Long card' })
 		cardId = card.id
+		otherCardId = (await api.post('/cards', { stackId: stack.id, title: 'Another card' })).id
 		await api.patch(`/cards/${cardId}`, {
 			duedate: '2027-12-10T12:00:00Z',
 			description: Array.from({ length: 80 }, (_, i) => `Paragraph ${i + 1}`).join('\n\n'),
@@ -114,6 +116,32 @@ test.describe('Mobile due date scrolling', () => {
 		await sheet.getByRole('button', { name: 'Close', exact: true }).click()
 		await expect(sheet).toHaveCount(0)
 		await expect(page.getByText('Date save refused')).toBeVisible()
+	})
+
+	test('a rejected date save does not show an error on another card', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`)
+		let release
+		const blocked = new Promise(resolve => { release = resolve })
+		let started
+		const requestStarted = new Promise(resolve => { started = resolve })
+		await page.route(`**/api/cards/${cardId}`, async route => {
+			if (route.request().method() !== 'PATCH') return route.continue()
+			started()
+			await blocked
+			await route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ error: 'Previous card date save refused' }) })
+		})
+		await page.locator('button.card-modal__pill[data-pill="due"]').click()
+		const date = page.locator('.card-modal__popover--date [data-date="end"]')
+		await date.fill('2027-12-17T12:00')
+		await date.press('Enter')
+		await requestStarted
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${boardId}/card/${otherCardId}`)
+		await expect(page.locator('.card-modal')).toContainText('Another card')
+		const rejected = page.waitForResponse(response => response.url().endsWith(`/api/cards/${cardId}`) && response.request().method() === 'PATCH')
+		release()
+		await rejected
+		await expect(page.getByText('Previous card date save refused')).toHaveCount(0)
 	})
 
 	test('touching another picker opens it and a backdrop tap dismisses only the date sheet', async ({ page }) => {

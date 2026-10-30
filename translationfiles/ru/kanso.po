@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— нет —"
 
-#: src/components/BoardSettingsModal.vue:4898
+#: src/components/BoardSettingsModal.vue:4932
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· повторов: %n"
@@ -382,7 +382,7 @@ msgstr[0] "%n карточка"
 msgstr[1] "%n карточки"
 msgstr[2] "%n карточек"
 
-#: src/components/StackColumn.vue:1070
+#: src/components/StackColumn.vue:1090
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "Архивирована %n карточка"
@@ -417,7 +417,7 @@ msgstr[0] "Обнаружена %n строка данных"
 msgstr[1] "Обнаружено %n строки данных"
 msgstr[2] "Обнаружено %n строк данных"
 
-#: src/components/CardDetail.vue:5025
+#: src/components/CardDetail.vue:5093
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n день назад"
@@ -431,14 +431,14 @@ msgstr[0] "%n файл"
 msgstr[1] "%n файла"
 msgstr[2] "%n файлов"
 
-#: src/components/CardDetail.vue:5023
+#: src/components/CardDetail.vue:5091
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n час назад"
 msgstr[1] "%n часа назад"
 msgstr[2] "%n часов назад"
 
-#: src/views/BoardView.vue:2723
+#: src/views/BoardView.vue:2751
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "Скопирован %n идентификатор."
@@ -466,7 +466,7 @@ msgstr[0] "%n метка не была создана и отсутствует 
 msgstr[1] "%n метки не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 msgstr[2] "%n меток не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 
-#: src/components/CardDetail.vue:5021
+#: src/components/CardDetail.vue:5089
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n минуту назад"
@@ -494,14 +494,14 @@ msgstr[0] "%n балл"
 msgstr[1] "%n балла"
 msgstr[2] "%n баллов"
 
-#: src/components/CardDetail.vue:1256
+#: src/components/CardDetail.vue:1261
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n проект"
 msgstr[1] "%n проекта"
 msgstr[2] "%n проектов"
 
-#: src/components/CardDetail.vue:2320
+#: src/components/CardDetail.vue:2348
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n ответ"
@@ -522,7 +522,7 @@ msgstr[0] "%n карточка без дат"
 msgstr[1] "%n карточки без дат"
 msgstr[2] "%n карточек без дат"
 
-#: src/components/CardDetail.vue:324
+#: src/components/CardDetail.vue:325
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n наблюдатель"
@@ -1516,7 +1516,7 @@ msgstr "Прогресс чек-листа: {done} из {total}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:523
+#: src/components/CardTile.vue:520
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Прогресс чек-листа: {done} из {total}, %n просроченный пункт"
@@ -1628,6 +1628,7 @@ msgid "close"
 msgstr "закрыть"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/CardDetail.vue
 #: src/components/CsvImportModal.vue
 #: src/views/BoardList.vue
 #: src/views/PublicBoard.vue
@@ -2071,8 +2072,8 @@ msgstr "Опасная зона"
 msgid "Date"
 msgstr "Дата"
 
-#: src/components/BoardSettingsModal.vue:2298
-#: src/components/CardDetail.vue:5214
+#: src/components/BoardSettingsModal.vue:2301
+#: src/components/CardDetail.vue:5282
 msgid "day"
 msgid_plural "days"
 msgstr[0] "день"
@@ -2629,7 +2630,7 @@ msgstr "Каждые"
 msgid "Every card in this project is done."
 msgstr "Все карточки в этом проекте готовы."
 
-#: src/components/BoardSettingsModal.vue:4878
+#: src/components/BoardSettingsModal.vue:4912
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Каждый %n день"
@@ -2640,21 +2641,21 @@ msgstr[2] "Каждые %n дней"
 msgid "Every estimate needs a label."
 msgstr "У каждой оценки должна быть метка."
 
-#: src/components/BoardSettingsModal.vue:4888
+#: src/components/BoardSettingsModal.vue:4922
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Каждый %n месяц"
 msgstr[1] "Каждые %n месяца"
 msgstr[2] "Каждые %n месяцев"
 
-#: src/components/BoardSettingsModal.vue:4880
+#: src/components/BoardSettingsModal.vue:4914
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Каждую %n неделю"
 msgstr[1] "Каждые %n недели"
 msgstr[2] "Каждые %n недель"
 
-#: src/components/BoardSettingsModal.vue:4890
+#: src/components/BoardSettingsModal.vue:4924
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Каждый %n год"
@@ -3631,7 +3632,7 @@ msgstr "Назначение, границы или правила. Любой �
 msgid "Jump to the discussion"
 msgstr "Перейти к обсуждению"
 
-#: src/components/CardDetail.vue:7058
+#: src/components/CardDetail.vue:7187
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Перейти к обсуждению (%n комментарий)"
@@ -4008,8 +4009,8 @@ msgstr "Режим"
 msgid "Mon"
 msgstr "Пн"
 
-#: src/components/BoardSettingsModal.vue:2300
-#: src/components/CardDetail.vue:5216
+#: src/components/BoardSettingsModal.vue:2303
+#: src/components/CardDetail.vue:5284
 msgid "month"
 msgid_plural "months"
 msgstr[0] "месяц"
@@ -5622,7 +5623,7 @@ msgstr "Показывать обсуждение под карточкой"
 msgid "Show the discussion panel"
 msgstr "Показать панель обсуждения"
 
-#: src/components/CardDetail.vue:7064
+#: src/components/CardDetail.vue:7193
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Показать панель обсуждения (%n комментарий)"
@@ -6424,8 +6425,8 @@ msgstr "Webhook активен"
 msgid "Wed"
 msgstr "Ср"
 
-#: src/components/BoardSettingsModal.vue:2299
-#: src/components/CardDetail.vue:5215
+#: src/components/BoardSettingsModal.vue:2302
+#: src/components/CardDetail.vue:5283
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "неделя"
@@ -6534,8 +6535,8 @@ msgstr "Записана"
 msgid "wrote"
 msgstr "написал"
 
-#: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5217
+#: src/components/BoardSettingsModal.vue:2304
+#: src/components/CardDetail.vue:5285
 msgid "year"
 msgid_plural "years"
 msgstr[0] "год"

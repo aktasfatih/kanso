@@ -102,10 +102,13 @@ class MyCardsService {
 	 *
 	 * @return array{cards: list<array<string, mixed>>, truncated: bool, limit: int, windowDays: int}
 	 */
-	public function findMineRecentlyDone(string $uid): array {
+	public function findMineRecentlyDone(string $uid, ?int $boardId = null): array {
 		// Active boards only (#10126): an archived board is shelved, so nothing
 		// on it belongs in this feed.
 		$boards = $this->boardService->findAllActive($uid);
+		if ($boardId !== null) {
+			$boards = array_values(array_filter($boards, static fn ($board): bool => $board->getId() === $boardId));
+		}
 		$boardIds = array_map(
 			static fn ($board): int => $board->getId(),
 			$boards

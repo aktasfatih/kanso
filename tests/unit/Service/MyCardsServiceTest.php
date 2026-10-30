@@ -227,6 +227,24 @@ class MyCardsServiceTest extends TestCase {
 		$this->assertSame([], $feed['cards']);
 	}
 
+	public function testRecentlyDoneFiltersToSelectedReadableBoardBeforeTheLimit(): void {
+		$board = $this->board(9);
+		$this->boardService->method('findAllActive')->willReturn([$this->board(3), $board]);
+		$this->boardAccess->expects(self::once())->method('rolesFor')->with([$board], 'alice')->willReturn([9 => ViewerContext::ROLE_INTERNAL]);
+		$this->cardMapper->expects(self::once())->method('findAssignedDoneSinceInBoards')
+			->with(['alice'], [9], 'alice', [9 => ViewerContext::ROLE_INTERNAL], self::anything(), MyCardsService::RECENT_DONE_LIMIT + 1)
+			->willReturn([['id' => 2, 'boardId' => 9]]);
+		self::assertSame([['id' => 2, 'boardId' => 9]], $this->service->findMineRecentlyDone('alice', 9)['cards']);
+	}
+
+	public function testRecentlyDoneCannotQueryAnUnreadableSelectedBoard(): void {
+		$this->boardService->method('findAllActive')->willReturn([$this->board(3)]);
+		$this->boardAccess->method('rolesFor')->willReturn([]);
+		$this->cardMapper->expects(self::once())->method('findAssignedDoneSinceInBoards')
+			->with(['alice'], [], 'alice', [], self::anything(), MyCardsService::RECENT_DONE_LIMIT + 1)->willReturn([]);
+		self::assertSame([], $this->service->findMineRecentlyDone('alice', 9)['cards']);
+	}
+
 	public function testFindMineRecentlyDoneQueriesOnlyInsideTheRecencyWindow(): void {
 		// THE bound that makes this cheap. A card completed just inside the
 		// window is within the queried range; one completed just outside it is

@@ -106,6 +106,7 @@ class TrelloImportService {
 		private ChecklistItemMapper $checklistItemMapper,
 		private SortKeyService $sortKeyService,
 		private IDBConnection $db,
+		private ChangeNotifier $changeNotifier,
 	) {
 	}
 
@@ -137,11 +138,12 @@ class TrelloImportService {
 		try {
 			$result = $this->rebuild($doc, $actorUid);
 			$this->db->commit();
-			return $result;
 		} catch (\Throwable $e) {
 			$this->db->rollBack();
 			throw $e;
 		}
+		$this->changeNotifier->pushBoardChanged($result['boardId']);
+		return $result;
 	}
 
 	/**
@@ -151,17 +153,14 @@ class TrelloImportService {
 	private function rebuild(array $doc, string $actorUid): array {
 		$title = isset($doc['name']) && is_string($doc['name']) && $doc['name'] !== ''
 			? $this->title($doc['name']) : 'Imported Trello board';
-		$board = $this->boardService->create($title, null, $actorUid);
-		$boardId = $board->getId();
 		$description = BoardService::normalizeDescription(
 			isset($doc['desc']) && is_string($doc['desc']) ? $doc['desc'] : null
 		);
 		if ($description !== null && mb_strlen($description) > BoardService::MAX_DESCRIPTION_LENGTH) {
 			$description = BoardService::normalizeDescription(mb_substr($description, 0, BoardService::MAX_DESCRIPTION_LENGTH));
 		}
-		if ($description !== null) {
-			$this->boardService->update($boardId, null, null, null, $actorUid, description: $description);
-		}
+		$board = $this->boardService->create($title, null, $actorUid, description: $description, push: false);
+		$boardId = $board->getId();
 		$now = time();
 
 		$labelIdMap = $this->importLabels($doc, $boardId);

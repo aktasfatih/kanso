@@ -199,7 +199,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
@@ -310,7 +310,7 @@ const {
 	data: doneData,
 	isLoading: doneLoading,
 	isError: doneError,
-} = useMyRecentlyDoneCards(showDone)
+} = useMyRecentlyDoneCards(showDone, activeBoard)
 
 const doneFeed = computed(() => recentlyDoneFeed(doneData.value))
 
@@ -331,8 +331,28 @@ const filteredDoneCards = computed(() =>
 )
 
 /** Local midnight boundaries used to bucket cards by due date. */
+const clock = ref(Date.now())
+let midnightTimer
+
+function refreshClock() {
+	clock.value = Date.now()
+	const next = new Date(clock.value)
+	next.setHours(24, 0, 0, 0)
+	clearTimeout(midnightTimer)
+	midnightTimer = setTimeout(refreshClock, next.getTime() - clock.value)
+}
+
+onMounted(() => {
+	refreshClock()
+	document.addEventListener('visibilitychange', refreshClock)
+})
+onUnmounted(() => {
+	clearTimeout(midnightTimer)
+	document.removeEventListener('visibilitychange', refreshClock)
+})
+
 function dayBounds() {
-	const start = new Date()
+	const start = new Date(clock.value)
 	start.setHours(0, 0, 0, 0)
 	const tomorrow = new Date(start)
 	tomorrow.setDate(tomorrow.getDate() + 1)
