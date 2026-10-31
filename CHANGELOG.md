@@ -11,6 +11,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.44.0](https://github.com/aktasfatih/kanso/compare/v0.43.0...v0.44.0) (2026-10-31)
+
+
+### Bug Fixes
+
+* add files to cards from the Files menu ([a1a5b3c](https://github.com/aktasfatih/kanso/commit/a1a5b3cb291c88eb1d7b371b915acd79c5543bf1))
+* add space between empty board actions ([5f6d930](https://github.com/aktasfatih/kanso/commit/5f6d930f21554a80f29d94728010d70233d8ddb3))
+* address review feedback for board workflows ([4f0d126](https://github.com/aktasfatih/kanso/commit/4f0d1260306b0c1114bb3f3072c29f2ca04420c3))
+* allow the command palette with board settings open ([7743a4f](https://github.com/aktasfatih/kanso/commit/7743a4f08126f9ef509a138aaa051ac9e8d5bd6f))
+* announce special characters correctly to screen readers ([a244e87](https://github.com/aktasfatih/kanso/commit/a244e87ac8d6cf3173e0637633585782cbdf0131))
+* keep card changes tied to their original board ([8158450](https://github.com/aktasfatih/kanso/commit/8158450a9dc9fcce2196b8e343e803f966ca6084))
+* limit repeated mailbox connection tests ([24d58a7](https://github.com/aktasfatih/kanso/commit/24d58a71321f2664debeae3565640b3a0dd0dd6b))
+* make board settings accessible as a non-modal dialog ([ed75c49](https://github.com/aktasfatih/kanso/commit/ed75c497baf0042fb74c54f97dd8857db245451f))
+* move comment order control into discussion header ([da23cba](https://github.com/aktasfatih/kanso/commit/da23cbadcb13cc37a7319b317ff13ea70e506d23))
+* preserve board descriptions when importing ([49f091e](https://github.com/aktasfatih/kanso/commit/49f091ecdde63ada426e78e6004c4bac59295ec3))
+* preserve card updates when other changes fail ([30d87ec](https://github.com/aktasfatih/kanso/commit/30d87ecb2ad7253f4c9502474449760ef1dcae8a))
+* restore mobile scrolling after opening due dates ([74a8410](https://github.com/aktasfatih/kanso/commit/74a84104dedac26c94073ff34a7e09829ecfecfd))
+* scroll full-page cards as one page ([1a80911](https://github.com/aktasfatih/kanso/commit/1a809118b26791ff978ea51ee4391acf7a746138))
+* support the Files menu on Nextcloud 32 ([1f15f99](https://github.com/aktasfatih/kanso/commit/1f15f99abfedc8602a3e81a5e76e038b52871cd9))
+
+
+### Features
+
+* add an early due date reminder option ([96edd24](https://github.com/aktasfatih/kanso/commit/96edd248bfe93b9e8046c08aed95b8fd14b00c62))
+* configure board estimates through MCP ([6bc7a0a](https://github.com/aktasfatih/kanso/commit/6bc7a0a9ceac7d18ab807eb3b28ea189704b8f20))
+* filter and organize your assigned tasks ([522ad3a](https://github.com/aktasfatih/kanso/commit/522ad3ad9ebe85556ee29fc3375c99b66d9d8374))
+* filter custom views by labels ([cac260e](https://github.com/aktasfatih/kanso/commit/cac260ec6e744d4f2ac746f10798aa3c84066a72))
+* keep description formatting tools in view ([bebf61f](https://github.com/aktasfatih/kanso/commit/bebf61f7ca6aafdae117506d40a6514c9019c31c))
+* leave the card composer with Escape ([4f991e5](https://github.com/aktasfatih/kanso/commit/4f991e5515bd59cdfca59b1bb183abc274778680))
+* open the command palette throughout Kanso ([655c210](https://github.com/aktasfatih/kanso/commit/655c210f50927c410e0402ec2c60b7369d1a9ad7))
+* search labels when editing cards ([a18fc55](https://github.com/aktasfatih/kanso/commit/a18fc55d11a0d34da71e30bbf94995b8ff6ffd4f)), closes [#11269](https://github.com/aktasfatih/kanso/issues/11269)
+* select board cards with keyboard shortcuts ([726776e](https://github.com/aktasfatih/kanso/commit/726776e672575c375337d30a710a33ec64c6b52f)), closes [#11547](https://github.com/aktasfatih/kanso/issues/11547)
+* select related cards on the board ([3312203](https://github.com/aktasfatih/kanso/commit/331220314bc34e9b3dd1e43d778dfb171158ce94))
+* show project colors beside card references ([9b1485f](https://github.com/aktasfatih/kanso/commit/9b1485f2f0d386376d746b796da2ee490f8b3ecb))
+
 # [0.43.0](https://github.com/aktasfatih/kanso/compare/v0.42.0...v0.43.0) (2026-10-30)
 
 
