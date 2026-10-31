@@ -3,32 +3,16 @@
 
 import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
-// #10091 — "Clear filters" may only clear the facets the control actually
-// RENDERS.
-//
-// The filter bar is shared by two surfaces that render DIFFERENT facet sets, over
-// one and the same filter state. A View hides the Labels facet on purpose (label
-// ids are board-scoped and collide across boards) while seeding the View's own
-// saved label filter into that state — so a blanket clear wiped a constraint the
-// user could not see, silently widening the page from "this View" to the entire
-// unfiltered cross-board feed, with a page reload as the only way back.
-//
-// Two halves, one invariant:
-//   1. On a View, clearing keeps the hidden saved label filter — and the feed
-//      request that follows still carries the `fl` short key.
-//   2. On a board, where Labels IS rendered, clearing still clears labels.
-// Without the second half the fix could be "never clear labels", which would
-// break the surface the button was written for.
+// Clear only the facets rendered by the control. Views expose labels, while
+// board-specific estimates remain hidden and must survive a clear.
 
 test.describe('Clear filters is scoped to the rendered facets (#10091)', () => {
-	test('on a View it keeps the hidden saved label filter (and the feed keeps `fl`)', async ({ page }) => {
+	test('on a View clear removes visible labels while preserving hidden estimates', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 900 })
 
 		const stamp = Math.floor(Date.now() / 1000)
-		// One board; two cards share the View's label (one bug, one feature) and a
-		// third carries no label at all. The View is defined by that label alone, so
-		// "the label filter survived" is directly readable off the rendered rows: two
-		// rows, never the whole cross-board feed.
+		// Two labelled cards and one unlabelled card distinguish clearing labels
+		// from preserving the hidden estimate constraint.
 		const board = await api.post('/boards', { title: 'ClearScope ' + stamp })
 		const label = await api.post('/labels', { boardId: board.id, title: 'vclear ' + stamp, color: 'cc0066' })
 		const stack = await api.post('/stacks', { boardId: board.id, title: 'To do' })
@@ -44,7 +28,7 @@ test.describe('Clear filters is scoped to the rendered facets (#10091)', () => {
 
 		const created = await api.put('/views', {
 			name: 'ClearScope ' + stamp,
-			filter: { labels: [label.id] },
+			filter: { labels: [label.id], estimates: ['__none__'] },
 			groupBy: 'status',
 			display: 'list',
 		})
@@ -59,10 +43,8 @@ test.describe('Clear filters is scoped to the rendered facets (#10091)', () => {
 			const trigger = page.locator('.board-filter-bar__trigger')
 			await expect(rowBug).toBeVisible({ timeout: 20_000 })
 			await expect(rowFeature).toBeVisible({ timeout: 15_000 })
-			// The saved label filter counts as one active constraint even though its
-			// facet is hidden — the trigger deliberately over-reports rather than hide
-			// an active constraint.
-			await expect(trigger).toContainText('Filter · 1')
+			// Both saved constraints count, including the hidden estimate.
+			await expect(trigger).toContainText('Filter · 2')
 
 			// There is no Views section to click through: this surface passes no saved
 			// views, so the empty "Views / Default (no filter)" block is not rendered.
@@ -74,43 +56,33 @@ test.describe('Clear filters is scoped to the rendered facets (#10091)', () => {
 			await page.locator('.board-filter-bar__opt', { hasText: /^Bug$/ }).click()
 			await expect(rowFeature).toHaveCount(0, { timeout: 15_000 })
 			await expect(rowBug).toBeVisible()
-			await expect(trigger).toContainText('Filter · 2')
+			await expect(trigger).toContainText('Filter · 3')
 
 			// ── Clear ────────────────────────────────────────────────────────────────
 			await page.locator('.board-filter-bar__back').click()
+			const cleared = page.waitForRequest((request) => request.url().includes('/api/views/cards')
+				&& request.url().includes('fe=__none__')
+				&& !request.url().includes('fl=') && !request.url().includes('ft='))
 			await page.locator('.board-filter-bar__clear').click()
+			await cleared
 
-			// The visible facet is gone…
-			await expect(rowFeature).toBeVisible({ timeout: 15_000 })
-			await expect(rowBug).toBeVisible()
-			// …and the hidden one is NOT: the View is still exactly its two labelled
-			// cards, not the unfiltered cross-board feed (which would render the whole
-			// dev database into this list).
-			await expect(page.locator('.board-list-row__title')).toHaveCount(2)
+			// Both visible constraints are cleared; the hidden estimate remains.
 			await expect(trigger).toContainText('Filter · 1')
-
-			// With nothing left that this control renders, Clear is no longer offered —
-			// it would be a button that clears nothing visible.
 			await expect(page.locator('.board-filter-bar__clear')).toHaveCount(0)
 			await page.keyboard.press('Escape')
 
-			// ── The wire, not just the DOM ───────────────────────────────────────────
-			// Clearing leaves the query key untouched (that is the point), so force the
-			// next feed request by changing the sort: it must still carry `fl`. Without
-			// this the spec would pass on a client-side-only survival while the server
-			// was being asked for the unfiltered feed — the heaviest query in the app.
 			const filteredFeed = page.waitForRequest(
 				(r) => r.url().includes('/api/views/cards')
 					&& r.url().includes('sortMode=title')
-					&& r.url().includes(`fl=${label.id}`),
+					&& r.url().includes('fe=__none__')
+					&& !r.url().includes('fl='),
 				{ timeout: 20_000 },
 			)
 			await page.locator('.view-page__sort button').first().click()
-			await page.waitForTimeout(400)
 			await page.locator('.action-radio__text', { hasText: /^Title$/ }).click()
 			await filteredFeed
 			await page.keyboard.press('Escape')
-			await expect(page.locator('.board-list-row__title')).toHaveCount(2)
+
 		} finally {
 			await api.delete(`/views/${view.id}`).catch(() => {})
 			await api.delete(`/boards/${board.id}`).catch(() => {})

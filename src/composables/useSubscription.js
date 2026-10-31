@@ -56,18 +56,37 @@ export function useSubscription(cardId) {
 		return ['card', getCardId()]
 	}
 
+	function rollbackSubscriber(context, self) {
+		if (!context?.hadCard) return
+		queryClient.setQueryData(context.cardKey, (old) => {
+			if (!old) return old
+			const previous = context.previousSubscription
+			const current = old.subscription ?? { subscribed: false, subscribers: [], count: 0 }
+			const subscribers = (Array.isArray(current.subscribers) ? current.subscribers : []).filter((uid) => uid !== context.uid)
+			if (Array.isArray(previous?.subscribers) && previous.subscribers.includes(context.uid)) subscribers.push(context.uid)
+			return {
+				...old,
+				subscription: {
+					...current,
+					...(self ? { subscribed: previous?.subscribed ?? false } : {}),
+					subscribers,
+					count: subscribers.length,
+				},
+			}
+		})
+	}
+
 	/**
 	 * Toggle subscription: pass `subscribed = true` to subscribe,
 	 * `subscribed = false` to unsubscribe.
 	 */
 	const toggle = useMutation({
-		mutationFn: ({ subscribed }) =>
+		mutationFn: ({ subscribed, cardKey }) =>
 			subscribed
-				? apiSubscribeCard(getCardId())
-				: apiUnsubscribeCard(getCardId()),
+				? apiSubscribeCard(cardKey[1])
+				: apiUnsubscribeCard(cardKey[1]),
 
-		onMutate: async ({ subscribed }) => {
-			const cardKey = getCardKey()
+		onMutate: async ({ subscribed, cardKey }) => {
 
 			await queryClient.cancelQueries({ queryKey: cardKey })
 
@@ -96,17 +115,15 @@ export function useSubscription(cardId) {
 				}
 			})
 
-			return { previousCard }
+			return { cardKey, previousSubscription: previousCard?.subscription, hadCard: !!previousCard, uid }
 		},
 
 		onError: (_err, _vars, context) => {
-			if (context?.previousCard !== undefined) {
-				queryClient.setQueryData(getCardKey(), context.previousCard)
-			}
+			rollbackSubscriber(context, true)
 		},
 
-		onSettled: () => {
-			queryClient.invalidateQueries({ queryKey: getCardKey() })
+		onSettled: (_data, _err, vars) => {
+			queryClient.invalidateQueries({ queryKey: vars.cardKey })
 			// Watching/unwatching changes which comments the Inbox feed surfaces
 			// for the affected watcher (#3766, #9859).
 			invalidateCrossBoardFeeds(queryClient)
@@ -119,13 +136,12 @@ export function useSubscription(cardId) {
 	 * server enforces EDIT on the actor and READ on the target.
 	 */
 	const toggleOther = useMutation({
-		mutationFn: ({ userId, subscribed }) =>
+		mutationFn: ({ userId, subscribed, cardKey }) =>
 			subscribed
-				? apiSubscribeWatcher(getCardId(), userId)
-				: apiUnsubscribeWatcher(getCardId(), userId),
+				? apiSubscribeWatcher(cardKey[1], userId)
+				: apiUnsubscribeWatcher(cardKey[1], userId),
 
-		onMutate: async ({ userId, subscribed }) => {
-			const cardKey = getCardKey()
+		onMutate: async ({ userId, subscribed, cardKey }) => {
 
 			await queryClient.cancelQueries({ queryKey: cardKey })
 
@@ -150,22 +166,28 @@ export function useSubscription(cardId) {
 				}
 			})
 
-			return { previousCard }
+			return { cardKey, previousSubscription: previousCard?.subscription, hadCard: !!previousCard, uid: userId }
 		},
 
 		onError: (_err, _vars, context) => {
-			if (context?.previousCard !== undefined) {
-				queryClient.setQueryData(getCardKey(), context.previousCard)
-			}
+			rollbackSubscriber(context, false)
 		},
 
-		onSettled: () => {
-			queryClient.invalidateQueries({ queryKey: getCardKey() })
+		onSettled: (_data, _err, vars) => {
+			queryClient.invalidateQueries({ queryKey: vars.cardKey })
 			// Watching/unwatching changes which comments the Inbox feed surfaces
 			// for the affected watcher (#3766, #9859).
 			invalidateCrossBoardFeeds(queryClient)
 		},
 	})
 
-	return { toggle, toggleOther }
+	function withCardKey(mutation) {
+		return {
+			...mutation,
+			mutate: (variables, options) => mutation.mutate({ ...variables, cardKey: getCardKey() }, options),
+			mutateAsync: (variables, options) => mutation.mutateAsync({ ...variables, cardKey: getCardKey() }, options),
+		}
+	}
+
+	return { toggle: withCardKey(toggle), toggleOther: withCardKey(toggleOther) }
 }

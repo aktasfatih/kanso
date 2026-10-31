@@ -19,7 +19,7 @@ import httpx
 import pytest
 import respx
 
-from kanso_mcp.client import KansoClient
+from kanso_mcp.client import KansoApiError, KansoClient
 from kanso_mcp.config import KansoConfig
 from kanso_mcp.models import CardSummary
 from kanso_mcp.tools import (
@@ -85,6 +85,76 @@ def _mock_board() -> None:
     respx.get(f"{BASE}/boards/7").mock(
         return_value=httpx.Response(200, json=BOARD_PAYLOAD)
     )
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_board_estimates_and_card_order():
+    tokens = [{"label": "Small", "value": 1}, {"label": "Large", "value": 3.5}]
+    route = respx.patch(f"{BASE}/boards/7").mock(
+        return_value=httpx.Response(200, json={
+            "id": 7, "title": "Board", "estimateScale": "custom",
+            "estimateTokens": tokens, "estimateCustom": tokens, "newCardsOnTop": False,
+        })
+    )
+    tools, client = _tools()
+    async with client:
+        board = await tools["kanso_update_board"](
+            7, estimate_scale="custom", estimate_custom=tokens, new_cards_on_top=False
+        )
+    assert json.loads(route.calls.last.request.content) == {
+        "estimateScale": "custom", "estimateCustom": tokens, "newCardsOnTop": False,
+    }
+    assert board["estimateScale"] == "custom"
+    assert board["estimateTokens"] == tokens
+    assert board["estimateCustom"] == tokens
+    assert board["newCardsOnTop"] is False
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_board_keeps_custom_estimates_when_another_scale_is_active():
+    tokens = [{"label": "Small", "value": 1}, {"label": "Large", "value": 3.5}]
+    respx.get(f"{BASE}/boards/7").mock(
+        return_value=httpx.Response(200, json={
+            "board": {"id": 7, "title": "Board", "estimateScale": "none", "estimateCustom": tokens},
+            "stacks": [], "cards": [], "labels": [],
+        })
+    )
+    tools, client = _tools()
+    async with client:
+        board = await tools["kanso_get_board"](7)
+    assert board["board"]["estimateCustom"] == tokens
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_board_estimates_propagates_server_validation_error():
+    route = respx.patch(f"{BASE}/boards/7").mock(
+        return_value=httpx.Response(400, text="Unknown estimate scale")
+    )
+    tools, client = _tools()
+    async with client:
+        with pytest.raises(KansoApiError) as error:
+            await tools["kanso_update_board"](7, estimate_scale="invalid")
+    assert error.value.status_code == 400
+    assert "Unknown estimate scale" in str(error.value)
+    assert json.loads(route.calls.last.request.content) == {"estimateScale": "invalid"}
+
+
+@pytest.mark.asyncio
+async def test_update_board_schema_exposes_estimate_settings():
+    from mcp.server.fastmcp import FastMCP
+
+    client = KansoClient(KansoConfig(host="http://nc.test", username="admin", password="pw"))
+    server = FastMCP("kanso-test")
+    register_tools(server, client)
+    async with client:
+        tool = next(t for t in await server.list_tools() if t.name == "kanso_update_board")
+    props = tool.inputSchema["properties"]
+    assert {"estimate_scale", "estimate_custom", "new_cards_on_top"} <= props.keys()
+    assert not ({"estimate_scale", "estimate_custom", "new_cards_on_top"} & set(tool.inputSchema.get("required", [])))
+    assert "clears card estimates" in tool.description
 
 
 @respx.mock

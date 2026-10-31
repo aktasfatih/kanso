@@ -133,6 +133,9 @@ class KansoClient:
         description: Optional[str] = None,
         allow_ai_actors: Optional[bool] = None,
         auto_complete_parent: Optional[bool] = None,
+        estimate_scale: Optional[str] = None,
+        estimate_custom: Optional[List[Dict[str, Any]]] = None,
+        new_cards_on_top: Optional[bool] = None,
     ) -> Board:
         data = await self._request(
             "PATCH",
@@ -145,6 +148,9 @@ class KansoClient:
                 "description": description,
                 "allowAiActors": allow_ai_actors,
                 "autoCompleteParent": auto_complete_parent,
+                "estimateScale": estimate_scale,
+                "estimateCustom": estimate_custom,
+                "newCardsOnTop": new_cards_on_top,
             },
         )
         return Board.model_validate(data)

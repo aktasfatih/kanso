@@ -115,7 +115,7 @@ class MyCardsControllerTest extends TestCase {
 		$cards = [['id' => 7, 'boardId' => 3, 'title' => 'Shipped it', 'doneAt' => 1_700_000_000]];
 		$this->myCardsService->expects(self::once())
 			->method('findMineRecentlyDone')
-			->with('alice')
+			->with('alice', null)
 			->willReturn([
 				'cards' => $cards,
 				'truncated' => false,
@@ -147,6 +147,12 @@ class MyCardsControllerTest extends TestCase {
 
 		self::assertSame('1', $this->headersOf($response)[MyCardsController::HEADER_TRUNCATED]);
 		self::assertSame('14', $this->headersOf($response)[MyCardsController::HEADER_DONE_WINDOW_DAYS]);
+	}
+
+	public function testRecentlyDonePassesTheSelectedBoardToTheService(): void {
+		$this->myCardsService->expects(self::once())->method('findMineRecentlyDone')->with('alice', 9)
+			->willReturn(['cards' => [], 'truncated' => false, 'limit' => 50, 'windowDays' => 14]);
+		self::assertSame(Http::STATUS_OK, $this->controller->recentlyDone(9)->getStatus());
 	}
 
 	public function testRecentlyDoneWithNoSessionIsDeniedWithoutQuerying(): void {

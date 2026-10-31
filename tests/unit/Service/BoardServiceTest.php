@@ -105,6 +105,17 @@ class BoardServiceTest extends TestCase {
 		$this->service->create('   ', null, 'alice');
 	}
 
+	public function testCreatePersistsDescriptionAndCanDeferPush(): void {
+		$this->boardMapper->expects(self::once())->method('insert')->willReturnCallback(static function (Board $board): Board {
+			self::assertSame('Team notes', $board->getDescription());
+			$board->setId(42);
+			return $board;
+		});
+		$this->changeNotifier->expects(self::once())->method('notify')
+			->with(42, Change::ENTITY_BOARD, 42, Change::ACTION_CREATE, 'alice', false)->willReturn(new Change());
+		$this->service->create('Board', null, 'alice', '  Team notes  ', false);
+	}
+
 	public function testCreateRejectsInvalidColor(): void {
 		$this->boardMapper->expects(self::never())->method('insert');
 

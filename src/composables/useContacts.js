@@ -44,8 +44,7 @@ export function useContacts(boardId) {
 				? apiLinkContact(cardId, contact.contactUri, contact.displayName)
 				: apiUnlinkContact(cardId, contact.contactUri),
 
-		onMutate: async ({ cardId, contact, link }) => {
-			const boardKey = getBoardKey()
+		onMutate: async ({ cardId, contact, link, boardKey }) => {
 			const cardKey = ['card', String(cardId)]
 			await queryClient.cancelQueries({ queryKey: boardKey })
 			await queryClient.cancelQueries({ queryKey: cardKey })
@@ -76,25 +75,38 @@ export function useContacts(boardId) {
 				return { ...old, contacts: patch(old.contacts) }
 			})
 
-			return { previousBoard, previousCard, cardKey }
+			return { contact, link, previousContacts: previousCard?.contacts, hadCard: !!previousCard, previousBoardContacts: previousBoard?.cards?.find((c) => c.id === cardId)?.contacts, hadBoardCard: !!previousBoard?.cards?.find((c) => c.id === cardId), cardKey, boardKey, cardId }
 		},
 
 		onError: (_err, _vars, context) => {
-			if (context?.previousBoard !== undefined) {
-				queryClient.setQueryData(getBoardKey(), context.previousBoard)
+			const restoreContact = (current, previous) => {
+				const existing = Array.isArray(current) ? current : []
+				const prior = Array.isArray(previous) ? previous.find((item) => item.contactUri === context.contact.contactUri) : undefined
+				const without = existing.filter((item) => item.contactUri !== context.contact.contactUri)
+				return prior ? [...without, prior] : without
 			}
-			if (context?.previousCard !== undefined && context?.cardKey) {
-				queryClient.setQueryData(context.cardKey, context.previousCard)
+			if (context?.hadBoardCard) {
+				queryClient.setQueryData(context.boardKey, (old) => old && ({
+					...old,
+					cards: old.cards.map((card) => card.id === context.cardId ? { ...card, contacts: restoreContact(card.contacts, context.previousBoardContacts) } : card),
+				}))
+			}
+			if (context?.hadCard) {
+				queryClient.setQueryData(context.cardKey, (old) => old && ({ ...old, contacts: restoreContact(old.contacts, context.previousContacts) }))
 			}
 		},
 
-		onSettled: (_data, _err, { cardId }) => {
+		onSettled: (_data, _err, { cardId, boardKey }) => {
 			queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })
-			queryClient.invalidateQueries({ queryKey: getBoardKey() })
+			queryClient.invalidateQueries({ queryKey: boardKey })
 		},
 	})
 
 	return {
-		toggleContact,
+		toggleContact: {
+			...toggleContact,
+			mutate: (variables, options) => toggleContact.mutate({ ...variables, boardKey: getBoardKey() }, options),
+			mutateAsync: (variables, options) => toggleContact.mutateAsync({ ...variables, boardKey: getBoardKey() }, options),
+		},
 	}
 }

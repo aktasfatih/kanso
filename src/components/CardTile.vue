@@ -11,13 +11,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			ref="el"
 			class="card-tile"
 			:class="{ 'card-tile--done': isDone, 'card-tile--selected': selected, 'card-tile--compact': compact, 'card-tile--nest-target': isNestTarget, 'card-tile--revealed': revealed }"
+			:aria-disabled="pickMode && pickDisabled ? 'true' : undefined"
 			:data-card-id="card.id"
 			@click="onTileClick"
 			@mouseenter="$emit('hover', card.id)"
 			@mouseleave="$emit('hover', null)">
 			<!-- Selection checkbox - shown in multi-select mode -->
 			<input
-				v-if="selectionMode"
+				v-if="selectionMode && !pickMode"
 				type="checkbox"
 				class="card-tile__select"
 				:checked="selected"
@@ -43,16 +44,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ label.title }}
 				</span>
 			</div>
-			<!-- Human-readable reference id (e.g. KAN-123) - a stable display id -->
-			<span v-if="cardHumanId" class="card-tile__ref">{{ cardHumanId }}</span>
-			<!-- Title row: the title (max 2 lines, clamped) and the project dots
-			     share one visual line, so a card that belongs to a project does not
-			     grow a whole extra row for them. The dots sit after the title,
-			     vertically centred, and render only when the card belongs to a
-			     coloured project - a small dot per project, the project title on
-			     hover, so the tile stays clean even across several projects. -->
-			<div class="card-tile__title-row">
-				<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
+			<div v-if="cardHumanId || cardProjects.length"
+				class="card-tile__reference-row"
+				:class="{ 'card-tile__reference-row--selecting': selectionMode && !pickMode }">
+				<span v-if="cardHumanId" class="card-tile__ref">{{ cardHumanId }}</span>
 				<div v-if="cardProjects.length" class="card-tile__projects" :aria-label="t('kanso', 'Projects')">
 					<span
 						v-for="project in cardProjects"
@@ -61,6 +56,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:style="{ background: cssColor(project.color) }"
 						:title="project.title" />
 				</div>
+			</div>
+			<div class="card-tile__title-row">
+				<span class="card-tile__title" :class="{ 'card-tile__title--done': isDone }">{{ card.title }}</span>
 			</div>
 			<!-- Single meta row: all badges inline, assignees pushed to the right -->
 			<div
@@ -331,6 +329,8 @@ const props = defineProps({
 		type: Boolean,
 		default: false,
 	},
+	pickMode: { type: Boolean, default: false },
+	pickDisabled: { type: Boolean, default: false },
 	/** Whether this tile is currently in the multi-select selection. */
 	selected: {
 		type: Boolean,
@@ -365,6 +365,7 @@ const cardHumanId = computed(() => humanId(props.boardPrefix, props.card.boardSe
 const emit = defineEmits(['click', 'hover', 'select'])
 
 function onTileClick(event) {
+	if (props.pickMode && props.pickDisabled) return
 	if (props.selectionMode) {
 		emit('select', { id: props.card.id, shiftKey: event.shiftKey })
 	} else {
@@ -420,7 +421,7 @@ function syncDragHandle() {
 	// class.
 	isDragging.value = false
 	dragCleanup = () => {}
-	if (!el.value || !canEditBoard.value) return
+	if (!el.value || !canEditBoard.value || props.pickMode) return
 	dragCleanup = draggable({
 		element: el.value,
 		getInitialData: () => buildCardDragData(props.card, props.laneKey),
@@ -429,7 +430,7 @@ function syncDragHandle() {
 	})
 }
 
-watch(canEditBoard, syncDragHandle)
+watch([canEditBoard, () => props.pickMode], syncDragHandle)
 
 onMounted(() => {
 	if (!el.value) return
@@ -713,16 +714,28 @@ const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.
 /* Human-id reference badge - small, muted, monospace so it reads as an id */
 .card-tile__ref {
 	font-size: 0.68rem;
+	line-height: 14px;
+	flex-shrink: 0;
+	white-space: nowrap;
 	font-weight: 600;
 	letter-spacing: 0.02em;
 	color: var(--color-text-maxcontrast);
 	font-family: var(--font-face-monospace, monospace);
 }
 
-/* Title row - the title and the project dots share one visual line, so a card
- * that belongs to a project does not grow a whole extra row for the dots. The
- * title keeps its clamp and takes the remaining width; the dots sit after it,
- * vertically centred. */
+.card-tile__reference-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 4px 8px;
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 100%;
+}
+
+.card-tile__reference-row--selecting {
+	padding-inline-end: 24px;
+}
+
 .card-tile__title-row {
 	display: flex;
 	align-items: center;
@@ -822,13 +835,13 @@ const cardType = computed(() => CARD_TYPES.find((tp) => tp.value === props.card.
 	border: 1px solid var(--color-border);
 }
 
-/* Project dots — one per coloured project the card belongs to. A small, quiet
- * affordance: the dot carries the project's colour, the title is on hover.
- * Sits on the title row (after the title), so it adds no row of its own. */
 .card-tile__projects {
 	display: flex;
 	align-items: center;
-	flex-shrink: 0;
+	flex-wrap: wrap;
+	min-width: 10px;
+	max-width: 100%;
+	padding-top: 2px;
 	gap: 4px;
 }
 

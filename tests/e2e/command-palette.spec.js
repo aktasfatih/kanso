@@ -42,6 +42,108 @@ test.describe('Command Palette', () => {
 		await page.waitForSelector('.card-tile', { timeout: 15_000 })
 	}
 
+	test('opens from the board list and navigates to a board', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/`)
+		await expect(page.getByRole('heading', { name: 'My Boards', exact: true })).toBeVisible()
+		await page.keyboard.press('Control+k')
+		const palette = page.locator('.command-palette')
+		await expect(palette).toHaveCount(1)
+		await palette.locator('.command-palette__input').fill(state.boardTitle)
+		await expect(palette.getByRole('option', { name: state.boardTitle })).toBeVisible()
+		await page.keyboard.press('Enter')
+		await expect(page).toHaveURL(new RegExp(`/board/${state.boardId}$`))
+		await expect(palette).not.toBeVisible()
+	})
+
+	test('searches cards from another workspace page', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/my-tasks`)
+		await expect(page.getByRole('heading', { name: 'My Tasks' })).toBeVisible()
+		await page.keyboard.press('Control+k')
+		const palette = page.locator('.command-palette')
+		await palette.locator('.command-palette__input').fill('Quartz timepiece')
+		await expect(palette.getByRole('option').filter({ hasText: 'Quartz timepiece sync' })).toBeVisible()
+		await page.keyboard.press('Enter')
+		await expect(page).toHaveURL(new RegExp(`/board/${state.boardId}/card/${state.cardId}$`))
+		await expect(page.getByRole('dialog', { name: 'Quartz timepiece sync' })).toBeVisible()
+	})
+
+	test('does not open over another modal', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/`)
+		await page.locator('[data-test="open-settings"]').click()
+		const settings = page.getByRole('dialog', { name: 'Kanso settings' })
+		await expect(settings).toBeVisible()
+		await page.keyboard.press('Control+k')
+		await expect(page.locator('.command-palette')).toHaveCount(0)
+		await expect(settings).toBeVisible()
+		await page.keyboard.press('Escape')
+		await expect(settings).not.toBeVisible()
+		await page.evaluate(() => {
+			const dialog = document.createElement('div')
+			dialog.setAttribute('role', 'dialog')
+			dialog.style.cssText = 'width: 100px; height: 100px; visibility: hidden'
+			document.body.append(dialog)
+		})
+		await page.keyboard.press('Control+k')
+		await expect(page.locator('.command-palette')).toBeVisible()
+	})
+
+	test('opens from the board while the non-modal settings rail is open', async ({ page }) => {
+		await goToBoard(page)
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
+		const settings = page.getByRole('dialog', { name: 'Board settings' })
+		await expect(settings).toBeVisible()
+		const card = page.locator('.card-tile').filter({ hasText: 'Quartz timepiece sync' })
+		await card.focus()
+		await expect(card).toBeFocused()
+		await page.keyboard.press('Control+k')
+		await expect(page.locator('.command-palette')).toBeVisible()
+		await expect(settings).toBeVisible()
+	})
+
+	test('opens from the focused non-modal settings rail', async ({ page }) => {
+		await goToBoard(page)
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
+		const settings = page.getByRole('dialog', { name: 'Board settings' })
+		await expect(settings.locator('[role="tab"][aria-selected="true"]')).toBeFocused()
+		await page.keyboard.press('Control+k')
+		await expect(page.locator('.command-palette')).toBeVisible()
+		await expect(settings).toBeVisible()
+	})
+
+	test('does not open behind a nested settings dialog', async ({ page }) => {
+		await goToBoard(page)
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
+		const settings = page.getByRole('dialog', { name: 'Board settings' })
+		await settings.evaluate((panel) => {
+			const dialog = document.createElement('div')
+			dialog.setAttribute('role', 'dialog')
+			dialog.style.cssText = 'width: 100px; height: 100px'
+			panel.append(dialog)
+		})
+		await page.keyboard.press('Control+k')
+		await expect(page.locator('.command-palette')).toHaveCount(0)
+	})
+
+	test('does not open behind a visible alert dialog when focus is outside', async ({ page }) => {
+		await goToBoard(page)
+		const card = page.locator('.card-tile').filter({ hasText: 'Quartz timepiece sync' })
+		await card.focus()
+		await page.evaluate(() => {
+			const alert = document.createElement('div')
+			alert.setAttribute('role', 'alertdialog')
+			alert.style.cssText = 'width: 100px; height: 100px'
+			document.body.append(alert)
+		})
+		await page.keyboard.press('Control+k')
+		await expect(page.locator('.command-palette')).toHaveCount(0)
+	})
+
 	// ── Tests ──────────────────────────────────────────────────────────────────
 
 	test('Ctrl+K opens the command palette with a focused search input', async ({ page }) => {
@@ -61,6 +163,20 @@ test.describe('Command Palette', () => {
 		// Input should be auto-focused
 		const input = palette.locator('.command-palette__input')
 		await expect(input).toBeFocused()
+	})
+
+	test('board shortcuts do not run behind the open palette', async ({ page }) => {
+		await goToBoard(page)
+		await page.locator('.board-view__stacks-wrap').click()
+		await page.keyboard.press('Control+k')
+		const palette = page.locator('.command-palette')
+		await palette.locator('.command-palette__input').fill('Quartz')
+		const clear = palette.getByRole('button', { name: 'Clear search' })
+		await clear.focus()
+		await page.keyboard.press('j')
+		await expect(clear).toBeFocused()
+		await page.keyboard.press('Space')
+		await expect(palette.locator('.command-palette__input')).toHaveValue('')
 	})
 
 	test('empty query shows recent boards section', async ({ page }) => {
@@ -172,6 +288,6 @@ test.describe('Command Palette', () => {
 
 		// Palette should NOT have opened
 		const palette = page.locator('.command-palette')
-		await expect(palette).not.toBeVisible({ timeout: 1000 }).catch(() => {})
+		await expect(palette).toHaveCount(0)
 	})
 })

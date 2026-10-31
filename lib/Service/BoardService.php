@@ -194,7 +194,7 @@ class BoardService {
 	 *
 	 * @throws InvalidInputException on invalid title or color
 	 */
-	public function create(string $title, ?string $color, string $uid): Board {
+	public function create(string $title, ?string $color, string $uid, ?string $description = null, bool $push = true): Board {
 		$now = time();
 
 		$board = new Board();
@@ -205,6 +205,9 @@ class BoardService {
 		$board->setArchived(false);
 		$board->setLastModified($now);
 		$board->setDeletedAt(0);
+		if ($description !== null) {
+			$board->setDescription($this->validateDescription($description));
+		}
 		// Default the human-id prefix from the title (e.g. "My Project" → "MYPRO").
 		// Editable later in board settings; the number is per-card (kanso_cards.board_seq).
 		$board->setPrefix(BoardPrefix::fromTitle($validTitle));
@@ -215,7 +218,8 @@ class BoardService {
 			Change::ENTITY_BOARD,
 			$board->getId(),
 			Change::ACTION_CREATE,
-			$uid
+			$uid,
+			$push
 		);
 
 		return $board;

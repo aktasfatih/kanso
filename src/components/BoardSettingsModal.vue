@@ -5,10 +5,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <template>
 	<Teleport to="#content-vue">
 		<aside
+			ref="panelRef"
+			v-show="!suspended"
+			:inert="suspended || undefined"
+			:aria-hidden="suspended ? 'true' : undefined"
 			class="bs-modal"
 			:class="{ 'bs-modal--maximized': maximized }"
 			role="dialog"
-			aria-modal="true"
 			:aria-label="t('kanso', 'Board settings')">
 
 			<!-- Header -->
@@ -2706,6 +2709,7 @@ import {
 } from '../services/api.js'
 
 const props = defineProps({
+	suspended: { type: Boolean, default: false },
 	boardId: {
 		type: [String, Number],
 		required: true,
@@ -2766,10 +2770,30 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'leave'])
+const panelRef = ref(null)
+let lastFocusInside = false
+
+function trackFocus(event) {
+	lastFocusInside = panelRef.value?.contains(event.target) ?? false
+}
+
+function focusActiveTab() {
+	nextTick(() => {
+		if (panelRef.value?.isConnected && !props.suspended) {
+			panelRef.value.querySelector('[role="tab"][aria-selected="true"]')?.focus({ preventScroll: true })
+		}
+	})
+}
 
 // ── Escape key dismissal ──────────────────────────────────────────────────────
 function onKeydown(e) {
+	if (props.suspended) return
 	if (e.key !== 'Escape') return
+	if ([...document.querySelectorAll('[role="dialog"]:not(.bs-modal), [role="alertdialog"], dialog[open]')]
+		.some((dialog) => !dialog.classList.contains('bs-delete-confirm')
+			&& dialog.getClientRects().length > 0
+			&& getComputedStyle(dialog).visibility === 'visible'
+			&& !dialog.closest('[aria-hidden="true"], [hidden], [inert]'))) return
 	// A destructive confirm takes Escape first — dismiss it instead of tearing
 	// down the whole settings modal.
 	if (showDeleteBoardConfirm.value) {
@@ -2778,8 +2802,17 @@ function onKeydown(e) {
 	}
 	emit('close')
 }
-onMounted(() => document.addEventListener('keydown', onKeydown))
-onUnmounted(() => document.removeEventListener('keydown', onKeydown))
+onMounted(() => {
+	document.addEventListener('keydown', onKeydown, true)
+	document.addEventListener('focusin', trackFocus)
+	document.addEventListener('pointerdown', trackFocus)
+	focusActiveTab()
+})
+onUnmounted(() => {
+	document.removeEventListener('keydown', onKeydown, true)
+	document.removeEventListener('focusin', trackFocus)
+	document.removeEventListener('pointerdown', trackFocus)
+})
 
 // ── Permission constants ──────────────────────────────────────────────────────
 const PERM_READ = 1
@@ -3398,9 +3431,15 @@ const activeTab = ref(props.initialTab)
  */
 function openTab(tab) {
 	activeTab.value = tab
+	focusActiveTab()
 }
 
-defineExpose({ openTab })
+function containsFocus() {
+	return panelRef.value?.contains(document.activeElement)
+		|| (document.activeElement === document.body && lastFocusInside)
+}
+
+defineExpose({ openTab, containsFocus })
 
 // Section rail items. Sharing shows for anyone who can share (member ACL) OR
 // manage (the public link lives here now), mirroring the pane's v-if.

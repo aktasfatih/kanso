@@ -232,14 +232,8 @@ class ViewService {
 			$out[] = $card;
 		}
 
-		// Union the readable boards' labels so the client can colour the card
-		// label chips - ONE query for the whole set, walked in board order so the
-		// payload keeps the exact sequence the old per-board loop emitted. Labels
-		// are board-scoped and ids are unique per board's creation table; across
-		// boards ids can collide, but a View's tiles only reference a card's own
-		// labelIds against a single lookup — collisions are acceptable for chip
-		// colouring (the same trade-off the board makes with its per-board
-		// labelsById). Keyed by id keeps the payload deduplicated.
+		// Label ids are global primary keys; the vocabulary covers readable boards
+		// before filtering so the facet remains usable even when no cards match.
 		$labelsByBoard = $this->labelMapper->findByBoards($boardIds);
 		foreach ($boardIds as $boardId) {
 			foreach ($labelsByBoard[$boardId] ?? [] as $label) {

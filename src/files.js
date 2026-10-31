@@ -47,7 +47,7 @@ function openPicker(node) {
 	})
 }
 
-registerFileAction({
+const action = {
 	id: 'kanso-add-to-card',
 	displayName: () => t('kanso', 'Add to Kanso…'),
 	iconSvgInline: () => kansoSvg,
@@ -55,7 +55,7 @@ registerFileAction({
 	// Single readable FILE only - never a folder, never a batch. The action just
 	// offers to copy; the server re-checks the actor can read the node and can
 	// EDIT the target card, so this is a UX gate, not the security boundary.
-	enabled: (nodes) => {
+	enabled: ({ nodes }) => {
 		if (!Array.isArray(nodes) || nodes.length !== 1) {
 			return false
 		}
@@ -64,10 +64,21 @@ registerFileAction({
 			&& (node.permissions & Permission.READ) !== 0
 	},
 
-	async exec(node) {
+	async exec({ nodes: [node] }) {
 		await openPicker(node)
 		// The dialog owns success/error toasts; report a silent (null) result so
 		// the Files app does not emit its own generic toast.
 		return null
 	},
-})
+}
+
+registerFileAction(action)
+
+// Older Files releases use the legacy registry and node-based callbacks.
+if (Array.isArray(window._nc_fileactions) && !window._nc_fileactions.some((entry) => entry.id === action.id)) {
+	window._nc_fileactions.push({
+		...action,
+		enabled: (nodes) => action.enabled({ nodes }),
+		exec: (node) => action.exec({ nodes: [node] }),
+	})
+}

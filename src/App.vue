@@ -267,6 +267,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<NcAppContent>
 			<router-view />
 		</NcAppContent>
+		<CommandPalette v-if="showCommandPalette" :open="true" @close="showCommandPalette = false" />
 		<!-- Per-user app settings (#69). Minimal slice: choose which top-level
 		     sidebar sections are shown. Boards is intentionally not toggleable
 		     (always shown) so navigation can't be stranded. -->
@@ -317,7 +318,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import { getSettings, updateSettings } from './services/api.js'
@@ -334,6 +335,8 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import NcCounterBubble from '@nextcloud/vue/components/NcCounterBubble'
+import CommandPalette from './components/CommandPalette.vue'
+import { COMMAND_PALETTE_OPEN } from './services/commandPalette.js'
 import ViewDashboardIcon from 'vue-material-design-icons/ViewDashboard.vue'
 import FormatListChecksIcon from 'vue-material-design-icons/FormatListChecks.vue'
 import CheckDecagramIcon from 'vue-material-design-icons/CheckDecagram.vue'
@@ -360,6 +363,25 @@ import { useCardPrefs } from './composables/useCardPrefs.js'
 
 const route = useRoute()
 const router = useRouter()
+const showCommandPalette = ref(false)
+provide(COMMAND_PALETTE_OPEN, showCommandPalette)
+
+function handleCommandPaletteKeydown(event) {
+	if (event.isComposing || event.defaultPrevented || event.altKey
+		|| !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') return
+	const target = event.target
+	if (!(target instanceof Element)
+		|| target.closest('input, textarea, [contenteditable], [role="dialog"]:not(.bs-modal), [role="alertdialog"], [role="menu"]')
+		|| [...document.querySelectorAll('[role="dialog"]:not(.bs-modal), [role="alertdialog"], dialog[open]')]
+			.some((dialog) => dialog.getClientRects().length > 0
+				&& getComputedStyle(dialog).visibility === 'visible'
+				&& !dialog.closest('[aria-hidden="true"], [hidden], [inert]'))) return
+	event.preventDefault()
+	showCommandPalette.value = true
+}
+
+onMounted(() => document.addEventListener('keydown', handleCommandPaletteKeydown))
+onUnmounted(() => document.removeEventListener('keydown', handleCommandPaletteKeydown))
 
 // Editor toolbar pref — shared with all MarkdownEditor instances reactively
 const { editorToolbarHidden, setEditorToolbarHidden } = useEditorPrefs()

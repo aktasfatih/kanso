@@ -22,17 +22,20 @@ installed rather than saying so:
 | Spec | Needs |
 | --- | --- |
 | [`card-contacts.spec.js`](./card-contacts.spec.js) | `contacts` — `ContactService::isAvailable()` is false without the app, so the picker's search returns an empty list and the spec times out waiting for its option |
+| [`card-attr-acl.spec.js`](./card-attr-acl.spec.js) | `contacts` — seeds and links a contact to exercise the attribute-bar permissions |
 | [`deck-import.spec.js`](./deck-import.spec.js) | `deck` — its `beforeAll` seeds a source board through the real Deck API, so the whole describe errors out |
 | [`deck-import-ui.spec.js`](./deck-import-ui.spec.js) | `deck` — same reason: it seeds a source board, then drives the import modal to assert the result summary |
 
 `dev/setup.sh` side-loads both (pinned release tarballs) through
 [`dev/install-optional-apps.sh`](../../dev/install-optional-apps.sh), and the CI
 `e2e` job gets them from the same script, so a local run and CI provision
-identically. If you booted with `KANSO_SKIP_OPTIONAL_APPS=1`, run
-`./dev/install-optional-apps.sh` against the running stack to add them
-afterwards. The pins support Nextcloud **34** only, so on a stack booted with
-`NC_VERSION=30..33` the script skips itself and those two specs stay red —
-that's expected, not a regression.
+identically. On Nextcloud 34, if you booted with `KANSO_SKIP_OPTIONAL_APPS=1`,
+run `NC_VERSION=34 KANSO_SKIP_OPTIONAL_APPS=0 ./dev/install-optional-apps.sh`
+against the running stack to add them
+afterwards. The installer runs only when `NC_VERSION=34` (the default); it skips
+all other versions, including supported versions 32, 33 and 35. On those stacks,
+provision compatible apps separately before running specs that need them. If an
+app is missing, its listed specs fail rather than skip.
 
 ## Realtime push (`notify_push`)
 

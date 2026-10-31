@@ -4,6 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
 	<div
+		ref="cardRoot"
 		class="card-modal"
 		:class="[
 			`card-modal--tab-${viewMode}`,
@@ -568,7 +569,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<button
 							class="card-modal__reminder-cancel"
 							:title="t('kanso', 'Cancel reminder')"
-							:disabled="cancelReminder.isPending.value"
+							:disabled="cancelReminder.isPending.value || String(reminder.id).startsWith('optimistic-')"
 							@click="handleCancelReminder(reminder)">
 							<CloseIcon :size="12" />
 						</button>
@@ -677,6 +678,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					     manager) the repeat rule, all of them writes. -->
 					<div v-if="canEdit || cardData.duedate" class="card-modal__attr">
 						<component
+							ref="duePickerButton"
 							:is="canEdit ? 'button' : 'span'"
 							class="card-modal__pill"
 							data-pill="due"
@@ -694,6 +696,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ cardData.duedate ? dueDateLabel : t('kanso', 'Due date') }}
 						</component>
 						<div v-if="openPicker === 'due'" class="card-modal__popover card-modal__popover--pad card-modal__popover--date">
+							<button class="card-modal__date-popover-close" type="button" :aria-label="t('kanso', 'Close')" @click="closeDuePicker($event.detail === 0)">
+								<CloseIcon :size="20" />
+							</button>
 							<!-- A timed card is a Start → End window; an all-day card is a
 							     single day, so it collapses to one date field (no time). -->
 							<template v-if="!isAllDay">
@@ -745,6 +750,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:checked="isAllDay"
 									@change="toggleAllDay($event.target.checked)">
 								{{ t('kanso', 'All day (no time)') }}
+							</label>
+							<label v-if="cardData.duedate" class="card-modal__reminder-day-before">
+								<input
+									type="checkbox"
+									:checked="cardData.dueReminderDayBefore === true"
+									:disabled="savingDayBeforeReminder || updateCard.isPending.value"
+									@change="toggleDayBeforeReminder">
+								{{ t('kanso', 'Remind assignees and card watchers one day before') }}
 							</label>
 							<!-- Surface date-save failures here (e.g. the end-before-start
 							     guard's 400) - otherwise a rejected date edit is silent. -->
@@ -1134,15 +1147,26 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<div v-if="canEdit" class="card-modal__attr">
 						<button
 							class="card-modal__pill card-modal__pill--dashed card-modal__pill--sm"
+							ref="labelPickerButton"
 							data-pill="label"
 							:aria-expanded="openPicker === 'label'"
-							@click="togglePicker('label')">
+							@click="toggleLabelPicker">
 							<PlusIcon :size="12" />
 							{{ t('kanso', 'Label') }}
 						</button>
 						<div v-if="openPicker === 'label'" class="card-modal__popover">
+							<input
+								ref="labelSearchInput"
+								v-model="labelQuery"
+								type="search"
+								class="card-modal__label-search"
+								:placeholder="t('kanso', 'Search labels…')"
+								:aria-label="t('kanso', 'Search labels…')">
 							<div v-if="boardLabels.length === 0" class="card-modal__popover-empty">
 								{{ t('kanso', 'No labels on this board yet.') }}
+							</div>
+							<div v-else-if="filteredBoardLabels.length === 0" class="card-modal__popover-empty">
+								{{ t('kanso', 'No labels match.') }}
 							</div>
 							<!-- Same rule as the assign rows above (#10705): `aria-busy`,
 							     never `disabled`, so activating a label by keyboard does not
@@ -1151,7 +1175,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							     queue, which also keeps a label picked mid-write from being
 							     dropped (#10920). -->
 							<button
-								v-for="label in boardLabels"
+								v-for="label in filteredBoardLabels"
 								:key="label.id"
 								class="card-modal__label-toggle"
 								:class="{
@@ -1426,6 +1450,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:upload-image="(file) => uploadAttachment.mutateAsync(file)"
 										:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
 										:show-toolbar="!editorToolbarHidden"
+										:sticky-toolbar="true"
 										@submit="saveDescription"
 										@escape="cancelDescriptionEdit"
 										@image-error="(msg) => { descPasteError = msg || t('kanso', 'Failed to upload image.') }" />
@@ -2167,9 +2192,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<option value="">{{ t('kanso', 'Pick a card…') }}</option>
 									<option v-for="c in boardCardsForRelation" :key="c.id" :value="c.id">{{ c.title }}</option>
 								</select>
+								<button ref="relationBoardPickerButton" class="card-modal__relation-add-btn" data-test="relation-board-picker" @click="pickRelationOnBoard">
+									{{ t('kanso', 'Pick on board') }}
+								</button>
 								<button
 									class="card-modal__relation-add-btn"
-									:disabled="!newRelationTargetId || addRelation.isPending.value"
+									:disabled="!hasValidRelationTarget || addRelation.isPending.value"
 									@click="handleAddRelation">
 									{{ t('kanso', 'Add') }}
 								</button>
@@ -2858,6 +2886,7 @@ import { normalizeCardFeatures } from '../services/cardFeatures.js'
 import { renderMarkdown, buildCardRefMap } from '../services/markdown.js'
 import { useEditorPrefs } from '../composables/useEditorPrefs.js'
 import { useCardPrefs } from '../composables/useCardPrefs.js'
+import { relationPicker, beginRelationPick, clearRelationPick, navigateRelationPick } from '../services/relationPicker.js'
 
 /**
  * Given a hex background color return '#000' or '#fff' for readable contrast.
@@ -3024,6 +3053,12 @@ function retryCardLoad() {
 // Read board data from cache (same queryKey as BoardView - no extra request).
 const { data: boardData } = useBoard(boardId)
 const boardLabels = computed(() => boardData.value?.labels ?? [])
+const labelQuery = ref('')
+const labelSearchInput = ref(null)
+const filteredBoardLabels = computed(() => {
+	const query = labelQuery.value.trim().toLocaleLowerCase()
+	return query ? boardLabels.value.filter((label) => label.title.toLocaleLowerCase().includes(query)) : boardLabels.value
+})
 const boardReviewTypes = computed(() => boardData.value?.reviewTypes ?? [])
 const boardCardFields = computed(() => boardData.value?.cardFields ?? [])
 // Built-in card sections this board's manager left switched on (#5894). Read
@@ -3211,8 +3246,8 @@ async function handleToggleLabel(label) {
 		// sent, so there is nothing to announce either.
 		if (result === TOGGLE_ALREADY_PENDING) return
 		announceMove(assign
-			? t('kanso', 'Label {label} added', { label: label.title })
-			: t('kanso', 'Label {label} removed', { label: label.title }))
+			? t('kanso', 'Label {label} added', { label: label.title }, { escape: false, sanitize: false })
+			: t('kanso', 'Label {label} removed', { label: label.title }, { escape: false, sanitize: false }))
 	} catch (err) {
 		labelToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update label.')
 	}
@@ -3501,8 +3536,8 @@ async function handleToggleAssignee(uid, assign) {
 		if (result === TOGGLE_ALREADY_PENDING) return
 		const who = participantName(uid)
 		announceMove(assign
-			? t('kanso', '{user} assigned', { user: who })
-			: t('kanso', '{user} unassigned', { user: who }))
+			? t('kanso', '{user} assigned', { user: who }, { escape: false, sanitize: false })
+			: t('kanso', '{user} unassigned', { user: who }, { escape: false, sanitize: false }))
 	} catch (err) {
 		assigneeError.value = err?.response?.data?.error || t('kanso', 'Failed to update assignee.')
 	}
@@ -3691,6 +3726,7 @@ async function submitCustomReminder() {
 }
 
 async function handleCancelReminder(reminder) {
+	if (String(reminder.id).startsWith('optimistic-')) return
 	reminderError.value = ''
 	try {
 		await cancelReminder.mutateAsync({ cardId: props.cardId, reminderId: reminder.id })
@@ -4101,6 +4137,12 @@ async function handleSetCoverColor(hex) {
 // All-day due dates hide the time-of-day (input becomes a plain date; the pill
 // and value drop "HH:MM"). The stored duedate is unchanged (at 00:00).
 const isAllDay = computed(() => cardData.value?.allDay === true)
+const savingDayBeforeReminder = ref(false)
+function setDateSaveError(message, forCard) {
+	if (!isStillCurrentCard(forCard)) return
+	saveError.value = message
+	if (openPicker.value !== 'due') showError(message)
+}
 
 // datetime-local needs "YYYY-MM-DDTHH:mm"; an all-day input is just "YYYY-MM-DD".
 const dueDateInputValue = computed(() => {
@@ -4117,6 +4159,7 @@ const dueDateInputValue = computed(() => {
 // Commit on blur/Enter instead: the value is bound straight to the computed and
 // only saved once the user leaves the field.
 async function handleDueDateChange(event) {
+	const forCard = props.cardId
 	const val = event.target.value
 	if (!val) return
 	// Leaving the field without editing it shouldn't fire a redundant PATCH.
@@ -4126,11 +4169,12 @@ async function handleDueDateChange(event) {
 	try {
 		await updateCard.mutateAsync({ data: { duedate: iso } })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update due date.')
+		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to update due date.'), forCard)
 	}
 }
 
 async function toggleAllDay(checked) {
+	const forCard = props.cardId
 	// An all-day card is a single day (a due date only) — the Start field is hidden.
 	// Clear any start date when switching to all-day so it can't linger invisibly,
 	// which would otherwise trip the end-before-start guard or silently anchor a
@@ -4139,15 +4183,37 @@ async function toggleAllDay(checked) {
 	try {
 		await updateCard.mutateAsync({ data })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update due date.')
+		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to update due date.'), forCard)
+	}
+}
+
+async function toggleDayBeforeReminder(event) {
+	const input = event.target
+	const checked = input.checked
+	const forCard = props.cardId
+	input.checked = cardData.value?.dueReminderDayBefore === true
+	saveError.value = ''
+	savingDayBeforeReminder.value = true
+	try {
+		const saved = await updateCard.mutateAsync({ data: { dueReminderDayBefore: checked } })
+		queryClient.setQueryData(['card', forCard], (current) => current
+			? { ...current, dueReminderDayBefore: saved.dueReminderDayBefore }
+			: current)
+	} catch (err) {
+		if (isStillCurrentCard(forCard)) {
+			setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to save.'), forCard)
+		}
+	} finally {
+		savingDayBeforeReminder.value = false
 	}
 }
 
 async function clearDueDate() {
+	const forCard = props.cardId
 	try {
 		await updateCard.mutateAsync({ data: { duedate: '' } })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to clear due date.')
+		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to clear due date.'), forCard)
 	}
 }
 
@@ -4162,6 +4228,7 @@ const startDateInputValue = computed(() => {
 })
 
 async function handleStartDateChange(event) {
+	const forCard = props.cardId
 	const val = event.target.value
 	if (!val) return
 	// Leaving the field without editing it shouldn't fire a redundant PATCH.
@@ -4170,15 +4237,16 @@ async function handleStartDateChange(event) {
 	try {
 		await updateCard.mutateAsync({ data: { startDate: iso } })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to update start date.')
+		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to update start date.'), forCard)
 	}
 }
 
 async function clearStartDate() {
+	const forCard = props.cardId
 	try {
 		await updateCard.mutateAsync({ data: { startDate: '' } })
 	} catch (err) {
-		saveError.value = err?.response?.data?.error || t('kanso', 'Failed to clear start date.')
+		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to clear start date.'), forCard)
 	}
 }
 
@@ -6071,7 +6139,13 @@ function onRootEscape() {
 		escapeClaimed = false
 	}, 0)
 	if (openPicker.value !== null) {
+		const wasLabelPicker = openPicker.value === 'label'
 		openPicker.value = null
+		if (wasLabelPicker) {
+			nextTick(() => {
+				if (openPicker.value === null) labelPickerButton.value?.focus()
+			})
+		}
 		return
 	}
 	if (props.mode === 'modal') {
@@ -6129,11 +6203,31 @@ function onDocumentMousedown(event) {
 	}
 	requestClose()
 }
+function onDocumentTouchStart(event) {
+	const target = event.target
+	if (openPicker.value !== 'due' || !(target instanceof Element)
+		|| !cardRoot.value?.contains(target) || target.closest('.card-modal__popover')
+		|| target.closest('[aria-expanded="true"]')) {
+		return
+	}
+	closeDuePicker()
+}
+function closeDuePicker(restoreFocus = false) {
+	const focused = document.activeElement
+	if (focused instanceof HTMLElement && cardRoot.value?.contains(focused)
+		&& focused.closest('.card-modal__popover--date')) {
+		focused.blur()
+	}
+	openPicker.value = null
+	if (restoreFocus) nextTick(() => duePickerButton.value?.focus({ preventScroll: true }))
+}
 onMounted(() => {
 	document.addEventListener('mousedown', onDocumentMousedown, true)
+	document.addEventListener('touchstart', onDocumentTouchStart, { capture: true, passive: true })
 })
 onBeforeUnmount(() => {
 	document.removeEventListener('mousedown', onDocumentMousedown, true)
+	document.removeEventListener('touchstart', onDocumentTouchStart, true)
 	if (highlightTimer) clearTimeout(highlightTimer)
 	stopPinningTarget()
 })
@@ -6862,7 +6956,7 @@ function moveWithinBoard(targetStackId, afterCardId) {
 	announceMove(t('kanso', '{card} moved to {stack}', {
 		card: cardData.value?.title || t('kanso', 'Card'),
 		stack: stackTitle,
-	}))
+	}, { escape: false, sanitize: false }))
 }
 
 // afterCardId=null → top; last card in the stack → bottom.
@@ -6959,12 +7053,47 @@ const hasAnyRelation = computed(() => relationGroups.value.some((g) => g.items.l
 const newRelationKind = ref('blocks')
 const newRelationTargetId = ref('')
 const relationError = ref('')
+const relationBoardPickerButton = ref(null)
+const focusRelationPickerOnReturn = ref(false)
+
+watch(relationBoardPickerButton, (button) => {
+	if (button && focusRelationPickerOnReturn.value) {
+		focusRelationPickerOnReturn.value = false
+		button.focus()
+	}
+})
+
+async function pickRelationOnBoard() {
+	if (!canEdit.value || !cardData.value || boardId.value == null || !confirmDiscardUnsaved()) return
+	const onOwnBoard = route.name === 'card-modal' && String(route.params.id) === String(boardId.value)
+	beginRelationPick({
+		boardId: String(boardId.value),
+		sourceId: Number(cardData.value.id),
+		kind: newRelationKind.value,
+		previousTargetId: newRelationTargetId.value || null,
+		originPath: route.fullPath,
+		controlled: props.controlled,
+	})
+	await navigateRelationPick(router, { name: 'board', params: { id: String(boardId.value) }, query: onOwnBoard ? route.query : {} })
+}
+
+watch([() => props.cardId, boardId, relationPicker], () => {
+	const session = relationPicker.value
+	if (!session || session.phase !== 'returning' || Number(props.cardId) !== session.sourceId
+		|| String(boardId.value) !== session.boardId || route.fullPath !== session.originPath) return
+	newRelationKind.value = session.kind
+	newRelationTargetId.value = session.targetId ?? ''
+	focusRelationPickerOnReturn.value = true
+	showRelationEditor.value = true
+	clearRelationPick()
+}, { immediate: true })
 
 // Cards on this board available for selection (excluding the current card)
 const boardCardsForRelation = computed(() => {
 	const cards = boardData.value?.cards ?? []
 	return cards.filter((c) => c.id !== Number(props.cardId) && !c.archived)
 })
+const hasValidRelationTarget = computed(() => boardCardsForRelation.value.some((card) => Number(card.id) === Number(newRelationTargetId.value)))
 
 const addRelation = useMutation({
 	mutationFn: ({ otherCardId, kind }) =>
@@ -6986,7 +7115,7 @@ const removeRelation = useMutation({
 
 async function handleAddRelation() {
 	const targetId = Number(newRelationTargetId.value)
-	if (!targetId) return
+	if (!targetId || !boardCardsForRelation.value.some((card) => Number(card.id) === targetId)) return
 	relationError.value = ''
 	try {
 		await addRelation.mutateAsync({ otherCardId: targetId, kind: newRelationKind.value })
@@ -7209,13 +7338,23 @@ const statusChipLabel = computed(() =>
 
 // One attribute-bar popover open at a time:
 // 'priority' | 'due' | 'estimate' | 'assign' | 'label' | 'review' | null
+const cardRoot = ref(null)
+const duePickerButton = ref(null)
 const openPicker = ref(null)
+const labelPickerButton = ref(null)
 
 watch(() => openPicker.value === 'estimate', (open) => {
 	if (open) numberEstimateDraft.value = currentEstimate.value
 })
 function togglePicker(name) {
 	openPicker.value = openPicker.value === name ? null : name
+}
+async function toggleLabelPicker() {
+	togglePicker('label')
+	if (openPicker.value !== 'label') return
+	labelQuery.value = ''
+	await nextTick()
+	if (openPicker.value === 'label') labelSearchInput.value?.focus()
 }
 
 // Attribute-bar display helpers
@@ -7999,6 +8138,9 @@ async function handleToggleProject(projectId) {
 	padding: 10px 12px;
 	gap: 6px;
 }
+.card-modal__date-popover-close {
+	display: none;
+}
 /* The date popover packs the Due date + Start date + the whole Repeat control, so
    the shared 200px min-width left it cramped and the 320px cap made it scroll.
    Give it room to lay the fields out comfortably (the mobile inset-sheet rule
@@ -8107,7 +8249,8 @@ async function handleToggleProject(projectId) {
 }
 /* Contacts picker (#3530) */
 .card-modal__contact-search,
-.card-modal__assign-search {
+.card-modal__assign-search,
+.card-modal__label-search {
 	width: 100%;
 	margin-bottom: 4px;
 	padding: 4px 8px;
@@ -8303,7 +8446,8 @@ async function handleToggleProject(projectId) {
 	color: var(--color-main-text);
 	font: inherit;
 }
-.card-modal__allday {
+.card-modal__allday,
+.card-modal__reminder-day-before {
 	display: flex;
 	align-items: center;
 	gap: 6px;
@@ -10176,6 +10320,24 @@ async function handleToggleProject(projectId) {
 		max-width: none;
 		max-height: 60vh;
 	}
+	.card-modal__date-popover-close {
+		display: flex;
+		position: sticky;
+		top: 0;
+		z-index: 1;
+		align-self: flex-end;
+		align-items: center;
+		justify-content: center;
+		flex: 0 0 44px;
+		width: 44px;
+		height: 44px;
+		padding: 0;
+		border: 0;
+		border-radius: var(--border-radius-element);
+		color: var(--color-main-text);
+		background: var(--color-main-background);
+		cursor: pointer;
+	}
 	.card-modal__body { grid-template-columns: 1fr; }
 	/* Panes stack: the persisted split width and its drag handle are ignored. */
 	.card-modal__resizer { display: none; }
@@ -10185,6 +10347,10 @@ async function handleToggleProject(projectId) {
 	.card-modal__discussion-toggle { display: none; }
 	.card-modal__content,
 	.card-modal__discussion { max-height: none; }
+	.card-modal__content {
+		overflow: visible;
+		--kanso-editor-toolbar-top: 45px;
+	}
 	.card-modal__discussion { border-left: none; border-top: 1px solid var(--color-border); }
 	/* #122 — on a phone the title and two date chips cannot share one line
 	   without crushing the title to an ellipsis, so the dates drop to a second
@@ -10341,5 +10507,35 @@ async function handleToggleProject(projectId) {
 	/* Full-page view fills the available width (the content panes keep their own
 	   inner padding, so text isn't flush to the edges). */
 	width: 100%;
+	flex: none;
+}
+
+.card-modal--mode-page .card-modal__body {
+	flex: none;
+	grid-template-rows: auto;
+	overflow: visible;
+}
+
+.card-modal--mode-page .card-modal__content,
+.card-modal--mode-page .card-modal__discussion,
+.card-modal--mode-page .card-modal__activity,
+.card-modal--mode-page .card-modal__thread-scroll {
+	max-height: none;
+	overflow: visible;
+}
+
+.card-modal--mode-page .card-modal__discussion {
+	align-self: start;
+}
+
+.card-modal--mode-page .card-modal__tabbar,
+.card-modal--mode-page .card-modal__discussion-tabs,
+.card-modal--mode-page .card-modal__comment-toolbar,
+.card-modal--mode-page .card-modal__composer {
+	position: static;
+}
+
+.card-modal--mode-page .card-modal__content {
+	--kanso-editor-toolbar-top: 0px;
 }
 </style>

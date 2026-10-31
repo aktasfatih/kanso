@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— 无 —"
 
-#: src/components/BoardSettingsModal.vue:4893
+#: src/components/BoardSettingsModal.vue:4932
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n 次"
@@ -132,7 +132,7 @@ msgstr[0] "{count} 张卡片没有估算，每张按典型估算值 {points} 计
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "有 {count} 张卡片的估算值不适用于新刻度，将被清除。此操作无法撤销。"
 
-#: src/components/BoardSettingsModal.vue:145
+#: src/components/BoardSettingsModal.vue:148
 msgid "{count} character left"
 msgid_plural "{count} characters left"
 msgstr[0] "还剩 {count} 个字符"
@@ -352,7 +352,7 @@ msgid "%n card"
 msgid_plural "%n cards"
 msgstr[0] "%n 张卡片"
 
-#: src/components/StackColumn.vue:1066
+#: src/components/StackColumn.vue:1090
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "已归档 %n 张卡片"
@@ -377,7 +377,7 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:5025
+#: src/components/CardDetail.vue:5093
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
@@ -387,12 +387,12 @@ msgid "%n file"
 msgid_plural "%n files"
 msgstr[0] "%n 个文件"
 
-#: src/components/CardDetail.vue:5023
+#: src/components/CardDetail.vue:5091
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
 
-#: src/views/BoardView.vue:2640
+#: src/views/BoardView.vue:2751
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "已复制 %n 个 ID。"
@@ -412,7 +412,7 @@ msgid "%n label was not created and is missing from the imported cards: only boa
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
 msgstr[0] "有 %n 个标签未能创建，导入的卡片中缺少它们：只有看板管理者才能添加新标签。请让管理者添加，然后在卡片上设置它们。"
 
-#: src/components/CardDetail.vue:5021
+#: src/components/CardDetail.vue:5089
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -432,12 +432,12 @@ msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n 点"
 
-#: src/components/CardDetail.vue:1237
+#: src/components/CardDetail.vue:1261
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
 
-#: src/components/CardDetail.vue:2320
+#: src/components/CardDetail.vue:2348
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n 条回复"
@@ -452,7 +452,7 @@ msgid "%n unscheduled card"
 msgid_plural "%n unscheduled cards"
 msgstr[0] "%n 张未排期的卡片"
 
-#: src/components/CardDetail.vue:324
+#: src/components/CardDetail.vue:325
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n 位关注者"
@@ -662,6 +662,7 @@ msgstr "停滞（>{days} 天）"
 
 #: src/views/BoardList.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/MyWorkView.vue
 msgid "All boards"
 msgstr "所有看板"
@@ -670,6 +671,10 @@ msgstr "所有看板"
 msgid "All day (no time)"
 msgstr "全天（不含时间）"
 
+#: src/views/MyCardsView.vue
+msgid "All due dates"
+msgstr "所有截止日期"
+
 #: src/components/BoardSettingsModal.vue
 msgid "All issues"
 msgstr "全部 issue"
@@ -677,6 +682,10 @@ msgstr "全部 issue"
 #: src/components/CardDetail.vue
 msgid "All requested reviews must be approved before this card can be marked done. Waiting on {names}."
 msgstr "所有已请求的评审通过后才能将此卡片标记为已完成。等待 {names}。"
+
+#: src/views/MyCardsView.vue
+msgid "All statuses"
+msgstr "所有状态"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Allow AI actors"
@@ -1005,6 +1014,8 @@ msgstr "蓝色"
 #: src/views/BoardStats.vue
 #: src/views/BoardView.vue
 #: src/views/CardPage.vue
+#: src/views/MyCardsView.vue
+#: src/views/MyWorkView.vue
 #: src/views/ProjectView.vue
 #: src/views/PublicBoard.vue
 #: src/views/TrashView.vue
@@ -1149,6 +1160,7 @@ msgstr "可共享"
 #: src/components/CardDetail.vue
 #: src/components/ManageTemplatesModal.vue
 #: src/views/BoardList.vue
+#: src/views/BoardView.vue
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 #: src/views/TrashView.vue
@@ -1424,7 +1436,7 @@ msgstr "清单进度 {total} 中的 {done}"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:519
+#: src/components/CardTile.vue:520
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "清单进度 {total} 中的 {done}，%n 个步骤已逾期"
@@ -1432,6 +1444,10 @@ msgstr[0] "清单进度 {total} 中的 {done}，%n 个步骤已逾期"
 #: src/components/CsvImportModal.vue
 msgid "Choose a board…"
 msgstr "选择看板…"
+
+#: src/views/BoardView.vue
+msgid "Choose a card on this board to add a relation."
+msgstr "选择此看板上的一张卡片以添加关联。"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CsvImportModal.vue
@@ -1530,6 +1546,7 @@ msgid "close"
 msgstr "关闭"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/CardDetail.vue
 #: src/components/CsvImportModal.vue
 #: src/views/BoardList.vue
 #: src/views/PublicBoard.vue
@@ -1973,8 +1990,8 @@ msgstr "危险区域"
 msgid "Date"
 msgstr "日期"
 
-#: src/components/BoardSettingsModal.vue:2298
-#: src/components/CardDetail.vue:5214
+#: src/components/BoardSettingsModal.vue:2301
+#: src/components/CardDetail.vue:5282
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -2319,6 +2336,7 @@ msgstr "截止 {date}"
 #: src/components/CardDetail.vue
 #: src/components/CsvImportModal.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Due date"
 msgstr "截止日期"
@@ -2528,7 +2546,7 @@ msgstr "每"
 msgid "Every card in this project is done."
 msgstr "此项目中的所有卡片均已完成。"
 
-#: src/components/BoardSettingsModal.vue:4873
+#: src/components/BoardSettingsModal.vue:4912
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "每 %n 天"
@@ -2537,17 +2555,17 @@ msgstr[0] "每 %n 天"
 msgid "Every estimate needs a label."
 msgstr "每个估算值都需要一个标签。"
 
-#: src/components/BoardSettingsModal.vue:4883
+#: src/components/BoardSettingsModal.vue:4922
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "每 %n 个月"
 
-#: src/components/BoardSettingsModal.vue:4875
+#: src/components/BoardSettingsModal.vue:4914
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "每 %n 周"
 
-#: src/components/BoardSettingsModal.vue:4885
+#: src/components/BoardSettingsModal.vue:4924
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "每 %n 年"
@@ -3213,6 +3231,10 @@ msgstr "筛选已删除的卡片"
 msgid "Filter trash…"
 msgstr "筛选回收站…"
 
+#: src/views/MyCardsView.vue
+msgid "Filters and sorting apply to loaded open tasks."
+msgstr "筛选和排序适用于已加载的未完成任务。"
+
 #: src/components/CardDetail.vue
 msgid "Find the card on board"
 msgstr "在看板上查找此卡片"
@@ -3448,6 +3470,7 @@ msgstr "在“文件”的文件夹中，被清理掉的备份会进入该账号
 #: src/components/CardTile.vue
 #: src/components/StackColumn.vue
 #: src/composables/useSwimlanes.js
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 msgid "In progress"
 msgstr "进行中"
@@ -3515,7 +3538,7 @@ msgstr "看板的用途、范围或协作约定。看板中的所有人都可以
 msgid "Jump to the discussion"
 msgstr "跳转到讨论"
 
-#: src/components/CardDetail.vue:7058
+#: src/components/CardDetail.vue:7187
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "跳转到讨论（%n 条评论）"
@@ -3751,6 +3774,7 @@ msgid "Linking…"
 msgstr "正在关联…"
 
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "List"
 msgstr "列表"
@@ -3889,8 +3913,8 @@ msgstr "模式"
 msgid "Mon"
 msgstr "周一"
 
-#: src/components/BoardSettingsModal.vue:2300
-#: src/components/CardDetail.vue:5216
+#: src/components/BoardSettingsModal.vue:2303
+#: src/components/CardDetail.vue:5284
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -4259,6 +4283,10 @@ msgid "No label"
 msgstr "无标签"
 
 #: src/components/CardDetail.vue
+msgid "No labels match."
+msgstr "没有匹配的标签。"
+
+#: src/components/CardDetail.vue
 msgid "No labels on this board yet."
 msgstr "此看板上还没有标签。"
 
@@ -4273,6 +4301,10 @@ msgstr "不限"
 #: src/components/SearchBox.vue
 msgid "No matches for \"{q}\""
 msgstr "没有与“{q}”匹配的结果"
+
+#: src/views/MyCardsView.vue
+msgid "No matching tasks"
+msgstr "没有匹配的任务"
 
 #: src/views/ProjectView.vue
 msgid "No notes yet. Start a discussion log for this project."
@@ -4395,6 +4427,7 @@ msgstr "尚未与任何人共享。"
 #: src/components/BoardListView.vue
 #: src/components/BoardTimelineView.vue
 #: src/components/CardDetail.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 msgid "Not started"
 msgstr "未开始"
@@ -4479,6 +4512,10 @@ msgstr "仅支持 https://github.com 链接"
 #: src/components/BoardSettingsModal.vue
 msgid "Only issues with a label"
 msgstr "仅带指定标签的 issue"
+
+#: src/views/MyCardsView.vue
+msgid "Only loaded tasks are shown."
+msgstr "仅显示已加载的任务。"
 
 #: src/views/MyCardsView.vue
 msgid "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list."
@@ -4683,6 +4720,10 @@ msgstr "为新标签选择颜色"
 msgid "Pick color for new review type"
 msgstr "为新评审类型选择颜色"
 
+#: src/components/CardDetail.vue
+msgid "Pick on board"
+msgstr "在看板上选择"
+
 #: src/App.vue
 #: src/components/BoardTileMenu.vue
 msgid "Pin board"
@@ -4746,6 +4787,7 @@ msgstr "预览"
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Priority"
 msgstr "优先级"
@@ -4869,6 +4911,10 @@ msgstr "关联"
 #: src/components/ProjectHealth.vue
 msgid "Remaining"
 msgstr "剩余"
+
+#: src/components/CardDetail.vue
+msgid "Remind assignees and card watchers one day before"
+msgstr "提前一天提醒被指派人和卡片关注者"
 
 #: src/components/CardDetail.vue
 msgid "Remind me about this comment at"
@@ -5300,12 +5346,20 @@ msgid "Search contacts…"
 msgstr "搜索联系人…"
 
 #: src/components/CardDetail.vue
+msgid "Search labels…"
+msgstr "搜索标签…"
+
+#: src/components/CardDetail.vue
 msgid "Search people…"
 msgstr "搜索人员…"
 
 #: src/components/SearchBox.vue
 msgid "Search results"
 msgstr "搜索结果"
+
+#: src/views/MyCardsView.vue
+msgid "Search tasks"
+msgstr "搜索任务"
 
 #: src/components/CardDetail.vue
 msgid "Search the people with access to this board"
@@ -5366,6 +5420,10 @@ msgstr "选择列…"
 #: src/views/TrashView.vue
 msgid "Select multiple cards"
 msgstr "选择多张卡片"
+
+#: src/views/BoardView.vue
+msgid "Select or deselect the focused card"
+msgstr "选择或取消选择当前焦点卡片"
 
 #: src/components/CardDetail.vue
 msgid "Set"
@@ -5463,7 +5521,7 @@ msgstr "在卡片下方显示讨论"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:7064
+#: src/components/CardDetail.vue:7193
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -5550,6 +5608,7 @@ msgstr "在你编辑期间，有人更改了此描述。你的文字保留在上
 msgid "Sort"
 msgstr "排序"
 
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Sort by"
 msgstr "排序依据"
@@ -5630,6 +5689,7 @@ msgstr "STARTTLS (143)"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 #: src/views/ViewPage.vue
 msgid "Status"
@@ -5713,6 +5773,10 @@ msgstr "目标列"
 
 #: src/composables/useCardType.js
 msgid "Task"
+msgstr "任务"
+
+#: src/views/MyCardsView.vue
+msgid "Tasks"
 msgstr "任务"
 
 #: src/views/MyCardsView.vue
@@ -5937,6 +6001,7 @@ msgstr "提示：按 ? 查看键盘快捷键"
 
 #: src/components/CsvImportModal.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 #: src/views/ViewPage.vue
@@ -6002,6 +6067,10 @@ msgstr "回收站是空的"
 #: src/views/BoardList.vue
 msgid "Trello (.json)"
 msgstr "Trello（.json）"
+
+#: src/views/MyCardsView.vue
+msgid "Try changing your filters or search."
+msgstr "请尝试更改筛选条件或搜索内容。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Tue"
@@ -6180,6 +6249,7 @@ msgid "Velocity — completed per week"
 msgstr "速率 — 每周完成数"
 
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "View"
 msgstr "视图"
@@ -6251,8 +6321,8 @@ msgstr "Webhook 已启用"
 msgid "Wed"
 msgstr "周三"
 
-#: src/components/BoardSettingsModal.vue:2299
-#: src/components/CardDetail.vue:5215
+#: src/components/BoardSettingsModal.vue:2302
+#: src/components/CardDetail.vue:5283
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -6359,8 +6429,8 @@ msgstr "写入时间"
 msgid "wrote"
 msgstr "写道"
 
-#: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5217
+#: src/components/BoardSettingsModal.vue:2304
+#: src/components/CardDetail.vue:5285
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"

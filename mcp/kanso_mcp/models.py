@@ -66,6 +66,7 @@ class Board(_Base):
     # The labels a card's `estimate` may take, in scale order, each with the
     # number it counts as. Empty for "none" and for "number" (any number).
     estimateTokens: List[dict] = []
+    estimateCustom: List[dict] = []
     newCardsOnTop: bool = False
     prefix: Optional[str] = None
     chatUrl: Optional[str] = None

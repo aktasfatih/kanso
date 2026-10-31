@@ -37,10 +37,12 @@ your work, on your own Nextcloud, laid out plainly.
   when nothing changed — with a light polling fallback everywhere else.
 
 ### 🗂️ Rich cards
-- Markdown descriptions (sanitized), **labels**, due dates, **assignees**, and
+- Markdown descriptions (sanitized) with a scrolling formatting toolbar, searchable **labels**, due dates, **assignees**, and
   priorities.
 - **Checklists / sub-tasks**, **parent ↔ child cards**, and **threaded
   comments**.
+- **Card relations**: link related, duplicate or blocking cards from a list or
+  pick the target directly on the board.
 - **Attachments**: upload files to a card (up to 100 MiB each). They live in
   Kanso's own app storage, not in your personal Files.
 - **Custom fields** defined per board — text, number, date or a select list —
@@ -51,6 +53,8 @@ your work, on your own Nextcloud, laid out plainly.
 - **Reminders**: nudge yourself about a card, or about a single comment —
   later today, tomorrow, next week, or a time you pick. Private to you, and
   delivered as a Nextcloud notification (so it needs cron).
+- **Due-date reminders**: card assignees and card watchers are notified when
+  a card is due; editors can also enable a reminder one day beforehand.
 
 <img src="docs/kanso-card.png" alt="A Kanso card with a markdown description, a checklist, priority, due date, an assignee and a threaded discussion" width="900">
 
@@ -85,6 +89,7 @@ your work, on your own Nextcloud, laid out plainly.
 - **Import from Trello or a CSV**: hand Kanso a Trello board's JSON export, or a
   CSV of cards plus a mapping of which column is the title, the description, the
   due date and so on. Both sit in the same **Import** menu on the board list.
+  Trello board descriptions longer than 4,000 characters are truncated on import.
 - **Export, duplicate, back up**: download any board as a zip (its attachments
   included) and import that zip back on any instance; or duplicate a board, with
   or without its cards. Administrators can additionally schedule **periodic
@@ -139,9 +144,13 @@ your work, on your own Nextcloud, laid out plainly.
 <img src="docs/kanso-timeline.png" alt="Kanso Timeline (Gantt) view: cards plotted on a date axis by start → due, with a due-only card shown as a milestone" width="900">
 
 ### 🧭 Cross-board hub & projects
+- **Custom Views** collect cards across readable boards and filter them by
+  labels, assignees, priority and other attributes.
 - **My Work** hub gathers, across every board: **My tasks** (cards assigned to
   you), **Reviews** (waiting on you), and an **Inbox** of mentions and activity
-  on cards you watch — filterable to a single board.
+  on cards you watch — filterable to a single board. My tasks also supports
+  searching, status and due-date filters, sorting, and a read-only status board;
+  these controls apply to the loaded open tasks.
 - **Projects**: cross-board card collections with a start and target date, a
   forecast finish date from your recent pace, an on-track / at-risk / late
   status, a burn-up chart, estimates normalized across boards, blocked and
@@ -160,10 +169,13 @@ your work, on your own Nextcloud, laid out plainly.
 <img src="docs/kanso-analytics.png" alt="Kanso board analytics: cards by stack, priority and label, plus a weekly velocity trend" width="900">
 
 ### ⌨️ Power-user UX
-- **Command palette** (`Ctrl`/`Cmd`+`K`) and full-text **search** across cards
-  and comments.
-- **Keyboard-first** navigation, **undo toasts** for destructive actions, and a
-  **trash** with restore.
+- **Command palette** (`Ctrl`/`Cmd`+`K`, except while typing, inside a menu, or
+  while a blocking dialog is open) and full-text
+  **search** across cards and comments.
+- **Keyboard-first** navigation: use `h`/`j`/`k`/`l` to move between cards,
+  `x` to select cards on a flat board, and `Esc` to exit selection. Press `n`
+  to enter the card composer and `Esc` to leave it without losing the draft.
+  Undo toasts and a trash with restore help recover from destructive actions.
 
 ### 🌍 Localization
 - **Follows your Nextcloud language** automatically. Kanso ships translations for

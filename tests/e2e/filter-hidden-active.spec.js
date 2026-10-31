@@ -14,7 +14,7 @@ import { test, expect, api, ncLogin, BASE } from './helpers.js'
 // with no row to open and no Clear button.
 //
 // The rule is now "render what constrains the surface", with one exception: a
-// LOCKED dimension (the View page's seeded label filter) is the surface's own
+// LOCKED dimension (the View page's seeded estimate filter) is the surface's own
 // identity rather than a filter the user applied, so it stays hidden and Clear
 // still may not touch it. Both halves are asserted here; without the last test,
 // the fix would just be #10091 again.
@@ -165,7 +165,7 @@ test.describe('A hidden-but-active filter is clearable — unless the surface ow
 		}
 	})
 
-	test('on a View the seeded label filter stays hidden and unclearable (#10091 holds)', async ({ page }) => {
+	test('on a View the seeded estimate filter stays hidden and unclearable', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 900 })
 
 		const stamp = Math.floor(Date.now() / 1000)
@@ -177,8 +177,7 @@ test.describe('A hidden-but-active filter is clearable — unless the surface ow
 		await api.post('/cards', { stackId: stack.id, title: 'HiddenLocked unlabelled ' + stamp })
 		await api.put(`/cards/${kept.id}/labels/${label.id}`)
 
-		// Both facets a cross-board View withholds because they are board-scoped:
-		// labels and estimates. `__none__` is the Unestimated sentinel, so it keeps
+		// Estimates remain hidden because scales are board-scoped. `__none__` is the Unestimated sentinel, so it keeps
 		// the labelled (unestimated) card in the feed while still being an active
 		// constraint on a facet this page does not render.
 		const created = await api.put('/views', {
@@ -199,20 +198,15 @@ test.describe('A hidden-but-active filter is clearable — unless the surface ow
 			await expect(page.locator('.board-list-row__title')).toHaveCount(1)
 			await expect(trigger).toContainText('Filter · 2')
 
-			// Both filters are active and both facets are unavailable here — exactly
-			// the shape the board cases above now surface. They must NOT surface here:
-			// these constraints ARE the View.
+			// Labels are visible and the estimate constraint remains hidden.
 			await openFilterPanel(page)
 			// Wait for the panel to actually render before asserting ABSENCE — a
 			// count-0 assertion is satisfied by a popover that has not opened yet.
 			await expect(page.locator('.board-filter-bar__dim-row[data-dim="types"]')).toBeVisible()
-			await expect(page.locator('.board-filter-bar__dim-row[data-dim="labels"]')).toHaveCount(0)
+			await expect(page.locator('.board-filter-bar__dim-row[data-dim="labels"]')).toBeVisible()
 			await expect(page.locator('.board-filter-bar__dim-row[data-dim="estimates"]')).toHaveCount(0)
-			// With nothing rendered that is constraining the page, Clear is not offered
-			// at all — so it cannot wipe the View's identity (#10091). That Clear also
-			// spares this filter when a VISIBLE facet is layered on top is what
-			// filter-clear-scope.spec.js pins; it is not repeated here.
-			await expect(page.locator('.board-filter-bar__clear')).toHaveCount(0)
+			// The visible label enables Clear; the hidden estimate remains protected.
+			await expect(page.locator('.board-filter-bar__clear')).toBeVisible()
 			await closeFilterPanel(page)
 			// Still the View's one labelled card, not the whole cross-board feed.
 			await expect(page.locator('.board-list-row__title')).toHaveCount(1)

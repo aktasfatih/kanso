@@ -177,6 +177,18 @@ class MailIntakeServiceTest extends TestCase {
 		$this->service->deleteConfig(self::BOARD_ID, 'mallory');
 	}
 
+	public function testTestConnectionRequiresManageBeforeAccessingMailbox(): void {
+		$this->boardMapper->method('find')->willReturn($this->board());
+		$this->permissionService->expects(self::once())->method('assertPermission')
+			->with(self::anything(), 'mallory', PermissionService::PERMISSION_MANAGE)
+			->willThrowException(new NotPermittedException('nope'));
+		$this->mapper->expects(self::never())->method('findByBoard');
+		$this->clientFactory->expects(self::never())->method('create');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->testConnection(self::BOARD_ID, 'mallory');
+	}
+
 	// ---- config validation -------------------------------------------------
 
 	/** Saves with sensible defaults, overridable per test. */

@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		:class="{ 'board-view--has-background': boardBackground }"
 		:style="boardBackground ? { '--board-background': boardBackground } : {}">
 		<!-- Header -->
-		<div ref="headerRef" class="board-view__header">
+		<div ref="headerRef" v-show="!relationPicking" class="board-view__header">
 			<NcButton class="board-view__back" :aria-label="t('kanso', 'All boards')" @click="goBack">
 				<template #icon>
 					<ArrowLeftIcon :size="20" />
@@ -304,7 +304,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<NcActionButton
 					class="board-view__settings-btn"
 					:aria-expanded="showSettings ? 'true' : 'false'"
-					@click="moreMenuOpen = false; settingsInitialTab = 'labels'; showSettings = !showSettings">
+					@click="toggleSettings">
 					<template #icon>
 						<CogIcon :size="20" />
 					</template>
@@ -326,6 +326,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<!-- Board settings modal (Labels + Sharing tabs) -->
 		<BoardSettingsModal
 			v-if="showSettings && boardData"
+			:suspended="relationPicking"
 			ref="settingsPanelRef"
 			:board-id="props.id"
 			:initial-tab="settingsInitialTab"
@@ -338,7 +339,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:current-user-id="currentUserId"
 			:stacks="boardData.stacks ?? []"
 			:cards="boardData.cards ?? []"
-			@close="showSettings = false"
+			@close="closeSettings"
 			@leave="showSettings = false" />
 
 		<!-- Card-template manager (#3634): view / edit / delete / unmark / create the
@@ -362,8 +363,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			@open-card="openCardFromAttachments"
 			@close="showBoardAttachments = false" />
 
-		<!-- Screen-reader live region: announces the user's own card moves and
-		     label/assignee changes (drag-and-drop has no visible SR feedback). -->
+		<div v-if="relationPicking" class="relation-picker-banner" role="status" data-test="relation-picker-banner">
+			<span>{{ t('kanso', 'Choose a card on this board to add a relation.') }}</span>
+			<button type="button" data-test="relation-picker-cancel" @click="returnFromRelationPicker(null)">{{ t('kanso', 'Cancel') }}</button>
+		</div>
+
+		<!-- Announcements use unescaped translations and must remain text-bound. -->
 		<div class="board-view__sr-only" aria-live="polite" role="status">
 			{{ announceMessage }}
 		</div>
@@ -390,7 +395,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- Stacks row (Board view). Kept mounted under v-show so its drag-and-drop
 		     monitors stay attached when the List view is showing. -->
-		<div v-show="viewMode === 'board' && swimlaneMode === 'none'" ref="stacksWrapRef" class="board-view__stacks-wrap">
+		<div v-show="relationPicking || (viewMode === 'board' && swimlaneMode === 'none')" ref="stacksWrapRef" class="board-view__stacks-wrap" @focusin="handleBoardFocus">
 			<!-- Skeleton stacks on cold load -->
 			<template v-if="isLoading">
 				<div v-for="n in 3" :key="n" class="stack-skeleton">
@@ -400,7 +405,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</template>
 
 			<!-- Actual stacks (flat board - no swimlanes) -->
-			<template v-else-if="boardData && swimlaneMode === 'none'">
+			<template v-else-if="boardData && (relationPicking || swimlaneMode === 'none')">
 				<StackColumn
 					v-for="stack in sortedStacks"
 					:key="stack.id"
@@ -411,25 +416,27 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:projects-by-id="projectsById"
 					:board-prefix="boardData.board.prefix"
 					:new-cards-on-top="boardData.board.newCardsOnTop === true"
-					:on-create-card="canEditBoard ? handleCreateCard : null"
-					:on-fetch-templates="canEditBoard ? handleFetchTemplates : null"
-					:on-create-from-template="canEditBoard ? handleCreateFromTemplate : null"
-					:on-manage-templates="canEditBoard ? () => { showManageTemplates = true } : null"
-					:on-delete-stack="canEditBoard ? handleDeleteStack : null"
-					:on-restore-stack="canEditBoard ? handleRestoreStack : null"
-					:on-archive-all-cards="canEditBoard ? handleArchiveAllInStack : null"
-					:on-select-all-cards="canEditBoard ? handleSelectAllInStack : null"
-					:on-unarchive-cards="canEditBoard ? handleUnarchiveCards : null"
-					:filter-active="filterActive"
-					:on-rename-stack="canEditBoard ? handleRenameStack : null"
-					:on-set-role="canEditBoard ? handleSetRole : null"
-					:on-set-wip="canEditBoard ? handleSetWip : null"
-					:on-set-color="canEditBoard ? handleSetColor : null"
-					:on-set-description="canEditBoard ? handleSetDescription : null"
+					:on-create-card="canEditBoard && !relationPicking ? handleCreateCard : null"
+					:on-fetch-templates="canEditBoard && !relationPicking ? handleFetchTemplates : null"
+					:on-create-from-template="canEditBoard && !relationPicking ? handleCreateFromTemplate : null"
+					:on-manage-templates="canEditBoard && !relationPicking ? () => { showManageTemplates = true } : null"
+					:on-delete-stack="canEditBoard && !relationPicking ? handleDeleteStack : null"
+					:on-restore-stack="canEditBoard && !relationPicking ? handleRestoreStack : null"
+					:on-archive-all-cards="canEditBoard && !relationPicking ? handleArchiveAllInStack : null"
+					:on-select-all-cards="canEditBoard && !relationPicking ? handleSelectAllInStack : null"
+					:on-unarchive-cards="canEditBoard && !relationPicking ? handleUnarchiveCards : null"
+					:filter-active="!relationPicking && filterActive"
+					:on-rename-stack="canEditBoard && !relationPicking ? handleRenameStack : null"
+					:on-set-role="canEditBoard && !relationPicking ? handleSetRole : null"
+					:on-set-wip="canEditBoard && !relationPicking ? handleSetWip : null"
+					:on-set-color="canEditBoard && !relationPicking ? handleSetColor : null"
+					:on-set-description="canEditBoard && !relationPicking ? handleSetDescription : null"
 					:on-card-focus="(cardId) => { focusedCardId = cardId }"
 					:on-card-hover="(cardId) => { hoveredCardId = cardId }"
-					:selection-mode="bulk.selectionMode.value"
-					:selected-ids="bulk.selected.value"
+					:selection-mode="relationPicking || bulk.selectionMode.value"
+					:pick-mode="relationPicking"
+					:pick-source-id="relationPicking ? relationPicker.sourceId : null"
+					:selected-ids="relationPicking ? NO_SELECTED_CARDS : bulk.selected.value"
 					:on-card-select="handleCardSelect"
 					:collapsed="isStackCollapsed(stack.id)"
 					:on-toggle-collapsed="toggleStackCollapsed"
@@ -444,7 +451,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				     conditions again (#9856), so it is never rendered — even hidden —
 				     into a view that doesn't own it. -->
 				<div
-					v-if="canEditBoard && addColumnTarget === 'track' && (showAddColumn || sortedStacks.length === 0)"
+					v-if="!relationPicking && canEditBoard && addColumnTarget === 'track' && (showAddColumn || sortedStacks.length === 0)"
 					class="add-stack add-stack--empty">
 					<p v-if="sortedStacks.length === 0" class="add-stack__hint" data-test="empty-board-hint">
 						{{ t('kanso', 'Start by adding a column, e.g. “To do”.') }}
@@ -471,7 +478,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		     stacks row for the lane's cards. Its own vertical scroll region so
 		     lanes stack top-to-bottom while each lane scrolls horizontally. -->
 		<div
-			v-show="viewMode === 'board' && swimlaneMode !== 'none'"
+			v-show="!relationPicking && viewMode === 'board' && swimlaneMode !== 'none'"
 			class="board-view__swimlanes-wrap">
 			<template v-if="boardData && swimlaneMode !== 'none'">
 				<SwimlaneRow
@@ -521,7 +528,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		       it (again ViewPage). Inside a board, a row opens the card-modal child
 		       route, which is the deep-linkable behaviour we want here. -->
 		<BoardListView
-			v-if="viewMode === 'list' && boardData"
+			v-if="!relationPicking && viewMode === 'list' && boardData"
 			ref="listViewRef"
 			:stacks="sortedStacks"
 			:cards-by-stack="cardsByStack"
@@ -538,7 +545,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 		<!-- Timeline (Gantt) view - cards on a date axis by start→due. -->
 		<BoardTimelineView
-			v-if="viewMode === 'timeline' && boardData"
+			v-if="!relationPicking && viewMode === 'timeline' && boardData"
 			:cards="allVisibleCards"
 			:stacks="sortedStacks"
 			:cards-by-stack="cardsByStack"
@@ -574,6 +581,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<tr>
 							<td class="shortcuts-modal__key"><kbd>Space</kbd></td>
 							<td>{{ t('kanso', 'Quick preview of the hovered / focused card') }}</td>
+						</tr>
+						<tr v-if="canEditBoard && viewMode === 'board' && swimlaneMode === 'none'">
+							<td class="shortcuts-modal__key"><kbd>x</kbd></td>
+							<td>{{ t('kanso', 'Select or deselect the focused card') }}</td>
 						</tr>
 						<!-- The two shortcuts the handler now refuses for a read-only
 						     member (#9978) — don't teach a viewer a key that is gated.
@@ -619,18 +630,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				@open="openPreviewCard" />
 		</template>
 
-		<!-- Command palette (Ctrl/Cmd+K, or "Open command palette" in the More
-		     menu - the touch-reachable trigger, #10066) -->
-		<CommandPalette
-			:open="showCommandPalette"
-			@close="showCommandPalette = false" />
-
 		<!-- Child route: CardModal renders over this view -->
 		<router-view />
 
 		<!-- Bulk action bar - shown when multi-select mode is active -->
 		<BulkActionBar
-			v-if="bulk.selectionMode.value"
+			v-if="bulk.selectionMode.value && !relationPicking"
 			:count="bulk.selectedCount.value"
 			:stacks="sortedStacks"
 			:labels="boardLabels"
@@ -671,7 +676,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { ref, computed, provide, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, inject, provide, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { showError, showSuccess, showWarning } from '@nextcloud/dialogs'
@@ -731,7 +736,7 @@ import BoardSettingsModal from '../components/BoardSettingsModal.vue'
 import ManageTemplatesModal from '../components/ManageTemplatesModal.vue'
 import BoardAttachmentsModal from '../components/BoardAttachmentsModal.vue'
 import BoardDescriptionModal from '../components/BoardDescriptionModal.vue'
-import CommandPalette from '../components/CommandPalette.vue'
+import { COMMAND_PALETTE_OPEN } from '../services/commandPalette.js'
 import CardPreview from '../components/CardPreview.vue'
 import { useBoard } from '../composables/useBoard.js'
 import { usePageTitle } from '../composables/usePageTitle.js'
@@ -756,11 +761,13 @@ import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { NEST_ENABLED } from '../services/cardNesting.js'
 import { CARD_FEATURES, normalizeCardFeatures } from '../services/cardFeatures.js'
 import { BOARD_CAN_EDIT } from '../services/boardPermissions.js'
+import { relationPicker, finishRelationPick, clearRelationPick } from '../services/relationPicker.js'
 
 // Stable identity for the "no dependency edges yet" case (#5896): a fresh `[]`
 // in the template would be a new prop value on every render while the board
 // loads, invalidating the timeline's arrow geometry each time.
 const NO_DEPENDENCIES = []
+const NO_SELECTED_CARDS = new Set()
 
 const props = defineProps({
 	id: {
@@ -771,6 +778,23 @@ const props = defineProps({
 
 const router = useRouter()
 const route = useRoute()
+const relationPicking = computed(() => relationPicker.value?.phase === 'selecting'
+	&& relationPicker.value.boardId === String(props.id) && route.name === 'board')
+
+async function returnFromRelationPicker(targetId) {
+	const session = relationPicker.value
+	if (!relationPicking.value || !session) return
+	if (targetId != null && (Number(targetId) === session.sourceId
+		|| !(boardData.value?.cards ?? []).some((card) => Number(card.id) === Number(targetId) && !card.archived))) return
+	finishRelationPick(targetId == null ? session.previousTargetId : Number(targetId))
+	const failure = await router.push(session.originPath)
+	if (failure) clearRelationPick()
+}
+
+watch(() => [route.name, route.params.id], ([name, id]) => {
+	const session = relationPicker.value
+	if (session?.phase === 'selecting' && (name !== 'board' || String(id) !== session.boardId)) clearRelationPick()
+})
 const queryClient = useQueryClient()
 const boardId = computed(() => props.id)
 const bulk = useBulkSelect(boardId, queryClient)
@@ -1132,7 +1156,7 @@ async function nestCard(cardId, targetData, sourceStackId, sourceParentId) {
 		showWarning(err?.response?.data?.error || t('kanso', 'Couldn\'t make this card a sub-card.'))
 		return
 	}
-	announce(t('kanso', '{card} is now a sub-card of {parent}', { card: movedTitle, parent: parentTitle }))
+	announce(t('kanso', '{card} is now a sub-card of {parent}', { card: movedTitle, parent: parentTitle }, { escape: false, sanitize: false }))
 
 	// setParent does not touch the column, and the list view only indents a child
 	// under a parent in the SAME group - so a cross-column nest also moves the
@@ -1203,11 +1227,11 @@ async function applyCardDrop({ cardId, sourceParentId, parentChange, move }) {
 			return
 		}
 		announce(parentChange.parentCardId === null
-			? t('kanso', '{card} is no longer a sub-card', { card: movedTitle })
+			? t('kanso', '{card} is no longer a sub-card', { card: movedTitle }, { escape: false, sanitize: false })
 			: t('kanso', '{card} is now a sub-card of {parent}', {
 				card: movedTitle,
 				parent: cardTitleById(parentChange.parentCardId),
-			}))
+			}, { escape: false, sanitize: false }))
 	}
 
 	if (!move) return
@@ -1223,7 +1247,7 @@ async function applyCardDrop({ cardId, sourceParentId, parentChange, move }) {
 		card: (cardsByStack.value.get(move.targetStackId) ?? []).find((c) => c.id === cardId)?.title
 			|| cardTitleById(cardId),
 		stack: stackTitleById(move.targetStackId),
-	}))
+	}, { escape: false, sanitize: false }))
 }
 const { toggle: boardWatchToggle } = useBoardSubscription(boardId)
 // The chosen background preset resolved to its CSS gradient (null = none). The
@@ -1310,7 +1334,7 @@ function openCardFromAttachments(cardId) {
 }
 
 // ── Command palette visibility ────────────────────────────────────────────────
-const showCommandPalette = ref(false)
+const showCommandPalette = inject(COMMAND_PALETTE_OPEN)
 
 // ── Keyboard shortcuts overlay ────────────────────────────────────────────────
 const showShortcuts = ref(false)
@@ -1370,8 +1394,34 @@ const showDescription = ref(false)
 // the description, which lives in General.
 const settingsInitialTab = ref('labels')
 const settingsPanelRef = ref(null)
+let settingsFocusTarget = null
+
+function closeSettings(returnFocus = false) {
+	const focusInside = returnFocus === true || settingsPanelRef.value?.containsFocus()
+	showSettings.value = false
+	if (focusInside) {
+		const target = settingsFocusTarget?.isConnected && settingsFocusTarget.getClientRects().length
+			? settingsFocusTarget
+			: headerRef.value?.querySelector('.board-view__more-menu button')
+		if (target?.isConnected && target.getClientRects().length) target.focus({ preventScroll: true })
+	}
+}
+
+function toggleSettings() {
+	moreMenuOpen.value = false
+	if (showSettings.value) {
+		settingsFocusTarget = headerRef.value?.querySelector('.board-view__more-menu button')
+		closeSettings(true)
+		return
+	}
+	settingsFocusTarget = headerRef.value?.querySelector('.board-view__more-menu button')
+	settingsInitialTab.value = 'labels'
+	showSettings.value = true
+}
+
 function openSettingsOnDescription() {
 	showDescription.value = false
+	settingsFocusTarget = headerRef.value?.querySelector('[data-test="board-description-btn"]')
 	// Seeds a COLD open: the panel then mounts on General directly, with no
 	// visible hop through Labels.
 	settingsInitialTab.value = 'general'
@@ -1609,7 +1659,7 @@ const cardsByStack = computed(() => {
 		if (card.archived) continue
 		// Composable filter (#3407): AND across dimensions, OR within each.
 		// filter-first, then group (swimlanes read this already-filtered map).
-		if (!passes(card)) continue
+		if (!relationPicking.value && !passes(card)) continue
 		if (!map.has(card.stackId)) map.set(card.stackId, [])
 		map.get(card.stackId).push(card)
 	}
@@ -1741,6 +1791,19 @@ const nonEmptyStacks = computed(() =>
  * 3. querySelector and .focus()
  */
 let navSeq = 0
+let navPending = false
+
+function handleBoardFocus(event) {
+	const tile = event.target.closest('.card-tile')
+	if (!tile) return
+	const id = Number(tile.dataset.cardId)
+	if (!findCardPosition(id)) return
+	if (navPending && id !== focusedCardId.value) {
+		navSeq++
+		navPending = false
+	}
+	focusedCardId.value = id
+}
 
 async function navigateTo(stackId, cardIdx) {
 	const cards = cardsByStack.value.get(stackId) ?? []
@@ -1753,10 +1816,12 @@ async function navigateTo(stackId, cardIdx) {
 	// Rapid keypresses race here: only the newest navigation may focus,
 	// or an older one resolving late would drag DOM focus backwards.
 	const seq = ++navSeq
+	navPending = true
 	await nextTick()
 	await new Promise((resolve) => requestAnimationFrame(resolve))
 	if (seq !== navSeq) return
 	document.querySelector(`[data-card-id="${card.id}"]`)?.focus()
+	navPending = false
 }
 
 // Clear focusedCardId / hoveredCardId when the card disappears from cardsByStack
@@ -1877,29 +1942,38 @@ async function revealCard(cardId) {
 	announce(t('kanso', '{card} is in {stack}', {
 		card: card.title,
 		stack: stackTitleById(card.stackId),
-	}))
+	}, { escape: false, sanitize: false }))
 }
 
 onUnmounted(() => {
 	if (revealTimer) clearTimeout(revealTimer)
+	if (relationPicker.value?.phase === 'selecting' && relationPicker.value.boardId === String(props.id)) clearRelationPick()
+})
+
+watch(relationPicking, (active) => {
+	if (!active) return
+	showDescription.value = false
+	showManageTemplates.value = false
+	showBoardAttachments.value = false
+	showShortcuts.value = false
+	moreMenuOpen.value = false
+	closePreview()
 })
 
 function handleKeydown(e) {
 	// Guard: composing (IME)
 	if (e.isComposing) return
-	// Cmd/Ctrl+K → open command palette.
-	// Handled BEFORE the modifier-key early-return guard (same technique as '?'
-	// and '/' which are handled before the overlay-open guard).
-	// Respects the same typing-context guard: don't trigger while the user is
-	// typing in an input/textarea/contenteditable.
-	if ((e.ctrlKey || e.metaKey) && e.key === 'k' && !e.altKey) {
-		const target = e.target
-		if (!target.closest('input, textarea, [contenteditable]')) {
-			e.preventDefault()
-			showCommandPalette.value = !showCommandPalette.value
-			return
-		}
+	if (showCommandPalette.value) return
+	if (relationPicking.value && (showDescription.value || showManageTemplates.value
+		|| showBoardAttachments.value || showShortcuts.value || previewCardId.value != null)) return
+	if (relationPicking.value && e.target instanceof Element
+		&& e.target.closest('input, textarea, [contenteditable], [role="dialog"], [role="menu"]')) return
+	if (relationPicking.value && e.key === 'Escape' && !e.defaultPrevented) {
+		e.preventDefault()
+		returnFromRelationPicker(null)
+		return
 	}
+	if (relationPicking.value && !['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'h', 'j', 'k', 'l', 'e'].includes(e.key)) return
 	// Guard: modifier keys held (but allow Shift for '?')
 	if (e.ctrlKey || e.metaKey || e.altKey) return
 	// Guard: typing context
@@ -1956,7 +2030,30 @@ function handleKeydown(e) {
 	}
 
 	// Guard: settings modal or shortcuts overlay open
-	if (showSettings.value || showShortcuts.value) return
+	if ((showSettings.value && !relationPicking.value) || showShortcuts.value) return
+
+	if ((e.key === 'x' || e.key === 'Escape') && !e.repeat && !e.defaultPrevented
+		&& !showCommandPalette.value && previewCardId.value == null
+		&& viewMode.value === 'board' && swimlaneMode.value === 'none') {
+		const boardTile = target.matches('.card-tile') && stacksWrapRef.value?.contains(target)
+		const bar = target.closest('.bulk-action-bar')
+		if (e.key === 'Escape' && bulk.selectionMode.value
+			&& (boardTile || (bar && !bar.querySelector('[aria-expanded="true"]')))) {
+			e.preventDefault()
+			bulk.exitMode()
+			return
+		}
+		const pos = findCardPosition(focusedCardId.value)
+		if (e.key === 'x' && canEditBoard.value
+			&& (boardTile || (navPending && target === document.body))
+			&& (navPending || Number(target.dataset.cardId) === focusedCardId.value)
+			&& pos && !isStackCollapsed(sortedStacks.value[pos.stackIdx].id)) {
+			e.preventDefault()
+			bulk.enterMode()
+			bulk.toggle(focusedCardId.value)
+			return
+		}
+	}
 
 	// Vim-style aliases for the arrow navigation below. The typing-context
 	// guard above has already bailed, so h/j/k/l still type normally in
@@ -2021,13 +2118,21 @@ function handleKeydown(e) {
 			stackId = first.id
 		}
 		const col = columnRefs.get(stackId)
-		if (col) col.focusComposer()
+		if (col?.focusComposer()) {
+			navSeq++
+			navPending = false
+		}
 		return
 	}
 
 	if (key === 'e') {
 		e.preventDefault()
 		if (focusedCardId.value == null) return
+		if (relationPicking.value) {
+			if (!target.matches('.card-tile') || !stacksWrapRef.value?.contains(target)) return
+			returnFromRelationPicker(focusedCardId.value)
+			return
+		}
 		router.push({
 			name: 'card-modal',
 			params: { id: props.id, cardId: focusedCardId.value },
@@ -2156,6 +2261,7 @@ onMounted(() => {
 		monitorForElements({
 			canMonitor: ({ source }) => source.data.type === 'card',
 			onDrop({ source, location }) {
+				if (relationPicking.value) return
 				// A non-manual display sort is view-only - dropping must not rewrite
 				// the fractional order, so ignore card drops until Manual is active.
 				if (sortMode.value !== 'manual') return
@@ -2292,6 +2398,7 @@ onMounted(() => {
 		monitorForElements({
 			canMonitor: ({ source }) => source.data.type === 'stack',
 			onDrop({ source, location }) {
+				if (relationPicking.value) return
 				const draggedStackId = source.data.stackId
 
 				const stackTarget = location.current.dropTargets.find((t) => t.data.type === 'stack')
@@ -2566,6 +2673,10 @@ async function handleSetDescription(stackId, description) {
  * @param {{ id: number, shiftKey: boolean }} payload
  */
 function handleCardSelect({ id, shiftKey }) {
+	if (relationPicking.value) {
+		returnFromRelationPicker(id)
+		return
+	}
 	if (shiftKey) {
 		const orderedIds = allVisibleCards.value.map((c) => c.id)
 		bulk.selectRange(orderedIds, id)
@@ -2788,6 +2899,20 @@ async function handleUnarchiveCards(cardIds) {
    back button, board title, then the right-aligned control cluster (search, view
    toggle, sort, swimlanes, filters, and the icon actions). A tighter gap groups
    the controls so they read as one bar rather than scattered buttons. */
+.relation-picker-banner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 16px;
+	background: var(--color-primary-element-light);
+	color: var(--color-main-text);
+}
+
+.relation-picker-banner button {
+	flex-shrink: 0;
+}
+
 .board-view__header {
 	display: flex;
 	align-items: center;

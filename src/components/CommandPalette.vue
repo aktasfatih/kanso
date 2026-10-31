@@ -282,6 +282,7 @@ watch(
 			inputRef.value?.focus()
 		}
 	},
+	{ immediate: true },
 )
 
 // ── Keyboard navigation ────────────────────────────────────────────────────────

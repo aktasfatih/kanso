@@ -19,6 +19,7 @@ use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\BoardService;
+use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\SortKeyService;
 use OCA\Kanso\Service\TrelloImportService;
@@ -28,6 +29,7 @@ use PHPUnit\Framework\TestCase;
 
 class TrelloImportServiceTest extends TestCase {
 	private BoardService&MockObject $boardService;
+	private ChangeNotifier&MockObject $changeNotifier;
 	private StackMapper&MockObject $stackMapper;
 	private CardMapper&MockObject $cardMapper;
 	private LabelMapper&MockObject $labelMapper;
@@ -42,6 +44,7 @@ class TrelloImportServiceTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->boardService = $this->createMock(BoardService::class);
+		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->stackMapper = $this->createMock(StackMapper::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
 		$this->labelMapper = $this->createMock(LabelMapper::class);
@@ -58,6 +61,7 @@ class TrelloImportServiceTest extends TestCase {
 			$this->checklistItemMapper,
 			new SortKeyService(),
 			$this->db,
+			$this->changeNotifier,
 		);
 	}
 
@@ -103,6 +107,51 @@ class TrelloImportServiceTest extends TestCase {
 	}
 
 	// ── happy path ──────────────────────────────────────────────────────────────
+
+	public function testImportsBoardDescription(): void {
+		$board = $this->newBoard('Board');
+		$this->boardService->expects(self::once())->method('create')->with('Board', null, 'alice', 'Notes for the team', false)->willReturn($board);
+		$committed = false;
+		$this->db->expects(self::once())->method('commit')->willReturnCallback(static function () use (&$committed): void {
+			$committed = true;
+		});
+		$this->changeNotifier->expects(self::once())->method('pushBoardChanged')->with(900)->willReturnCallback(static function () use (&$committed): void {
+			self::assertTrue($committed);
+		});
+
+		$result = $this->service->import(json_encode(['name' => 'Board', 'desc' => '  Notes for the team  ', 'lists' => [], 'cards' => []]), 'alice');
+
+		self::assertSame(900, $result['boardId']);
+	}
+
+	public function testTruncatesMultibyteBoardDescriptionAndNormalizesTheCut(): void {
+		$board = $this->newBoard('Board');
+		$this->boardService->expects(self::once())->method('create')
+			->with('Board', null, 'alice', str_repeat('é', 3999), false)->willReturn($board);
+		$this->db->expects(self::once())->method('commit');
+
+		$this->service->import(json_encode(['name' => 'Board', 'desc' => str_repeat('é', 3999) . ' after the limit', 'lists' => [], 'cards' => []]), 'alice');
+	}
+
+	public function testMissingOrBlankBoardDescriptionsDoNotTriggerUpdate(): void {
+		$this->boardService->method('create')->with('Board', null, 'alice', null, false)->willReturn($this->newBoard('Board'));
+		$this->boardService->expects(self::never())->method('update');
+		$this->db->expects(self::exactly(5))->method('commit');
+
+		foreach ([[], ['desc' => null], ['desc' => ''], ['desc' => " \n "], ['desc' => ['unexpected']]] as $fields) {
+			$this->service->import(json_encode(['name' => 'Board', 'lists' => [], 'cards' => []] + $fields), 'alice');
+		}
+	}
+
+	public function testBoardCreationFailureRollsBackImportWithoutPush(): void {
+		$this->boardService->method('create')->willThrowException(new \RuntimeException('create failed'));
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+		$this->expectException(\RuntimeException::class);
+
+		$this->service->import(json_encode(['name' => 'Board', 'desc' => 'Notes', 'lists' => [], 'cards' => []]), 'alice');
+	}
 
 	public function testImportMapsStructureCardsLabelsChecklists(): void {
 		$this->db->expects(self::once())->method('beginTransaction');
@@ -349,6 +398,7 @@ class TrelloImportServiceTest extends TestCase {
 	}
 
 	public function testImportRollsBackOnFailure(): void {
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
 		$this->db->expects(self::once())->method('beginTransaction');
 		$this->db->expects(self::once())->method('rollBack');
 		$this->db->expects(self::never())->method('commit');

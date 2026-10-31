@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— yok —"
 
-#: src/components/BoardSettingsModal.vue:4893
+#: src/components/BoardSettingsModal.vue:4932
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n kez"
@@ -136,7 +136,7 @@ msgstr[1] "{count} kartın tahmini yok ve her biri tipik tahmin olan {points} sa
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "{count} kartın tahmini yeni ölçeğe uymuyor ve temizlenecek. Bu geri alınamaz."
 
-#: src/components/BoardSettingsModal.vue:145
+#: src/components/BoardSettingsModal.vue:148
 msgid "{count} character left"
 msgid_plural "{count} characters left"
 msgstr[0] "{count} karakter kaldı"
@@ -367,7 +367,7 @@ msgid_plural "%n cards"
 msgstr[0] "%n kart"
 msgstr[1] "%n kart"
 
-#: src/components/StackColumn.vue:1066
+#: src/components/StackColumn.vue:1090
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "%n kart arşivlendi"
@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n veri satırı bulundu"
 msgstr[1] "%n veri satırı bulundu"
 
-#: src/components/CardDetail.vue:5025
+#: src/components/CardDetail.vue:5093
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n gün önce"
@@ -409,13 +409,13 @@ msgid_plural "%n files"
 msgstr[0] "%n dosya"
 msgstr[1] "%n dosya"
 
-#: src/components/CardDetail.vue:5023
+#: src/components/CardDetail.vue:5091
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
 msgstr[1] "%n saat önce"
 
-#: src/views/BoardView.vue:2640
+#: src/views/BoardView.vue:2751
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n kimlik kopyalandı."
@@ -439,7 +439,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 msgstr[1] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 
-#: src/components/CardDetail.vue:5021
+#: src/components/CardDetail.vue:5089
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n dakika önce"
@@ -463,13 +463,13 @@ msgid_plural "%n points"
 msgstr[0] "%n puan"
 msgstr[1] "%n puan"
 
-#: src/components/CardDetail.vue:1237
+#: src/components/CardDetail.vue:1261
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n proje"
 msgstr[1] "%n proje"
 
-#: src/components/CardDetail.vue:2320
+#: src/components/CardDetail.vue:2348
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n yanıt"
@@ -487,7 +487,7 @@ msgid_plural "%n unscheduled cards"
 msgstr[0] "%n zamanlanmamış kart"
 msgstr[1] "%n zamanlanmamış kart"
 
-#: src/components/CardDetail.vue:324
+#: src/components/CardDetail.vue:325
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n izleyici"
@@ -698,6 +698,7 @@ msgstr "Bekleyen (>{days}g)"
 
 #: src/views/BoardList.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/MyWorkView.vue
 msgid "All boards"
 msgstr "Tüm panolar"
@@ -706,6 +707,10 @@ msgstr "Tüm panolar"
 msgid "All day (no time)"
 msgstr "Tüm gün (saatsiz)"
 
+#: src/views/MyCardsView.vue
+msgid "All due dates"
+msgstr "Tüm son tarihler"
+
 #: src/components/BoardSettingsModal.vue
 msgid "All issues"
 msgstr "Tüm sorunlar"
@@ -713,6 +718,10 @@ msgstr "Tüm sorunlar"
 #: src/components/CardDetail.vue
 msgid "All requested reviews must be approved before this card can be marked done. Waiting on {names}."
 msgstr "Bu kartın tamamlandı olarak işaretlenebilmesi için istenen tüm incelemelerin onaylanması gerekir. {names} bekleniyor."
+
+#: src/views/MyCardsView.vue
+msgid "All statuses"
+msgstr "Tüm durumlar"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Allow AI actors"
@@ -1045,6 +1054,8 @@ msgstr "Mavi"
 #: src/views/BoardStats.vue
 #: src/views/BoardView.vue
 #: src/views/CardPage.vue
+#: src/views/MyCardsView.vue
+#: src/views/MyWorkView.vue
 #: src/views/ProjectView.vue
 #: src/views/PublicBoard.vue
 #: src/views/TrashView.vue
@@ -1189,6 +1200,7 @@ msgstr "Paylaşabilir"
 #: src/components/CardDetail.vue
 #: src/components/ManageTemplatesModal.vue
 #: src/views/BoardList.vue
+#: src/views/BoardView.vue
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 #: src/views/TrashView.vue
@@ -1464,7 +1476,7 @@ msgstr "Kontrol listesi ilerlemesi: {total} adımdan {done} tanesi"
 
 #: src/components/BoardListView.vue:1076
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:519
+#: src/components/CardTile.vue:520
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Kontrol listesi ilerlemesi: {total} adımdan {done} tanesi, %n adım gecikmiş"
@@ -1473,6 +1485,10 @@ msgstr[1] "Kontrol listesi ilerlemesi: {total} adımdan {done} tanesi, %n adım 
 #: src/components/CsvImportModal.vue
 msgid "Choose a board…"
 msgstr "Bir pano seç…"
+
+#: src/views/BoardView.vue
+msgid "Choose a card on this board to add a relation."
+msgstr "İlişki eklemek için bu panodan bir kart seçin."
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CsvImportModal.vue
@@ -1571,6 +1587,7 @@ msgid "close"
 msgstr "kapat"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/CardDetail.vue
 #: src/components/CsvImportModal.vue
 #: src/views/BoardList.vue
 #: src/views/PublicBoard.vue
@@ -2014,8 +2031,8 @@ msgstr "Tehlikeli bölge"
 msgid "Date"
 msgstr "Tarih"
 
-#: src/components/BoardSettingsModal.vue:2298
-#: src/components/CardDetail.vue:5214
+#: src/components/BoardSettingsModal.vue:2301
+#: src/components/CardDetail.vue:5282
 msgid "day"
 msgid_plural "days"
 msgstr[0] "gün"
@@ -2361,6 +2378,7 @@ msgstr "Bitiş {date}"
 #: src/components/CardDetail.vue
 #: src/components/CsvImportModal.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Due date"
 msgstr "Bitiş tarihi"
@@ -2570,7 +2588,7 @@ msgstr "Her"
 msgid "Every card in this project is done."
 msgstr "Bu projedeki tüm kartlar tamamlandı."
 
-#: src/components/BoardSettingsModal.vue:4873
+#: src/components/BoardSettingsModal.vue:4912
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Her gün"
@@ -2580,19 +2598,19 @@ msgstr[1] "Her %n günde bir"
 msgid "Every estimate needs a label."
 msgstr "Her tahminin bir etiketi olmalı."
 
-#: src/components/BoardSettingsModal.vue:4883
+#: src/components/BoardSettingsModal.vue:4922
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Her ay"
 msgstr[1] "Her %n ayda bir"
 
-#: src/components/BoardSettingsModal.vue:4875
+#: src/components/BoardSettingsModal.vue:4914
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Her hafta"
 msgstr[1] "Her %n haftada bir"
 
-#: src/components/BoardSettingsModal.vue:4885
+#: src/components/BoardSettingsModal.vue:4924
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Her yıl"
@@ -3259,6 +3277,10 @@ msgstr "Silinen kartları filtrele"
 msgid "Filter trash…"
 msgstr "Çöp kutusunu filtrele…"
 
+#: src/views/MyCardsView.vue
+msgid "Filters and sorting apply to loaded open tasks."
+msgstr "Filtreler ve sıralama yüklenen açık görevlere uygulanır."
+
 #: src/components/CardDetail.vue
 msgid "Find the card on board"
 msgstr "Kartı panoda bul"
@@ -3495,6 +3517,7 @@ msgstr "Bir Dosyalar klasöründe, budanan bir yedek o hesabın çöp kutusuna t
 #: src/components/CardTile.vue
 #: src/components/StackColumn.vue
 #: src/composables/useSwimlanes.js
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 msgid "In progress"
 msgstr "Devam ediyor"
@@ -3562,7 +3585,7 @@ msgstr "Amacı, kapsamı veya kuralları. Panodaki herkes pano adının yanında
 msgid "Jump to the discussion"
 msgstr "Tartışmaya atla"
 
-#: src/components/CardDetail.vue:7058
+#: src/components/CardDetail.vue:7187
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Tartışmaya atla (%n yorum)"
@@ -3799,6 +3822,7 @@ msgid "Linking…"
 msgstr "Bağlanıyor…"
 
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "List"
 msgstr "Liste"
@@ -3937,8 +3961,8 @@ msgstr "Mod"
 msgid "Mon"
 msgstr "Pzt"
 
-#: src/components/BoardSettingsModal.vue:2300
-#: src/components/CardDetail.vue:5216
+#: src/components/BoardSettingsModal.vue:2303
+#: src/components/CardDetail.vue:5284
 msgid "month"
 msgid_plural "months"
 msgstr[0] "ay"
@@ -4308,6 +4332,10 @@ msgid "No label"
 msgstr "Etiket yok"
 
 #: src/components/CardDetail.vue
+msgid "No labels match."
+msgstr "Eşleşen etiket yok."
+
+#: src/components/CardDetail.vue
 msgid "No labels on this board yet."
 msgstr "Bu panoda henüz etiket yok."
 
@@ -4322,6 +4350,10 @@ msgstr "Sınır yok"
 #: src/components/SearchBox.vue
 msgid "No matches for \"{q}\""
 msgstr "\"{q}\" için eşleşme yok"
+
+#: src/views/MyCardsView.vue
+msgid "No matching tasks"
+msgstr "Eşleşen görev yok"
 
 #: src/views/ProjectView.vue
 msgid "No notes yet. Start a discussion log for this project."
@@ -4444,6 +4476,7 @@ msgstr "Henüz kimseyle paylaşılmadı."
 #: src/components/BoardListView.vue
 #: src/components/BoardTimelineView.vue
 #: src/components/CardDetail.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 msgid "Not started"
 msgstr "Başlamadı"
@@ -4528,6 +4561,10 @@ msgstr "Yalnızca https://github.com bağlantıları desteklenir"
 #: src/components/BoardSettingsModal.vue
 msgid "Only issues with a label"
 msgstr "Yalnızca şu etikete sahip sorunlar"
+
+#: src/views/MyCardsView.vue
+msgid "Only loaded tasks are shown."
+msgstr "Yalnızca yüklenen görevler gösterilir."
 
 #: src/views/MyCardsView.vue
 msgid "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list."
@@ -4732,6 +4769,10 @@ msgstr "Yeni etiket için renk seç"
 msgid "Pick color for new review type"
 msgstr "Yeni inceleme türü için renk seç"
 
+#: src/components/CardDetail.vue
+msgid "Pick on board"
+msgstr "Panodan seç"
+
 #: src/App.vue
 #: src/components/BoardTileMenu.vue
 msgid "Pin board"
@@ -4795,6 +4836,7 @@ msgstr "Önizleme"
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Priority"
 msgstr "Öncelik"
@@ -4918,6 +4960,10 @@ msgstr "İlişkiler"
 #: src/components/ProjectHealth.vue
 msgid "Remaining"
 msgstr "Kalan"
+
+#: src/components/CardDetail.vue
+msgid "Remind assignees and card watchers one day before"
+msgstr "Atanan kişilere ve kartı takip edenlere bir gün önce hatırlat"
 
 #: src/components/CardDetail.vue
 msgid "Remind me about this comment at"
@@ -5349,12 +5395,20 @@ msgid "Search contacts…"
 msgstr "Kişilerde ara…"
 
 #: src/components/CardDetail.vue
+msgid "Search labels…"
+msgstr "Etiketleri ara…"
+
+#: src/components/CardDetail.vue
 msgid "Search people…"
 msgstr "Kişi ara…"
 
 #: src/components/SearchBox.vue
 msgid "Search results"
 msgstr "Arama sonuçları"
+
+#: src/views/MyCardsView.vue
+msgid "Search tasks"
+msgstr "Görevlerde ara"
 
 #: src/components/CardDetail.vue
 msgid "Search the people with access to this board"
@@ -5417,6 +5471,10 @@ msgstr "Bir sütun seç…"
 #: src/views/TrashView.vue
 msgid "Select multiple cards"
 msgstr "Birden çok kart seç"
+
+#: src/views/BoardView.vue
+msgid "Select or deselect the focused card"
+msgstr "Odaklanan kartı seç veya seçimini kaldır"
 
 #: src/components/CardDetail.vue
 msgid "Set"
@@ -5514,7 +5572,7 @@ msgstr "Tartışmayı kartın altında göster"
 msgid "Show the discussion panel"
 msgstr "Tartışma panelini göster"
 
-#: src/components/CardDetail.vue:7064
+#: src/components/CardDetail.vue:7193
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Tartışma panelini göster (%n yorum)"
@@ -5602,6 +5660,7 @@ msgstr "Sen düzenlerken başka biri bu açıklamayı değiştirdi. Senin metnin
 msgid "Sort"
 msgstr "Sırala"
 
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "Sort by"
 msgstr "Sıralama ölçütü"
@@ -5682,6 +5741,7 @@ msgstr "STARTTLS (143)"
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 #: src/views/ViewPage.vue
 msgid "Status"
@@ -5766,6 +5826,10 @@ msgstr "Hedef sütun"
 #: src/composables/useCardType.js
 msgid "Task"
 msgstr "Görev"
+
+#: src/views/MyCardsView.vue
+msgid "Tasks"
+msgstr "Görevler"
 
 #: src/views/MyCardsView.vue
 msgid "Tasks you completed in the last {days} days."
@@ -5989,6 +6053,7 @@ msgstr "İpucu: klavye kısayolları için ? tuşuna bas"
 
 #: src/components/CsvImportModal.vue
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 #: src/views/ViewPage.vue
@@ -6054,6 +6119,10 @@ msgstr "Çöp kutusu boş"
 #: src/views/BoardList.vue
 msgid "Trello (.json)"
 msgstr "Trello (.json)"
+
+#: src/views/MyCardsView.vue
+msgid "Try changing your filters or search."
+msgstr "Filtrelerinizi veya aramanızı değiştirmeyi deneyin."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Tue"
@@ -6232,6 +6301,7 @@ msgid "Velocity — completed per week"
 msgstr "Hız — haftada tamamlanan"
 
 #: src/views/BoardView.vue
+#: src/views/MyCardsView.vue
 #: src/views/ViewPage.vue
 msgid "View"
 msgstr "Görünüm"
@@ -6303,8 +6373,8 @@ msgstr "Webhook etkin"
 msgid "Wed"
 msgstr "Çar"
 
-#: src/components/BoardSettingsModal.vue:2299
-#: src/components/CardDetail.vue:5215
+#: src/components/BoardSettingsModal.vue:2302
+#: src/components/CardDetail.vue:5283
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "hafta"
@@ -6412,8 +6482,8 @@ msgstr "Yazıldı"
 msgid "wrote"
 msgstr "yazdı"
 
-#: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5217
+#: src/components/BoardSettingsModal.vue:2304
+#: src/components/CardDetail.vue:5285
 msgid "year"
 msgid_plural "years"
 msgstr[0] "yıl"

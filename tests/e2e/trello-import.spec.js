@@ -8,6 +8,7 @@ import { test, expect, api, ncLogin, BASE, RATE_LIMIT_MESSAGE } from './helpers.
 function trelloFixture(stamp) {
 	return {
 		name: 'E2E Trello ' + stamp,
+		desc: 'A board for the whole team',
 		labels: [
 			{ id: 'lbl_bug', name: 'Bug', color: 'red' },
 			{ id: 'lbl_feat', name: 'Feature', color: 'green' },
@@ -70,6 +71,7 @@ test.describe('Import from Trello', () => {
 		// Assert the imported board mirrors the fixture via the API payload.
 		const payload = await api.get(`/boards/${importedBoardId}`)
 		expect(payload.board.title).toBe('E2E Trello ' + stamp)
+		expect(payload.board.description).toBe('A board for the whole team')
 
 		const stacks = payload.stacks.slice().sort((a, b) => (a.sortKey < b.sortKey ? -1 : 1))
 		// Lists imported in Trello `pos` order (Todo before Doing).
