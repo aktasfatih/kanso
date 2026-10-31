@@ -3,23 +3,23 @@
 
 import { test, expect, ncLogin, BASE } from './helpers.js'
 
-function due(days) {
-	const date = new Date()
+function due(days, now = Date.now()) {
+	const date = new Date(now)
 	date.setHours(12, 0, 0, 0)
 	date.setDate(date.getDate() + days)
 	return date.toISOString()
 }
 
-function cards() {
+function cards(now) {
 	const common = { stackTitle: 'To do', doneAt: 0, parentCardId: null }
 	return [
-		{ ...common, id: 900001, boardId: 501, boardTitle: 'Alpha board', title: 'Cedar task', duedate: due(-1), priority: 4, startedAt: 0 },
-		{ ...common, id: 900002, boardId: 502, boardTitle: 'Beta board', title: 'Alpha task', duedate: due(0), priority: 1, startedAt: 123 },
+		{ ...common, id: 900001, boardId: 501, boardTitle: 'Alpha board', title: 'Cedar task', duedate: due(-1, now), priority: 4, startedAt: 0 },
+		{ ...common, id: 900002, boardId: 502, boardTitle: 'Beta board', title: 'Alpha task', duedate: due(0, now), priority: 1, startedAt: 123 },
 		{ ...common, id: 900003, boardId: 501, boardTitle: 'Alpha board', title: 'Bravo task', duedate: null, priority: 2, startedAt: 0 },
 	]
 }
 
-async function openTasks(page, { truncated = false } = {}) {
+async function openTasks(page, { truncated = false, now } = {}) {
 	await page.route('**/apps/kanso/api/boards', (route) => route.fulfill({
 		status: 200,
 		contentType: 'application/json',
@@ -33,7 +33,7 @@ async function openTasks(page, { truncated = false } = {}) {
 		status: 200,
 		contentType: 'application/json',
 		headers: { 'X-Kanso-Limit': '200', 'X-Kanso-Truncated': truncated ? '1' : '0' },
-		body: JSON.stringify(cards()),
+		body: JSON.stringify(cards(now)),
 	}))
 	await ncLogin(page)
 	await page.goto(`${BASE}/index.php/apps/kanso#/my-tasks`)
@@ -89,10 +89,11 @@ test('sorting orders the displayed tasks and board view groups by status', async
 })
 
 test('the today filter refreshes at local midnight without a data change', async ({ page }) => {
-	const beforeMidnight = new Date()
-	beforeMidnight.setHours(23, 59, 55, 0)
-	await page.clock.install({ time: beforeMidnight })
-	await openTasks(page)
+	const day = new Date(2026, 4, 15, 20, 0, 0)
+	const beforeMidnight = new Date(2026, 4, 15, 23, 59, 55)
+	await page.clock.install({ time: day })
+	await openTasks(page, { now: day })
+	await page.clock.pauseAt(beforeMidnight)
 	await page.getByLabel('Due date', { exact: true }).selectOption({ label: 'Today' })
 	await expect(page.locator('.my-cards-view__row', { hasText: 'Alpha task' })).toBeVisible()
 	await page.clock.fastForward(10_000)
