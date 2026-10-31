@@ -176,7 +176,8 @@ by mail cannot trigger notifications or run script in a card.
 
 ## Limitations
 
-- Polling is every five minutes, so a card can take that long to appear.
+- Polling is scheduled at least five minutes apart; a busy or delayed Nextcloud
+  background-job queue can make a card take longer to appear.
 - Replying to an intake card by email creates a **new card**; it does not add a
   comment.
 - One mailbox per board.

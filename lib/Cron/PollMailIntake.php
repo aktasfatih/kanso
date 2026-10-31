@@ -20,9 +20,6 @@ use OCP\BackgroundJob\TimedJob;
  * handling, the message budget and the UID watermark all live in
  * {@see MailIntakeService::pollAll} - one unreachable server is recorded on its
  * own board and stepped over, so it cannot stall the others.
- *
- * TIME_INSENSITIVE: intake is not something a user is waiting on in the moment,
- * so it belongs in the window where NC is happy to run heavier work.
  */
 class PollMailIntake extends TimedJob {
 	public function __construct(
@@ -31,7 +28,7 @@ class PollMailIntake extends TimedJob {
 	) {
 		parent::__construct($time);
 		$this->setInterval(60 * 5);
-		$this->setTimeSensitivity(self::TIME_INSENSITIVE);
+		$this->setTimeSensitivity(self::TIME_SENSITIVE);
 	}
 
 	#[\Override]
