@@ -179,6 +179,24 @@ test.describe('Board settings section rail', () => {
 		await wip.press('Tab')
 		await expect.poll(stackWip).toBe(0)
 		await expect(wip).toHaveValue('')
+
+		await wip.fill('5')
+		await wip.press('Tab')
+		await expect.poll(stackWip).toBe(5)
+
+		await wip.fill('0')
+		await wip.press('Tab')
+		await expect.poll(stackWip).toBe(0)
+
+		await wip.fill('4')
+		await wip.press('Tab')
+		await expect.poll(stackWip).toBe(4)
+		await wip.focus()
+		await page.keyboard.press('Control+A')
+		await page.keyboard.type('-')
+		await wip.press('Tab')
+		await expect(page.locator('#bs-pane-workflow')).toContainText('WIP limit must be a positive number or empty.')
+		expect(await stackWip()).toBe(4)
 	})
 
 	test('an Automation group collapses and expands', async ({ page }) => {

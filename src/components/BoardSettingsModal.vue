@@ -1401,7 +1401,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:disabled="!canEdit || workflowSaving[stack.id]"
 								:value="wipLimitDisplay(stack)"
 								:placeholder="t('kanso', 'No limit')"
-								@change="onWipLimitChange(stack, $event.target.value)" />
+								@change="onWipLimitChange(stack, $event.target)" />
 						</div>
 
 						<!-- Per-stack saving indicator -->
@@ -4096,11 +4096,11 @@ async function onRoleChange(stack, newRole) {
 }
 
 // The server reads null as "unchanged", so "no limit" must be sent as 0.
-async function onWipLimitChange(stack, rawValue) {
+async function onWipLimitChange(stack, input) {
 	workflowErrors.value = { ...workflowErrors.value, [stack.id]: '' }
-	const trimmed = String(rawValue).trim()
+	const trimmed = String(input.value).trim()
 	const wipLimit = trimmed === '' || trimmed === '0' ? 0 : parseInt(trimmed, 10)
-	if (trimmed !== '' && trimmed !== '0' && (isNaN(wipLimit) || wipLimit < 0)) {
+	if (input.validity.badInput || (trimmed !== '' && trimmed !== '0' && (isNaN(wipLimit) || wipLimit < 0))) {
 		workflowErrors.value = {
 			...workflowErrors.value,
 			[stack.id]: t('kanso', 'WIP limit must be a positive number or empty.'),
