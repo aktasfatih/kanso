@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— aucun —"
 
-#: src/components/BoardSettingsModal.vue:4927
+#: src/components/BoardSettingsModal.vue:4938
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n fois"
@@ -136,7 +136,7 @@ msgstr[1] "{count} cartes n'ont pas d'estimation et comptent chacune pour l'esti
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "{count} carte(s) ont une estimation incompatible avec la nouvelle échelle ; elle sera effacée. Cette action est irréversible."
 
-#: src/components/BoardSettingsModal.vue:148
+#: src/components/BoardSettingsModal.vue:149
 msgid "{count} character left"
 msgid_plural "{count} characters left"
 msgstr[0] "{count} caractère restant"
@@ -345,21 +345,21 @@ msgstr "%1$s a demandé votre revue sur %2$s"
 msgid "%1$s shared %2$s with you"
 msgstr "%1$s a partagé %2$s avec vous"
 
-#: src/views/BoardList.vue:217
+#: src/views/BoardList.vue:219
 msgid "%n attachment"
 msgid_plural "%n attachments"
 msgstr[0] "%n pièce jointe"
 msgstr[1] "%n pièces jointes"
 
-#: src/views/BoardList.vue:224
+#: src/views/BoardList.vue:226
 msgid "%n attachment could not be copied and is missing from the new board. Keep your Deck board until you have checked it."
 msgid_plural "%n attachments could not be copied and are missing from the new board. Keep your Deck board until you have checked them."
 msgstr[0] "%n pièce jointe n'a pas pu être copiée et manque dans le nouveau tableau. Conservez votre tableau Deck le temps de la vérifier."
 msgstr[1] "%n pièces jointes n'ont pas pu être copiées et manquent dans le nouveau tableau. Conservez votre tableau Deck le temps de les vérifier."
 
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:214
-#: src/views/BoardList.vue:257
+#: src/views/BoardList.vue:216
+#: src/views/BoardList.vue:259
 #: src/views/BoardStats.vue:444
 #: src/views/ProjectStats.vue:347
 msgid "%n card"
@@ -367,7 +367,7 @@ msgid_plural "%n cards"
 msgstr[0] "%n carte"
 msgstr[1] "%n cartes"
 
-#: src/components/StackColumn.vue:1090
+#: src/components/StackColumn.vue:1092
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "%n carte archivée"
@@ -379,13 +379,13 @@ msgid_plural "%n cards created"
 msgstr[0] "%n carte créée"
 msgstr[1] "%n cartes créées"
 
-#: src/views/BoardList.vue:213
+#: src/views/BoardList.vue:215
 msgid "%n column"
 msgid_plural "%n columns"
 msgstr[0] "%n colonne"
 msgstr[1] "%n colonnes"
 
-#: src/views/BoardList.vue:216
+#: src/views/BoardList.vue:218
 msgid "%n comment"
 msgid_plural "%n comments"
 msgstr[0] "%n commentaire"
@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n ligne de données détectée"
 msgstr[1] "%n lignes de données détectées"
 
-#: src/components/CardDetail.vue:5096
+#: src/components/CardDetail.vue:5098
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "il y a %n jour"
@@ -409,19 +409,19 @@ msgid_plural "%n files"
 msgstr[0] "%n fichier"
 msgstr[1] "%n fichiers"
 
-#: src/components/CardDetail.vue:5094
+#: src/components/CardDetail.vue:5096
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "il y a %n heure"
 msgstr[1] "il y a %n heures"
 
-#: src/views/BoardView.vue:2751
+#: src/views/BoardView.vue:2752
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n identifiant copié."
 msgstr[1] "%n identifiants copiés."
 
-#: src/views/BoardList.vue:215
+#: src/views/BoardList.vue:217
 msgid "%n label"
 msgid_plural "%n labels"
 msgstr[0] "%n étiquette"
@@ -439,7 +439,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n étiquette n'a pas été créée et manque dans les cartes importées : seuls les gestionnaires du tableau peuvent ajouter de nouvelles étiquettes. Demandez à un gestionnaire de l'ajouter, puis définissez-la sur les cartes."
 msgstr[1] "%n étiquettes n'ont pas été créées et manquent dans les cartes importées : seuls les gestionnaires du tableau peuvent ajouter de nouvelles étiquettes. Demandez à un gestionnaire de les ajouter, puis définissez-les sur les cartes."
 
-#: src/components/CardDetail.vue:5092
+#: src/components/CardDetail.vue:5094
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "il y a %n minute"
@@ -463,13 +463,13 @@ msgid_plural "%n points"
 msgstr[0] "%n point"
 msgstr[1] "%n points"
 
-#: src/components/CardDetail.vue:1261
+#: src/components/CardDetail.vue:1263
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n projet"
 msgstr[1] "%n projets"
 
-#: src/components/CardDetail.vue:2351
+#: src/components/CardDetail.vue:2353
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n réponse"
@@ -487,7 +487,7 @@ msgid_plural "%n unscheduled cards"
 msgstr[0] "%n carte non planifiée"
 msgstr[1] "%n cartes non planifiées"
 
-#: src/components/CardDetail.vue:325
+#: src/components/CardDetail.vue:326
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n observateur"
@@ -773,13 +773,13 @@ msgstr "Approuvée"
 msgid "Archive"
 msgstr "Archiver"
 
-#: src/components/StackColumn.vue:218
+#: src/components/StackColumn.vue:219
 msgid "Archive %n card"
 msgid_plural "Archive %n cards"
 msgstr[0] "Archiver %n carte"
 msgstr[1] "Archiver %n cartes"
 
-#: src/components/StackColumn.vue:217
+#: src/components/StackColumn.vue:218
 msgid "Archive %n visible card"
 msgid_plural "Archive %n visible cards"
 msgstr[0] "Archiver %n carte visible"
@@ -1474,7 +1474,7 @@ msgstr "Liste de contrôle incomplète"
 msgid "Checklist progress {done} of {total}"
 msgstr "Progression de la liste de contrôle : {done} sur {total}"
 
-#: src/components/BoardListView.vue:1076
+#: src/components/BoardListView.vue:1078
 #: src/components/CardPreview.vue:239
 #: src/components/CardTile.vue:520
 msgid "Checklist progress {done} of {total}, %n overdue step"
@@ -2031,8 +2031,8 @@ msgstr "Zone de danger"
 msgid "Date"
 msgstr "Date"
 
-#: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5285
+#: src/components/BoardSettingsModal.vue:2312
+#: src/components/CardDetail.vue:5287
 msgid "day"
 msgid_plural "days"
 msgstr[0] "jour"
@@ -2588,7 +2588,7 @@ msgstr "Tous les"
 msgid "Every card in this project is done."
 msgstr "Toutes les cartes de ce projet sont terminées."
 
-#: src/components/BoardSettingsModal.vue:4907
+#: src/components/BoardSettingsModal.vue:4918
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Tous les jours"
@@ -2598,19 +2598,19 @@ msgstr[1] "Tous les %n jours"
 msgid "Every estimate needs a label."
 msgstr "Chaque estimation doit avoir une étiquette."
 
-#: src/components/BoardSettingsModal.vue:4917
+#: src/components/BoardSettingsModal.vue:4928
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Tous les mois"
 msgstr[1] "Tous les %n mois"
 
-#: src/components/BoardSettingsModal.vue:4909
+#: src/components/BoardSettingsModal.vue:4920
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Toutes les semaines"
 msgstr[1] "Toutes les %n semaines"
 
-#: src/components/BoardSettingsModal.vue:4919
+#: src/components/BoardSettingsModal.vue:4930
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Tous les ans"
@@ -3585,7 +3585,7 @@ msgstr "Objectif, périmètre ou règles. Tous les membres du tableau peuvent la
 msgid "Jump to the discussion"
 msgstr "Aller à la discussion"
 
-#: src/components/CardDetail.vue:7190
+#: src/components/CardDetail.vue:7192
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Aller à la discussion (%n commentaire)"
@@ -3961,8 +3961,8 @@ msgstr "Mode"
 msgid "Mon"
 msgstr "Lun"
 
-#: src/components/BoardSettingsModal.vue:2303
-#: src/components/CardDetail.vue:5287
+#: src/components/BoardSettingsModal.vue:2314
+#: src/components/CardDetail.vue:5289
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mois"
@@ -5436,14 +5436,14 @@ msgstr "Secret (copiez-le maintenant, il ne s'affiche qu'une fois)"
 msgid "Select"
 msgstr "Liste déroulante"
 
-#: src/components/StackColumn.vue:206
+#: src/components/StackColumn.vue:207
 #: src/views/ArchivedView.vue:420
 msgid "Select %n card"
 msgid_plural "Select %n cards"
 msgstr[0] "Sélectionner %n carte"
 msgstr[1] "Sélectionner %n cartes"
 
-#: src/components/StackColumn.vue:205
+#: src/components/StackColumn.vue:206
 #: src/views/ArchivedView.vue:419
 msgid "Select %n visible card"
 msgid_plural "Select %n visible cards"
@@ -5572,7 +5572,7 @@ msgstr "Afficher la discussion sous la carte"
 msgid "Show the discussion panel"
 msgstr "Afficher le panneau de discussion"
 
-#: src/components/CardDetail.vue:7196
+#: src/components/CardDetail.vue:7198
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Afficher le panneau de discussion (%n commentaire)"
@@ -6373,8 +6373,8 @@ msgstr "Webhook actif"
 msgid "Wed"
 msgstr "Mer"
 
-#: src/components/BoardSettingsModal.vue:2302
-#: src/components/CardDetail.vue:5286
+#: src/components/BoardSettingsModal.vue:2313
+#: src/components/CardDetail.vue:5288
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "semaine"
@@ -6482,8 +6482,8 @@ msgstr "Écrit le"
 msgid "wrote"
 msgstr "a écrit"
 
-#: src/components/BoardSettingsModal.vue:2304
-#: src/components/CardDetail.vue:5288
+#: src/components/BoardSettingsModal.vue:2315
+#: src/components/CardDetail.vue:5290
 msgid "year"
 msgid_plural "years"
 msgstr[0] "an"

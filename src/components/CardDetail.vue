@@ -201,6 +201,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ cardHumanId }}
 							</button>
 							<input
+								enterkeyhint="done"
 								v-if="editingTitle"
 								ref="titleInputRef"
 								v-model="draftTitle"
@@ -1221,6 +1222,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										@click="newLabelColor = ''; showNewLabelColor = false">×</button>
 								</div>
 								<input
+									enterkeyhint="done"
 									v-model="newLabelTitle"
 									class="card-modal__label-create-input"
 									type="text"

@@ -118,6 +118,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<p class="board-filter-bar__caption">{{ t('kanso', 'Save current filter') }}</p>
 					<div class="board-filter-bar__save-row">
 						<NcTextField
+							enterkeyhint="done"
 							v-model="saveName"
 							class="board-filter-bar__save-input"
 							maxlength="100"

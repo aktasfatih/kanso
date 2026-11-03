@@ -11,6 +11,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<div class="search-box__input-wrap" @click="focusInput">
 			<MagnifyIcon class="search-box__magnify" :size="18" aria-hidden="true" />
 			<input
+				enterkeyhint="go"
 				ref="inputRef"
 				v-model="term"
 				class="search-box__input"

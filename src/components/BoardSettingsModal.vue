@@ -105,6 +105,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								</label>
 								<div class="board-settings__prefix-row">
 									<input
+										enterkeyhint="done"
 										id="bs-board-name"
 										v-model="nameDraft"
 										class="board-settings__prefix-input board-settings__name-input"
@@ -222,6 +223,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</label>
 							<div class="board-settings__prefix-row">
 								<input
+									enterkeyhint="done"
 									id="bs-card-prefix"
 									v-model="prefixDraft"
 									class="board-settings__prefix-input"
@@ -252,6 +254,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</label>
 							<div class="board-settings__prefix-row">
 								<input
+									enterkeyhint="done"
 									id="bs-chat-url"
 									v-model="chatUrlDraft"
 									class="board-settings__chat-url-input"
@@ -456,6 +459,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<!-- Inline rename input -->
 						<template v-if="editingLabelId === label.id">
 							<input
+								enterkeyhint="done"
 								:ref="(el) => setEditRef(label.id, el)"
 								v-model="editingTitle"
 								class="label-settings__rename-input"
@@ -558,6 +562,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 
 						<input
+							enterkeyhint="done"
 							v-model="newTitle"
 							class="label-settings__create-input"
 							type="text"
@@ -644,6 +649,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<!-- Inline rename input -->
 						<template v-if="editingRtId === rt.id">
 							<input
+								enterkeyhint="done"
 								:ref="(el) => setRtEditRef(rt.id, el)"
 								v-model="editingRtTitle"
 								class="label-settings__rename-input"
@@ -758,6 +764,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 
 						<input
+							enterkeyhint="done"
 							v-model="newRtTitle"
 							class="label-settings__create-input"
 							type="text"
@@ -831,6 +838,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<!-- Inline rename input -->
 						<template v-if="editingCfId === field.id">
 							<input
+								enterkeyhint="done"
 								:ref="(el) => setCfEditRef(field.id, el)"
 								v-model="editingCfName"
 								class="label-settings__rename-input"
@@ -935,6 +943,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<h4 class="label-settings__create-heading">{{ t('kanso', 'Add custom field') }}</h4>
 					<div class="label-settings__create-row cf-settings__create-row">
 						<input
+							enterkeyhint="done"
 							v-model="newCfName"
 							class="label-settings__create-input"
 							type="text"
@@ -1514,6 +1523,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</select>
 							<template v-if="intakeFilterMode === 'label'">
 								<input
+									enterkeyhint="done"
 									v-model="intakeLabelInput"
 									class="github-webhook__input"
 									type="text"
@@ -1616,6 +1626,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</select>
 							<template v-if="forgejoIntakeFilterMode === 'label'">
 								<input
+									enterkeyhint="done"
 									v-model="forgejoIntakeLabelInput"
 									class="github-webhook__input"
 									type="text"

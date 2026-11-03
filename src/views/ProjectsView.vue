@@ -103,6 +103,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<span aria-hidden="true" class="projects-view__required">*</span>
 				</label>
 				<input
+					enterkeyhint="done"
 					id="project-title"
 					ref="titleInputRef"
 					v-model="newTitle"

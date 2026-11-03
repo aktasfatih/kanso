@@ -78,6 +78,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						class="card-composer"
 						@submit.prevent="submitCard(rows[vRow.index].stackId)">
 						<input
+							enterkeyhint="enter"
 							:ref="(el) => setComposerRef(rows[vRow.index].stackId, el)"
 							:value="draftByStack[rows[vRow.index].stackId] ?? ''"
 							class="card-composer__input"
@@ -367,6 +368,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			class="add-column-composer"
 			@submit.prevent="submitNewColumn">
 			<input
+				enterkeyhint="done"
 				ref="addColumnInputRef"
 				v-model="addColumnTitle"
 				class="add-column-composer__input"

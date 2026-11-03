@@ -6,6 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 	<div class="view-page">
 		<div class="view-page__header kanso-page-header">
 			<input
+				enterkeyhint="done"
 				v-if="view && editingTitle"
 				ref="titleInput"
 				v-model="titleDraft"

@@ -54,6 +54,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<ChevronLeftIcon :size="18" />
 				</button>
 				<input
+					enterkeyhint="done"
 					v-if="editingTitle"
 					ref="titleInputRef"
 					v-model="titleDraft"
@@ -275,6 +276,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<div v-if="canQuickAdd" v-show="!collapsed" class="card-composer-wrap">
 			<form class="card-composer" @submit.prevent="submitCard">
 				<input
+					enterkeyhint="enter"
 					ref="composerInputRef"
 					v-model="newCardTitle"
 					class="card-composer__input"

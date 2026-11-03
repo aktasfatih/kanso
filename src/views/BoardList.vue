@@ -120,6 +120,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<!-- Inline create-folder form (#3529) -->
 		<form v-if="showCreateFolder && !showArchived" class="new-board-form" data-test="new-folder-form" @submit.prevent="submitNewFolder">
 			<input
+				enterkeyhint="done"
 				ref="newFolderInput"
 				v-model="newFolderName"
 				class="new-board-form__input"
@@ -141,6 +142,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<!-- Inline create-board form (revealed by the Create board button) -->
 		<form v-if="showCreate" class="new-board-form" @submit.prevent="submitNewBoard">
 			<input
+				enterkeyhint="done"
 				ref="newBoardInput"
 				v-model="newBoardTitle"
 				class="new-board-form__input"
@@ -442,6 +444,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:data-test="'rename-folder-form-' + folder.id"
 							@submit.prevent="submitRenameFolder(folder)">
 							<input
+								enterkeyhint="done"
 								v-model="renameName"
 								class="new-board-form__input"
 								type="text"
