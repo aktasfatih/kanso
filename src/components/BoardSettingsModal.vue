@@ -4095,16 +4095,11 @@ async function onRoleChange(stack, newRole) {
 	}
 }
 
-/**
- * WIP limit input: empty string → send null (no limit).
- * "0" also maps to null (backend treats both as unlimited).
- * Positive integer → send that integer.
- */
+// The server reads null as "unchanged", so "no limit" must be sent as 0.
 async function onWipLimitChange(stack, rawValue) {
 	workflowErrors.value = { ...workflowErrors.value, [stack.id]: '' }
 	const trimmed = String(rawValue).trim()
-	// Treat empty or "0" as "no limit" → null
-	const wipLimit = trimmed === '' || trimmed === '0' ? null : parseInt(trimmed, 10)
+	const wipLimit = trimmed === '' || trimmed === '0' ? 0 : parseInt(trimmed, 10)
 	if (trimmed !== '' && trimmed !== '0' && (isNaN(wipLimit) || wipLimit < 0)) {
 		workflowErrors.value = {
 			...workflowErrors.value,

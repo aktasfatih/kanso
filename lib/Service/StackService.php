@@ -98,7 +98,7 @@ class StackService {
 	 * Updates the given fields (null = leave unchanged). `role` is one of the
 	 * Stack::ROLE_* constants (moving a card into a done-role stack stamps its
 	 * done_at - see CardService::move); `wipLimit` is a non-negative soft cap
-	 * (null clears it - no server-side enforcement, the client warns).
+	 * (0 clears it - no server-side enforcement, the client warns).
 	 * `description` is free-form plain text explaining what belongs in the
 	 * column ('' clears it), capped at {@see self::MAX_DESCRIPTION_LENGTH}.
 	 *

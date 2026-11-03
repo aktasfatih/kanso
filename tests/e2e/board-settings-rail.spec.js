@@ -6,12 +6,13 @@ import { test, expect, api, ncLogin, BASE } from './helpers.js'
 // #3570 — board settings sidebar restructured into a vertical section rail with a
 // danger group pinned at the bottom and a collapsible Automation pane.
 test.describe('Board settings section rail', () => {
-	const state = { boardId: 0 }
+	const state = { boardId: 0, stackId: 0 }
 
 	test.beforeAll(async () => {
 		const board = await api.post('/boards', { title: 'Rail E2E ' + Math.floor(Date.now() / 1000) })
 		state.boardId = board.id
-		await api.post('/stacks', { boardId: board.id, title: 'To Do' })
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'To Do' })
+		state.stackId = stack.id
 	})
 
 	test.afterAll(async () => {
@@ -154,6 +155,30 @@ test.describe('Board settings section rail', () => {
 		await expect(confirm).toBeVisible()
 		await confirm.getByRole('button', { name: 'Cancel' }).click()
 		await expect(confirm).toBeHidden()
+	})
+
+	test('a WIP limit can be cleared back to no limit', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${state.boardId}`)
+		await page.waitForSelector('.board-view__header', { timeout: 15_000 })
+		await page.getByRole('button', { name: 'More' }).click()
+		await page.getByRole('menuitem', { name: /board settings/i }).click()
+		await page.getByRole('tab', { name: /workflow/i }).click()
+
+		const wip = page.locator(`#workflow-wip-${state.stackId}`)
+		const stackWip = async () => {
+			const board = await api.get(`/boards/${state.boardId}`)
+			return board.stacks.find((s) => s.id === state.stackId).wipLimit ?? 0
+		}
+
+		await wip.fill('3')
+		await wip.press('Tab')
+		await expect.poll(stackWip).toBe(3)
+
+		await wip.fill('')
+		await wip.press('Tab')
+		await expect.poll(stackWip).toBe(0)
+		await expect(wip).toHaveValue('')
 	})
 
 	test('an Automation group collapses and expands', async ({ page }) => {
