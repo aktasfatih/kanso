@@ -11,6 +11,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+## [0.44.2](https://github.com/aktasfatih/kanso/compare/v0.44.1...v0.44.2) (2026-11-04)
+
+
+### Bug Fixes
+
+* allow clearing a column's WIP limit from board settings ([378b7e0](https://github.com/aktasfatih/kanso/commit/378b7e02222d5f637ad9269721c90fc37d29d3c2)), closes [#222](https://github.com/aktasfatih/kanso/issues/222)
+* keep a column's WIP limit when board settings gets an invalid number ([b93d4b6](https://github.com/aktasfatih/kanso/commit/b93d4b68bb12b7decc873545c1b407e2acf122e5))
+* mobile keyboards show an Enter key on every press-Enter-to-save field ([9083926](https://github.com/aktasfatih/kanso/commit/9083926336575287bbb771cc2cd5288a88937465))
+* pressing Enter in search no longer opens a result for the previous term ([60b138c](https://github.com/aktasfatih/kanso/commit/60b138c5afdf19655c1aa76aca52278817fdd0fc))
+* pressing Enter in search opens the first result when none is highlighted ([9fcb8d8](https://github.com/aktasfatih/kanso/commit/9fcb8d8c14e961385f9e59c7f21806e7464e2240))
+* pressing Enter on mobile adds the checklist item instead of jumping to sub-cards ([1634416](https://github.com/aktasfatih/kanso/commit/1634416df0e5d555b10341d31184ba3901678bb0)), closes [#221](https://github.com/aktasfatih/kanso/issues/221)
+* reject decimal and exponent WIP limits instead of truncating them ([2a86a4f](https://github.com/aktasfatih/kanso/commit/2a86a4f1793748c44290df2942e8e57c5a24c945))
+
 ## [0.44.1](https://github.com/aktasfatih/kanso/compare/v0.44.0...v0.44.1) (2026-10-31)
 
 
