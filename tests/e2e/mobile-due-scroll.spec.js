@@ -145,6 +145,8 @@ test.describe('Mobile due date scrolling', () => {
 	})
 
 	test('touching another picker opens it and a backdrop tap dismisses only the date sheet', async ({ page }) => {
+		// Tall enough that the date sheet never covers the priority pill it taps.
+		await page.setViewportSize({ width: 390, height: 844 })
 		await ncLogin(page)
 		await page.goto(`${BASE}/index.php/apps/kanso#/board/${boardId}/card/${cardId}`)
 		const due = page.locator('button.card-modal__pill[data-pill="due"]')

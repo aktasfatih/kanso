@@ -149,7 +149,9 @@ test.describe('Select a relation on the board', () => {
 	})
 
 	test('returns to the source overlay on a custom View', async ({ page }) => {
-		const created = await api.put('/views', { name: `Relation picker view ${Date.now()}`, filter: {}, groupBy: 'status', display: 'list' })
+		const label = await api.post('/labels', { boardId: state.boardId, title: `Relation view ${Date.now()}`, color: '0082c9' })
+		await api.put(`/cards/${state.sourceId}/labels/${label.id}`)
+		const created = await api.put('/views', { name: `Relation picker view ${Date.now()}`, filter: { labels: [label.id] }, groupBy: 'status', display: 'list' })
 		const viewId = created.views[created.views.length - 1].id
 		try {
 			await ncLogin(page)
@@ -165,6 +167,7 @@ test.describe('Select a relation on the board', () => {
 			await expect(page.locator('.card-modal__relation-target')).toHaveValue(String(state.targetId))
 		} finally {
 			await api.delete(`/views/${viewId}`).catch(() => {})
+			await api.delete(`/labels/${label.id}`).catch(() => {})
 		}
 	})
 
