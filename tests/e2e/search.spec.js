@@ -74,6 +74,15 @@ test.describe('Search', () => {
 
 	// ── Tests ──────────────────────────────────────────────────────────────────
 
+	test('Enter with no highlighted result opens the first one', async ({ page }) => {
+		await goToBoard(page)
+		const searchInput = page.locator('.search-box__input')
+		await searchInput.fill('Alpha')
+		await expect(page.locator('.search-box__result').filter({ hasText: 'Alpha widget' })).toBeVisible()
+		await searchInput.press('Enter')
+		await expect(page.locator('.card-modal')).toContainText('Alpha widget', { timeout: 15_000 })
+	})
+
 	test('typing a card-title term shows that card in results and clicking opens the modal', async ({ page }) => {
 		await goToBoard(page)
 

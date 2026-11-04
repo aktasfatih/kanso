@@ -240,9 +240,8 @@ function moveActive(delta) {
 }
 
 function selectActive() {
-	if (activeIndex.value >= 0 && results.value[activeIndex.value]) {
-		selectResult(results.value[activeIndex.value])
-	}
+	const result = results.value[Math.max(activeIndex.value, 0)]
+	if (result) selectResult(result)
 }
 
 async function scrollActiveIntoView() {
