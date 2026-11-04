@@ -292,7 +292,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             stack_id: The numeric stack id.
             title: New title.
             archived: Archive (true) or unarchive (false) the stack.
-            wip_limit: Work-in-progress card cap (null/omit to leave unchanged).
+            wip_limit: Work-in-progress card cap; 0 clears it (null/omit to leave unchanged).
             color: New colour (6-hex, no '#').
             description: Plain-text note saying what belongs in this column,
                 max 2000 characters ('' clears it, omit to leave unchanged).

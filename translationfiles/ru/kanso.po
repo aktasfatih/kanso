@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— нет —"
 
-#: src/components/BoardSettingsModal.vue:4932
+#: src/components/BoardSettingsModal.vue:4938
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· повторов: %n"
@@ -140,7 +140,7 @@ msgstr[2] "{count} карточек без оценки, для каждой б�
 msgid "{count} card(s) have an estimate that does not fit the new scale and will be cleared. This cannot be undone."
 msgstr "Карточек с оценкой, не подходящей под новую шкалу: {count}. Их оценки будут очищены. Это действие нельзя отменить."
 
-#: src/components/BoardSettingsModal.vue:148
+#: src/components/BoardSettingsModal.vue:149
 msgid "{count} character left"
 msgid_plural "{count} characters left"
 msgstr[0] "Остался {count} символ"
@@ -357,14 +357,14 @@ msgstr "%1$s запросил вашу проверку %2$s"
 msgid "%1$s shared %2$s with you"
 msgstr "%1$s поделился с вами %2$s"
 
-#: src/views/BoardList.vue:217
+#: src/views/BoardList.vue:219
 msgid "%n attachment"
 msgid_plural "%n attachments"
 msgstr[0] "%n вложение"
 msgstr[1] "%n вложения"
 msgstr[2] "%n вложений"
 
-#: src/views/BoardList.vue:224
+#: src/views/BoardList.vue:226
 msgid "%n attachment could not be copied and is missing from the new board. Keep your Deck board until you have checked it."
 msgid_plural "%n attachments could not be copied and are missing from the new board. Keep your Deck board until you have checked them."
 msgstr[0] "%n вложение не удалось скопировать, и оно отсутствует на новой доске. Сохраняйте свою доску Deck, пока не проверите его."
@@ -372,8 +372,8 @@ msgstr[1] "%n вложения не удалось скопировать, и о
 msgstr[2] "%n вложений не удалось скопировать, и они отсутствуют на новой доске. Сохраняйте свою доску Deck, пока не проверите их."
 
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:214
-#: src/views/BoardList.vue:257
+#: src/views/BoardList.vue:216
+#: src/views/BoardList.vue:259
 #: src/views/BoardStats.vue:444
 #: src/views/ProjectStats.vue:347
 msgid "%n card"
@@ -382,7 +382,7 @@ msgstr[0] "%n карточка"
 msgstr[1] "%n карточки"
 msgstr[2] "%n карточек"
 
-#: src/components/StackColumn.vue:1090
+#: src/components/StackColumn.vue:1092
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "Архивирована %n карточка"
@@ -396,14 +396,14 @@ msgstr[0] "Создана %n карточка"
 msgstr[1] "Создано %n карточки"
 msgstr[2] "Создано %n карточек"
 
-#: src/views/BoardList.vue:213
+#: src/views/BoardList.vue:215
 msgid "%n column"
 msgid_plural "%n columns"
 msgstr[0] "%n колонка"
 msgstr[1] "%n колонки"
 msgstr[2] "%n колонок"
 
-#: src/views/BoardList.vue:216
+#: src/views/BoardList.vue:218
 msgid "%n comment"
 msgid_plural "%n comments"
 msgstr[0] "%n комментарий"
@@ -417,7 +417,7 @@ msgstr[0] "Обнаружена %n строка данных"
 msgstr[1] "Обнаружено %n строки данных"
 msgstr[2] "Обнаружено %n строк данных"
 
-#: src/components/CardDetail.vue:5093
+#: src/components/CardDetail.vue:5098
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n день назад"
@@ -431,21 +431,21 @@ msgstr[0] "%n файл"
 msgstr[1] "%n файла"
 msgstr[2] "%n файлов"
 
-#: src/components/CardDetail.vue:5091
+#: src/components/CardDetail.vue:5096
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n час назад"
 msgstr[1] "%n часа назад"
 msgstr[2] "%n часов назад"
 
-#: src/views/BoardView.vue:2751
+#: src/views/BoardView.vue:2752
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "Скопирован %n идентификатор."
 msgstr[1] "Скопировано %n идентификатора."
 msgstr[2] "Скопировано %n идентификаторов."
 
-#: src/views/BoardList.vue:215
+#: src/views/BoardList.vue:217
 msgid "%n label"
 msgid_plural "%n labels"
 msgstr[0] "%n метка"
@@ -466,7 +466,7 @@ msgstr[0] "%n метка не была создана и отсутствует 
 msgstr[1] "%n метки не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 msgstr[2] "%n меток не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 
-#: src/components/CardDetail.vue:5089
+#: src/components/CardDetail.vue:5094
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n минуту назад"
@@ -494,14 +494,14 @@ msgstr[0] "%n балл"
 msgstr[1] "%n балла"
 msgstr[2] "%n баллов"
 
-#: src/components/CardDetail.vue:1261
+#: src/components/CardDetail.vue:1263
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n проект"
 msgstr[1] "%n проекта"
 msgstr[2] "%n проектов"
 
-#: src/components/CardDetail.vue:2348
+#: src/components/CardDetail.vue:2353
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n ответ"
@@ -522,7 +522,7 @@ msgstr[0] "%n карточка без дат"
 msgstr[1] "%n карточки без дат"
 msgstr[2] "%n карточек без дат"
 
-#: src/components/CardDetail.vue:325
+#: src/components/CardDetail.vue:326
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n наблюдатель"
@@ -809,14 +809,14 @@ msgstr "Одобрено"
 msgid "Archive"
 msgstr "Архивировать"
 
-#: src/components/StackColumn.vue:218
+#: src/components/StackColumn.vue:219
 msgid "Archive %n card"
 msgid_plural "Archive %n cards"
 msgstr[0] "Архивировать %n карточку"
 msgstr[1] "Архивировать %n карточки"
 msgstr[2] "Архивировать %n карточек"
 
-#: src/components/StackColumn.vue:217
+#: src/components/StackColumn.vue:218
 msgid "Archive %n visible card"
 msgid_plural "Archive %n visible cards"
 msgstr[0] "Архивировать %n видимую карточку"
@@ -1514,7 +1514,7 @@ msgstr "Чек-лист не выполнен"
 msgid "Checklist progress {done} of {total}"
 msgstr "Прогресс чек-листа: {done} из {total}"
 
-#: src/components/BoardListView.vue:1076
+#: src/components/BoardListView.vue:1078
 #: src/components/CardPreview.vue:239
 #: src/components/CardTile.vue:520
 msgid "Checklist progress {done} of {total}, %n overdue step"
@@ -2072,8 +2072,8 @@ msgstr "Опасная зона"
 msgid "Date"
 msgstr "Дата"
 
-#: src/components/BoardSettingsModal.vue:2301
-#: src/components/CardDetail.vue:5282
+#: src/components/BoardSettingsModal.vue:2312
+#: src/components/CardDetail.vue:5287
 msgid "day"
 msgid_plural "days"
 msgstr[0] "день"
@@ -2630,7 +2630,7 @@ msgstr "Каждые"
 msgid "Every card in this project is done."
 msgstr "Все карточки в этом проекте готовы."
 
-#: src/components/BoardSettingsModal.vue:4912
+#: src/components/BoardSettingsModal.vue:4918
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Каждый %n день"
@@ -2641,21 +2641,21 @@ msgstr[2] "Каждые %n дней"
 msgid "Every estimate needs a label."
 msgstr "У каждой оценки должна быть метка."
 
-#: src/components/BoardSettingsModal.vue:4922
+#: src/components/BoardSettingsModal.vue:4928
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Каждый %n месяц"
 msgstr[1] "Каждые %n месяца"
 msgstr[2] "Каждые %n месяцев"
 
-#: src/components/BoardSettingsModal.vue:4914
+#: src/components/BoardSettingsModal.vue:4920
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Каждую %n неделю"
 msgstr[1] "Каждые %n недели"
 msgstr[2] "Каждые %n недель"
 
-#: src/components/BoardSettingsModal.vue:4924
+#: src/components/BoardSettingsModal.vue:4930
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Каждый %n год"
@@ -3632,7 +3632,7 @@ msgstr "Назначение, границы или правила. Любой �
 msgid "Jump to the discussion"
 msgstr "Перейти к обсуждению"
 
-#: src/components/CardDetail.vue:7187
+#: src/components/CardDetail.vue:7192
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Перейти к обсуждению (%n комментарий)"
@@ -4009,8 +4009,8 @@ msgstr "Режим"
 msgid "Mon"
 msgstr "Пн"
 
-#: src/components/BoardSettingsModal.vue:2303
-#: src/components/CardDetail.vue:5284
+#: src/components/BoardSettingsModal.vue:2314
+#: src/components/CardDetail.vue:5289
 msgid "month"
 msgid_plural "months"
 msgstr[0] "месяц"
@@ -5485,7 +5485,7 @@ msgstr "Секрет (скопируйте сейчас, он показывае
 msgid "Select"
 msgstr "Список"
 
-#: src/components/StackColumn.vue:206
+#: src/components/StackColumn.vue:207
 #: src/views/ArchivedView.vue:420
 msgid "Select %n card"
 msgid_plural "Select %n cards"
@@ -5493,7 +5493,7 @@ msgstr[0] "Выбрать %n карточку"
 msgstr[1] "Выбрать %n карточки"
 msgstr[2] "Выбрать %n карточек"
 
-#: src/components/StackColumn.vue:205
+#: src/components/StackColumn.vue:206
 #: src/views/ArchivedView.vue:419
 msgid "Select %n visible card"
 msgid_plural "Select %n visible cards"
@@ -5623,7 +5623,7 @@ msgstr "Показывать обсуждение под карточкой"
 msgid "Show the discussion panel"
 msgstr "Показать панель обсуждения"
 
-#: src/components/CardDetail.vue:7193
+#: src/components/CardDetail.vue:7198
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Показать панель обсуждения (%n комментарий)"
@@ -6425,8 +6425,8 @@ msgstr "Webhook активен"
 msgid "Wed"
 msgstr "Ср"
 
-#: src/components/BoardSettingsModal.vue:2302
-#: src/components/CardDetail.vue:5283
+#: src/components/BoardSettingsModal.vue:2313
+#: src/components/CardDetail.vue:5288
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "неделя"
@@ -6535,8 +6535,8 @@ msgstr "Записана"
 msgid "wrote"
 msgstr "написал"
 
-#: src/components/BoardSettingsModal.vue:2304
-#: src/components/CardDetail.vue:5285
+#: src/components/BoardSettingsModal.vue:2315
+#: src/components/CardDetail.vue:5290
 msgid "year"
 msgid_plural "years"
 msgstr[0] "год"

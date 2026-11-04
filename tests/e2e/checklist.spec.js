@@ -71,6 +71,16 @@ test.describe('Checklist', () => {
 		state.boardUrl = `${BASE}/index.php/apps/kanso#/board/${board.id}`
 	})
 
+	test('add inputs ask mobile keyboards for an Enter key, not Next', async ({ page }) => {
+		await ncLogin(page)
+		await page.goto(state.boardUrl)
+		await page.locator('.card-tile').filter({ hasText: 'Card With Checklist' }).click()
+		await page.waitForSelector('.card-modal', { timeout: 15_000 })
+
+		await expect(page.locator('.card-modal__checklist-add-input')).toHaveAttribute('enterkeyhint', 'enter')
+		await expect(page.getByPlaceholder('Add a sub-card…')).toHaveAttribute('enterkeyhint', 'enter')
+	})
+
 	test('add two checklist items via UI, toggle one done, assert progress and persistence', async ({ page }) => {
 		await ncLogin(page)
 		await page.goto(state.boardUrl)

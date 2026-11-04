@@ -15,6 +15,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<div class="command-palette__input-wrap">
 				<MagnifyIcon class="command-palette__magnify" :size="18" aria-hidden="true" />
 				<input
+					enterkeyhint="go"
 					ref="inputRef"
 					v-model="query"
 					class="command-palette__input"

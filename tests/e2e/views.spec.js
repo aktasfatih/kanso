@@ -698,10 +698,12 @@ test.describe('Cross-board Views (#3815)', () => {
 			const stack = (await api.post('/stacks', { boardId, title: 'To do' })).id
 			const card = await api.post('/cards', { stackId: stack, title: 'ViewNames card ' + stamp })
 			await api.put(`/cards/${card.id}/assignees/${uid}`)
+			const label = await api.post('/labels', { boardId, title: 'ViewNames ' + stamp, color: '0082c9' })
+			await api.put(`/cards/${card.id}/labels/${label.id}`)
 
 			const created = await api.put('/views', {
 				name: 'ViewNames ' + stamp,
-				filter: {},
+				filter: { labels: [label.id] },
 				groupBy: 'assignee',
 				display: 'list',
 			})
@@ -718,7 +720,8 @@ test.describe('Cross-board Views (#3815)', () => {
 			// The assignee avatar's root carries the display name in its `title`
 			// (the NcAvatar tooltip), not the raw uid — proof the resolved name is
 			// plumbed into NcAvatar with no extra request.
-			const avatar = page.locator('.assignee-stack__avatar').first()
+			const row = page.locator('.board-list-row-wrap', { hasText: 'ViewNames card ' + stamp })
+			const avatar = row.locator('.assignee-stack__avatar').first()
 			await expect(avatar).toBeVisible()
 			await expect(avatar).toHaveAttribute('title', displayName)
 		} finally {

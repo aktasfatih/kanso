@@ -11,6 +11,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<div class="search-box__input-wrap" @click="focusInput">
 			<MagnifyIcon class="search-box__magnify" :size="18" aria-hidden="true" />
 			<input
+				enterkeyhint="go"
 				ref="inputRef"
 				v-model="term"
 				class="search-box__input"
@@ -239,9 +240,9 @@ function moveActive(delta) {
 }
 
 function selectActive() {
-	if (activeIndex.value >= 0 && results.value[activeIndex.value]) {
-		selectResult(results.value[activeIndex.value])
-	}
+	if (term.value !== debouncedTerm.value) return
+	const result = results.value[Math.max(activeIndex.value, 0)]
+	if (result) selectResult(result)
 }
 
 async function scrollActiveIntoView() {

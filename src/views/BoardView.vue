@@ -458,6 +458,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</p>
 					<form @submit.prevent="submitNewStack">
 						<input
+							enterkeyhint="done"
 							ref="addColumnInputRef"
 							v-model="newStackTitle"
 							class="add-stack__input"

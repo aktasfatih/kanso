@@ -201,6 +201,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								{{ cardHumanId }}
 							</button>
 							<input
+								enterkeyhint="done"
 								v-if="editingTitle"
 								ref="titleInputRef"
 								v-model="draftTitle"
@@ -1221,6 +1222,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										@click="newLabelColor = ''; showNewLabelColor = false">×</button>
 								</div>
 								<input
+									enterkeyhint="done"
 									v-model="newLabelTitle"
 									class="card-modal__label-create-input"
 									type="text"
@@ -1558,6 +1560,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										class="card-modal__checklist-item-input"
 										type="text"
 										maxlength="255"
+										enterkeyhint="done"
 										@keydown.enter.prevent="saveItemTitle(item)"
 										@keydown.escape.stop="cancelItemEdit"
 										@blur="saveItemTitle(item)">
@@ -1684,6 +1687,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									type="text"
 									maxlength="255"
 									:placeholder="t('kanso', 'Add an item…')"
+									enterkeyhint="enter"
 									:disabled="addItem.isPending.value"
 									@keydown.enter.prevent="handleAddItem">
 							</div>
@@ -1725,6 +1729,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									type="text"
 									maxlength="100"
 									:placeholder="t('kanso', 'Add a sub-card…')"
+									enterkeyhint="enter"
 									:disabled="addChildMutation.isPending.value"
 									@keydown.enter.prevent="handleAddChild">
 							</div>
