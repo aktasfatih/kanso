@@ -4110,8 +4110,8 @@ async function onRoleChange(stack, newRole) {
 async function onWipLimitChange(stack, input) {
 	workflowErrors.value = { ...workflowErrors.value, [stack.id]: '' }
 	const trimmed = String(input.value).trim()
-	const wipLimit = trimmed === '' || trimmed === '0' ? 0 : parseInt(trimmed, 10)
-	if (input.validity.badInput || (trimmed !== '' && trimmed !== '0' && (isNaN(wipLimit) || wipLimit < 0))) {
+	const wipLimit = trimmed === '' ? 0 : parseInt(trimmed, 10)
+	if (input.validity.badInput || (trimmed !== '' && !/^\d+$/.test(trimmed))) {
 		workflowErrors.value = {
 			...workflowErrors.value,
 			[stack.id]: t('kanso', 'WIP limit must be a positive number or empty.'),

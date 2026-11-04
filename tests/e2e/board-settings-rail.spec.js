@@ -197,6 +197,13 @@ test.describe('Board settings section rail', () => {
 		await wip.press('Tab')
 		await expect(page.locator('#bs-pane-workflow')).toContainText('WIP limit must be a positive number or empty.')
 		expect(await stackWip()).toBe(4)
+
+		for (const invalid of ['1e2', '2.5']) {
+			await wip.fill(invalid)
+			await wip.press('Tab')
+			await expect(page.locator('#bs-pane-workflow')).toContainText('WIP limit must be a positive number or empty.')
+			expect(await stackWip()).toBe(4)
+		}
 	})
 
 	test('an Automation group collapses and expands', async ({ page }) => {
