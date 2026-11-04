@@ -240,6 +240,7 @@ function moveActive(delta) {
 }
 
 function selectActive() {
+	if (term.value !== debouncedTerm.value) return
 	const result = results.value[Math.max(activeIndex.value, 0)]
 	if (result) selectResult(result)
 }
