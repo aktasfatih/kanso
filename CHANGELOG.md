@@ -11,6 +11,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.45.0](https://github.com/aktasfatih/kanso/compare/v0.44.2...v0.45.0) (2026-11-06)
+
+
+### Bug Fixes
+
+* board sharing now follows the Nextcloud sharing settings ([3718aa8](https://github.com/aktasfatih/kanso/commit/3718aa8b2cffb8412ff52531e342b1c48adcb47c))
+* making an external board member internal now checks the sharing settings ([8bd63da](https://github.com/aktasfatih/kanso/commit/8bd63da5803fea612cdc149a5c9ad05758526725))
+* **mcp:** report a completed leave even if the follow-up check fails ([5e1e389](https://github.com/aktasfatih/kanso/commit/5e1e3894c9edcdf625acafc5544354a67f7d4ce2))
+* shared projects stay current and keep collaborators' edits ([3fce281](https://github.com/aktasfatih/kanso/commit/3fce281eb016c1e60e87618b54490a3e6135dd5b))
+
+
+### Features
+
+* **mcp:** manage project shares from the MCP server ([352bdb5](https://github.com/aktasfatih/kanso/commit/352bdb56adbda2e9fa21195da3bfa7af501e9fc9))
+* share projects with users and groups ([f804192](https://github.com/aktasfatih/kanso/commit/f80419214ed32b61363be1797b60f90f95a86b92))
+
 ## [0.44.2](https://github.com/aktasfatih/kanso/compare/v0.44.1...v0.44.2) (2026-11-04)
 
 
