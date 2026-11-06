@@ -16,9 +16,8 @@ use OCP\IDBConnection;
 
 /**
  * Mapper for `kanso_project_comments`. A thin twin of {@see CommentMapper}, but
- * keyed on `project_id` instead of `card_id`. No board joins - a project comment
- * is owner-only metadata (the owner gate lives in
- * {@see \OCA\Kanso\Service\ProjectCommentService}).
+ * keyed on `project_id` instead of `card_id`. No board joins - access is gated on
+ * the project in {@see \OCA\Kanso\Service\ProjectCommentService}.
  *
  * @template-extends QBMapper<ProjectComment>
  */
@@ -61,11 +60,8 @@ class ProjectCommentMapper extends QBMapper {
 	}
 
 	/**
-	 * Soft-deletes every non-deleted reply of a top-level comment in one
-	 * set-based UPDATE - the cascade for a thread delete. Doing it as a single
-	 * statement (rather than read-then-update-each) closes the window where a
-	 * reply inserted concurrently with the parent's delete would survive as an
-	 * orphan, and avoids N round-trips.
+	 * Soft-deletes every non-deleted reply of a top-level comment - the cascade
+	 * for a thread delete. One statement covers the replies.
 	 *
 	 * @throws Exception
 	 */
@@ -76,6 +72,25 @@ class ProjectCommentMapper extends QBMapper {
 			->where($qb->expr()->eq('parent_comment_id', $qb->createNamedParameter($parentCommentId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
 		$qb->executeStatement();
+	}
+
+	/**
+	 * @throws Exception
+	 */
+	public function hasRepliesFromOthers(int $parentCommentId, string $author): bool {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('parent_comment_id', $qb->createNamedParameter($parentCommentId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->neq('author', $qb->createNamedParameter($author)))
+			->setMaxResults(1);
+
+		$result = $qb->executeQuery();
+		$found = $result->fetch() !== false;
+		$result->closeCursor();
+
+		return $found;
 	}
 
 	/**

@@ -12,10 +12,14 @@ import {
 
 /**
  * Composable for a single project's card list and add/remove card mutations.
+ * The mutations take `{ projectId, cardId }`: a write paused offline must not
+ * follow the route to whichever project is open at reconnect.
  *
  * @param {import('vue').Ref<string|number>} projectId - reactive project id
+ * @param {object} [options]
+ * @param {number|false} [options.refetchInterval] poll interval, for a page collaborators may change
  */
-export function useProjectCards(projectId) {
+export function useProjectCards(projectId, { refetchInterval = false } = {}) {
 	const queryClient = useQueryClient()
 
 	const id = computed(() => (typeof projectId === 'object' ? projectId.value : projectId))
@@ -24,20 +28,24 @@ export function useProjectCards(projectId) {
 		queryKey: computed(() => ['project', String(id.value), 'cards']),
 		queryFn: () => apiGetProjectCards(id.value),
 		enabled: computed(() => id.value != null),
+		refetchInterval,
 	})
 
+	function invalidate(_data, _err, { projectId }) {
+		queryClient.invalidateQueries({ queryKey: ['project', String(projectId)] })
+		queryClient.invalidateQueries({ queryKey: ['project-stats', String(projectId)] })
+		queryClient.invalidateQueries({ queryKey: ['projects'] })
+	}
+
 	const addCard = useMutation({
-		mutationFn: (cardId) => apiAddCardToProject(id.value, cardId),
-		onSettled: () => {
-			queryClient.invalidateQueries({ queryKey: ['project', String(id.value)] })
-			queryClient.invalidateQueries({ queryKey: ['projects'] })
-		},
+		mutationFn: ({ projectId, cardId }) => apiAddCardToProject(projectId, cardId),
+		onSettled: invalidate,
 	})
 
 	const removeCard = useMutation({
-		mutationFn: (cardId) => apiRemoveCardFromProject(id.value, cardId),
-		onMutate: async (cardId) => {
-			const key = ['project', String(id.value), 'cards']
+		mutationFn: ({ projectId, cardId }) => apiRemoveCardFromProject(projectId, cardId),
+		onMutate: async ({ projectId, cardId }) => {
+			const key = ['project', String(projectId), 'cards']
 			await queryClient.cancelQueries({ queryKey: key })
 			const previous = queryClient.getQueryData(key)
 			queryClient.setQueryData(key, (old) => {
@@ -46,15 +54,12 @@ export function useProjectCards(projectId) {
 			})
 			return { previous }
 		},
-		onError: (_err, _vars, context) => {
+		onError: (_err, { projectId }, context) => {
 			if (context?.previous !== undefined) {
-				queryClient.setQueryData(['project', String(id.value), 'cards'], context.previous)
+				queryClient.setQueryData(['project', String(projectId), 'cards'], context.previous)
 			}
 		},
-		onSettled: () => {
-			queryClient.invalidateQueries({ queryKey: ['project', String(id.value)] })
-			queryClient.invalidateQueries({ queryKey: ['projects'] })
-		},
+		onSettled: invalidate,
 	})
 
 	return {
@@ -68,13 +73,16 @@ export function useProjectCards(projectId) {
  * A project's progress, forecast, health and burn-up (server-computed).
  *
  * @param {import('vue').Ref<string|number>} projectId - reactive project id
+ * @param {object} [options]
+ * @param {number|false} [options.refetchInterval] poll interval
  */
-export function useProjectPlan(projectId) {
+export function useProjectPlan(projectId, { refetchInterval = false } = {}) {
 	const id = computed(() => (typeof projectId === 'object' ? projectId.value : projectId))
 
 	return useQuery({
 		queryKey: computed(() => ['project', String(id.value), 'plan']),
 		queryFn: () => apiGetProjectPlan(id.value),
 		enabled: computed(() => id.value != null),
+		refetchInterval,
 	})
 }

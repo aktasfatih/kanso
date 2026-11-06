@@ -158,6 +158,7 @@ class BoardControllerTest extends TestCase {
 			$this->cardMapper,
 			$this->labelMapper,
 			$this->projectMapper,
+			$this->projectCardMapper,
 			$this->reviewTypeMapper,
 			$this->cardFieldMapper,
 			$this->aclMapper,
@@ -201,6 +202,19 @@ class BoardControllerTest extends TestCase {
 		$response = $this->controller->show(1);
 		self::assertSame(Http::STATUS_NOT_MODIFIED, $response->getStatus());
 		self::assertSame('7-' . PermissionService::PERMISSION_ALL . '-internal', $response->getETag());
+	}
+
+	public function testProjectStateMovesTheValidator(): void {
+		$this->boardService->method('find')->willReturn($this->board(1));
+		$this->changeMapper->method('getLatestChangeId')->willReturn(7);
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+		$this->projectCardMapper->method('boardDigest')->willReturn('abc');
+		$this->request->method('getHeader')->willReturnMap([['If-None-Match', '"7-' . PermissionService::PERMISSION_ALL . '-internal"']]);
+
+		$response = $this->controller->show(1);
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame('7-' . PermissionService::PERMISSION_ALL . '-internal-abc', $response->getETag());
 	}
 
 	public function testShowReturns304ForWeakIfNoneMatch(): void {
@@ -408,7 +422,7 @@ class BoardControllerTest extends TestCase {
 		$project->setColor('e53935');
 		$project->setOwner('alice');
 		$project->setCreatedAt(1700000000);
-		$this->projectMapper->method('findByIdsForOwner')->with([10], 'alice')->willReturn([$project]);
+		$this->projectMapper->method('findAccessibleByIds')->with([10], 'alice')->willReturn([$project]);
 
 		$response = $this->controller->show(1);
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
@@ -421,6 +435,7 @@ class BoardControllerTest extends TestCase {
 		self::assertSame(10, $data['projects'][0]['id']);
 		self::assertSame('Q3 Initiative', $data['projects'][0]['title']);
 		self::assertSame('e53935', $data['projects'][0]['color']);
+		self::assertSame(['id', 'title', 'color'], array_keys($data['projects'][0]));
 	}
 
 	public function testShowShipsProjectWithNoColor(): void {
@@ -432,7 +447,7 @@ class BoardControllerTest extends TestCase {
 		$project->setColor(null);
 		$project->setOwner('alice');
 		$project->setCreatedAt(1700000000);
-		$this->projectMapper->method('findByIdsForOwner')->with([10], 'alice')->willReturn([$project]);
+		$this->projectMapper->method('findAccessibleByIds')->with([10], 'alice')->willReturn([$project]);
 
 		$response = $this->controller->show(1);
 		$data = $response->getData();
@@ -448,7 +463,7 @@ class BoardControllerTest extends TestCase {
 		// someone else. The owner-scoped lookup returns nothing, so the project's
 		// title and colour must not leak into the board payload.
 		$this->projectCardMapper->method('findProjectIdsByBoard')->with(1, 'alice')->willReturn([3 => [10]]);
-		$this->projectMapper->method('findByIdsForOwner')->with([10], 'alice')->willReturn([]);
+		$this->projectMapper->method('findAccessibleByIds')->with([10], 'alice')->willReturn([]);
 
 		$response = $this->controller->show(1);
 		$data = $response->getData();
@@ -463,7 +478,7 @@ class BoardControllerTest extends TestCase {
 		// No card is collected into any project.
 		$this->projectCardMapper->method('findProjectIdsByBoard')->with(1, 'alice')->willReturn([]);
 		// The lookup must not even run for an empty id set.
-		$this->projectMapper->expects(self::never())->method('findByIdsForOwner');
+		$this->projectMapper->expects(self::never())->method('findAccessibleByIds');
 
 		$response = $this->controller->show(1);
 		$data = $response->getData();
@@ -1064,7 +1079,7 @@ class BoardControllerTest extends TestCase {
 		$project->setOwner('alice');
 		$project->setCreatedAt(1700000000);
 		$this->projectMapper->expects(self::once())
-			->method('findByIdsForOwner')->with([10], 'alice')->willReturn([$project]);
+			->method('findAccessibleByIds')->with([10], 'alice')->willReturn([$project]);
 
 		$data = $this->controller->changes(1, 5)->getData();
 		self::assertFalse($data['resync']);
@@ -1074,6 +1089,7 @@ class BoardControllerTest extends TestCase {
 		self::assertSame(10, $data['projects'][0]['id']);
 		self::assertSame('Q3 Initiative', $data['projects'][0]['title']);
 		self::assertSame('e53935', $data['projects'][0]['color']);
+		self::assertSame(['id', 'title', 'color'], array_keys($data['projects'][0]));
 	}
 
 	public function testChangesDoesNotLeakAProjectTheViewerDoesNotOwn(): void {
@@ -1096,7 +1112,7 @@ class BoardControllerTest extends TestCase {
 		$card->setTitle('References a foreign project');
 		$this->cardMapper->method('findSummariesByIds')->with(1, [42])->willReturn([$card]);
 		$this->stackMapper->method('findByIds')->willReturn([]);
-		$this->projectMapper->method('findByIdsForOwner')->with([10], 'alice')->willReturn([]);
+		$this->projectMapper->method('findAccessibleByIds')->with([10], 'alice')->willReturn([]);
 
 		$data = $this->controller->changes(1, 5)->getData();
 		self::assertSame([], $data['projects'], 'a project the viewer does not own must not leak');
@@ -1115,7 +1131,7 @@ class BoardControllerTest extends TestCase {
 		$this->cardMapper->method('findSummariesByIds')->willReturn([]);
 		$this->stackMapper->method('findByIds')->willReturn([]);
 
-		$this->projectMapper->expects(self::never())->method('findByIdsForOwner');
+		$this->projectMapper->expects(self::never())->method('findAccessibleByIds');
 
 		$data = $this->controller->changes(1, 5)->getData();
 		self::assertFalse($data['resync']);

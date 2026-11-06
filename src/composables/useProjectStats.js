@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { getProjectStats } from '../services/api.js'
 
 /**
- * Fetch cross-board analytics for a single project (owner-only). Mirrors
+ * Fetch cross-board analytics for a single project. Mirrors
  * {@link useBoardStats}; the DTO omits board-specific panels (byStack, estimate
  * totals) and never sums points across mixed estimate scales.
  *
@@ -18,7 +18,7 @@ export function useProjectStats(projectId) {
 	)
 
 	return useQuery({
-		queryKey: computed(() => ['project-stats', resolvedId.value]),
+		queryKey: computed(() => ['project-stats', String(resolvedId.value)]),
 		queryFn: () => getProjectStats(resolvedId.value),
 		enabled: computed(() => !!resolvedId.value),
 		// Analytics snapshot — stale after 2 min, same as board stats.

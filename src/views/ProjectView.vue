@@ -4,15 +4,25 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
 	<div class="project-view">
+		<div
+			v-if="accessLost"
+			class="project-view__error"
+			role="alert"
+			data-test="project-access-lost">
+			<p>{{ t('kanso', 'This project no longer exists, or you no longer have access to it.') }}</p>
+			<NcButton @click="router.push({ name: 'projects' })">{{ t('kanso', 'Back to projects') }}</NcButton>
+		</div>
+
 		<!-- Loading state -->
-		<div v-if="isLoadingCards && !cards.length" class="project-view__loading" aria-live="polite">
+		<div v-else-if="isLoadingCards && !cards.length" class="project-view__loading" aria-live="polite">
 			<span class="project-view__spinner" aria-hidden="true" />
 			<span>{{ t('kanso', 'Loading project…') }}</span>
 		</div>
 
 		<!-- Error state -->
 		<div v-else-if="isError" class="project-view__error">
-			{{ t('kanso', 'Failed to load project cards. Please try again.') }}
+			<p>{{ t('kanso', 'Failed to load project cards. Please try again.') }}</p>
+			<NcButton @click="router.push({ name: 'projects' })">{{ t('kanso', 'Back to projects') }}</NcButton>
 		</div>
 
 		<template v-else>
@@ -27,6 +37,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						class="project-view__dot"
 						:style="{ background: '#' + project.color }" />
 					<h1 class="project-view__title">{{ project?.title ?? t('kanso', 'Project') }}</h1>
+					<span
+						v-if="project?.shared"
+						class="project-view__shared"
+						data-test="project-shared-label">
+						{{ isOwner ? t('kanso', 'Shared') : t('kanso', 'Shared by {owner}', { owner: project.ownerDisplayName }, { escape: false, sanitize: false }) }}
+					</span>
 				</div>
 
 				<div class="project-view__header-actions">
@@ -50,14 +66,42 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</template>
 							{{ project.pinned ? t('kanso', 'Unpin project') : t('kanso', 'Pin to sidebar') }}
 						</NcActionButton>
-						<NcActionButton :close-after-click="true" @click="openEditDialog">
+						<NcActionButton
+							v-if="isOwner"
+							:close-after-click="true"
+							data-test="project-share"
+							@click="showShareDialog = true">
+							<template #icon>
+								<ShareVariantIcon :size="20" />
+							</template>
+							{{ t('kanso', 'Share project') }}
+						</NcActionButton>
+						<NcActionButton
+							v-if="canEdit"
+							:close-after-click="true"
+							data-test="project-edit"
+							@click="openEditDialog">
 							<template #icon>
 								<PencilIcon :size="20" />
 							</template>
 							{{ t('kanso', 'Edit project') }}
 						</NcActionButton>
-						<NcActionSeparator />
-						<NcActionButton :close-after-click="true" @click="handleDelete">
+						<NcActionSeparator v-if="isOwner || project?.canLeave" />
+						<NcActionButton
+							v-if="project?.canLeave"
+							:close-after-click="true"
+							data-test="project-leave"
+							@click="handleLeave">
+							<template #icon>
+								<LogoutIcon :size="20" />
+							</template>
+							{{ t('kanso', 'Leave project') }}
+						</NcActionButton>
+						<NcActionButton
+							v-if="isOwner"
+							:close-after-click="true"
+							data-test="project-delete"
+							@click="handleDelete">
 							<template #icon>
 								<TrashCanIcon :size="20" />
 							</template>
@@ -68,6 +112,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</div>
 
 			<span v-if="actionError" class="project-view__action-error">{{ actionError }}</span>
+			<span v-if="projectsFailed" class="project-view__action-error" role="alert">{{ t('kanso', 'Failed to load projects. Please try again.') }}</span>
 
 			<!-- Prominent, in-place editable description directly under the title.
 			     Reuses the shipped markdown editor (#3562): useMarkdownToolbar +
@@ -124,11 +169,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<template v-if="project?.description">
 						<div
 							class="project-view__desc-view"
-							:class="{ 'project-view__desc-view--collapsed': !descExpanded, 'project-view__desc-view--overflowing': descOverflows && !descExpanded }"
-							tabindex="0"
-							role="button"
+							:class="{ 'project-view__desc-view--collapsed': !descExpanded, 'project-view__desc-view--overflowing': descOverflows && !descExpanded, 'project-view__desc-view--readonly': !canEdit }"
+							:tabindex="canEdit ? 0 : undefined"
+							:role="canEdit ? 'button' : undefined"
 							data-test="project-description"
-							:title="t('kanso', 'Click to edit the description')"
+							:title="canEdit ? t('kanso', 'Click to edit the description') : undefined"
 							@click="startDescriptionEdit"
 							@keydown.enter="startDescriptionEdit">
 							<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
@@ -146,7 +191,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</button>
 					</template>
 					<button
-						v-else
+						v-else-if="canEdit"
 						type="button"
 						class="project-view__desc-placeholder"
 						@click="startDescriptionEdit">
@@ -160,6 +205,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:plan="plan"
 					:project-id="id"
 					:error="datesError"
+					:read-only="!canEdit"
 					@update-dates="saveDates" />
 				<ProjectBurnup v-if="plan && plan.total" class="project-view__burnup" :plan="plan" />
 			</div>
@@ -180,7 +226,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</button>
 				</div>
 				<!-- Add card control -->
-				<div class="project-view__add-row">
+				<div v-if="canEdit" class="project-view__add-row">
 					<button
 						class="project-view__add-btn"
 						:aria-expanded="showPicker"
@@ -203,7 +249,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<NcEmptyContent
 				v-if="!cards.length && !isLoadingCards"
 				:name="t('kanso', 'No cards in this project')"
-				:description="t('kanso', 'Use the Add card button above to collect cards from any board.')">
+				:description="canEdit ? t('kanso', 'Use the Add card button above to collect cards from any board.') : ''">
 				<template #icon>
 					<FolderMultipleOutlineIcon :size="64" />
 				</template>
@@ -261,7 +307,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:class="{ 'project-view__due--overdue': isOverdue(card) }">
 									{{ formatDue(card.duedate) }}
 								</span>
-								<NcActions :force-menu="false">
+								<NcActions v-if="canEdit" :force-menu="false">
 									<NcActionButton
 										:close-after-click="true"
 										@click.stop="handleRemoveCard(card.id)">
@@ -277,18 +323,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</template>
 			</template>
 
-			<!-- Discussion log — an owner-only personal thread on the project (#3563).
-			     Reuses the shipped markdown editor (useMarkdownToolbar + renderMarkdown,
-			     same as the description) and mirrors the card comment thread pattern:
-			     one-level replies, edit/delete. No @mention/notify — a project has a
-			     single reader (the owner). -->
 			<section class="project-view__discussion">
 				<h2 class="project-view__section-title">
 					{{ t('kanso', 'Discussion') }}<span v-if="commentTree.length"> · {{ commentTotal }}</span>
 				</h2>
 
 				<!-- Composer -->
-				<div class="project-view__composer">
+				<div v-if="canEdit" class="project-view__composer">
 					<div class="project-view__md-toolbar" role="toolbar" :aria-label="t('kanso', 'Formatting')">
 						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Bold')" @mousedown.prevent @click="commentToolbar.bold()"><FormatBoldIcon :size="18" /></button>
 						<button type="button" class="project-view__md-btn" :title="t('kanso', 'Italic')" @mousedown.prevent @click="commentToolbar.italic()"><FormatItalicIcon :size="18" /></button>
@@ -311,8 +352,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ t('kanso', 'Post') }}
 						</NcButton>
 						<span class="project-view__desc-hint">{{ t('kanso', 'Ctrl+Enter to post') }}</span>
-						<span v-if="commentError" class="project-view__desc-error">{{ commentError }}</span>
 					</div>
+				</div>
+
+				<span
+					v-if="commentError"
+					class="project-view__action-error"
+					role="alert"
+					data-test="project-comment-error">{{ commentError }}</span>
+
+				<div v-if="commentsQuery.isError.value" class="project-view__action-error" role="alert">
+					{{ t('kanso', 'Failed to load the discussion.') }}
 				</div>
 
 				<!-- Thread -->
@@ -347,15 +397,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 								<div class="project-view__comment-controls">
 									<button
-										v-if="editingCommentId !== topComment.id"
+										v-if="canEdit && editingCommentId !== topComment.id"
 										class="project-view__comment-link-btn"
 										@click="openReplyBox(topComment.id)">
 										{{ t('kanso', 'Reply') }}
 									</button>
-									<button class="project-view__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(topComment)">
+									<button
+										v-if="canEditComment(topComment)"
+										class="project-view__comment-icon-btn"
+										:title="t('kanso', 'Edit comment')"
+										@click="startCommentEdit(topComment)">
 										<PencilIcon :size="14" />
 									</button>
 									<button
+										v-if="canDeleteComment(topComment)"
 										class="project-view__comment-icon-btn project-view__comment-icon-btn--danger"
 										:title="t('kanso', 'Delete comment')"
 										:disabled="deleteComment.isPending.value"
@@ -407,10 +462,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<div v-else class="project-view__comment-body project-view__desc-rendered kanso-md" v-html="renderMarkdown(reply.body)" />
 
 									<div class="project-view__comment-controls">
-										<button class="project-view__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(reply)">
+										<button
+											v-if="canEditComment(reply)"
+											class="project-view__comment-icon-btn"
+											:title="t('kanso', 'Edit comment')"
+											@click="startCommentEdit(reply)">
 											<PencilIcon :size="14" />
 										</button>
 										<button
+											v-if="canDeleteComment(reply)"
 											class="project-view__comment-icon-btn project-view__comment-icon-btn--danger"
 											:title="t('kanso', 'Delete comment')"
 											:disabled="deleteComment.isPending.value"
@@ -424,8 +484,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 				</div>
 
-				<div v-else class="project-view__discussion-empty">
-					{{ t('kanso', 'No notes yet. Start a discussion log for this project.') }}
+				<div v-else-if="!commentsQuery.isError.value" class="project-view__discussion-empty">
+					{{ canEdit ? t('kanso', 'No notes yet. Start a discussion log for this project.') : t('kanso', 'No notes yet.') }}
 				</div>
 			</section>
 		</template>
@@ -525,6 +585,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</NcButton>
 			</template>
 		</NcDialog>
+		<ProjectShareDialog
+			v-if="showShareDialog"
+			:key="id"
+			:project-id="id"
+			@close="showShareDialog = false" />
 		<CardModal
 			v-if="selectedCardId"
 			:key="selectedCardId"
@@ -540,6 +605,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
+import { getCurrentUser } from '@nextcloud/auth'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -548,6 +614,8 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
+import LogoutIcon from 'vue-material-design-icons/Logout.vue'
+import ShareVariantIcon from 'vue-material-design-icons/ShareVariant.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import TrashCanIcon from 'vue-material-design-icons/TrashCan.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
@@ -573,11 +641,15 @@ import { useProjects } from '../composables/useProjects.js'
 import { usePageTitle } from '../composables/usePageTitle.js'
 import { useProjectCards, useProjectPlan } from '../composables/useProject.js'
 import { useProjectComments } from '../composables/useProjectComments.js'
+import { useLeaveProject } from '../composables/useProjectShares.js'
 import { buildCommentTree } from '../composables/useComments.js'
 import CardSearchPicker from '../components/CardSearchPicker.vue'
 import CardModal from '../components/CardModal.vue'
 import { relationPicker } from '../services/relationPicker.js'
 import ProjectHealth from '../components/ProjectHealth.vue'
+import ProjectShareDialog from '../components/ProjectShareDialog.vue'
+import { MY_WORK_POLL_INTERVAL } from '../composables/queryKeys.js'
+import { apiAnswerStatus } from '../services/apiErrors.js'
 import ProjectBurnup from '../components/ProjectBurnup.vue'
 import BoardTimelineView from '../components/BoardTimelineView.vue'
 import { renderMarkdown } from '../services/markdown.js'
@@ -600,8 +672,20 @@ const router = useRouter()
 const queryClient = useQueryClient()
 
 // Resolve the project from the list query (already in cache)
-const { data: projectsData, update: updateMutation, remove: removeMutation, togglePin } = useProjects()
+const {
+	data: projectsData,
+	isSuccess: projectsLoaded,
+	isFetching: projectsFetching,
+	isError: projectsFailed,
+	update: updateMutation,
+	remove: removeMutation,
+	togglePin,
+} = useProjects({ refetchInterval: MY_WORK_POLL_INTERVAL })
 const project = computed(() => (projectsData.value ?? []).find((p) => String(p.id) === String(props.id)) ?? null)
+
+const isOwner = computed(() => project.value?.isOwner === true)
+const canEdit = computed(() => project.value?.canEdit === true)
+const showShareDialog = ref(false)
 
 // Browser tab title (#125). Empty until the (cached) projects list resolves.
 usePageTitle(() => project.value?.title ?? '')
@@ -610,13 +694,37 @@ const {
 	data: cardsData,
 	isLoading: isLoadingCards,
 	isError,
+	error: cardsError,
 	addCard,
 	removeCard,
-} = useProjectCards(computed(() => props.id))
+} = useProjectCards(computed(() => props.id), { refetchInterval: MY_WORK_POLL_INTERVAL })
+
+// Nothing pushes a revoked share to this page; the list poll and any refused
+// read find it. Sticky, since a poll in flight must not flash the old content.
+const accessLost = ref(false)
+const leavingPage = ref(false)
+
+const projectGone = computed(() => projectsLoaded.value && !projectsFetching.value && project.value === null)
+const cardsRefused = computed(() => [403, 404].includes(apiAnswerStatus(cardsError.value)))
+
+watch([projectGone, cardsRefused], ([gone, refused]) => {
+	if ((!gone && !refused) || accessLost.value || leavingPage.value) return
+	accessLost.value = true
+	queryClient.resetQueries({ queryKey: ['project', String(props.id)] })
+	queryClient.removeQueries({ queryKey: ['project-stats', String(props.id)] })
+	queryClient.invalidateQueries({ queryKey: ['projects'] })
+}, { immediate: true })
+
+watch(project, (current) => {
+	if (current !== null && accessLost.value) {
+		accessLost.value = false
+		queryClient.invalidateQueries({ queryKey: ['project', String(props.id)] })
+	}
+})
 
 const cards = computed(() => cardsData.value ?? [])
 
-const { data: planData } = useProjectPlan(computed(() => props.id))
+const { data: planData } = useProjectPlan(computed(() => props.id), { refetchInterval: MY_WORK_POLL_INTERVAL })
 const plan = computed(() => planData.value ?? null)
 
 // Group cards by boardTitle, preserving server order within each group
@@ -769,7 +877,7 @@ async function handlePickCard(result) {
 	if (cardIdsInProject.value.has(result.cardId)) return
 	addError.value = ''
 	try {
-		await addCard.mutateAsync(result.cardId)
+		await addCard.mutateAsync({ projectId: props.id, cardId: result.cardId })
 	} catch (err) {
 		addError.value = err?.response?.data?.error || t('kanso', 'Failed to add card.')
 	}
@@ -778,7 +886,7 @@ async function handlePickCard(result) {
 async function handleRemoveCard(cardId) {
 	actionError.value = ''
 	try {
-		await removeCard.mutateAsync(cardId)
+		await removeCard.mutateAsync({ projectId: props.id, cardId })
 	} catch (err) {
 		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to remove card.')
 	}
@@ -789,11 +897,35 @@ const actionError = ref('')
 
 async function handleDelete() {
 	actionError.value = ''
+	leavingPage.value = true
+	const id = props.id
 	try {
-		await removeMutation.mutateAsync(Number(props.id))
+		await removeMutation.mutateAsync(Number(id))
+		if (props.id === id) router.push({ name: 'projects' })
+	} catch (err) {
+		leavingPage.value = false
+		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to delete project.')
+	}
+}
+
+const leaveMutation = useLeaveProject()
+
+async function handleLeave() {
+	actionError.value = ''
+	leavingPage.value = true
+	const id = props.id
+	try {
+		const stillHasAccess = await leaveMutation.mutateAsync(Number(id))
+		if (props.id !== id) return
+		if (stillHasAccess) {
+			leavingPage.value = false
+			actionError.value = t('kanso', 'You still have access to this project through a group.')
+			return
+		}
 		router.push({ name: 'projects' })
 	} catch (err) {
-		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to delete project.')
+		leavingPage.value = false
+		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to leave project.')
 	}
 }
 
@@ -841,6 +973,7 @@ const descToolbar = useMarkdownToolbar({
 })
 
 function startDescriptionEdit() {
+	if (!canEdit.value) return
 	draftDescription.value = project.value?.description ?? ''
 	descError.value = ''
 	showInlinePreview.value = false
@@ -917,10 +1050,15 @@ const mdToolbar = useMarkdownToolbar({
 	textareaRef: descTextareaRef,
 })
 
+// What the dialog opened with. Only fields changed from it are sent, so saving a
+// new title cannot overwrite a description a collaborator edited meanwhile.
+let editOriginal = { title: '', description: '', color: '' }
+
 function openEditDialog() {
 	editTitle.value = project.value?.title ?? ''
 	editDescription.value = project.value?.description ?? ''
 	editColor.value = project.value?.color ?? ''
+	editOriginal = { title: editTitle.value.trim(), description: editDescription.value.trim(), color: editColor.value }
 	editError.value = ''
 	showDescPreview.value = false
 	showEditDialog.value = true
@@ -935,20 +1073,21 @@ async function submitEdit() {
 	const title = editTitle.value.trim()
 	if (!title || updateMutation.isPending.value) return
 	editError.value = ''
+	const edited = { title, description: editDescription.value.trim(), color: editColor.value }
+	const changes = Object.fromEntries(Object.entries(edited).filter(([field, value]) => value !== editOriginal[field]))
+	if (Object.keys(changes).length === 0) {
+		closeEditDialog()
+		return
+	}
 	try {
-		await updateMutation.mutateAsync({
-			id: Number(props.id),
-			title,
-			description: editDescription.value.trim() || undefined,
-			color: editColor.value || undefined,
-		})
+		await updateMutation.mutateAsync({ id: Number(props.id), ...changes })
 		closeEditDialog()
 	} catch (err) {
 		editError.value = err?.response?.data?.error || t('kanso', 'Failed to update project.')
 	}
 }
 
-// ── Discussion log (owner-only project comments, #3563) ──────────────────────
+// ── Discussion log ───────────────────────────────────────────────────────────
 // Reuses the shipped markdown editor (useMarkdownToolbar + renderMarkdown) and
 // mirrors the card comment thread pattern: one-level threading, edit/delete.
 const {
@@ -956,10 +1095,21 @@ const {
 	addComment,
 	editComment,
 	deleteComment,
-} = useProjectComments(computed(() => props.id))
+} = useProjectComments(computed(() => props.id), { refetchInterval: MY_WORK_POLL_INTERVAL })
 
 const commentTree = computed(() => buildCommentTree(commentsQuery.data.value ?? []))
 const commentTotal = computed(() => (commentsQuery.data.value ?? []).length)
+
+const currentUid = getCurrentUser()?.uid
+
+function canEditComment(comment) {
+	return canEdit.value && comment.author === currentUid
+}
+
+function canDeleteComment(comment) {
+	if (isOwner.value) return true
+	return canEditComment(comment) && !(commentsQuery.data.value ?? []).some((c) => c.parentCommentId === comment.id && c.author !== comment.author)
+}
 
 const newCommentBody = ref('')
 const newCommentRef = ref(null)
@@ -986,7 +1136,7 @@ async function submitNewComment() {
 	if (!body || addComment.isPending.value) return
 	commentError.value = ''
 	try {
-		await addComment.mutateAsync({ body, parentCommentId: null })
+		await addComment.mutateAsync({ projectId: props.id, body, parentCommentId: null })
 		// Only clear after a successful post so a failed post keeps the text (#3510).
 		newCommentBody.value = ''
 	} catch (err) {
@@ -1013,7 +1163,7 @@ async function submitReply(parentId) {
 	if (!body || addComment.isPending.value) return
 	commentError.value = ''
 	try {
-		await addComment.mutateAsync({ body, parentCommentId: parentId })
+		await addComment.mutateAsync({ projectId: props.id, body, parentCommentId: parentId })
 		closeReplyBox()
 	} catch (err) {
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to post reply.')
@@ -1023,6 +1173,33 @@ async function submitReply(parentId) {
 // ── Edit ─────────────────────────────────────────────────────────────────────
 const editingCommentId = ref(null)
 const editingCommentBody = ref('')
+
+// The router reuses this component between projects, and a draft must not
+// follow the user into one with a wider audience.
+watch(() => props.id, () => {
+	accessLost.value = false
+	leavingPage.value = false
+	actionError.value = ''
+	datesError.value = ''
+	showShareDialog.value = false
+	selectedCardId.value = null
+	selectedBoardId.value = null
+	showPicker.value = false
+	addError.value = ''
+	suppressBlurSave = true
+	editingDescription.value = false
+	draftDescription.value = ''
+	descError.value = ''
+	descExpanded.value = false
+	showEditDialog.value = false
+	editError.value = ''
+	newCommentBody.value = ''
+	commentError.value = ''
+	replyingToId.value = null
+	replyBody.value = ''
+	editingCommentId.value = null
+	editingCommentBody.value = ''
+})
 
 function startCommentEdit(comment) {
 	editingCommentId.value = comment.id
@@ -1042,7 +1219,7 @@ async function saveCommentEdit(comment) {
 	}
 	commentError.value = ''
 	try {
-		await editComment.mutateAsync({ comment, body })
+		await editComment.mutateAsync({ projectId: props.id, comment, body })
 		cancelCommentEdit()
 	} catch (err) {
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to update note.')
@@ -1053,7 +1230,7 @@ async function saveCommentEdit(comment) {
 async function handleDeleteComment(comment) {
 	commentError.value = ''
 	try {
-		await deleteComment.mutateAsync({ comment })
+		await deleteComment.mutateAsync({ projectId: props.id, comment })
 	} catch (err) {
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to delete note.')
 	}
@@ -1061,6 +1238,12 @@ async function handleDeleteComment(comment) {
 </script>
 
 <style scoped>
+.project-view__shared {
+	flex-shrink: 0;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.85em;
+}
+
 .project-view {
 	padding: 20px 32px 32px 52px;
 	max-width: 1600px;
@@ -1229,6 +1412,10 @@ async function handleDeleteComment(comment) {
 
 .project-view__desc-toggle-icon--up {
 	transform: rotate(180deg);
+}
+
+.project-view__desc-view--readonly {
+	cursor: default;
 }
 
 .project-view__desc-view:hover,

@@ -18,10 +18,9 @@ use OCP\IUserManager;
 use OCP\IUserSession;
 
 /**
- * Project comment (discussion) endpoints - owner-only (#3563). Each serialized
- * comment carries the author's resolved display name (looked up from the uid,
- * not stored). Ownership is enforced in {@see ProjectCommentService}; a
- * non-owner gets a 403.
+ * Project comment (discussion) endpoints. Each serialized comment carries
+ * the author's resolved display name (looked up from the uid, not stored). Access
+ * is enforced in {@see ProjectCommentService}.
  */
 class ProjectCommentController extends Controller {
 	use ApiErrorTrait;

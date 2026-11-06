@@ -7,9 +7,12 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Db;
 
+use OCA\Kanso\Access\ProjectAccess;
 use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Db\ProjectCardMapper;
+use OCA\Kanso\Db\ProjectShareMapper;
 use OCA\Kanso\Service\CardVisibilityScope;
+use OCA\Kanso\Service\PermissionService;
 use OCP\DB\IResult;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
@@ -17,23 +20,10 @@ use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Mapper-level test for the owner scoping of `projectIds` (#10737).
- *
- * Projects are private, owner-only collections, but collecting a card needs
- * only READ on its board - so an unscoped `findProjectIdsByCard` told every
- * reader of a shared card how many OTHER people had filed it away privately.
- *
- * The DB is mocked (as everywhere in tests/unit/Db), so what is asserted here
- * is the shape of the query that reaches it: the join to `kanso_projects` and
- * the `p.owner = <viewer>` predicate, with the viewer's uid actually bound to
- * it. Drop either and these tests fail. The end-to-end denial - peer A's
- * project never reaching peer B - is pinned in tests/e2e/card-attr-acl.spec.js
- * against a real database and two real users.
- *
- * The second half of the file (#10734) pins the card LISTING behind every
- * project metric - that its `kanso_cards` join really carries
- * {@see CardVisibilityScope}, so a collected card that later turned hidden
- * drops out of the project view AND out of the stats derived from it.
+ * Pins the shape of the queries that reach the DB: `projectIds` covers only the
+ * projects the viewer can reach, and the card listing behind every project
+ * metric carries {@see CardVisibilityScope}. The end-to-end denial runs in
+ * tests/e2e/card-attr-acl.spec.js.
  */
 class ProjectCardMapperTest extends TestCase {
 	private IDBConnection&MockObject $db;
@@ -45,6 +35,8 @@ class ProjectCardMapperTest extends TestCase {
 	private array $joins = [];
 	/** @var array<string, mixed> bound parameter token => value */
 	private array $params = [];
+	/** @var list<string> every select() column */
+	private array $selected = [];
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -54,7 +46,13 @@ class ProjectCardMapperTest extends TestCase {
 		// emit no visibility branches at all and the test would pass on a leak.
 		// findProjectIdsByCard() does not use the scope, so the tests above are
 		// unaffected either way.
-		$this->mapper = new ProjectCardMapper($this->db, new CardVisibilityScope());
+		$permissions = $this->createMock(PermissionService::class);
+		$permissions->method('getUserGroupIds')->willReturn(['staff']);
+		$this->mapper = new ProjectCardMapper(
+			$this->db,
+			new CardVisibilityScope(),
+			new ProjectAccess($this->db, $this->createMock(ProjectShareMapper::class), $permissions),
+		);
 	}
 
 	/**
@@ -65,9 +63,13 @@ class ProjectCardMapperTest extends TestCase {
 	 */
 	private function stubQuery(array $rows): void {
 		$qb = $this->createMock(IQueryBuilder::class);
-		foreach (['select', 'from', 'orderBy'] as $method) {
+		foreach (['from', 'orderBy'] as $method) {
 			$qb->method($method)->willReturnSelf();
 		}
+		$qb->method('select')->willReturnCallback(function (string ...$columns) use ($qb): IQueryBuilder {
+			array_push($this->selected, ...$columns);
+			return $qb;
+		});
 		foreach (['where', 'andWhere'] as $method) {
 			$qb->method($method)->willReturnCallback(function (string $predicate) use ($qb): IQueryBuilder {
 				$this->predicates[] = $predicate;
@@ -103,6 +105,7 @@ class ProjectCardMapperTest extends TestCase {
 			$row = array_shift($queue);
 			return $row ?? false;
 		});
+		$result->method('fetchAll')->willReturn($rows);
 		$qb->method('executeQuery')->willReturn($result);
 
 		$this->db->method('getQueryBuilder')->willReturn($qb);
@@ -130,21 +133,30 @@ class ProjectCardMapperTest extends TestCase {
 		self::assertSame('p', $alias);
 	}
 
-	public function testFindProjectIdsByCardFiltersByTheViewerAsOwner(): void {
+	public function testFindProjectIdsByCardReachesProjectsTheViewerOwns(): void {
 		$this->stubQuery([]);
 
 		$this->mapper->findProjectIdsByCard(9, 'bob');
 
-		// THE denial: without this predicate every reader of the card sees every
-		// collector's project id.
 		$owner = $this->predicateOn('p.owner');
 		self::assertNotNull($owner, 'the query must constrain p.owner');
-		self::assertStringStartsWith('eq(p.owner,', $owner);
 
-		// …and it must be the VIEWER that is bound to it, not some other uid.
 		preg_match('/eq\(p\.owner,(:p\d+)\)/', $owner, $m);
 		self::assertArrayHasKey($m[1], $this->params);
 		self::assertSame('bob', $this->params[$m[1]]);
+	}
+
+	public function testFindProjectIdsByCardAlsoReachesProjectsSharedWithTheViewer(): void {
+		$this->stubQuery([]);
+
+		$this->mapper->findProjectIdsByCard(9, 'bob');
+
+		$share = $this->predicateOn('s.participant');
+		self::assertNotNull($share, 'the share subquery must constrain s.participant');
+		preg_match('/eq\(s\.participant,(:p\d+)\)/', $share, $user);
+		preg_match('/in\(s\.participant,(:p\d+)\)/', $share, $groups);
+		self::assertSame('bob', $this->params[$user[1]]);
+		self::assertSame(['staff'], $this->params[$groups[1]]);
 	}
 
 	public function testFindProjectIdsByCardStillFiltersByTheCard(): void {
@@ -167,12 +179,41 @@ class ProjectCardMapperTest extends TestCase {
 		self::assertSame([4, 11], $this->mapper->findProjectIdsByCard(9, 'alice'));
 	}
 
-	public function testFindProjectIdsByCardReturnsNothingWhenTheViewerOwnsNone(): void {
-		// The read-only peer's case: the card IS in a project, but not in one of
-		// theirs, so the owner filter leaves no row at all.
+	public function testBoardDigestCoversWhatTheViewerSeesOfProjects(): void {
+		$this->stubQuery([['card_id' => 9, 'id' => 4, 'title' => 'Q3', 'color' => 'ff0000']]);
+
+		self::assertNotSame('', $this->mapper->boardDigest(ViewerContext::forMember('bob', 7, ViewerContext::ROLE_INTERNAL, false)));
+
+		self::assertSame(['pc.card_id', 'p.id', 'p.title', 'p.color'], array_slice($this->selected, 0, 4));
+		preg_match('/eq\(c\.board_id,(:p\d+)\)/', (string)$this->predicateOn('c.board_id'), $board);
+		self::assertSame(7, $this->params[$board[1]]);
+		preg_match('/eq\(c\.deleted_at,(:p\d+)\)/', (string)$this->predicateOn('c.deleted_at'), $deleted);
+		self::assertSame(0, $this->params[$deleted[1]]);
+	}
+
+	public function testBoardDigestIsScopedToWhatTheViewerCanReach(): void {
 		$this->stubQuery([]);
 
-		self::assertSame([], $this->mapper->findProjectIdsByCard(9, 'bob'));
+		$this->mapper->boardDigest(ViewerContext::forMember('bob', 7, ViewerContext::ROLE_INTERNAL, false));
+
+		preg_match('/eq\(p\.owner,(:p\d+)\)/', (string)$this->predicateOn('p.owner'), $owner);
+		self::assertSame('bob', $this->params[$owner[1]]);
+		preg_match('/in\(s\.participant,(:p\d+)\)/', (string)$this->predicateOn('s.participant'), $groups);
+		self::assertSame(['staff'], $this->params[$groups[1]]);
+	}
+
+	public function testBoardDigestLeavesOutCardsHiddenFromTheViewer(): void {
+		$this->stubQuery([]);
+
+		$this->mapper->boardDigest(ViewerContext::forMember('bob', 7, ViewerContext::ROLE_EXTERNAL, false));
+
+		self::assertNotNull($this->predicateOn('c.visibility'));
+	}
+
+	public function testBoardDigestIsEmptyWithoutMemberships(): void {
+		$this->stubQuery([]);
+
+		self::assertSame('', $this->mapper->boardDigest(ViewerContext::forMember('bob', 7, ViewerContext::ROLE_INTERNAL, false)));
 	}
 
 	// ---- the card LISTING behind every project metric (#10734) --------------
@@ -311,7 +352,7 @@ class ProjectCardMapperTest extends TestCase {
 		// never an `IN ()`.
 		$db = $this->createMock(IDBConnection::class);
 		$db->expects(self::never())->method('getQueryBuilder');
-		$mapper = new ProjectCardMapper($db, new CardVisibilityScope());
+		$mapper = new ProjectCardMapper($db, new CardVisibilityScope(), $this->createMock(ProjectAccess::class));
 		self::assertSame([], $mapper->findCardsInProjectAndBoards(4, [], 'alice', []));
 	}
 
@@ -400,7 +441,7 @@ class ProjectCardMapperTest extends TestCase {
 
 		$db = $this->createMock(IDBConnection::class);
 		$db->expects(self::never())->method('getQueryBuilder');
-		$mapper = new ProjectCardMapper($db, new CardVisibilityScope());
+		$mapper = new ProjectCardMapper($db, new CardVisibilityScope(), $this->createMock(ProjectAccess::class));
 		self::assertSame([], $mapper->openBlockerCounts([], [7], 'alice', []));
 		self::assertSame([], $mapper->openBlockerCounts([11], [], 'alice', []));
 	}

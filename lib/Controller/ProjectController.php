@@ -16,8 +16,8 @@ use OCP\IRequest;
 use OCP\IUserSession;
 
 /**
- * Project endpoints - owner-only, cross-board card collections (#3447). Every
- * method acts as the current user; ownership and board-read ACL are enforced in
+ * Project endpoints - cross-board card collections. Every method acts as
+ * the current user; project access and board-read ACL are enforced in
  * {@see ProjectService}. Membership mutations are idempotent and return an empty
  * body.
  */
@@ -34,7 +34,7 @@ class ProjectController extends Controller {
 	}
 
 	/**
-	 * The current user's projects, in title order.
+	 * The projects the current user owns or was shared, in title order.
 	 */
 	#[NoAdminRequired]
 	public function index(): JSONResponse {
@@ -70,7 +70,7 @@ class ProjectController extends Controller {
 	}
 
 	/**
-	 * The project's cards, ACL-filtered to the owner's readable boards.
+	 * The project's cards, ACL-filtered to the viewer's readable boards.
 	 */
 	#[NoAdminRequired]
 	public function cards(int $id): JSONResponse {
@@ -80,10 +80,8 @@ class ProjectController extends Controller {
 	}
 
 	/**
-	 * Cross-board analytics for the project, owner-gated and ACL-filtered to the
-	 * owner's readable boards (mirrors board analytics). The owner gate + the
-	 * one-pass ACL card resolution live in {@see ProjectService::stats()}, so a
-	 * non-owner gets a 403 and a card on an unreadable board never contributes.
+	 * Cross-board analytics for the project, ACL-filtered to the viewer's readable
+	 * boards (mirrors board analytics) - see {@see ProjectService::stats()}.
 	 */
 	#[NoAdminRequired]
 	public function stats(int $id): JSONResponse {

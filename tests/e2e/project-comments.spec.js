@@ -1,14 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Project discussion log e2e (#3563): the project page carries an owner-only
-// comment thread reusing the markdown editor. Post a comment (with markdown),
+// Project discussion log e2e: the project page carries a comment thread reusing
+// the markdown editor. Post a comment (with markdown),
 // assert it renders as HTML and persists across a full reload; then edit and
 // delete through the UI.
 
 import { test, expect, api, ncLogin, BASE } from './helpers.js'
 
-test.describe('Project discussion log (owner-only comments)', () => {
+test.describe('Project discussion log', () => {
 	const state = { projectId: 0 }
 
 	/**

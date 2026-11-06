@@ -857,11 +857,29 @@ export const unpinProject = (id) =>
 export const getProjectPlan = (projectId) =>
 	axios.get(url(`/api/projects/${projectId}/plan`)).then((r) => r.data)
 
-// Cross-board project analytics (owner-only)
+// Cross-board project analytics
 export const getProjectStats = (projectId) =>
 	axios.get(url(`/api/projects/${projectId}/stats`)).then((r) => r.data)
 
-// Project comments — an owner-only personal discussion log on a project (#3563).
+export const getProjectShares = (projectId) =>
+	axios.get(url(`/api/projects/${projectId}/shares`)).then((r) => r.data)
+
+export const createProjectShare = (projectId, data) =>
+	axios.post(url(`/api/projects/${projectId}/shares`), data).then((r) => r.data)
+
+export const updateProjectShare = (projectId, shareId, permission) =>
+	axios.patch(url(`/api/projects/${projectId}/shares/${shareId}`), { permission }).then((r) => r.data)
+
+export const deleteProjectShare = (projectId, shareId) =>
+	axios.delete(url(`/api/projects/${projectId}/shares/${shareId}`)).then((r) => r.data)
+
+export const searchProjectSharees = (projectId, q) =>
+	axios.get(url(`/api/projects/${projectId}/shares/search`), { params: { q } }).then((r) => r.data)
+
+export const leaveProject = (projectId) =>
+	axios.delete(url(`/api/projects/${projectId}/shares/me`)).then((r) => r.data)
+
+// Project comments — a project's discussion log, visible to everyone it is shared with.
 // One-level threads, mirroring the card-comment API but project-scoped. The
 // update/delete paths are /api/project-comments/{id} (distinct from card
 // comments' /api/comments/{id}).

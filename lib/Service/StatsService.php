@@ -137,10 +137,10 @@ class StatsService {
 	/**
 	 * The project-analytics DTO, computed over an explicit ACL-resolved card id
 	 * set (#3568) rather than a single board. The caller (ProjectStatsController
-	 * → ProjectService) has already owner-gated the project AND resolved the card
-	 * ids to the owner's readable-board set (one ACL-filtered pass via
+	 * → ProjectService) has already access-gated the project AND resolved the card
+	 * ids to the viewer's readable-board set (one ACL-filtered pass via
 	 * {@see \OCA\Kanso\Db\ProjectCardMapper::findCardsInProjectAndBoards}), so a
-	 * card on a board the owner cannot READ is never in $cardIds and can never
+	 * card on a board the viewer cannot READ is never in $cardIds and can never
 	 * contribute - there is no board scope here and no cross-board leak. Every
 	 * aggregate re-uses the same PHP-side roll-ups as {@see self::boardStats()}
 	 * (bucketByDay / velocity / cycleTime / trend), just fed the card-id-set

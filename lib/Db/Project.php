@@ -11,9 +11,9 @@ use OCP\AppFramework\Db\Entity;
 use OCP\DB\Types;
 
 /**
- * A project (table `kanso_projects`): an owner-only, cross-board collection of
- * cards. `owner` is the uid; there is no sharing in v1. `color` is a bare hex
- * string (no '#'), `created_at` is unix seconds, `start_date` / `target_date`
+ * A project (table `kanso_projects`): a cross-board collection of cards. `owner`
+ * is the uid; others reach it through `kanso_project_shares`. `color` is a bare
+ * hex string (no '#'), `created_at` is unix seconds, `start_date` / `target_date`
  * are optional YYYY-MM-DD calendar dates.
  *
  * @method string getTitle()

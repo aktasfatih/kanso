@@ -2,19 +2,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * useProjectComments — the owner-only project discussion log (#3563).
+ * useProjectComments — a project's discussion log.
  *
- * A thinner twin of useComments (cards): a project comment has exactly one
- * reader (the owner), so there is no card/board cache to patch and no comment
- * count badge to keep in sync — just the flat comment list for one project,
- * with optimistic add/edit/delete and rollback on error.
+ * A thinner twin of useComments (cards): there is no card/board cache to patch
+ * and no comment count badge to keep in sync — just the flat comment list for
+ * one project, with optimistic add/edit/delete and rollback on error.
  *
  * The flat comment array from the server is returned as-is; tree building
  * (top-level + one level of replies) is done by `buildCommentTree` (shared with
  * card comments — the server contract is identical: replies always point to a
  * top-level comment).
  *
- * projectId may be a plain number/string, a Vue ref, or a getter function.
+ * projectId may be a plain number/string, a Vue ref, or a getter function. It
+ * drives the read only: every write takes its project from the mutation
+ * variables, because one paused offline must not follow the route.
  */
 
 import { computed } from 'vue'
@@ -39,36 +40,51 @@ function resolve(v) {
 
 /**
  * @param {import('vue').Ref<string|number>|string|number|Function} projectId
+ * @param {object} [options]
+ * @param {number|false} [options.refetchInterval] poll interval
  */
-export function useProjectComments(projectId) {
+export function useProjectComments(projectId, { refetchInterval = false } = {}) {
 	const queryClient = useQueryClient()
 
 	function getProjectId() {
 		return String(resolve(projectId))
 	}
 
-	function getKey() {
-		return ['project', getProjectId(), 'comments']
+	function keyFor(id) {
+		return ['project', String(id), 'comments']
+	}
+
+	// A refused write means the viewer's access changed, which ['projects'] carries.
+	function invalidate(_data, _err, { projectId: id }) {
+		queryClient.invalidateQueries({ queryKey: keyFor(id) })
+		queryClient.invalidateQueries({ queryKey: ['projects'] })
+	}
+
+	function rollback(_err, { projectId: id }, context) {
+		if (context?.previous !== undefined) {
+			queryClient.setQueryData(keyFor(id), context.previous)
+		}
 	}
 
 	const comments = useQuery({
-		queryKey: computed(() => getKey()),
+		queryKey: computed(() => keyFor(getProjectId())),
 		queryFn: () => apiFetch(getProjectId()),
 		enabled: computed(() => resolve(projectId) != null),
+		refetchInterval,
 	})
 
 	// ── addComment ────────────────────────────────────────────────────────────
 	const addComment = useMutation({
-		mutationFn: ({ body, parentCommentId }) =>
-			apiCreate(getProjectId(), {
+		mutationFn: ({ projectId: id, body, parentCommentId }) =>
+			apiCreate(String(id), {
 				body,
 				...(parentCommentId !== null && parentCommentId !== undefined
 					? { parentCommentId }
 					: {}),
 			}),
 
-		onMutate: async ({ body, parentCommentId }) => {
-			const key = getKey()
+		onMutate: async ({ projectId: id, body, parentCommentId }) => {
+			const key = keyFor(id)
 			await queryClient.cancelQueries({ queryKey: key })
 			const previous = queryClient.getQueryData(key)
 
@@ -76,7 +92,7 @@ export function useProjectComments(projectId) {
 			const tempId = -(Date.now())
 			const optimistic = {
 				id: tempId,
-				projectId: Number(getProjectId()),
+				projectId: Number(id),
 				parentCommentId: parentCommentId ?? null,
 				author: '',
 				authorDisplayName: '',
@@ -90,23 +106,17 @@ export function useProjectComments(projectId) {
 			return { previous }
 		},
 
-		onError: (_err, _vars, context) => {
-			if (context?.previous !== undefined) {
-				queryClient.setQueryData(getKey(), context.previous)
-			}
-		},
+		onError: rollback,
 
-		onSettled: () => {
-			queryClient.invalidateQueries({ queryKey: getKey() })
-		},
+		onSettled: invalidate,
 	})
 
 	// ── editComment ───────────────────────────────────────────────────────────
 	const editComment = useMutation({
 		mutationFn: ({ comment, body }) => apiUpdate(comment.id, { body }),
 
-		onMutate: async ({ comment, body }) => {
-			const key = getKey()
+		onMutate: async ({ projectId: id, comment, body }) => {
+			const key = keyFor(id)
 			await queryClient.cancelQueries({ queryKey: key })
 			const previous = queryClient.getQueryData(key)
 
@@ -120,15 +130,9 @@ export function useProjectComments(projectId) {
 			return { previous }
 		},
 
-		onError: (_err, _vars, context) => {
-			if (context?.previous !== undefined) {
-				queryClient.setQueryData(getKey(), context.previous)
-			}
-		},
+		onError: rollback,
 
-		onSettled: () => {
-			queryClient.invalidateQueries({ queryKey: getKey() })
-		},
+		onSettled: invalidate,
 	})
 
 	// ── deleteComment ─────────────────────────────────────────────────────────
@@ -137,8 +141,8 @@ export function useProjectComments(projectId) {
 	const deleteComment = useMutation({
 		mutationFn: ({ comment }) => apiDelete(comment.id),
 
-		onMutate: async ({ comment }) => {
-			const key = getKey()
+		onMutate: async ({ projectId: id, comment }) => {
+			const key = keyFor(id)
 			await queryClient.cancelQueries({ queryKey: key })
 			const previous = queryClient.getQueryData(key)
 
@@ -152,15 +156,9 @@ export function useProjectComments(projectId) {
 			return { previous }
 		},
 
-		onError: (_err, _vars, context) => {
-			if (context?.previous !== undefined) {
-				queryClient.setQueryData(getKey(), context.previous)
-			}
-		},
+		onError: rollback,
 
-		onSettled: () => {
-			queryClient.invalidateQueries({ queryKey: getKey() })
-		},
+		onSettled: invalidate,
 	})
 
 	return {

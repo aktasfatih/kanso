@@ -15,6 +15,7 @@ use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChangeMapper;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Project;
+use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\ProjectMapper;
 use OCA\Kanso\Db\ReviewTypeMapper;
 use OCA\Kanso\Db\StackMapper;
@@ -59,6 +60,7 @@ class BoardController extends Controller {
 		private CardMapper $cardMapper,
 		private LabelMapper $labelMapper,
 		private ProjectMapper $projectMapper,
+		private ProjectCardMapper $projectCardMapper,
 		private ReviewTypeMapper $reviewTypeMapper,
 		private CardFieldMapper $cardFieldMapper,
 		private AclMapper $aclMapper,
@@ -69,6 +71,15 @@ class BoardController extends Controller {
 		private CardRelationService $cardRelationService,
 	) {
 		parent::__construct($appName, $request);
+	}
+
+	/**
+	 * What a card tile reads, and all that {@see ProjectCardMapper::boardDigest()} validates.
+	 *
+	 * @return array{id: int, title: ?string, color: ?string}
+	 */
+	private function projectTile(Project $project): array {
+		return ['id' => $project->getId(), 'title' => $project->getTitle(), 'color' => $project->getColor()];
 	}
 
 	#[NoAdminRequired]
@@ -107,14 +118,17 @@ class BoardController extends Controller {
 	 * they no longer hold, for as long as the board stayed open. So the ETag is
 	 * `<latest change id>-<this viewer's permission mask>-<this viewer's role>`:
 	 * the board-global part still covers every content change, and the
-	 * viewer-scoped part covers the membership changes nothing else can see.
+	 * viewer-scoped part covers the membership changes nothing else can see. A
+	 * trailing digest of the viewer's project tiles, present only when the board
+	 * has any, covers project edits and shares, which write no change row.
 	 * Full revocation is already handled a line earlier - BoardService::find
 	 * throws before any of this - but a partial one (a user in two groups losing
 	 * the wider grant) is exactly what this catches.
 	 *
-	 * The cost is one extra `getPermissions()` on the 304 path: one indexed acl
-	 * read plus the group-id lookup the read gate has already warmed. The 200
-	 * path pays nothing - the mask is reused in the payload below.
+	 * The cost on the 304 path is one extra `getPermissions()` (one indexed acl
+	 * read plus the group-id lookup the read gate has already warmed) and one
+	 * project digest query. The 200 path pays the same digest query; only the
+	 * mask is reused in the payload below.
 	 *
 	 * The client half of the bargain lives in `src/services/api.js`
 	 * (`fetchBoard`), which replays the validator whenever it re-reads a board it
@@ -140,6 +154,10 @@ class BoardController extends Controller {
 			// validator, not just of the payload; the 200 path below reuses it.
 			$permissions = $this->permissionService->getPermissions($board, $uid);
 			$etag = $cursor . '-' . $permissions . '-' . $viewer->role;
+			$projectDigest = $this->projectCardMapper->boardDigest($viewer);
+			if ($projectDigest !== '') {
+				$etag .= '-' . $projectDigest;
+			}
 			if ($this->matchesIfNoneMatch($etag)) {
 				$response = new JSONResponse([], Http::STATUS_NOT_MODIFIED);
 				$response->setETag($etag);
@@ -147,11 +165,11 @@ class BoardController extends Controller {
 			}
 
 			$cards = $this->cardSummaryService->serialize($id, $this->cardMapper->findSummariesByBoard($id, $viewer), $viewer);
-			// The viewer's OWN projects referenced by the visible cards - the
+			// The viewer's reachable projects referenced by the visible cards - the
 			// board-level project list (id/title/color) the tile resolves its
 			// `projectIds` against. Bounded by the cards in play (one lookup
-			// query, not one per card) and owner-scoped, so a project the viewer
-			// does not own contributes nothing - its title and color stay private.
+			// query, not one per card) and access-scoped, so a project the viewer
+			// cannot reach contributes nothing - its title and color stay private.
 			$projectIds = [];
 			foreach ($cards as $card) {
 				foreach ($card['projectIds'] as $pid) {
@@ -161,8 +179,8 @@ class BoardController extends Controller {
 			// Skip the lookup entirely when no visible card is collected into a
 			// project - an empty `IN ()` is invalid SQL and the query is wasted.
 			$projects = $projectIds === [] ? [] : array_values(array_map(
-				static fn (Project $project): array => $project->jsonSerialize(),
-				$this->projectMapper->findByIdsForOwner(array_keys($projectIds), $uid)
+				fn (Project $project): array => $this->projectTile($project),
+				$this->projectMapper->findAccessibleByIds(array_keys($projectIds), $uid)
 			));
 
 			$response = new JSONResponse([
@@ -170,7 +188,7 @@ class BoardController extends Controller {
 				'stacks' => $this->stackMapper->findByBoard($id),
 				'cards' => $cards,
 				'labels' => $this->labelMapper->findByBoard($id),
-				// The viewer's OWN projects the visible cards belong to - the
+				// The viewer's reachable projects the visible cards belong to - the
 				// board-level lookup the tile maps `projectIds` to a colour.
 				'projects' => $projects,
 				'reviewTypes' => $this->reviewTypeMapper->findByBoard($id),
@@ -355,7 +373,7 @@ class BoardController extends Controller {
 				$payload['blocksEdges'] = $this->cardRelationService->blocksEdgesForBoard($board, $uid);
 			}
 
-			// The viewer's OWN projects referenced by the upserted cards - the
+			// The viewer's reachable projects referenced by the upserted cards - the
 			// board-level project list (id/title/color) the tile resolves its
 			// `projectIds` against, exactly as show() ships it. Without this a card
 			// whose project membership changed in the window would render with no
@@ -363,7 +381,7 @@ class BoardController extends Controller {
 			// only for a NON-empty window (an empty delta must not run the query)
 			// and only when the upserted cards actually reference a project (an
 			// empty `IN ()` is invalid SQL and the query is wasted). One bounded,
-			// owner-scoped lookup - a project the viewer does not own contributes
+			// access-scoped lookup - a project the viewer cannot reach contributes
 			// nothing, so its title and colour stay private.
 			if ($rows !== []) {
 				$projectIds = [];
@@ -374,8 +392,8 @@ class BoardController extends Controller {
 				}
 				if ($projectIds !== []) {
 					$payload['projects'] = array_values(array_map(
-						static fn (Project $project): array => $project->jsonSerialize(),
-						$this->projectMapper->findByIdsForOwner(array_keys($projectIds), $uid)
+						fn (Project $project): array => $this->projectTile($project),
+						$this->projectMapper->findAccessibleByIds(array_keys($projectIds), $uid)
 					));
 				}
 			}

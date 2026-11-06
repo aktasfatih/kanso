@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Db;
 
+use OCA\Kanso\Access\ProjectAccess;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\MultipleObjectsReturnedException;
 use OCP\AppFramework\Db\QBMapper;
@@ -20,7 +21,10 @@ use OCP\IDBConnection;
  * @template-extends QBMapper<Project>
  */
 class ProjectMapper extends QBMapper {
-	public function __construct(IDBConnection $db) {
+	public function __construct(
+		IDBConnection $db,
+		private ProjectAccess $projectAccess,
+	) {
 		parent::__construct($db, 'kanso_projects', Project::class);
 	}
 
@@ -39,33 +43,45 @@ class ProjectMapper extends QBMapper {
 	}
 
 	/**
-	 * Every project owned by the user, in title order.
+	 * Every project the user owns or was shared, in title order.
 	 *
 	 * @return Project[]
 	 * @throws Exception
 	 */
-	public function findByOwner(string $uid): array {
+	public function findAccessible(string $uid): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
-			->where($qb->expr()->eq('owner', $qb->createNamedParameter($uid)))
 			->orderBy('title', 'ASC')
 			->addOrderBy('id', 'ASC');
+		$this->projectAccess->restrict($qb, '', $uid);
 
 		return $this->findEntities($qb);
 	}
 
 	/**
-	 * The viewer's OWN projects among the given ids, in one query - the board
-	 * payload's project lookup. Projects are owner-only, so restricting to
-	 * `owner = uid` is the whole ACL: a project someone else owns is invisible,
-	 * and its title/color must not leak through a shared card.
+	 * @return Project[]
+	 * @throws Exception
+	 */
+	public function findOwnedBy(string $uid): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('owner', $qb->createNamedParameter($uid)));
+
+		return $this->findEntities($qb);
+	}
+
+	/**
+	 * The projects among $ids the user can reach, in one query - the board
+	 * payload's project lookup. Anything else stays invisible: its title and
+	 * color must not leak through a shared card.
 	 *
 	 * @param int[] $ids
 	 * @return Project[]
 	 * @throws Exception
 	 */
-	public function findByIdsForOwner(array $ids, string $uid): array {
+	public function findAccessibleByIds(array $ids, string $uid): array {
 		if ($ids === []) {
 			return [];
 		}
@@ -74,8 +90,8 @@ class ProjectMapper extends QBMapper {
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->in('id', $qb->createNamedParameter(array_values($ids), IQueryBuilder::PARAM_INT_ARRAY)))
-			->andWhere($qb->expr()->eq('owner', $qb->createNamedParameter($uid)))
 			->orderBy('id', 'ASC');
+		$this->projectAccess->restrict($qb, '', $uid);
 
 		return $this->findEntities($qb);
 	}

@@ -114,7 +114,7 @@ msgstr "{card} artık {parent} kartının alt kartı"
 msgid "{card} moved to {stack}"
 msgstr "{card} şu sütuna taşındı: {stack}"
 
-#: src/components/ProjectHealth.vue:167
+#: src/components/ProjectHealth.vue:170
 msgid "{count} blocked"
 msgid_plural "{count} blocked"
 msgstr[0] "{count} engellenmiş"
@@ -126,7 +126,7 @@ msgid_plural "{count} cards"
 msgstr[0] "{count} kart"
 msgstr[1] "{count} kart"
 
-#: src/components/ProjectHealth.vue:178
+#: src/components/ProjectHealth.vue:181
 msgid "{count} card has no estimate and counts as the typical estimate of {points}."
 msgid_plural "{count} cards have no estimate and each counts as the typical estimate of {points}."
 msgstr[0] "{count} kartın tahmini yok ve tipik tahmin olan {points} sayılıyor."
@@ -142,19 +142,19 @@ msgid_plural "{count} characters left"
 msgstr[0] "{count} karakter kaldı"
 msgstr[1] "{count} karakter kaldı"
 
-#: src/components/ProjectHealth.vue:158
+#: src/components/ProjectHealth.vue:161
 msgid "{count} day ago"
 msgid_plural "{count} days ago"
 msgstr[0] "{count} gün önce"
 msgstr[1] "{count} gün önce"
 
-#: src/components/ProjectHealth.vue:170
+#: src/components/ProjectHealth.vue:173
 msgid "{count} in progress"
 msgid_plural "{count} in progress"
 msgstr[0] "{count} devam ediyor"
 msgstr[1] "{count} devam ediyor"
 
-#: src/components/ProjectHealth.vue:164
+#: src/components/ProjectHealth.vue:167
 msgid "{count} overdue"
 msgid_plural "{count} overdue"
 msgstr[0] "{count} gecikmiş"
@@ -187,7 +187,7 @@ msgstr "en erken {from}"
 msgid "{n} blocked"
 msgstr "{n} engelli"
 
-#: src/components/ProjectHealth.vue:136
+#: src/components/ProjectHealth.vue:139
 msgid "{n} card / week"
 msgid_plural "{n} cards / week"
 msgstr[0] "{n} kart / hafta"
@@ -228,7 +228,7 @@ msgid_plural "{n} points"
 msgstr[0] "{n} puan"
 msgstr[1] "{n} puan"
 
-#: src/components/ProjectHealth.vue:135
+#: src/components/ProjectHealth.vue:138
 msgid "{n} point / week"
 msgid_plural "{n} points / week"
 msgstr[0] "{n} puan / hafta"
@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n veri satırı bulundu"
 msgstr[1] "%n veri satırı bulundu"
 
-#: src/components/CardDetail.vue:5098
+#: src/components/CardDetail.vue:5095
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n gün önce"
@@ -409,7 +409,7 @@ msgid_plural "%n files"
 msgstr[0] "%n dosya"
 msgstr[1] "%n dosya"
 
-#: src/components/CardDetail.vue:5096
+#: src/components/CardDetail.vue:5093
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
@@ -439,7 +439,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 msgstr[1] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 
-#: src/components/CardDetail.vue:5094
+#: src/components/CardDetail.vue:5091
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n dakika önce"
@@ -463,13 +463,13 @@ msgid_plural "%n points"
 msgstr[0] "%n puan"
 msgstr[1] "%n puan"
 
-#: src/components/CardDetail.vue:1263
+#: src/components/CardDetail.vue:1258
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n proje"
 msgstr[1] "%n proje"
 
-#: src/components/CardDetail.vue:2353
+#: src/components/CardDetail.vue:2350
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n yanıt"
@@ -520,6 +520,10 @@ msgstr "Ayrı bir hesap yalnızca kimin kotasının harcandığını değiştiri
 #: src/components/BoardSettingsModal.vue
 msgid "Accept mail from (one address or @domain per line — leave empty to accept anyone)"
 msgstr "Şu adreslerden gelen postaları kabul et (satır başına bir adres ya da @alanadı — herkesi kabul etmek için boş bırak)"
+
+#: src/components/ProjectShareDialog.vue
+msgid "Access level for {name}"
+msgstr "{name} için erişim düzeyi"
 
 #: templates/admin-backup.php
 msgid "Account that owns the folder"
@@ -1017,7 +1021,7 @@ msgstr "Engellendi"
 msgid "Blocked by"
 msgstr "Engelleyen"
 
-#: src/views/ProjectView.vue:254
+#: src/views/ProjectView.vue:300
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "{count} açık kart tarafından engellendi"
@@ -1185,6 +1189,7 @@ msgid "Calendar feed"
 msgstr "Takvim akışı"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Can edit"
 msgstr "Düzenleyebilir"
 
@@ -1195,6 +1200,10 @@ msgstr "Yönetebilir"
 #: src/components/BoardSettingsModal.vue
 msgid "Can share"
 msgstr "Paylaşabilir"
+
+#: src/components/ProjectShareDialog.vue
+msgid "Can view"
+msgstr "Görüntüleyebilir"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
@@ -2032,7 +2041,7 @@ msgid "Date"
 msgstr "Tarih"
 
 #: src/components/BoardSettingsModal.vue:2312
-#: src/components/CardDetail.vue:5287
+#: src/components/CardDetail.vue:5284
 msgid "day"
 msgid_plural "days"
 msgstr[0] "gün"
@@ -2823,6 +2832,10 @@ msgstr "Yorum düzenlenemedi."
 msgid "Failed to leave board."
 msgstr "Panodan ayrılamadı."
 
+#: src/views/ProjectView.vue
+msgid "Failed to leave project."
+msgstr "Projeden ayrılınamadı."
+
 #: src/components/CardDetail.vue
 msgid "Failed to link card."
 msgstr "Kart bağlanamadı."
@@ -2860,6 +2873,7 @@ msgstr "Gelen kutusu yüklenemedi. Lütfen tekrar dene."
 msgid "Failed to load project cards. Please try again."
 msgstr "Proje kartları yüklenemedi. Lütfen tekrar dene."
 
+#: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 msgid "Failed to load projects. Please try again."
 msgstr "Projeler yüklenemedi. Lütfen tekrar dene."
@@ -2875,6 +2889,10 @@ msgstr "Yineleme kuralları yüklenemedi."
 #: src/views/MyReviewsView.vue
 msgid "Failed to load reviews. Please try again."
 msgstr "İncelemeler yüklenemedi. Lütfen tekrar dene."
+
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to load shares."
+msgstr "Paylaşımlar yüklenemedi."
 
 #: src/views/MyCardsView.vue
 msgid "Failed to load tasks. Please try again."
@@ -2893,6 +2911,10 @@ msgstr "Panonun ekleri yüklenemedi."
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the calendar feed config."
 msgstr "Takvim akışı yapılandırması yüklenemedi."
+
+#: src/views/ProjectView.vue
+msgid "Failed to load the discussion."
+msgstr "Tartışma yüklenemedi."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the email intake settings."
@@ -2947,6 +2969,10 @@ msgstr "Not gönderilemedi."
 #: src/views/ProjectView.vue
 msgid "Failed to post reply."
 msgstr "Yanıt gönderilemedi."
+
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to remove access."
+msgstr "Erişim kaldırılamadı."
 
 #: src/components/CardDetail.vue
 msgid "Failed to remove attachment."
@@ -3032,6 +3058,10 @@ msgstr "Filtre kaydedilemedi."
 msgid "Failed to save."
 msgstr "Kaydedilemedi."
 
+#: src/composables/useProjectShares.js
+msgid "Failed to search."
+msgstr "Arama başarısız oldu."
+
 #: src/components/CardDetail.vue
 msgid "Failed to set parent."
 msgstr "Üst kart ayarlanamadı."
@@ -3048,6 +3078,10 @@ msgstr "Hatırlatıcı kurulamadı."
 msgid "Failed to share board."
 msgstr "Pano paylaşılamadı."
 
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to share project."
+msgstr "Proje paylaşılamadı."
+
 #: src/components/CardDetail.vue
 msgid "Failed to submit review."
 msgstr "İnceleme gönderilemedi."
@@ -3059,6 +3093,10 @@ msgstr "Kart arşivden çıkarılamadı."
 #: src/components/CardDetail.vue
 msgid "Failed to unassign step."
 msgstr "Adım ataması kaldırılamadı."
+
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to update access."
+msgstr "Erişim güncellenemedi."
 
 #: src/components/CardDetail.vue
 msgid "Failed to update assignee."
@@ -3387,6 +3425,7 @@ msgid "Green"
 msgstr "Yeşil"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Group"
 msgstr "Grup"
 
@@ -3496,7 +3535,7 @@ msgstr "Yeni bir Kanso panosuna aktarıldı:"
 msgid "Importing…"
 msgstr "İçe aktarılıyor…"
 
-#: src/components/ProjectHealth.vue:157
+#: src/components/ProjectHealth.vue:160
 msgid "in {count} day"
 msgid_plural "in {count} days"
 msgstr[0] "{count} gün içinde"
@@ -3585,7 +3624,7 @@ msgstr "Amacı, kapsamı veya kuralları. Panodaki herkes pano adının yanında
 msgid "Jump to the discussion"
 msgstr "Tartışmaya atla"
 
-#: src/components/CardDetail.vue:7192
+#: src/components/CardDetail.vue:7189
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Tartışmaya atla (%n yorum)"
@@ -3755,6 +3794,10 @@ msgstr "Ayrıl"
 msgid "Leave board"
 msgstr "Panodan ayrıl"
 
+#: src/views/ProjectView.vue
+msgid "Leave project"
+msgstr "Projeden ayrıl"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Leave this board?"
 msgstr "Bu panodan ayrılınsın mı?"
@@ -3875,6 +3918,7 @@ msgstr "Deck panoların yükleniyor…"
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 #: src/components/CsvImportModal.vue
+#: src/components/ProjectShareDialog.vue
 #: src/views/ArchivedView.vue
 #: src/views/PublicBoard.vue
 #: src/views/TrashView.vue
@@ -3962,7 +4006,7 @@ msgid "Mon"
 msgstr "Pzt"
 
 #: src/components/BoardSettingsModal.vue:2314
-#: src/components/CardDetail.vue:5289
+#: src/components/CardDetail.vue:5286
 msgid "month"
 msgid_plural "months"
 msgstr[0] "ay"
@@ -4356,6 +4400,10 @@ msgid "No matching tasks"
 msgstr "Eşleşen görev yok"
 
 #: src/views/ProjectView.vue
+msgid "No notes yet."
+msgstr "Henüz not yok."
+
+#: src/views/ProjectView.vue
 msgid "No notes yet. Start a discussion log for this project."
 msgstr "Henüz not yok. Bu proje için bir tartışma günlüğü başlat."
 
@@ -4437,6 +4485,10 @@ msgstr "Henüz konu yok. Bir konu başlattığında bu kartı izleyen herkese bi
 msgid "No type"
 msgstr "Tür yok"
 
+#: src/components/ProjectShareDialog.vue
+msgid "No users or groups found."
+msgstr "Kullanıcı veya grup bulunamadı."
+
 #: src/components/CardDetail.vue
 msgid "Nobody has access to this board yet."
 msgstr "Bu panoya henüz kimsenin erişimi yok."
@@ -4470,6 +4522,7 @@ msgid "Not enough data yet"
 msgstr "Henüz yeterli veri yok"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Not shared with anyone yet."
 msgstr "Henüz kimseyle paylaşılmadı."
 
@@ -4718,6 +4771,10 @@ msgstr "Payload URL'si"
 #: src/components/CardDetail.vue
 msgid "Pending"
 msgstr "Bekliyor"
+
+#: src/components/ProjectShareDialog.vue
+msgid "People you share with see this project’s details and its whole discussion, including earlier notes. They only see the cards they can already access on their boards."
+msgstr "Paylaştığınız kişiler bu projenin ayrıntılarını ve önceki notlar dahil tüm tartışmayı görür. Yalnızca panolarında zaten erişebildikleri kartları görürler."
 
 #: src/components/BoardSettingsModal.vue
 msgid "per mailbox"
@@ -5020,6 +5077,10 @@ msgstr "\"{name}\" panodan çıkarılsın mı?"
 #: src/components/BoardSettingsModal.vue
 msgid "Remove {label}"
 msgstr "{label} öğesini kaldır"
+
+#: src/components/ProjectShareDialog.vue
+msgid "Remove {name}"
+msgstr "{name} kişisini kaldır"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Remove {name} from board"
@@ -5415,15 +5476,18 @@ msgid "Search the people with access to this board"
 msgstr "Bu panoya erişimi olan kişiler arasında ara"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Search users or groups"
 msgstr "Kullanıcı ya da grup ara"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Search users or groups…"
 msgstr "Kullanıcı ya da grup ara…"
 
 #: src/components/CardSearchPicker.vue
 #: src/components/CommandPalette.vue
+#: src/components/ProjectShareDialog.vue
 #: src/components/SearchBox.vue
 msgid "Searching…"
 msgstr "Aranıyor…"
@@ -5528,6 +5592,21 @@ msgstr "Bu panonun salt okunur bir görünümünü herkese açık bağlantıyla 
 msgid "Share a read-only view of this board with anyone via a public link. No sign-in is required to view it. Read-only comments are shown; assignees, activity and members are never shown."
 msgstr "Bu panonun salt okunur bir görünümünü herkese açık bağlantıyla herkesle paylaş. Görüntülemek için oturum açmak gerekmez. Yorumlar salt okunur gösterilir; atananlar, etkinlik ve üyeler asla gösterilmez."
 
+#: src/components/ProjectShareDialog.vue
+#: src/views/ProjectView.vue
+msgid "Share project"
+msgstr "Projeyi paylaş"
+
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Shared"
+msgstr "Paylaşıldı"
+
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Shared by {owner}"
+msgstr "{owner} tarafından paylaşıldı"
+
 #: src/views/PublicBoard.vue
 msgid "Shared read-only via Kanso"
 msgstr "Kanso ile salt okunur paylaşıldı"
@@ -5572,7 +5651,7 @@ msgstr "Tartışmayı kartın altında göster"
 msgid "Show the discussion panel"
 msgstr "Tartışma panelini göster"
 
-#: src/components/CardDetail.vue:7198
+#: src/components/CardDetail.vue:7195
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Tartışma panelini göster (%n yorum)"
@@ -5988,6 +6067,10 @@ msgstr "Bu bağlantının süresi dolmuş. Ziyaretçilere bağlantının süresi
 msgid "This link is invalid or has been disabled."
 msgstr "Bu bağlantı geçersiz ya da devre dışı bırakılmış."
 
+#: src/views/ProjectView.vue
+msgid "This project no longer exists, or you no longer have access to it."
+msgstr "Bu proje artık yok veya projeye artık erişiminiz yok."
+
 #: templates/public-expired.php
 msgid "This public board link has expired. Ask whoever shared the board for a new link."
 msgstr "Bu herkese açık pano bağlantısının süresi dolmuş. Panoyu paylaşan kişiden yeni bir bağlantı iste."
@@ -6284,6 +6367,7 @@ msgid "Use the Add card button above to collect cards from any board."
 msgstr "Herhangi bir panodan kart toplamak için yukarıdaki Kart ekle düğmesini kullan."
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "User"
 msgstr "Kullanıcı"
 
@@ -6374,7 +6458,7 @@ msgid "Wed"
 msgstr "Çar"
 
 #: src/components/BoardSettingsModal.vue:2313
-#: src/components/CardDetail.vue:5288
+#: src/components/CardDetail.vue:5285
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "hafta"
@@ -6483,7 +6567,7 @@ msgid "wrote"
 msgstr "yazdı"
 
 #: src/components/BoardSettingsModal.vue:2315
-#: src/components/CardDetail.vue:5290
+#: src/components/CardDetail.vue:5287
 msgid "year"
 msgid_plural "years"
 msgstr[0] "yıl"
@@ -6517,6 +6601,10 @@ msgstr "düzenleyebilirsin"
 #: src/components/BoardSettingsModal.vue
 msgid "you can manage"
 msgstr "yönetebilirsin"
+
+#: src/components/CardDetail.vue
+msgid "You can only view this project"
+msgstr "Bu projeyi yalnızca görüntüleyebilirsiniz"
 
 #: src/components/CardDetail.vue
 msgid "You cannot copy to that board."
@@ -6557,6 +6645,10 @@ msgstr "Herkese açık bağlantıyı yapılandırmak için yönetme iznine ihtiy
 #: src/components/CardDetail.vue
 msgid "You no longer have access to this card."
 msgstr "Bu karta artık erişimin yok."
+
+#: src/views/ProjectView.vue
+msgid "You still have access to this project through a group."
+msgstr "Bu projeye bir grup üzerinden erişiminiz devam ediyor."
 
 #: src/views/InboxView.vue
 msgid "You're all caught up"

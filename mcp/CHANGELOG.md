@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Shared projects — `kanso_share_project`, `kanso_list_project_shares`,
+  `kanso_update_project_share`, `kanso_unshare_project` and
+  `kanso_leave_project`. Projects now list everything you own or have been
+  shared, with `isOwner`, `canEdit`, `canLeave`, `shared` and
+  `ownerDisplayName`. `kanso_leave_project` returns `stillHasAccess`, true when
+  a group still reaches the project.
 - Boards carry `estimateTokens`, the labels a card's `estimate` may take
   (with the number each counts as), so assistants can pick a valid estimate on
   any scale, including custom ones.
@@ -20,17 +26,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and on-track status; `kanso_create_project` / `kanso_update_project` take a
   `start_date` and `target_date`, and project card rows now carry `estimate`,
   `startDate`, `blockers` and `assigneeIds`.
-- Project tools — work with your personal cross-board card collections over
-  MCP: `kanso_list_projects`, `kanso_get_project`, `kanso_create_project`,
+- Project tools — work with cross-board card collections you own or that are
+  shared with you over MCP: `kanso_list_projects`, `kanso_get_project`, `kanso_create_project`,
   `kanso_update_project`, `kanso_delete_project`, `kanso_list_project_cards`,
   `kanso_get_project_stats`, `kanso_add_card_to_project`,
   `kanso_remove_card_from_project`, plus the project discussion thread through
   `kanso_list_project_comments`, `kanso_add_project_comment`,
   `kanso_update_project_comment` and `kanso_delete_project_comment`. Until now
   an agent could see a card's `projectIds` but had no way to read, build or
-  report on a project. Projects stay owner-only: the tools act as you and only
-  ever reach your own projects, and the card list and stats are limited to live
-  cards on boards you can still read.
+  report on a project. The tools act as you and only ever reach projects you
+  own or that are shared with you, and the card list and stats are limited to
+  live cards on boards you can still read.
 - `kanso_move_card_to_board` — move a card to a column on a different board.
   Until now an agent could only move a card within its own board, so the only
   way across was to recreate it by hand on the target and delete the original.
@@ -63,6 +69,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A project you cannot reach now answers 404, the same as one that does not
+  exist, instead of 403. A write or owner action your share does not allow
+  answers 403.
 - `kanso_get_board` returns the board's own `description` — what the board is
   for, its scope, its house rules — and `kanso_update_board` takes a
   `description` argument to write it (markdown, up to 4000 characters, `""`

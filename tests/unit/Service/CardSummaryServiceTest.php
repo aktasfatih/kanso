@@ -424,7 +424,7 @@ class CardSummaryServiceTest extends TestCase {
 			new CardRelationMapper($db),
 			new RecurRuleMapper($db),
 			new CardRunningTimerMapper($db),
-			new ProjectCardMapper($db, $scope),
+			new ProjectCardMapper($db, $scope, $this->createMock(\OCA\Kanso\Access\ProjectAccess::class)),
 			$scope,
 		);
 

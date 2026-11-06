@@ -57,6 +57,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					data-test="project-start-date"
 					:value="plan.startDate ?? ''"
 					:max="plan.targetDate ?? undefined"
+					:disabled="readOnly"
 					@change="emit('update-dates', { startDate: $event.target.value })">
 			</div>
 
@@ -69,6 +70,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					data-test="project-target-date"
 					:value="plan.targetDate ?? ''"
 					:min="plan.startDate ?? undefined"
+					:disabled="readOnly"
 					@change="emit('update-dates', { targetDate: $event.target.value })">
 				<span v-if="daysLeftLabel" class="health__sub" :class="{ 'health__sub--late': plan.daysLeft < 0 }">{{ daysLeftLabel }}</span>
 			</div>
@@ -103,6 +105,7 @@ const props = defineProps({
 	plan: { type: Object, required: true },
 	projectId: { type: [String, Number], required: true },
 	error: { type: String, default: '' },
+	readOnly: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update-dates'])

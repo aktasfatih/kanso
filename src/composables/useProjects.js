@@ -17,13 +17,17 @@ import { createToggleQueue } from './useToggleQueue.js'
 /**
  * Composable for the projects list — create / update / delete mutations
  * all invalidate ['projects'] so every consumer stays in sync.
+ *
+ * @param {object} [options]
+ * @param {number|false} [options.refetchInterval] poll interval, for a view that must notice access changes
  */
-export function useProjects() {
+export function useProjects({ refetchInterval = false } = {}) {
 	const queryClient = useQueryClient()
 
 	const query = useQuery({
 		queryKey: ['projects'],
 		queryFn: apiGetProjects,
+		refetchInterval,
 	})
 
 	const create = useMutation({
@@ -153,9 +157,8 @@ export function useCardProjects() {
 			? apiAddCardToProject(projectId, Number(cardId))
 			: apiRemoveCardFromProject(projectId, Number(cardId)),
 		// No optimistic patch, deliberately: the card detail carries `projectIds`
-		// and the project page carries its own card list, and a project is the
-		// viewer's OWN collection that another member's board rights cannot be
-		// inferred from (see the picker's comment in CardDetail.vue). The settle
+		// and the project page carries its own card list, and what each viewer
+		// sees of a project depends on their own boards. The settle
 		// invalidation below is the only writer, so there is no snapshot to roll
 		// back and no window in which a rollback could resurrect a stale id.
 		onSettled: (_data, _err, { cardId, projectId }) => {
