@@ -15,10 +15,6 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\Change;
 use OCP\AppFramework\Db\DoesNotExistException;
-use OCP\IGroupManager;
-use OCP\IUser;
-use OCP\IUserManager;
-use OCP\Share\IManager as IShareManager;
 
 /**
  * Board sharing (ACL) management. SHARE lets a user hand out or adjust
@@ -29,18 +25,13 @@ use OCP\Share\IManager as IShareManager;
  * log so shared boards delta-sync their member lists like any other entity.
  */
 class AclService {
-	private const SEARCH_LIMIT = 25;
-	private const MIN_QUERY_LENGTH = 2;
-
 	public function __construct(
 		private AclMapper $aclMapper,
 		private BoardMapper $boardMapper,
 		private CardAssigneeMapper $cardAssigneeMapper,
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
-		private IUserManager $userManager,
-		private IGroupManager $groupManager,
-		private IShareManager $shareManager,
+		private ShareeSearchService $shareeSearch,
 	) {
 	}
 
@@ -74,14 +65,9 @@ class AclService {
 			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
 		}
 
+		$participant = $this->shareeSearch->resolveParticipant($type, $participant, $actorUid);
 		if ($type === Acl::TYPE_USER && $participant === $board->getOwner()) {
 			throw new InvalidInputException('Cannot share a board with its owner');
-		}
-		if ($type === Acl::TYPE_USER && !$this->userManager->userExists($participant)) {
-			throw new InvalidInputException('User does not exist');
-		}
-		if ($type === Acl::TYPE_GROUP && !$this->groupManager->groupExists($participant)) {
-			throw new InvalidInputException('Group does not exist');
 		}
 
 		$this->assertNoEscalation($board, $actorUid, $permission);
@@ -142,7 +128,8 @@ class AclService {
 	 * @throws NotPermittedException if the actor may not share the board, or
 	 *                               lacks MANAGE and flips bits beyond their own or the role
 	 * @throws InvalidInputException on unknown permission bits, an unknown
-	 *                               role, or a rule of another board
+	 *                               role, a rule of another board, or added bits
+	 *                               for a target the actor may no longer share with
 	 */
 	public function update(int $boardId, int $aclId, int $permission, string $actorUid, ?string $role = null): Acl {
 		$board = $this->loadBoard($boardId);
@@ -151,6 +138,9 @@ class AclService {
 		$acl = $this->loadAcl($boardId, $aclId);
 		$permission = $this->validateMask($permission);
 		$this->assertNoEscalation($board, $actorUid, $permission ^ $acl->getPermission());
+		if (($permission & ~$acl->getPermission()) !== 0) {
+			$this->shareeSearch->resolveParticipant($acl->getParticipantType(), (string)$acl->getParticipant(), $actorUid);
+		}
 
 		if ($role !== null) {
 			$role = $this->parseRole($role);
@@ -225,23 +215,6 @@ class AclService {
 	 * not already shared with. The owner is excluded too - sharing with
 	 * them is rejected by create().
 	 *
-	 * The instance share-restriction settings are honored so a locked-down
-	 * instance is not silently enumerable through the board share dialog.
-	 * This mirrors how Nextcloud core filters its own collaborator picker
-	 * (OC\Collaboration\Collaborators\UserPlugin / GroupPlugin) using the
-	 * platform's own flags via OCP\Share\IManager - no hand-rolled policy:
-	 *   - a server-side 2-char floor on $q (defence in depth over the client);
-	 *   - user results only when enumeration is allowed, with an exact
-	 *     UID/display-name match still surfacing under allowEnumerationFullMatch;
-	 *   - enumeration limited to the actor's own groups when
-	 *     limitEnumerationToGroups() or shareWithGroupMembersOnly() is set
-	 *     (minus the shareWithGroupMembersOnly exclude list);
-	 *   - group results suppressed entirely when group sharing is disabled,
-	 *     and intersected with the actor's groups under the same group-only
-	 *     restrictions.
-	 * Phonebook/email full-match backends are intentionally out of scope -
-	 * disproportionate for a board share picker.
-	 *
 	 * @return list<array{id: string, displayName: string, type: string}>
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not share the board
@@ -250,9 +223,7 @@ class AclService {
 		$board = $this->loadBoard($boardId);
 		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_SHARE);
 
-		// Server-side floor: never enumerate on a near-empty query, even if a
-		// client skips its own guard.
-		if (mb_strlen(trim($q)) < self::MIN_QUERY_LENGTH) {
+		if (!$this->shareeSearch->isSearchable($q)) {
 			return [];
 		}
 
@@ -266,135 +237,7 @@ class AclService {
 			}
 		}
 
-		return array_merge(
-			$this->searchUsers($q, $actorUid, $excludedUsers),
-			$this->searchGroups($q, $actorUid, $excludedGroups),
-		);
-	}
-
-	/**
-	 * User half of the share-dialog search, gated by the instance enumeration
-	 * settings. Mirrors core's UserPlugin.
-	 *
-	 * @param array<string, true> $excludedUsers uids already shared / the owner
-	 * @return list<array{id: string, displayName: string, type: string}>
-	 */
-	private function searchUsers(string $q, string $actorUid, array $excludedUsers): array {
-		$enumerationAllowed = $this->shareManager->allowEnumeration();
-		$fullMatch = $this->shareManager->allowEnumerationFullMatch();
-		if (!$enumerationAllowed && !$fullMatch) {
-			// Enumeration off and no full-match exception - surface nothing.
-			return [];
-		}
-
-		// Two independent group restrictions, mirroring core's UserPlugin:
-		//   - limitEnumerationToGroups() narrows only *wide* enumeration hits to
-		//     the actor's own groups; an exact full match is exempt.
-		//   - shareWithGroupMembersOnly() is a hard filter over *every* result
-		//     (wide or exact), and honours its own exclude-group list.
-		$limitToGroups = $enumerationAllowed && $this->shareManager->limitEnumerationToGroups();
-		$membersOnly = $this->shareManager->shareWithGroupMembersOnly();
-
-		$enumerationGroups = $limitToGroups ? $this->actorGroupSet($actorUid, false) : null;
-		$membersOnlyGroups = $membersOnly ? $this->actorGroupSet($actorUid, true) : null;
-
-		$lowerQ = mb_strtolower(trim($q));
-		$results = [];
-		foreach ($this->userManager->searchDisplayName($q, self::SEARCH_LIMIT) as $user) {
-			$uid = $user->getUID();
-			if (isset($excludedUsers[$uid])) {
-				continue;
-			}
-			$isExact = mb_strtolower($uid) === $lowerQ
-				|| mb_strtolower($user->getDisplayName()) === $lowerQ;
-			// A wide (non-exact) hit only survives when enumeration is on; when
-			// it is off, only an exact full match (if enabled) passes.
-			if (!$isExact && !$enumerationAllowed) {
-				continue;
-			}
-			// limitEnumerationToGroups applies to wide hits only.
-			if ($enumerationGroups !== null && !$isExact && !$this->sharesGroup($user, $enumerationGroups)) {
-				continue;
-			}
-			// shareWithGroupMembersOnly applies to all hits, exact included.
-			if ($membersOnlyGroups !== null && !$this->sharesGroup($user, $membersOnlyGroups)) {
-				continue;
-			}
-			$results[] = [
-				'id' => $uid,
-				'displayName' => $user->getDisplayName(),
-				'type' => 'user',
-			];
-		}
-		return $results;
-	}
-
-	/**
-	 * The actor's group ids as a lookup set. When $applyExcludeList is set the
-	 * shareWithGroupMembersOnly exclude-group list is removed, matching core's
-	 * treatment of that restriction.
-	 *
-	 * @return array<string, true>
-	 */
-	private function actorGroupSet(string $actorUid, bool $applyExcludeList): array {
-		$actor = $this->userManager->get($actorUid);
-		$groups = $actor !== null ? $this->groupManager->getUserGroupIds($actor) : [];
-		if ($applyExcludeList) {
-			$groups = array_diff($groups, $this->shareManager->shareWithGroupMembersOnlyExcludeGroupsList());
-		}
-		return array_fill_keys($groups, true);
-	}
-
-	/**
-	 * Group half of the share-dialog search. Suppressed entirely when group
-	 * sharing is disabled, and intersected with the actor's own groups under
-	 * the group-only restrictions. Mirrors core's GroupPlugin.
-	 *
-	 * @param array<string, true> $excludedGroups gids already shared
-	 * @return list<array{id: string, displayName: string, type: string}>
-	 */
-	private function searchGroups(string $q, string $actorUid, array $excludedGroups): array {
-		if (!$this->shareManager->allowGroupSharing()) {
-			return [];
-		}
-
-		$membersOnly = $this->shareManager->shareWithGroupMembersOnly();
-		$restrictToActorGroups = $membersOnly || $this->shareManager->limitEnumerationToGroups();
-		// The exclude-group list only bites under shareWithGroupMembersOnly,
-		// matching core's GroupPlugin.
-		$allowedGroups = $restrictToActorGroups ? $this->actorGroupSet($actorUid, $membersOnly) : null;
-
-		$results = [];
-		foreach ($this->groupManager->search($q, self::SEARCH_LIMIT) as $group) {
-			$gid = $group->getGID();
-			if (isset($excludedGroups[$gid])) {
-				continue;
-			}
-			if ($allowedGroups !== null && !isset($allowedGroups[$gid])) {
-				continue;
-			}
-			$displayName = $group->getDisplayName();
-			$results[] = [
-				'id' => $gid,
-				'displayName' => $displayName === '' ? $gid : $displayName,
-				'type' => 'group',
-			];
-		}
-		return $results;
-	}
-
-	/**
-	 * Whether $user is a member of any group in the allowed set.
-	 *
-	 * @param array<string, true> $allowedGroups
-	 */
-	private function sharesGroup(IUser $user, array $allowedGroups): bool {
-		foreach ($this->groupManager->getUserGroupIds($user) as $gid) {
-			if (isset($allowedGroups[$gid])) {
-				return true;
-			}
-		}
-		return false;
+		return $this->shareeSearch->search($q, $actorUid, $excludedUsers, $excludedGroups);
 	}
 
 	/**

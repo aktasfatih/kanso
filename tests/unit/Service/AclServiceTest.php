@@ -19,7 +19,9 @@ use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
+use OCA\Kanso\Service\ShareeSearchService;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IAppConfig;
 use OCP\IGroup;
 use OCP\IGroupManager;
 use OCP\IUser;
@@ -52,6 +54,7 @@ class AclServiceTest extends TestCase {
 		// Default to a fully open instance (enumeration on, no group-only
 		// restriction, group sharing allowed) - the pre-hardening behaviour.
 		// Individual tests override these to drive the config-flag matrix.
+		$this->shareManager->method('shareApiEnabled')->willReturn(true);
 		$this->shareManager->method('allowEnumeration')->willReturn(true);
 		$this->shareManager->method('allowEnumerationFullMatch')->willReturn(true);
 		$this->shareManager->method('limitEnumerationToGroups')->willReturn(false);
@@ -64,10 +67,14 @@ class AclServiceTest extends TestCase {
 			$this->cardAssigneeMapper,
 			$this->changeNotifier,
 			$this->permissionService,
-			$this->userManager,
-			$this->groupManager,
-			$this->shareManager
+			new ShareeSearchService($this->userManager, $this->groupManager, $this->shareManager, $this->appConfig())
 		);
+	}
+
+	private function appConfig(): IAppConfig {
+		$config = $this->createMock(IAppConfig::class);
+		$config->method('getValueString')->willReturnArgument(2);
+		return $config;
 	}
 
 	private function board(int $id = 1): Board {
@@ -99,7 +106,7 @@ class AclServiceTest extends TestCase {
 		$this->permissionService->method('getPermissions')
 			->with($board, 'alice')
 			->willReturn(PermissionService::PERMISSION_ALL);
-		$this->userManager->method('userExists')->with('bob')->willReturn(true);
+		$this->userManager->method('get')->with('bob')->willReturn($this->user('bob', 'Bob'));
 		$this->aclMapper->method('findByParticipant')
 			->with(1, Acl::TYPE_USER, 'bob')
 			->willReturn(null);
@@ -141,8 +148,8 @@ class AclServiceTest extends TestCase {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
-		$this->groupManager->method('groupExists')->with('devs')->willReturn(true);
-		$this->userManager->expects(self::never())->method('userExists');
+		$this->groupManager->method('get')->with('devs')->willReturn($this->group('devs', 'Devs'));
+		$this->userManager->expects(self::never())->method('get');
 		$this->aclMapper->method('findByParticipant')
 			->with(1, Acl::TYPE_GROUP, 'devs')
 			->willReturn(null);
@@ -163,7 +170,7 @@ class AclServiceTest extends TestCase {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
-		$this->userManager->method('userExists')->with('bob')->willReturn(true);
+		$this->userManager->method('get')->with('bob')->willReturn($this->user('bob', 'Bob'));
 		$this->aclMapper->method('findByParticipant')->willReturn(null);
 		$this->aclMapper->expects(self::once())
 			->method('insert')
@@ -210,7 +217,7 @@ class AclServiceTest extends TestCase {
 				| PermissionService::PERMISSION_EDIT
 				| PermissionService::PERMISSION_SHARE
 			);
-		$this->userManager->method('userExists')->with('bob')->willReturn(true);
+		$this->userManager->method('get')->with('bob')->willReturn($this->user('bob', 'Bob'));
 		$this->aclMapper->expects(self::never())->method('insert');
 		$this->changeNotifier->expects(self::never())->method('notify');
 
@@ -228,7 +235,7 @@ class AclServiceTest extends TestCase {
 				| PermissionService::PERMISSION_EDIT
 				| PermissionService::PERMISSION_SHARE
 			);
-		$this->userManager->method('userExists')->with('bob')->willReturn(true);
+		$this->userManager->method('get')->with('bob')->willReturn($this->user('bob', 'Bob'));
 		$this->aclMapper->method('findByParticipant')->willReturn(null);
 		$this->aclMapper->expects(self::once())
 			->method('insert')
@@ -269,6 +276,7 @@ class AclServiceTest extends TestCase {
 	public function testCreateRejectsBoardOwnerAsParticipant(): void {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->userManager->method('get')->with('alice')->willReturn($this->user('alice', 'Alice'));
 		$this->aclMapper->expects(self::never())->method('insert');
 
 		$this->expectException(InvalidInputException::class);
@@ -276,25 +284,49 @@ class AclServiceTest extends TestCase {
 		$this->service->create(1, 'alice', 'user', PermissionService::PERMISSION_READ, 'alice');
 	}
 
-	public function testCreateRejectsNonexistentUser(): void {
-		$board = $this->board();
-		$this->boardMapper->method('find')->with(1)->willReturn($board);
-		$this->userManager->method('userExists')->with('ghost')->willReturn(false);
+	public function testCreateRejectsTheBoardOwnerThroughACaseVariant(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->userManager->method('get')->with('ALICE')->willReturn($this->user('alice', 'Alice'));
 		$this->aclMapper->expects(self::never())->method('insert');
 
 		$this->expectException(InvalidInputException::class);
-		$this->expectExceptionMessage('User does not exist');
+		$this->expectExceptionMessage('Cannot share a board with its owner');
+		$this->service->create(1, 'ALICE', 'user', PermissionService::PERMISSION_READ, 'alice');
+	}
+
+	public function testCreateStoresTheCanonicalUid(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+		$this->userManager->method('get')->with('BOB')->willReturn($this->user('bob', 'Bob'));
+		$this->aclMapper->method('findByParticipant')->with(1, Acl::TYPE_USER, 'bob')->willReturn(null);
+		$this->aclMapper->expects(self::once())->method('insert')->willReturnCallback(static function (Acl $acl): Acl {
+			$acl->setId(40);
+			return $acl;
+		});
+		$this->changeNotifier->method('notify')->willReturn(new Change());
+
+		self::assertSame('bob', $this->service->create(1, 'BOB', 'user', PermissionService::PERMISSION_READ, 'alice')->getParticipant());
+	}
+
+	public function testCreateRejectsNonexistentUser(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->userManager->method('get')->with('ghost')->willReturn(null);
+		$this->aclMapper->expects(self::never())->method('insert');
+
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('Cannot share with this participant');
 		$this->service->create(1, 'ghost', 'user', PermissionService::PERMISSION_READ, 'alice');
 	}
 
 	public function testCreateRejectsNonexistentGroup(): void {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
-		$this->groupManager->method('groupExists')->with('ghosts')->willReturn(false);
+		$this->groupManager->method('get')->with('ghosts')->willReturn(null);
 		$this->aclMapper->expects(self::never())->method('insert');
 
 		$this->expectException(InvalidInputException::class);
-		$this->expectExceptionMessage('Group does not exist');
+		$this->expectExceptionMessage('Cannot share with this participant');
 		$this->service->create(1, 'ghosts', 'group', PermissionService::PERMISSION_READ, 'alice');
 	}
 
@@ -302,7 +334,7 @@ class AclServiceTest extends TestCase {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
-		$this->userManager->method('userExists')->with('bob')->willReturn(true);
+		$this->userManager->method('get')->with('bob')->willReturn($this->user('bob', 'Bob'));
 		$this->aclMapper->method('findByParticipant')
 			->with(1, Acl::TYPE_USER, 'bob')
 			->willReturn($this->acl());
@@ -318,7 +350,7 @@ class AclServiceTest extends TestCase {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
-		$this->userManager->method('userExists')->with('bob')->willReturn(true);
+		$this->userManager->method('get')->with('bob')->willReturn($this->user('bob', 'Bob'));
 		$this->aclMapper->method('findByParticipant')->willReturn(null);
 		$uniqueViolation = $this->createMock(\OCP\DB\Exception::class);
 		$uniqueViolation->method('getReason')
@@ -349,7 +381,7 @@ class AclServiceTest extends TestCase {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
-		$this->userManager->method('userExists')->with('bob')->willReturn(true);
+		$this->userManager->method('get')->with('bob')->willReturn($this->user('bob', 'Bob'));
 		$this->aclMapper->method('findByParticipant')->willReturn(null);
 		$this->aclMapper->expects(self::once())
 			->method('insert')
@@ -385,7 +417,7 @@ class AclServiceTest extends TestCase {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
-		$this->userManager->method('userExists')->with('bob')->willReturn(true);
+		$this->userManager->method('get')->with('bob')->willReturn($this->user('bob', 'Bob'));
 		$this->aclMapper->method('findByParticipant')->willReturn(null);
 		$this->aclMapper->expects(self::once())
 			->method('insert')
@@ -420,6 +452,7 @@ class AclServiceTest extends TestCase {
 			->with($board, 'alice')
 			->willReturn(PermissionService::PERMISSION_ALL);
 		$this->aclMapper->method('find')->with(40)->willReturn($this->acl());
+		$this->userManager->method('get')->with('bob')->willReturn($this->user('bob', 'Bob'));
 		$this->aclMapper->expects(self::once())
 			->method('update')
 			->willReturnCallback(static function (Acl $acl): Acl {
@@ -453,6 +486,7 @@ class AclServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
 		$this->aclMapper->method('find')->with(40)->willReturn($this->acl());
+		$this->userManager->method('get')->with('bob')->willReturn($this->user('bob', 'Bob'));
 		$this->aclMapper->expects(self::once())
 			->method('update')
 			->willReturnCallback(static function (Acl $acl): Acl {
@@ -554,6 +588,41 @@ class AclServiceTest extends TestCase {
 
 		$acl = $this->service->update(1, 40, $existingMask, 'carol');
 		self::assertSame($existingMask, $acl->getPermission());
+	}
+
+	private function stubUpdateOf(Acl $stored): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
+		$this->aclMapper->method('find')->with(40)->willReturn($stored);
+	}
+
+	public function testUpdateRaisingBitsRechecksTheSharingPolicy(): void {
+		$this->stubUpdateOf($this->acl());
+		$this->userManager->method('get')->with('bob')->willReturn(null);
+		$this->aclMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(1, 40, PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT, 'alice');
+	}
+
+	public function testUpdateLoweringBitsOfAMissingUserIsAllowed(): void {
+		$this->stubUpdateOf($this->acl(40, 1, 'bob', Acl::TYPE_USER, PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT));
+		$this->userManager->expects(self::never())->method('get');
+		$this->aclMapper->expects(self::once())->method('update')->willReturnArgument(0);
+
+		self::assertSame(PermissionService::PERMISSION_READ, $this->service->update(1, 40, PermissionService::PERMISSION_READ, 'alice')->getPermission());
+	}
+
+	public function testUpdateChangingOnlyTheRoleOfAMissingUserIsAllowed(): void {
+		$this->stubUpdateOf($this->acl());
+		$this->userManager->expects(self::never())->method('get');
+		$this->aclMapper->expects(self::once())->method('update')->willReturnArgument(0);
+
+		self::assertSame(
+			ViewerContext::ROLE_EXTERNAL,
+			$this->service->update(1, 40, PermissionService::PERMISSION_READ, 'alice', ViewerContext::ROLE_EXTERNAL)->getRole()
+		);
 	}
 
 	// ---- update: member role (#3742) --------------------------------------
@@ -776,6 +845,7 @@ class AclServiceTest extends TestCase {
 
 	private function user(string $uid, string $displayName): IUser&MockObject {
 		$user = $this->createMock(IUser::class);
+		$user->method('isEnabled')->willReturn(true);
 		$user->method('getUID')->willReturn($uid);
 		$user->method('getDisplayName')->willReturn($displayName);
 		return $user;
@@ -882,6 +952,7 @@ class AclServiceTest extends TestCase {
 		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
 		// Enumeration off, full-match off, group sharing off: nothing at all.
 		$share = $this->createMock(IShareManager::class);
+		$share->method('shareApiEnabled')->willReturn(true);
 		$share->method('allowEnumeration')->willReturn(false);
 		$share->method('allowEnumerationFullMatch')->willReturn(false);
 		$share->method('limitEnumerationToGroups')->willReturn(false);
@@ -900,6 +971,7 @@ class AclServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
 		$share = $this->createMock(IShareManager::class);
+		$share->method('shareApiEnabled')->willReturn(true);
 		$share->method('allowEnumeration')->willReturn(false);
 		$share->method('allowEnumerationFullMatch')->willReturn(true);
 		$share->method('limitEnumerationToGroups')->willReturn(false);
@@ -909,8 +981,10 @@ class AclServiceTest extends TestCase {
 		$service = $this->serviceWithShareManager($share);
 		// 'bob' is an exact uid match; 'bobby' is only a prefix hit and must
 		// be dropped because wide enumeration is off.
+		$bob = $this->user('bob', 'Bob Baker');
+		$this->userManager->method('get')->with('bob')->willReturn($bob);
 		$this->userManager->method('searchDisplayName')->with('bob', 25)->willReturn([
-			$this->user('bob', 'Bob Baker'),
+			$bob,
 			$this->user('bobby', 'Bobby Tables'),
 		]);
 		$this->groupManager->method('search')->with('bob', 25)->willReturn([]);
@@ -925,6 +999,7 @@ class AclServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
 		$share = $this->createMock(IShareManager::class);
+		$share->method('shareApiEnabled')->willReturn(true);
 		$share->method('allowEnumeration')->willReturn(false);
 		$share->method('allowEnumerationFullMatch')->willReturn(true);
 		$share->method('limitEnumerationToGroups')->willReturn(false);
@@ -948,6 +1023,7 @@ class AclServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
 		$share = $this->createMock(IShareManager::class);
+		$share->method('shareApiEnabled')->willReturn(true);
 		$share->method('allowEnumeration')->willReturn(true);
 		$share->method('allowEnumerationFullMatch')->willReturn(true);
 		$share->method('limitEnumerationToGroups')->willReturn(false);
@@ -959,7 +1035,7 @@ class AclServiceTest extends TestCase {
 		$actor = $this->user('alice', 'Alice Adams');
 		$bob = $this->user('bob', 'Bob Baker'); // shares 'devs'
 		$carol = $this->user('carol', 'Carol Cook'); // no overlap
-		$this->userManager->method('get')->with('alice')->willReturn($actor);
+		$this->userManager->method('get')->willReturnMap([['alice', $actor]]);
 		$this->groupManager->method('getUserGroupIds')->willReturnMap([
 			[$actor, ['devs', 'qa']],
 			[$bob, ['devs']],
@@ -978,6 +1054,7 @@ class AclServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
 		$share = $this->createMock(IShareManager::class);
+		$share->method('shareApiEnabled')->willReturn(true);
 		$share->method('allowEnumeration')->willReturn(true);
 		$share->method('allowEnumerationFullMatch')->willReturn(true);
 		// Enumeration is narrowed to the actor's groups, but an EXACT full
@@ -993,7 +1070,8 @@ class AclServiceTest extends TestCase {
 		// returned. 'carla' is only a wide hit outside alice's groups - dropped.
 		$carol = $this->user('carol', 'Carol Cook');
 		$carla = $this->user('carla', 'Carla King');
-		$this->userManager->method('get')->with('alice')->willReturn($actor);
+		$this->userManager->method('get')->willReturnMap([['alice', $actor], ['carol', $carol]]);
+		$this->groupManager->method('displayNamesInGroup')->willReturn([]);
 		$this->groupManager->method('getUserGroupIds')->willReturnMap([
 			[$actor, ['devs']],
 			[$carol, ['ops']],
@@ -1012,6 +1090,7 @@ class AclServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
 		$share = $this->createMock(IShareManager::class);
+		$share->method('shareApiEnabled')->willReturn(true);
 		$share->method('allowEnumeration')->willReturn(true);
 		$share->method('allowEnumerationFullMatch')->willReturn(true);
 		$share->method('limitEnumerationToGroups')->willReturn(false);
@@ -1025,7 +1104,7 @@ class AclServiceTest extends TestCase {
 		$actor = $this->user('alice', 'Alice Adams');
 		$bob = $this->user('bob', 'Bob Baker');
 		$dave = $this->user('dave', 'Dave Doe');
-		$this->userManager->method('get')->with('alice')->willReturn($actor);
+		$this->userManager->method('get')->willReturnMap([['alice', $actor]]);
 		$this->groupManager->method('getUserGroupIds')->willReturnMap([
 			[$actor, ['devs', 'qa']],
 			[$bob, ['devs']],
@@ -1044,6 +1123,7 @@ class AclServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
 		$share = $this->createMock(IShareManager::class);
+		$share->method('shareApiEnabled')->willReturn(true);
 		$share->method('allowEnumeration')->willReturn(true);
 		$share->method('allowEnumerationFullMatch')->willReturn(true);
 		$share->method('limitEnumerationToGroups')->willReturn(false);
@@ -1067,6 +1147,7 @@ class AclServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		$this->aclMapper->method('findByBoard')->with(1)->willReturn([]);
 		$share = $this->createMock(IShareManager::class);
+		$share->method('shareApiEnabled')->willReturn(true);
 		$share->method('allowEnumeration')->willReturn(true);
 		$share->method('allowEnumerationFullMatch')->willReturn(true);
 		$share->method('limitEnumerationToGroups')->willReturn(false);
@@ -1076,7 +1157,7 @@ class AclServiceTest extends TestCase {
 		$service = $this->serviceWithShareManager($share);
 
 		$actor = $this->user('alice', 'Alice Adams');
-		$this->userManager->method('get')->with('alice')->willReturn($actor);
+		$this->userManager->method('get')->willReturnMap([['alice', $actor]]);
 		$this->groupManager->method('getUserGroupIds')->with($actor)->willReturn(['devs']);
 		$this->userManager->method('searchDisplayName')->with('de', 25)->willReturn([]);
 		// 'devs' is the actor's group and passes; 'design' is not and is dropped.
@@ -1097,9 +1178,7 @@ class AclServiceTest extends TestCase {
 			$this->cardAssigneeMapper,
 			$this->changeNotifier,
 			$this->permissionService,
-			$this->userManager,
-			$this->groupManager,
-			$share
+			new ShareeSearchService($this->userManager, $this->groupManager, $share, $this->appConfig())
 		);
 	}
 }
