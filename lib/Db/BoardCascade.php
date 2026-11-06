@@ -144,6 +144,7 @@ class BoardCascade {
 	 *  - kanso_board_groups: a USER's folders of boards (keyed by uid). The
 	 *    folder outlives any board filed into it; only the membership rows
 	 *    (kanso_board_group_members) are board-scoped.
+	 *  - kanso_project_shares: a project's sharing rules.
 	 *  - kanso_projects: cross-board project records owned by a user; a project
 	 *    spans boards, so only its card links (kanso_project_cards) go.
 	 *  - kanso_project_comments: hang off a project, not off a board.
@@ -155,6 +156,7 @@ class BoardCascade {
 		'kanso_projects',
 		'kanso_project_comments',
 		'kanso_project_pins',
+		'kanso_project_shares',
 	];
 
 	public function __construct(

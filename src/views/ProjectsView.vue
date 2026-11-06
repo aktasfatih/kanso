@@ -65,6 +65,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<PinOutlineIcon v-else :size="18" />
 					</button>
 				</div>
+				<span v-if="project.shared" class="projects-view__shared" data-test="project-tile-shared">
+					<AccountMultipleIcon :size="14" />
+					{{ project.isOwner ? t('kanso', 'Shared') : t('kanso', 'Shared by {owner}', { owner: project.ownerDisplayName }, { escape: false, sanitize: false }) }}
+				</span>
 				<span v-if="project.description" class="projects-view__project-desc">{{ project.description }}</span>
 
 				<template v-if="plans[project.id]">
@@ -180,6 +184,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
+import AccountMultipleIcon from 'vue-material-design-icons/AccountMultiple.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import PinIcon from 'vue-material-design-icons/Pin.vue'
 import PinOutlineIcon from 'vue-material-design-icons/PinOutline.vue'
@@ -275,6 +280,14 @@ function openProject(project) {
 </script>
 
 <style scoped>
+.projects-view__shared {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.85em;
+}
+
 .projects-view {
 	padding: 20px 32px 32px 52px;
 	max-width: 1600px;

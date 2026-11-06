@@ -221,6 +221,12 @@ return [
 		['name' => 'project#unpin', 'url' => '/api/projects/{id}/pin', 'verb' => 'DELETE'],
 		['name' => 'project#addCard', 'url' => '/api/projects/{id}/cards/{cardId}', 'verb' => 'PUT'],
 		['name' => 'project#removeCard', 'url' => '/api/projects/{id}/cards/{cardId}', 'verb' => 'DELETE'],
+		['name' => 'projectShare#index', 'url' => '/api/projects/{id}/shares', 'verb' => 'GET'],
+		['name' => 'projectShare#create', 'url' => '/api/projects/{id}/shares', 'verb' => 'POST'],
+		['name' => 'projectShare#search', 'url' => '/api/projects/{id}/shares/search', 'verb' => 'GET'],
+		['name' => 'projectShare#leave', 'url' => '/api/projects/{id}/shares/me', 'verb' => 'DELETE'],
+		['name' => 'projectShare#update', 'url' => '/api/projects/{id}/shares/{shareId}', 'verb' => 'PATCH'],
+		['name' => 'projectShare#destroy', 'url' => '/api/projects/{id}/shares/{shareId}', 'verb' => 'DELETE'],
 
 		['name' => 'activity#index', 'url' => '/api/cards/{cardId}/activity', 'verb' => 'GET'],
 
@@ -343,7 +349,7 @@ return [
 		['name' => 'commentReaction#react', 'url' => '/api/comments/{commentId}/reactions/{emoji}', 'verb' => 'PUT'],
 		['name' => 'commentReaction#unreact', 'url' => '/api/comments/{commentId}/reactions/{emoji}', 'verb' => 'DELETE'],
 
-		// Project comments — an owner-only personal discussion log (#3563). The
+		// Project comments — a discussion thread on a project. The
 		// update/destroy paths are scoped under /api/project-comments so they never
 		// collide with the card-comment /api/comments/{commentId} routes above.
 		['name' => 'projectComment#index', 'url' => '/api/projects/{projectId}/comments', 'verb' => 'GET'],

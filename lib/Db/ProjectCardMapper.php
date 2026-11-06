@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Db;
 
+use OCA\Kanso\Access\ProjectAccess;
 use OCA\Kanso\Service\CardVisibilityScope;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\Exception;
@@ -22,6 +23,7 @@ class ProjectCardMapper extends QBMapper {
 	public function __construct(
 		IDBConnection $db,
 		private CardVisibilityScope $visibilityScope,
+		private ProjectAccess $projectAccess,
 	) {
 		parent::__construct($db, 'kanso_project_cards', ProjectCard::class);
 	}
@@ -89,16 +91,12 @@ class ProjectCardMapper extends QBMapper {
 	}
 
 	/**
-	 * The ids of the VIEWER'S OWN projects a card belongs to - powers the
-	 * `projectIds` list on card detail.
+	 * The ids of the projects a card belongs to that the viewer can reach -
+	 * powers the `projectIds` list on card detail.
 	 *
-	 * Scoped by owner (#10737): projects are private, owner-only collections
-	 * (there is no sharing/ACL table - see {@see \OCA\Kanso\Service\ProjectService}),
-	 * and collecting a card needs only READ on its board, so an unscoped list
-	 * told every reader of a shared card how many OTHER people had filed it into
-	 * their private collections. The join to `kanso_projects` keeps the query at
-	 * one round trip; "the projects the viewer may see" is exactly "the projects
-	 * the viewer owns".
+	 * Scoped to the viewer: collecting a card needs only READ on its
+	 * board, so an unscoped list would tell every reader of a shared card how
+	 * many OTHER people had filed it into their projects.
 	 *
 	 * @return int[]
 	 * @throws Exception
@@ -109,8 +107,8 @@ class ProjectCardMapper extends QBMapper {
 			->from($this->getTableName(), 'pc')
 			->innerJoin('pc', 'kanso_projects', 'p', $qb->expr()->eq('pc.project_id', 'p.id'))
 			->where($qb->expr()->eq('pc.card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->eq('p.owner', $qb->createNamedParameter($uid)))
 			->orderBy('pc.project_id', 'ASC');
+		$this->projectAccess->restrict($qb, 'p', $uid);
 
 		$result = $qb->executeQuery();
 		$ids = [];
@@ -123,22 +121,42 @@ class ProjectCardMapper extends QBMapper {
 	}
 
 	/**
-	 * The viewer's OWN project ids for every non-deleted card on a board, as
-	 * one query joining through `kanso_cards` and `kanso_projects` - the board
-	 * payload stays a fixed number of queries no matter how many cards are
-	 * collected into projects.
-	 *
-	 * Scoped by owner, exactly like {@see self::findProjectIdsByCard()}:
-	 * projects are private, owner-only collections, and a card is readable by
-	 * anyone on the board - an unscoped list would leak that OTHER people filed
-	 * the card into their private collections. "The projects the viewer may see"
-	 * is exactly "the projects the viewer owns".
+	 * The project ids the viewer can reach for every non-deleted card on a
+	 * board, as one query joining through `kanso_cards` and `kanso_projects` -
+	 * the board payload stays a fixed number of queries no matter how many cards
+	 * are collected into projects. Scoped like {@see self::findProjectIdsByCard()}.
 	 *
 	 * @return array<int, int[]> map of cardId => projectIds in membership order
 	 * @throws Exception
 	 */
 	public function findProjectIdsByBoard(int $boardId, string $uid): array {
 		return $this->findProjectIdsByBoards([$boardId], $uid);
+	}
+
+	/**
+	 * A validator over what the viewer sees of project memberships on a board,
+	 * for the board ETag: '' when there are none, so a board with no project
+	 * cards keeps its plain validator. Covers title, colour, membership and
+	 * reach, none of which move the board's change cursor.
+	 *
+	 * @throws Exception
+	 */
+	public function boardDigest(int $boardId, string $uid): string {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('pc.card_id', 'p.id', 'p.title', 'p.color')
+			->from($this->getTableName(), 'pc')
+			->innerJoin('pc', 'kanso_projects', 'p', $qb->expr()->eq('pc.project_id', 'p.id'))
+			->innerJoin('pc', 'kanso_cards', 'c', $qb->expr()->eq('pc.card_id', 'c.id'))
+			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('pc.id', 'ASC');
+		$this->projectAccess->restrict($qb, 'p', $uid);
+
+		$result = $qb->executeQuery();
+		$rows = $result->fetchAll();
+		$result->closeCursor();
+
+		return $rows === [] ? '' : md5((string)json_encode($rows));
 	}
 
 	/**
@@ -163,8 +181,8 @@ class ProjectCardMapper extends QBMapper {
 			->innerJoin('pc', 'kanso_cards', 'c', $qb->expr()->eq('pc.card_id', 'c.id'))
 			->where($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->eq('p.owner', $qb->createNamedParameter($uid)))
 			->orderBy('pc.id', 'ASC');
+		$this->projectAccess->restrict($qb, 'p', $uid);
 
 		$result = $qb->executeQuery();
 		$map = [];
@@ -194,8 +212,8 @@ class ProjectCardMapper extends QBMapper {
 	 * archived card counted as outstanding.
 	 *
 	 * Visibility (#3743): the scope runs on the joined card, so a collected
-	 * card that is hidden from the project owner (e.g. someone else's private
-	 * card that was public when collected) drops out of the list - and, since
+	 * card that is hidden from the viewer (e.g. someone else's private card
+	 * that was public when collected) drops out of the list - and, since
 	 * project stats aggregate over exactly this id set, out of every project
 	 * metric too.
 	 *

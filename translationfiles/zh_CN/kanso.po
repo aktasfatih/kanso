@@ -113,7 +113,7 @@ msgstr "{card} 现在是 {parent} 的子卡片"
 msgid "{card} moved to {stack}"
 msgstr "{card} 已移动到 {stack}"
 
-#: src/components/ProjectHealth.vue:167
+#: src/components/ProjectHealth.vue:170
 msgid "{count} blocked"
 msgid_plural "{count} blocked"
 msgstr[0] "{count} 个被阻塞"
@@ -123,7 +123,7 @@ msgid "{count} card"
 msgid_plural "{count} cards"
 msgstr[0] "{count} 张卡片"
 
-#: src/components/ProjectHealth.vue:178
+#: src/components/ProjectHealth.vue:181
 msgid "{count} card has no estimate and counts as the typical estimate of {points}."
 msgid_plural "{count} cards have no estimate and each counts as the typical estimate of {points}."
 msgstr[0] "{count} 张卡片没有估算，每张按典型估算值 {points} 计算。"
@@ -137,17 +137,17 @@ msgid "{count} character left"
 msgid_plural "{count} characters left"
 msgstr[0] "还剩 {count} 个字符"
 
-#: src/components/ProjectHealth.vue:158
+#: src/components/ProjectHealth.vue:161
 msgid "{count} day ago"
 msgid_plural "{count} days ago"
 msgstr[0] "{count} 天前"
 
-#: src/components/ProjectHealth.vue:170
+#: src/components/ProjectHealth.vue:173
 msgid "{count} in progress"
 msgid_plural "{count} in progress"
 msgstr[0] "{count} 个进行中"
 
-#: src/components/ProjectHealth.vue:164
+#: src/components/ProjectHealth.vue:167
 msgid "{count} overdue"
 msgid_plural "{count} overdue"
 msgstr[0] "{count} 个已逾期"
@@ -178,7 +178,7 @@ msgstr "最早 {from}"
 msgid "{n} blocked"
 msgstr "{n} 张被阻塞"
 
-#: src/components/ProjectHealth.vue:136
+#: src/components/ProjectHealth.vue:139
 msgid "{n} card / week"
 msgid_plural "{n} cards / week"
 msgstr[0] "{n} 张卡片/周"
@@ -217,7 +217,7 @@ msgid "{n} point"
 msgid_plural "{n} points"
 msgstr[0] "{n} 点"
 
-#: src/components/ProjectHealth.vue:135
+#: src/components/ProjectHealth.vue:138
 msgid "{n} point / week"
 msgid_plural "{n} points / week"
 msgstr[0] "{n} 点/周"
@@ -377,7 +377,7 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:5098
+#: src/components/CardDetail.vue:5095
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
@@ -387,7 +387,7 @@ msgid "%n file"
 msgid_plural "%n files"
 msgstr[0] "%n 个文件"
 
-#: src/components/CardDetail.vue:5096
+#: src/components/CardDetail.vue:5093
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
@@ -412,7 +412,7 @@ msgid "%n label was not created and is missing from the imported cards: only boa
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
 msgstr[0] "有 %n 个标签未能创建，导入的卡片中缺少它们：只有看板管理者才能添加新标签。请让管理者添加，然后在卡片上设置它们。"
 
-#: src/components/CardDetail.vue:5094
+#: src/components/CardDetail.vue:5091
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -432,12 +432,12 @@ msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n 点"
 
-#: src/components/CardDetail.vue:1263
+#: src/components/CardDetail.vue:1258
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
 
-#: src/components/CardDetail.vue:2353
+#: src/components/CardDetail.vue:2350
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n 条回复"
@@ -484,6 +484,10 @@ msgstr "使用单独的账号只会改变占用谁的配额；要控制磁盘占
 #: src/components/BoardSettingsModal.vue
 msgid "Accept mail from (one address or @domain per line — leave empty to accept anyone)"
 msgstr "接受来自以下地址的邮件（每行一个地址或 @域名 — 留空则接受任何人）"
+
+#: src/components/ProjectShareDialog.vue
+msgid "Access level for {name}"
+msgstr "{name} 的访问级别"
 
 #: templates/admin-backup.php
 msgid "Account that owns the folder"
@@ -978,7 +982,7 @@ msgstr "被阻塞"
 msgid "Blocked by"
 msgstr "被阻塞于"
 
-#: src/views/ProjectView.vue:254
+#: src/views/ProjectView.vue:300
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "被 {count} 张未完成的卡片阻塞"
@@ -1145,6 +1149,7 @@ msgid "Calendar feed"
 msgstr "日历订阅"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Can edit"
 msgstr "可编辑"
 
@@ -1155,6 +1160,10 @@ msgstr "可管理"
 #: src/components/BoardSettingsModal.vue
 msgid "Can share"
 msgstr "可共享"
+
+#: src/components/ProjectShareDialog.vue
+msgid "Can view"
+msgstr "可查看"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
@@ -1991,7 +2000,7 @@ msgid "Date"
 msgstr "日期"
 
 #: src/components/BoardSettingsModal.vue:2312
-#: src/components/CardDetail.vue:5287
+#: src/components/CardDetail.vue:5284
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -2777,6 +2786,10 @@ msgstr "编辑评论失败。"
 msgid "Failed to leave board."
 msgstr "退出看板失败。"
 
+#: src/views/ProjectView.vue
+msgid "Failed to leave project."
+msgstr "无法退出项目。"
+
 #: src/components/CardDetail.vue
 msgid "Failed to link card."
 msgstr "关联卡片失败。"
@@ -2814,6 +2827,7 @@ msgstr "加载收件箱失败，请重试。"
 msgid "Failed to load project cards. Please try again."
 msgstr "加载项目卡片失败，请重试。"
 
+#: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 msgid "Failed to load projects. Please try again."
 msgstr "加载项目失败，请重试。"
@@ -2829,6 +2843,10 @@ msgstr "加载重复规则失败。"
 #: src/views/MyReviewsView.vue
 msgid "Failed to load reviews. Please try again."
 msgstr "加载评审失败，请重试。"
+
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to load shares."
+msgstr "无法加载共享列表。"
 
 #: src/views/MyCardsView.vue
 msgid "Failed to load tasks. Please try again."
@@ -2847,6 +2865,10 @@ msgstr "加载看板附件失败。"
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the calendar feed config."
 msgstr "加载日历订阅配置失败。"
+
+#: src/views/ProjectView.vue
+msgid "Failed to load the discussion."
+msgstr "无法加载讨论。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the email intake settings."
@@ -2901,6 +2923,10 @@ msgstr "发布笔记失败。"
 #: src/views/ProjectView.vue
 msgid "Failed to post reply."
 msgstr "发布回复失败。"
+
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to remove access."
+msgstr "无法移除访问权限。"
 
 #: src/components/CardDetail.vue
 msgid "Failed to remove attachment."
@@ -2986,6 +3012,10 @@ msgstr "保存筛选器失败。"
 msgid "Failed to save."
 msgstr "保存失败。"
 
+#: src/composables/useProjectShares.js
+msgid "Failed to search."
+msgstr "搜索失败。"
+
 #: src/components/CardDetail.vue
 msgid "Failed to set parent."
 msgstr "设置父卡片失败。"
@@ -3002,6 +3032,10 @@ msgstr "设置提醒失败。"
 msgid "Failed to share board."
 msgstr "共享看板失败。"
 
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to share project."
+msgstr "无法共享项目。"
+
 #: src/components/CardDetail.vue
 msgid "Failed to submit review."
 msgstr "提交评审失败。"
@@ -3013,6 +3047,10 @@ msgstr "取消归档卡片失败。"
 #: src/components/CardDetail.vue
 msgid "Failed to unassign step."
 msgstr "取消指派步骤失败。"
+
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to update access."
+msgstr "无法更新访问权限。"
 
 #: src/components/CardDetail.vue
 msgid "Failed to update assignee."
@@ -3341,6 +3379,7 @@ msgid "Green"
 msgstr "绿色"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Group"
 msgstr "群组"
 
@@ -3450,7 +3489,7 @@ msgstr "已导入到新的 Kanso 看板："
 msgid "Importing…"
 msgstr "导入中…"
 
-#: src/components/ProjectHealth.vue:157
+#: src/components/ProjectHealth.vue:160
 msgid "in {count} day"
 msgid_plural "in {count} days"
 msgstr[0] "{count} 天后"
@@ -3538,7 +3577,7 @@ msgstr "看板的用途、范围或协作约定。看板中的所有人都可以
 msgid "Jump to the discussion"
 msgstr "跳转到讨论"
 
-#: src/components/CardDetail.vue:7192
+#: src/components/CardDetail.vue:7189
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "跳转到讨论（%n 条评论）"
@@ -3707,6 +3746,10 @@ msgstr "退出"
 msgid "Leave board"
 msgstr "退出看板"
 
+#: src/views/ProjectView.vue
+msgid "Leave project"
+msgstr "退出项目"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Leave this board?"
 msgstr "退出此看板？"
@@ -3827,6 +3870,7 @@ msgstr "正在加载你的 Deck 看板…"
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 #: src/components/CsvImportModal.vue
+#: src/components/ProjectShareDialog.vue
 #: src/views/ArchivedView.vue
 #: src/views/PublicBoard.vue
 #: src/views/TrashView.vue
@@ -3914,7 +3958,7 @@ msgid "Mon"
 msgstr "周一"
 
 #: src/components/BoardSettingsModal.vue:2314
-#: src/components/CardDetail.vue:5289
+#: src/components/CardDetail.vue:5286
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -4307,6 +4351,10 @@ msgid "No matching tasks"
 msgstr "没有匹配的任务"
 
 #: src/views/ProjectView.vue
+msgid "No notes yet."
+msgstr "还没有笔记。"
+
+#: src/views/ProjectView.vue
 msgid "No notes yet. Start a discussion log for this project."
 msgstr "暂无笔记。为此项目开始记录讨论吧。"
 
@@ -4388,6 +4436,10 @@ msgstr "暂无话题。你发起话题时，关注此卡片的所有人都会收
 msgid "No type"
 msgstr "无类型"
 
+#: src/components/ProjectShareDialog.vue
+msgid "No users or groups found."
+msgstr "未找到用户或群组。"
+
 #: src/components/CardDetail.vue
 msgid "Nobody has access to this board yet."
 msgstr "目前还没有人能访问此看板。"
@@ -4421,6 +4473,7 @@ msgid "Not enough data yet"
 msgstr "数据尚不足"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Not shared with anyone yet."
 msgstr "尚未与任何人共享。"
 
@@ -4669,6 +4722,10 @@ msgstr "Payload URL"
 #: src/components/CardDetail.vue
 msgid "Pending"
 msgstr "待处理"
+
+#: src/components/ProjectShareDialog.vue
+msgid "People you share with see this project’s details and its whole discussion, including earlier notes. They only see the cards they can already access on their boards."
+msgstr "与您共享的人可以看到此项目的详细信息和全部讨论，包括之前的笔记。他们只能看到自己在看板上已有权访问的卡片。"
 
 #: src/components/BoardSettingsModal.vue
 msgid "per mailbox"
@@ -4971,6 +5028,10 @@ msgstr "把“{name}”从看板中移除？"
 #: src/components/BoardSettingsModal.vue
 msgid "Remove {label}"
 msgstr "移除 {label}"
+
+#: src/components/ProjectShareDialog.vue
+msgid "Remove {name}"
+msgstr "移除 {name}"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Remove {name} from board"
@@ -5366,15 +5427,18 @@ msgid "Search the people with access to this board"
 msgstr "搜索有权访问此看板的人员"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Search users or groups"
 msgstr "搜索用户或群组"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Search users or groups…"
 msgstr "搜索用户或群组…"
 
 #: src/components/CardSearchPicker.vue
 #: src/components/CommandPalette.vue
+#: src/components/ProjectShareDialog.vue
 #: src/components/SearchBox.vue
 msgid "Searching…"
 msgstr "搜索中…"
@@ -5477,6 +5541,21 @@ msgstr "通过公开链接与任何人共享此看板的只读视图。查看时
 msgid "Share a read-only view of this board with anyone via a public link. No sign-in is required to view it. Read-only comments are shown; assignees, activity and members are never shown."
 msgstr "通过公开链接与任何人共享此看板的只读视图。查看时无需登录。评论会以只读方式显示；负责人、动态和成员始终不会显示。"
 
+#: src/components/ProjectShareDialog.vue
+#: src/views/ProjectView.vue
+msgid "Share project"
+msgstr "共享项目"
+
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Shared"
+msgstr "已共享"
+
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Shared by {owner}"
+msgstr "由 {owner} 共享"
+
 #: src/views/PublicBoard.vue
 msgid "Shared read-only via Kanso"
 msgstr "通过 Kanso 以只读方式共享"
@@ -5521,7 +5600,7 @@ msgstr "在卡片下方显示讨论"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:7198
+#: src/components/CardDetail.vue:7195
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -5936,6 +6015,10 @@ msgstr "此链接已过期。访客会看到链接已过期的提示；请选择
 msgid "This link is invalid or has been disabled."
 msgstr "此链接无效或已被禁用。"
 
+#: src/views/ProjectView.vue
+msgid "This project no longer exists, or you no longer have access to it."
+msgstr "此项目已不存在，或您已无权访问。"
+
 #: templates/public-expired.php
 msgid "This public board link has expired. Ask whoever shared the board for a new link."
 msgstr "此公开看板链接已过期。请向共享此看板的人索取新链接。"
@@ -6232,6 +6315,7 @@ msgid "Use the Add card button above to collect cards from any board."
 msgstr "使用上方的“添加卡片”按钮，从任意看板中收集卡片。"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "User"
 msgstr "用户"
 
@@ -6322,7 +6406,7 @@ msgid "Wed"
 msgstr "周三"
 
 #: src/components/BoardSettingsModal.vue:2313
-#: src/components/CardDetail.vue:5288
+#: src/components/CardDetail.vue:5285
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -6430,7 +6514,7 @@ msgid "wrote"
 msgstr "写道"
 
 #: src/components/BoardSettingsModal.vue:2315
-#: src/components/CardDetail.vue:5290
+#: src/components/CardDetail.vue:5287
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"
@@ -6463,6 +6547,10 @@ msgstr "你可以编辑"
 #: src/components/BoardSettingsModal.vue
 msgid "you can manage"
 msgstr "你可以管理"
+
+#: src/components/CardDetail.vue
+msgid "You can only view this project"
+msgstr "您只能查看此项目"
 
 #: src/components/CardDetail.vue
 msgid "You cannot copy to that board."
@@ -6503,6 +6591,10 @@ msgstr "配置公开链接需要管理权限。"
 #: src/components/CardDetail.vue
 msgid "You no longer have access to this card."
 msgstr "你已无权访问此卡片。"
+
+#: src/views/ProjectView.vue
+msgid "You still have access to this project through a group."
+msgstr "您仍可通过群组访问此项目。"
 
 #: src/views/InboxView.vue
 msgid "You're all caught up"

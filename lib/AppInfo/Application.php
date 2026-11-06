@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\AppInfo;
 
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
+use OCA\Kanso\Listener\ProjectShareCleanupListener;
 use OCA\Kanso\Notification\Notifier;
 use OCA\Kanso\Service\ActivityPublisher;
 use OCA\Kanso\SetupCheck\GuestsWhitelistCheck;
@@ -20,7 +21,9 @@ use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files\AppData\IAppDataFactory;
 use OCP\Files\IAppData;
+use OCP\Group\Events\GroupDeletedEvent;
 use OCP\IURLGenerator;
+use OCP\User\Events\UserDeletedEvent;
 use OCP\Util;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
@@ -78,6 +81,9 @@ class Application extends App implements IBootstrap, IEventListener {
 		// listener is resolved lazily on dispatch, so this stays a no-op cost on
 		// every other page.
 		$context->registerEventListener(LoadAdditionalScriptsEvent::class, self::class);
+
+		$context->registerEventListener(UserDeletedEvent::class, ProjectShareCleanupListener::class);
+		$context->registerEventListener(GroupDeletedEvent::class, ProjectShareCleanupListener::class);
 	}
 
 	#[\Override]

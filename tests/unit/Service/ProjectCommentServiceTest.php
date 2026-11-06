@@ -7,30 +7,131 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Access\ProjectAccess;
+use OCA\Kanso\Db\Acl;
 use OCA\Kanso\Db\Project;
 use OCA\Kanso\Db\ProjectComment;
 use OCA\Kanso\Db\ProjectCommentMapper;
 use OCA\Kanso\Db\ProjectMapper;
+use OCA\Kanso\Db\ProjectShare;
+use OCA\Kanso\Db\ProjectShareMapper;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\ProjectCommentService;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IDBConnection;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 class ProjectCommentServiceTest extends TestCase {
 	private ProjectCommentMapper&MockObject $commentMapper;
 	private ProjectMapper&MockObject $projectMapper;
+	private ProjectShareMapper&MockObject $shareMapper;
 	private ProjectCommentService $service;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->commentMapper = $this->createMock(ProjectCommentMapper::class);
 		$this->projectMapper = $this->createMock(ProjectMapper::class);
+		$this->shareMapper = $this->createMock(ProjectShareMapper::class);
 		$this->service = new ProjectCommentService(
 			$this->commentMapper,
 			$this->projectMapper,
+			new ProjectAccess($this->createMock(IDBConnection::class), $this->shareMapper, $this->createMock(PermissionService::class)),
 		);
+	}
+
+	private function sharedWithBob(int $permission): void {
+		$share = new ProjectShare();
+		$share->setParticipantType(Acl::TYPE_USER);
+		$share->setParticipant('bob');
+		$share->setPermission($permission);
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$this->shareMapper->method('findByProject')->with(5)->willReturn([$share]);
+	}
+
+	public function testViewerReadsTheThreadButCannotPost(): void {
+		$this->sharedWithBob(PermissionService::PERMISSION_READ);
+		$this->commentMapper->method('findByProject')->with(5)->willReturn([]);
+		$this->commentMapper->expects(self::never())->method('insert');
+
+		self::assertSame([], $this->service->listForProject(5, 'bob'));
+		$this->expectException(NotPermittedException::class);
+		$this->service->addComment(5, 'hi', null, 'bob');
+	}
+
+	public function testEditorPostsUnderTheirOwnName(): void {
+		$this->sharedWithBob(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT);
+		$this->commentMapper->method('insert')->willReturnArgument(0);
+
+		self::assertSame('bob', $this->service->addComment(5, 'hi', null, 'bob')->getAuthor());
+	}
+
+	public function testEditorCannotEditSomeoneElsesComment(): void {
+		$this->sharedWithBob(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT);
+		$this->commentMapper->method('find')->with(1)->willReturn($this->comment(1, 5, null, 'alice'));
+		$this->commentMapper->expects(self::never())->method('update');
+		$this->expectException(NotPermittedException::class);
+		$this->service->editComment(1, 'changed', 'bob');
+	}
+
+	public function testEditorCannotDeleteSomeoneElsesComment(): void {
+		$this->sharedWithBob(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT);
+		$this->commentMapper->method('find')->with(1)->willReturn($this->comment(1, 5, null, 'alice'));
+		$this->commentMapper->expects(self::never())->method('update');
+		$this->expectException(NotPermittedException::class);
+		$this->service->deleteComment(1, 'bob');
+	}
+
+	public function testDowngradedAuthorCannotEditTheirComment(): void {
+		$this->sharedWithBob(PermissionService::PERMISSION_READ);
+		$this->commentMapper->method('find')->with(1)->willReturn($this->comment(1, 5, null, 'bob'));
+		$this->commentMapper->expects(self::never())->method('update');
+		$this->expectException(NotPermittedException::class);
+		$this->service->editComment(1, 'changed', 'bob');
+	}
+
+	public function testDowngradedAuthorCannotDeleteTheirComment(): void {
+		$this->sharedWithBob(PermissionService::PERMISSION_READ);
+		$this->commentMapper->method('find')->with(1)->willReturn($this->comment(1, 5, null, 'bob'));
+		$this->commentMapper->expects(self::never())->method('update');
+		$this->expectException(NotPermittedException::class);
+		$this->service->deleteComment(1, 'bob');
+	}
+
+	public function testEditorCannotDeleteAThreadHoldingOthersReplies(): void {
+		$this->sharedWithBob(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT);
+		$this->commentMapper->method('find')->with(1)->willReturn($this->comment(1, 5, null, 'bob'));
+		$this->commentMapper->method('hasRepliesFromOthers')->with(1, 'bob')->willReturn(true);
+		$this->commentMapper->expects(self::never())->method('softDeleteRepliesOf');
+		$this->commentMapper->expects(self::never())->method('update');
+		$this->expectException(NotPermittedException::class);
+		$this->service->deleteComment(1, 'bob');
+	}
+
+	public function testEditorDeletesTheirOwnThreadWhenOnlyTheyReplied(): void {
+		$this->sharedWithBob(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT);
+		$this->commentMapper->method('find')->with(1)->willReturn($this->comment(1, 5, null, 'bob'));
+		$this->commentMapper->method('hasRepliesFromOthers')->willReturn(false);
+		$this->commentMapper->expects(self::once())->method('softDeleteRepliesOf');
+		$this->commentMapper->expects(self::once())->method('update');
+		$this->service->deleteComment(1, 'bob');
+	}
+
+	public function testOwnerDeletesAThreadHoldingOthersReplies(): void {
+		$this->sharedWithBob(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT);
+		$this->commentMapper->method('find')->with(1)->willReturn($this->comment(1, 5, null, 'alice'));
+		$this->commentMapper->method('hasRepliesFromOthers')->willReturn(true);
+		$this->commentMapper->expects(self::once())->method('softDeleteRepliesOf');
+		$this->service->deleteComment(1, 'alice');
+	}
+
+	public function testOwnerCanDeleteAMembersComment(): void {
+		$this->sharedWithBob(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT);
+		$this->commentMapper->method('find')->with(1)->willReturn($this->comment(1, 5, null, 'bob'));
+		$this->commentMapper->expects(self::once())->method('update');
+		$this->service->deleteComment(1, 'alice');
 	}
 
 	private function project(string $owner = 'alice'): Project {
@@ -65,11 +166,11 @@ class ProjectCommentServiceTest extends TestCase {
 		self::assertSame($thread, $this->service->listForProject(5, 'alice'));
 	}
 
-	public function testListForProjectRejectsNonOwner(): void {
+	public function testListForProjectHidesTheProjectFromStrangers(): void {
 		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
 		$this->commentMapper->expects(self::never())->method('findByProject');
 
-		$this->expectException(NotPermittedException::class);
+		$this->expectException(DoesNotExistException::class);
 		$this->service->listForProject(5, 'mallory');
 	}
 
@@ -90,11 +191,11 @@ class ProjectCommentServiceTest extends TestCase {
 		$this->service->addComment(5, '  Hello world  ', null, 'alice');
 	}
 
-	public function testAddCommentRejectsNonOwner(): void {
+	public function testAddCommentHidesTheProjectFromStrangers(): void {
 		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
 		$this->commentMapper->expects(self::never())->method('insert');
 
-		$this->expectException(NotPermittedException::class);
+		$this->expectException(DoesNotExistException::class);
 		$this->service->addComment(5, 'nope', null, 'mallory');
 	}
 
@@ -140,7 +241,7 @@ class ProjectCommentServiceTest extends TestCase {
 		$this->commentMapper->expects(self::never())->method('insert');
 
 		$this->expectException(InvalidInputException::class);
-		$this->expectExceptionMessage('different project');
+		$this->expectExceptionMessage('does not exist');
 		$this->service->addComment(5, 'reply', 50, 'alice');
 	}
 
@@ -161,13 +262,13 @@ class ProjectCommentServiceTest extends TestCase {
 		$this->service->editComment(50, 'new body', 'alice');
 	}
 
-	public function testEditCommentRejectsNonOwner(): void {
+	public function testEditCommentHidesTheProjectFromStrangers(): void {
 		$comment = $this->comment(50, 5, null, 'alice', 'old');
 		$this->commentMapper->method('find')->with(50)->willReturn($comment);
 		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
 		$this->commentMapper->expects(self::never())->method('update');
 
-		$this->expectException(NotPermittedException::class);
+		$this->expectException(DoesNotExistException::class);
 		$this->service->editComment(50, 'hijack', 'mallory');
 	}
 
@@ -212,13 +313,13 @@ class ProjectCommentServiceTest extends TestCase {
 		$this->service->deleteComment(60, 'alice');
 	}
 
-	public function testDeleteCommentRejectsNonOwner(): void {
+	public function testDeleteCommentHidesTheProjectFromStrangers(): void {
 		$comment = $this->comment(50, 5, null, 'alice');
 		$this->commentMapper->method('find')->with(50)->willReturn($comment);
 		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
 		$this->commentMapper->expects(self::never())->method('update');
 
-		$this->expectException(NotPermittedException::class);
+		$this->expectException(DoesNotExistException::class);
 		$this->service->deleteComment(50, 'mallory');
 	}
 

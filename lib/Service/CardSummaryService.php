@@ -97,9 +97,9 @@ class CardSummaryService {
 			// Card ids with an active running timer (#73) - drives the tile
 			// "timer running" badge. One boolean per card; the timer row stays out.
 			'timerRunning' => array_flip($this->runningTimerMapper->findCardIdsByBoard($boardId)),
-			// The viewer's OWN project ids per card - drives the tile's project
-			// colour. Owner-scoped (projects are private collections), so a card
-			// filed into someone else's project shows nothing to this viewer.
+			// The project ids per card the viewer can reach - drives the tile's
+			// project colour. A card filed into a project they have no access to
+			// shows nothing.
 			'projectIds' => $this->projectCardMapper->findProjectIdsByBoard($boardId, $viewer->userId),
 		]);
 	}

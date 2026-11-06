@@ -34,7 +34,8 @@ class CardMovePersonalService {
 	 *
 	 * @param array<int, int> $commentIds old comment ID to new comment ID
 	 */
-	public function transfer(int $sourceId, Card $target, Board $targetBoard, array $commentIds): void {
+	public function transfer(Card $source, Board $sourceBoard, Card $target, Board $targetBoard, array $commentIds): void {
+		$sourceId = $source->getId();
 		$reminders = $this->reminders->findByCardForMove($sourceId);
 		$subscriptions = $this->subscriptions->findByCardForMove($sourceId);
 		$memberships = $this->projectCards->findByCardForMove($sourceId);
@@ -69,13 +70,24 @@ class CardMovePersonalService {
 				throw new InvalidInputException('The card cannot be moved because some card data cannot be preserved on the destination board');
 			}
 		}
+		$checkedOwners = [];
 		foreach ($memberships as $membership) {
 			try {
 				$project = $this->projects->find($membership->getProjectId());
 			} catch (DoesNotExistException $e) {
 				throw new InvalidInputException('The card cannot be moved because some card data cannot be preserved on the destination board');
 			}
-			$assertAccess($project->getOwner());
+			// A member can collect a card its project's owner never had access to;
+			// that owner has nothing to lose, so must not block the move.
+			$owner = $project->getOwner();
+			if (isset($checkedOwners[$owner])) {
+				continue;
+			}
+			$checkedOwners[$owner] = true;
+			if (($this->permissions->getPermissions($sourceBoard, $owner) & PermissionService::PERMISSION_READ) !== 0
+				&& $this->visibility->isVisible($sourceBoard, $source, $owner)) {
+				$assertAccess($owner);
+			}
 		}
 		try {
 			$timer = $this->timers->findByCard($sourceId);

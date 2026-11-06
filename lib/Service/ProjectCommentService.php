@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Access\ProjectAccess;
 use OCA\Kanso\Db\Project;
 use OCA\Kanso\Db\ProjectComment;
 use OCA\Kanso\Db\ProjectCommentMapper;
@@ -14,19 +15,16 @@ use OCA\Kanso\Db\ProjectMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
 /**
- * Project comments / discussion - an OWNER-ONLY personal log on a project
- * (#3563). A one-level thread (top-level comments + their replies, no deeper
- * nesting), mirroring {@see CommentService} for cards but with a completely
- * different ACL: projects are owner-only (no sharing table), so EVERY operation
- * asserts the actor IS the project owner and a project comment has exactly one
- * reader. There is deliberately NO @mention / notify / watcher machinery - there
- * is no second reader to notify - and no `kanso_changes` row (a project is
- * per-user, cross-board metadata with no per-board consumer, exactly as
- * {@see ProjectService} documents for project membership).
+ * Project comments / discussion: a one-level thread (top-level comments
+ * and their replies), mirroring {@see CommentService} for cards. Anyone who can
+ * read the project reads the thread; posting needs EDIT, as on a card. Authors
+ * edit and delete their own comments, and the owner may delete any.
  *
- * A comment may be edited only by its author (== the owner) and deleted by its
- * author. Deleting a top-level comment cascades a soft-delete over its replies
- * so no reply is orphaned. Bodies are stored raw (markdown) and MUST be rendered
+ * There is no @mention / notify / watcher machinery and no `kanso_changes` row
+ * (a project has no per-board consumer, see {@see ProjectService}).
+ *
+ * Deleting a top-level comment cascades a soft-delete over its replies so no
+ * reply is orphaned. Bodies are stored raw (markdown) and MUST be rendered
  * through the client DOMPurify/markdown-it sanitizer - never trusted as HTML.
  */
 class ProjectCommentService {
@@ -35,38 +33,38 @@ class ProjectCommentService {
 	public function __construct(
 		private ProjectCommentMapper $commentMapper,
 		private ProjectMapper $projectMapper,
+		private ProjectAccess $projectAccess,
 	) {
 	}
 
 	/**
-	 * The project's flat thread (non-deleted, oldest first). Owner only.
+	 * The project's flat thread (non-deleted, oldest first).
 	 *
 	 * @return ProjectComment[]
 	 * @throws DoesNotExistException if the project does not exist
-	 * @throws NotPermittedException if the actor is not the owner
+	 * @throws NotPermittedException if the actor cannot read the project
 	 */
 	public function listForProject(int $projectId, string $actorUid): array {
-		$this->loadOwnedProject($projectId, $actorUid);
+		$this->loadProject($projectId, $actorUid, PermissionService::PERMISSION_READ);
 
 		return $this->commentMapper->findByProject($projectId);
 	}
 
 	/**
 	 * Posts a comment ($parentCommentId null) or a reply to a top-level comment.
-	 * Owner only.
 	 *
 	 * @throws DoesNotExistException if the project does not exist
-	 * @throws NotPermittedException if the actor is not the owner
+	 * @throws NotPermittedException if the actor cannot edit the project
 	 * @throws InvalidInputException if the body is empty/too long, or the parent is invalid (missing, other project, deleted, or itself a reply - one level only)
 	 */
 	public function addComment(int $projectId, string $body, ?int $parentCommentId, string $actorUid): ProjectComment {
 		$body = $this->normalizeBody($body);
-		$this->loadOwnedProject($projectId, $actorUid);
+		$this->loadProject($projectId, $actorUid, PermissionService::PERMISSION_EDIT);
 
 		if ($parentCommentId !== null) {
 			$parent = $this->loadParentComment($parentCommentId);
 			if ($parent->getProjectId() !== $projectId) {
-				throw new InvalidInputException('Parent comment belongs to a different project');
+				throw new InvalidInputException('Parent comment does not exist');
 			}
 			if ($parent->getParentCommentId() !== null) {
 				throw new InvalidInputException('Replies can only be one level deep');
@@ -86,20 +84,18 @@ class ProjectCommentService {
 	}
 
 	/**
-	 * Edits a comment body. Only the author (== the owner) may edit. Stamps
-	 * edited_at.
+	 * Edits a comment body. Only its author may edit, and only while they can
+	 * still edit the project. Stamps edited_at.
 	 *
 	 * @throws DoesNotExistException if the comment or project does not exist or is deleted
-	 * @throws NotPermittedException if the actor is not the owner/author
+	 * @throws NotPermittedException if the actor is not the author or cannot edit the project
 	 * @throws InvalidInputException if the body is empty or too long
 	 */
 	public function editComment(int $commentId, string $body, string $actorUid): ProjectComment {
 		$body = $this->normalizeBody($body);
 		$comment = $this->loadComment($commentId);
-		$this->loadOwnedProject($comment->getProjectId(), $actorUid);
+		$this->loadProject($comment->getProjectId(), $actorUid, PermissionService::PERMISSION_EDIT);
 
-		// The owner is the only reader/writer, so author == owner here, but keep
-		// the author check explicit as defence in depth.
 		if ($comment->getAuthor() !== $actorUid) {
 			throw new NotPermittedException('Only the author may edit this comment');
 		}
@@ -115,26 +111,32 @@ class ProjectCommentService {
 	}
 
 	/**
-	 * Soft-deletes a comment. Only the author (== the owner) may delete. Deleting
-	 * a top-level comment cascades to its non-deleted replies so the thread
-	 * disappears as a unit.
+	 * Soft-deletes a comment. The owner may delete any comment; an author may
+	 * delete their own while they can edit the project, unless that would take
+	 * other people's replies with it. Deleting a top-level comment cascades to
+	 * its non-deleted replies so the thread disappears as a unit.
 	 *
 	 * @throws DoesNotExistException if the comment or project does not exist or is deleted
-	 * @throws NotPermittedException if the actor is not the owner/author
+	 * @throws NotPermittedException if the actor is neither the owner nor an author who can
+	 *                               edit, or the thread holds other people's replies
 	 */
 	public function deleteComment(int $commentId, string $actorUid): void {
 		$comment = $this->loadComment($commentId);
-		$this->loadOwnedProject($comment->getProjectId(), $actorUid);
-
-		if ($comment->getAuthor() !== $actorUid) {
-			throw new NotPermittedException('Only the author may delete this comment');
+		$project = $this->projectMapper->find($comment->getProjectId());
+		if ($project->getOwner() !== $actorUid) {
+			$this->projectAccess->assertPermission($project, $actorUid, PermissionService::PERMISSION_EDIT);
+			if ($comment->getAuthor() !== $actorUid) {
+				throw new NotPermittedException('Only the author may delete this comment');
+			}
+			if ($comment->getParentCommentId() === null && $this->commentMapper->hasRepliesFromOthers($commentId, $actorUid)) {
+				throw new NotPermittedException('Only the project owner may delete a comment other people replied to');
+			}
 		}
 
 		$now = time();
 
-		// Cascade over a top-level comment's replies so none is orphaned. A
-		// single set-based UPDATE also catches a reply inserted concurrently
-		// with this delete (no read-then-write window).
+		// Cascade over a top-level comment's replies so none is orphaned. One
+		// statement covers the replies.
 		if ($comment->getParentCommentId() === null) {
 			$this->commentMapper->softDeleteRepliesOf($commentId, $now);
 		}
@@ -175,25 +177,22 @@ class ProjectCommentService {
 		try {
 			$parent = $this->commentMapper->find($id);
 		} catch (DoesNotExistException) {
-			throw new InvalidInputException('Parent comment ' . $id . ' does not exist');
+			throw new InvalidInputException('Parent comment does not exist');
 		}
 		if ($parent->getDeletedAt() > 0) {
-			throw new InvalidInputException('Parent comment ' . $id . ' does not exist');
+			throw new InvalidInputException('Parent comment does not exist');
 		}
 		return $parent;
 	}
 
 	/**
-	 * The owner-only gate - mirrors {@see ProjectService::loadOwnedProject()}.
-	 *
+	 * @param int $permission bitmask of PermissionService::PERMISSION_* bits
 	 * @throws DoesNotExistException if the project does not exist
-	 * @throws NotPermittedException if the actor does not own the project
+	 * @throws NotPermittedException if the actor lacks a required bit
 	 */
-	private function loadOwnedProject(int $id, string $uid): Project {
+	private function loadProject(int $id, string $uid, int $permission): Project {
 		$project = $this->projectMapper->find($id);
-		if ($project->getOwner() !== $uid) {
-			throw new NotPermittedException('Only the owner may act on this project');
-		}
+		$this->projectAccess->assertPermission($project, $uid, $permission);
 		return $project;
 	}
 }

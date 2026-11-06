@@ -115,7 +115,7 @@ msgstr "{card} теперь подкарточка {parent}"
 msgid "{card} moved to {stack}"
 msgstr "{card} перемещена в {stack}"
 
-#: src/components/ProjectHealth.vue:167
+#: src/components/ProjectHealth.vue:170
 msgid "{count} blocked"
 msgid_plural "{count} blocked"
 msgstr[0] "{count} заблокирована"
@@ -129,7 +129,7 @@ msgstr[0] "{count} карточка"
 msgstr[1] "{count} карточки"
 msgstr[2] "{count} карточек"
 
-#: src/components/ProjectHealth.vue:178
+#: src/components/ProjectHealth.vue:181
 msgid "{count} card has no estimate and counts as the typical estimate of {points}."
 msgid_plural "{count} cards have no estimate and each counts as the typical estimate of {points}."
 msgstr[0] "{count} карточка без оценки, для нее берется типичная оценка {points}."
@@ -147,21 +147,21 @@ msgstr[0] "Остался {count} символ"
 msgstr[1] "Осталось {count} символа"
 msgstr[2] "Осталось {count} символов"
 
-#: src/components/ProjectHealth.vue:158
+#: src/components/ProjectHealth.vue:161
 msgid "{count} day ago"
 msgid_plural "{count} days ago"
 msgstr[0] "{count} день назад"
 msgstr[1] "{count} дня назад"
 msgstr[2] "{count} дней назад"
 
-#: src/components/ProjectHealth.vue:170
+#: src/components/ProjectHealth.vue:173
 msgid "{count} in progress"
 msgid_plural "{count} in progress"
 msgstr[0] "{count} в работе"
 msgstr[1] "{count} в работе"
 msgstr[2] "{count} в работе"
 
-#: src/components/ProjectHealth.vue:164
+#: src/components/ProjectHealth.vue:167
 msgid "{count} overdue"
 msgid_plural "{count} overdue"
 msgstr[0] "{count} просрочена"
@@ -196,7 +196,7 @@ msgstr "не раньше {from}"
 msgid "{n} blocked"
 msgstr "Заблокировано: {n}"
 
-#: src/components/ProjectHealth.vue:136
+#: src/components/ProjectHealth.vue:139
 msgid "{n} card / week"
 msgid_plural "{n} cards / week"
 msgstr[0] "Карточек в неделю: {n}"
@@ -239,7 +239,7 @@ msgstr[0] "{n} балл"
 msgstr[1] "{n} балла"
 msgstr[2] "{n} баллов"
 
-#: src/components/ProjectHealth.vue:135
+#: src/components/ProjectHealth.vue:138
 msgid "{n} point / week"
 msgid_plural "{n} points / week"
 msgstr[0] "Баллов в неделю: {n}"
@@ -417,7 +417,7 @@ msgstr[0] "Обнаружена %n строка данных"
 msgstr[1] "Обнаружено %n строки данных"
 msgstr[2] "Обнаружено %n строк данных"
 
-#: src/components/CardDetail.vue:5098
+#: src/components/CardDetail.vue:5095
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n день назад"
@@ -431,7 +431,7 @@ msgstr[0] "%n файл"
 msgstr[1] "%n файла"
 msgstr[2] "%n файлов"
 
-#: src/components/CardDetail.vue:5096
+#: src/components/CardDetail.vue:5093
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n час назад"
@@ -466,7 +466,7 @@ msgstr[0] "%n метка не была создана и отсутствует 
 msgstr[1] "%n метки не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 msgstr[2] "%n меток не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 
-#: src/components/CardDetail.vue:5094
+#: src/components/CardDetail.vue:5091
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n минуту назад"
@@ -494,14 +494,14 @@ msgstr[0] "%n балл"
 msgstr[1] "%n балла"
 msgstr[2] "%n баллов"
 
-#: src/components/CardDetail.vue:1263
+#: src/components/CardDetail.vue:1258
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n проект"
 msgstr[1] "%n проекта"
 msgstr[2] "%n проектов"
 
-#: src/components/CardDetail.vue:2353
+#: src/components/CardDetail.vue:2350
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n ответ"
@@ -556,6 +556,10 @@ msgstr "Отдельная учетная запись лишь меняет т�
 #: src/components/BoardSettingsModal.vue
 msgid "Accept mail from (one address or @domain per line — leave empty to accept anyone)"
 msgstr "Принимать почту от (один адрес или @домен в строке — оставьте пустым, чтобы принимать от всех)"
+
+#: src/components/ProjectShareDialog.vue
+msgid "Access level for {name}"
+msgstr "Уровень доступа для {name}"
 
 #: templates/admin-backup.php
 msgid "Account that owns the folder"
@@ -1056,7 +1060,7 @@ msgstr "Заблокирована"
 msgid "Blocked by"
 msgstr "Блокируется"
 
-#: src/views/ProjectView.vue:254
+#: src/views/ProjectView.vue:300
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Заблокирована {count} открытой карточкой"
@@ -1225,6 +1229,7 @@ msgid "Calendar feed"
 msgstr "Календарная лента"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Can edit"
 msgstr "Может редактировать"
 
@@ -1235,6 +1240,10 @@ msgstr "Может управлять"
 #: src/components/BoardSettingsModal.vue
 msgid "Can share"
 msgstr "Может делиться"
+
+#: src/components/ProjectShareDialog.vue
+msgid "Can view"
+msgstr "Может просматривать"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
@@ -2073,7 +2082,7 @@ msgid "Date"
 msgstr "Дата"
 
 #: src/components/BoardSettingsModal.vue:2312
-#: src/components/CardDetail.vue:5287
+#: src/components/CardDetail.vue:5284
 msgid "day"
 msgid_plural "days"
 msgstr[0] "день"
@@ -2869,6 +2878,10 @@ msgstr "Не удалось изменить комментарий."
 msgid "Failed to leave board."
 msgstr "Не удалось покинуть доску."
 
+#: src/views/ProjectView.vue
+msgid "Failed to leave project."
+msgstr "Не удалось покинуть проект."
+
 #: src/components/CardDetail.vue
 msgid "Failed to link card."
 msgstr "Не удалось связать карточку."
@@ -2906,6 +2919,7 @@ msgstr "Не удалось загрузить входящие. Попробу�
 msgid "Failed to load project cards. Please try again."
 msgstr "Не удалось загрузить карточки проекта. Попробуйте еще раз."
 
+#: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 msgid "Failed to load projects. Please try again."
 msgstr "Не удалось загрузить проекты. Попробуйте еще раз."
@@ -2921,6 +2935,10 @@ msgstr "Не удалось загрузить правила повторени
 #: src/views/MyReviewsView.vue
 msgid "Failed to load reviews. Please try again."
 msgstr "Не удалось загрузить проверки. Попробуйте еще раз."
+
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to load shares."
+msgstr "Не удалось загрузить список доступа."
 
 #: src/views/MyCardsView.vue
 msgid "Failed to load tasks. Please try again."
@@ -2939,6 +2957,10 @@ msgstr "Не удалось загрузить вложения доски."
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the calendar feed config."
 msgstr "Не удалось загрузить настройки календарной ленты."
+
+#: src/views/ProjectView.vue
+msgid "Failed to load the discussion."
+msgstr "Не удалось загрузить обсуждение."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the email intake settings."
@@ -2993,6 +3015,10 @@ msgstr "Не удалось отправить заметку."
 #: src/views/ProjectView.vue
 msgid "Failed to post reply."
 msgstr "Не удалось отправить ответ."
+
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to remove access."
+msgstr "Не удалось удалить доступ."
 
 #: src/components/CardDetail.vue
 msgid "Failed to remove attachment."
@@ -3078,6 +3104,10 @@ msgstr "Не удалось сохранить фильтр."
 msgid "Failed to save."
 msgstr "Не удалось сохранить."
 
+#: src/composables/useProjectShares.js
+msgid "Failed to search."
+msgstr "Не удалось выполнить поиск."
+
 #: src/components/CardDetail.vue
 msgid "Failed to set parent."
 msgstr "Не удалось назначить родительскую карточку."
@@ -3094,6 +3124,10 @@ msgstr "Не удалось установить напоминание."
 msgid "Failed to share board."
 msgstr "Не удалось поделиться доской."
 
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to share project."
+msgstr "Не удалось поделиться проектом."
+
 #: src/components/CardDetail.vue
 msgid "Failed to submit review."
 msgstr "Не удалось отправить результат проверки."
@@ -3105,6 +3139,10 @@ msgstr "Не удалось разархивировать карточку."
 #: src/components/CardDetail.vue
 msgid "Failed to unassign step."
 msgstr "Не удалось снять назначение с пункта."
+
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to update access."
+msgstr "Не удалось обновить доступ."
 
 #: src/components/CardDetail.vue
 msgid "Failed to update assignee."
@@ -3433,6 +3471,7 @@ msgid "Green"
 msgstr "Зеленый"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Group"
 msgstr "Группа"
 
@@ -3542,7 +3581,7 @@ msgstr "Импортировано в новую доску Kanso:"
 msgid "Importing…"
 msgstr "Импорт…"
 
-#: src/components/ProjectHealth.vue:157
+#: src/components/ProjectHealth.vue:160
 msgid "in {count} day"
 msgid_plural "in {count} days"
 msgstr[0] "через {count} день"
@@ -3632,7 +3671,7 @@ msgstr "Назначение, границы или правила. Любой �
 msgid "Jump to the discussion"
 msgstr "Перейти к обсуждению"
 
-#: src/components/CardDetail.vue:7192
+#: src/components/CardDetail.vue:7189
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Перейти к обсуждению (%n комментарий)"
@@ -3803,6 +3842,10 @@ msgstr "Покинуть"
 msgid "Leave board"
 msgstr "Покинуть доску"
 
+#: src/views/ProjectView.vue
+msgid "Leave project"
+msgstr "Покинуть проект"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Leave this board?"
 msgstr "Покинуть эту доску?"
@@ -3923,6 +3966,7 @@ msgstr "Загрузка ваших досок Deck…"
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 #: src/components/CsvImportModal.vue
+#: src/components/ProjectShareDialog.vue
 #: src/views/ArchivedView.vue
 #: src/views/PublicBoard.vue
 #: src/views/TrashView.vue
@@ -4010,7 +4054,7 @@ msgid "Mon"
 msgstr "Пн"
 
 #: src/components/BoardSettingsModal.vue:2314
-#: src/components/CardDetail.vue:5289
+#: src/components/CardDetail.vue:5286
 msgid "month"
 msgid_plural "months"
 msgstr[0] "месяц"
@@ -4405,6 +4449,10 @@ msgid "No matching tasks"
 msgstr "Нет подходящих задач"
 
 #: src/views/ProjectView.vue
+msgid "No notes yet."
+msgstr "Заметок пока нет."
+
+#: src/views/ProjectView.vue
 msgid "No notes yet. Start a discussion log for this project."
 msgstr "Заметок пока нет. Начните журнал обсуждения этого проекта."
 
@@ -4486,6 +4534,10 @@ msgstr "Веток пока нет. Все, кто следит за этой к
 msgid "No type"
 msgstr "Без типа"
 
+#: src/components/ProjectShareDialog.vue
+msgid "No users or groups found."
+msgstr "Пользователи и группы не найдены."
+
 #: src/components/CardDetail.vue
 msgid "Nobody has access to this board yet."
 msgstr "Пока ни у кого нет доступа к этой доске."
@@ -4519,6 +4571,7 @@ msgid "Not enough data yet"
 msgstr "Пока недостаточно данных"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Not shared with anyone yet."
 msgstr "Пока никому не предоставлен доступ."
 
@@ -4767,6 +4820,10 @@ msgstr "Payload URL"
 #: src/components/CardDetail.vue
 msgid "Pending"
 msgstr "Ожидает"
+
+#: src/components/ProjectShareDialog.vue
+msgid "People you share with see this project’s details and its whole discussion, including earlier notes. They only see the cards they can already access on their boards."
+msgstr "Люди, с которыми вы делитесь, видят сведения об этом проекте и всё обсуждение, включая прежние заметки. Они видят только те карточки, к которым уже имеют доступ на своих досках."
 
 #: src/components/BoardSettingsModal.vue
 msgid "per mailbox"
@@ -5069,6 +5126,10 @@ msgstr "Убрать «{name}» с доски?"
 #: src/components/BoardSettingsModal.vue
 msgid "Remove {label}"
 msgstr "Убрать {label}"
+
+#: src/components/ProjectShareDialog.vue
+msgid "Remove {name}"
+msgstr "Удалить {name}"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Remove {name} from board"
@@ -5464,15 +5525,18 @@ msgid "Search the people with access to this board"
 msgstr "Поиск среди тех, у кого есть доступ к этой доске"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Search users or groups"
 msgstr "Поиск пользователей или групп"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Search users or groups…"
 msgstr "Поиск пользователей или групп…"
 
 #: src/components/CardSearchPicker.vue
 #: src/components/CommandPalette.vue
+#: src/components/ProjectShareDialog.vue
 #: src/components/SearchBox.vue
 msgid "Searching…"
 msgstr "Поиск…"
@@ -5579,6 +5643,21 @@ msgstr "Поделиться доской только для чтения с к
 msgid "Share a read-only view of this board with anyone via a public link. No sign-in is required to view it. Read-only comments are shown; assignees, activity and members are never shown."
 msgstr "Поделиться доской только для чтения с кем угодно по публичной ссылке. Для просмотра вход не требуется. Комментарии показываются только для чтения; исполнители, активность и участники никогда не показываются."
 
+#: src/components/ProjectShareDialog.vue
+#: src/views/ProjectView.vue
+msgid "Share project"
+msgstr "Поделиться проектом"
+
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Shared"
+msgstr "Общий"
+
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Shared by {owner}"
+msgstr "Доступ предоставил(а) {owner}"
+
 #: src/views/PublicBoard.vue
 msgid "Shared read-only via Kanso"
 msgstr "Доступ только для чтения через Kanso"
@@ -5623,7 +5702,7 @@ msgstr "Показывать обсуждение под карточкой"
 msgid "Show the discussion panel"
 msgstr "Показать панель обсуждения"
 
-#: src/components/CardDetail.vue:7198
+#: src/components/CardDetail.vue:7195
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Показать панель обсуждения (%n комментарий)"
@@ -6040,6 +6119,10 @@ msgstr "Срок действия этой ссылки истек. Посети
 msgid "This link is invalid or has been disabled."
 msgstr "Эта ссылка недействительна или отключена."
 
+#: src/views/ProjectView.vue
+msgid "This project no longer exists, or you no longer have access to it."
+msgstr "Этот проект больше не существует, или у вас больше нет к нему доступа."
+
 #: templates/public-expired.php
 msgid "This public board link has expired. Ask whoever shared the board for a new link."
 msgstr "Срок действия этой публичной ссылки на доску истек. Запросите новую ссылку у того, кто поделился доской."
@@ -6336,6 +6419,7 @@ msgid "Use the Add card button above to collect cards from any board."
 msgstr "Используйте кнопку «Добавить карточку» выше, чтобы собрать карточки с любых досок."
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "User"
 msgstr "Пользователь"
 
@@ -6426,7 +6510,7 @@ msgid "Wed"
 msgstr "Ср"
 
 #: src/components/BoardSettingsModal.vue:2313
-#: src/components/CardDetail.vue:5288
+#: src/components/CardDetail.vue:5285
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "неделя"
@@ -6536,7 +6620,7 @@ msgid "wrote"
 msgstr "написал"
 
 #: src/components/BoardSettingsModal.vue:2315
-#: src/components/CardDetail.vue:5290
+#: src/components/CardDetail.vue:5287
 msgid "year"
 msgid_plural "years"
 msgstr[0] "год"
@@ -6571,6 +6655,10 @@ msgstr "вы можете редактировать"
 #: src/components/BoardSettingsModal.vue
 msgid "you can manage"
 msgstr "вы можете управлять"
+
+#: src/components/CardDetail.vue
+msgid "You can only view this project"
+msgstr "Вы можете только просматривать этот проект"
 
 #: src/components/CardDetail.vue
 msgid "You cannot copy to that board."
@@ -6611,6 +6699,10 @@ msgstr "Для настройки публичной ссылки нужны п�
 #: src/components/CardDetail.vue
 msgid "You no longer have access to this card."
 msgstr "У вас больше нет доступа к этой карточке."
+
+#: src/views/ProjectView.vue
+msgid "You still have access to this project through a group."
+msgstr "У вас всё ещё есть доступ к этому проекту через группу."
 
 #: src/views/InboxView.vue
 msgid "You're all caught up"

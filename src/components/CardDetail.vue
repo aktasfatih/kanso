@@ -1243,13 +1243,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</div>
 					</div>
 
-					<!-- Projects membership.
-					     Deliberately NOT gated on canEdit (#10732). A project is the
-					     viewer's OWN collection: ProjectService::addCard() loads the
-					     project as its owner and then asks only for PERMISSION_READ on the
-					     card's board, so collecting a card you can merely read is
-					     explicitly allowed. Hiding this pill would remove a working
-					     feature from read-only members, not a dead affordance. -->
+					<!-- Not gated on the card's canEdit: collecting a card needs edit
+					     rights on the project and only read access to the card. -->
 					<span class="card-modal__attr-divider" />
 
 					<div class="card-modal__attr">
@@ -1286,7 +1281,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								:class="{ 'card-modal__label-toggle--active': cardProjectIds.has(project.id) }"
 								:aria-pressed="cardProjectIds.has(project.id)"
 								:aria-busy="isProjectTogglePending(project.id) ? 'true' : undefined"
-								@click="handleToggleProject(project.id)">
+								:aria-disabled="project.canEdit ? undefined : 'true'"
+								:title="project.canEdit ? undefined : t('kanso', 'You can only view this project')"
+								@click="handleToggleProject(project)">
 								<span
 									class="card-modal__project-dot"
 									:style="project.color ? { background: '#' + project.color } : {}" />
@@ -7414,7 +7411,8 @@ function isProjectTogglePending(projectId) {
 
 // Leaves `openPicker` alone, like the label and assignee pickers: it is a
 // multi-select, so it stays open across picks (#10603).
-async function handleToggleProject(projectId) {
+async function handleToggleProject({ id: projectId, canEdit }) {
+	if (!canEdit) return
 	projectToggleError.value = ''
 	// Read membership at CLICK time, not when the write starts: the pick queued
 	// behind another one must still mean what the user saw when they made it.
@@ -8305,6 +8303,11 @@ async function handleToggleProject(projectId) {
 	font-weight: 600;
 	cursor: pointer;
 }
+.card-modal__label-toggle[aria-disabled='true'] {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
 .card-modal__label-toggle--active {
 	background: var(--label-color, var(--color-primary-element));
 	color: #fff;

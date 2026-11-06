@@ -151,7 +151,11 @@ your work, on your own Nextcloud, laid out plainly.
   on cards you watch — filterable to a single board. My tasks also supports
   searching, status and due-date filters, sorting, and a read-only status board;
   these controls apply to the loaded open tasks.
-- **Projects**: cross-board card collections with a start and target date, a
+- **Projects**: cross-board card collections, shareable with users and groups
+  under your Nextcloud sharing settings (members only see the cards they can
+  already access; if the owner's account is deleted, an editor takes over, direct
+  shares first, and with no editor the project and its discussion are deleted;
+  view-only members are never promoted), with a start and target date, a
   forecast finish date from your recent pace, an on-track / at-risk / late
   status, a burn-up chart, estimates normalized across boards, blocked and
   overdue work grouped up top, and the project's cards on a timeline.

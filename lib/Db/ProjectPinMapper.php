@@ -70,6 +70,15 @@ class ProjectPinMapper extends QBMapper {
 	}
 
 	/** @throws Exception */
+	public function deleteByUser(string $uid): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('uid', $qb->createNamedParameter($uid)));
+
+		$qb->executeStatement();
+	}
+
+	/** @throws Exception */
 	public function deleteByProject(int $projectId): void {
 		$qb = $this->db->getQueryBuilder();
 		$qb->delete($this->getTableName())

@@ -114,7 +114,7 @@ msgstr "{card} agora é um subcartão de {parent}"
 msgid "{card} moved to {stack}"
 msgstr "{card} movido para {stack}"
 
-#: src/components/ProjectHealth.vue:167
+#: src/components/ProjectHealth.vue:170
 msgid "{count} blocked"
 msgid_plural "{count} blocked"
 msgstr[0] "{count} bloqueado"
@@ -126,7 +126,7 @@ msgid_plural "{count} cards"
 msgstr[0] "{count} cartão"
 msgstr[1] "{count} cartões"
 
-#: src/components/ProjectHealth.vue:178
+#: src/components/ProjectHealth.vue:181
 msgid "{count} card has no estimate and counts as the typical estimate of {points}."
 msgid_plural "{count} cards have no estimate and each counts as the typical estimate of {points}."
 msgstr[0] "{count} cartão não tem estimativa e conta como a estimativa típica de {points}."
@@ -142,19 +142,19 @@ msgid_plural "{count} characters left"
 msgstr[0] "{count} caractere restante"
 msgstr[1] "{count} caracteres restantes"
 
-#: src/components/ProjectHealth.vue:158
+#: src/components/ProjectHealth.vue:161
 msgid "{count} day ago"
 msgid_plural "{count} days ago"
 msgstr[0] "há {count} dia"
 msgstr[1] "há {count} dias"
 
-#: src/components/ProjectHealth.vue:170
+#: src/components/ProjectHealth.vue:173
 msgid "{count} in progress"
 msgid_plural "{count} in progress"
 msgstr[0] "{count} em andamento"
 msgstr[1] "{count} em andamento"
 
-#: src/components/ProjectHealth.vue:164
+#: src/components/ProjectHealth.vue:167
 msgid "{count} overdue"
 msgid_plural "{count} overdue"
 msgstr[0] "{count} atrasado"
@@ -187,7 +187,7 @@ msgstr "{from}, no mínimo"
 msgid "{n} blocked"
 msgstr "{n} bloqueados"
 
-#: src/components/ProjectHealth.vue:136
+#: src/components/ProjectHealth.vue:139
 msgid "{n} card / week"
 msgid_plural "{n} cards / week"
 msgstr[0] "{n} cartão / semana"
@@ -228,7 +228,7 @@ msgid_plural "{n} points"
 msgstr[0] "{n} ponto"
 msgstr[1] "{n} pontos"
 
-#: src/components/ProjectHealth.vue:135
+#: src/components/ProjectHealth.vue:138
 msgid "{n} point / week"
 msgid_plural "{n} points / week"
 msgstr[0] "{n} ponto / semana"
@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n linha de dados detectada"
 msgstr[1] "%n linhas de dados detectadas"
 
-#: src/components/CardDetail.vue:5098
+#: src/components/CardDetail.vue:5095
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "há %n dia"
@@ -409,7 +409,7 @@ msgid_plural "%n files"
 msgstr[0] "%n arquivo"
 msgstr[1] "%n arquivos"
 
-#: src/components/CardDetail.vue:5096
+#: src/components/CardDetail.vue:5093
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "há %n hora"
@@ -439,7 +439,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etiqueta não foi criada e está faltando nos cartões importados: só quem gerencia o quadro pode adicionar novas etiquetas. Peça a essa pessoa para adicioná-la e depois defina-a nos cartões."
 msgstr[1] "%n etiquetas não foram criadas e estão faltando nos cartões importados: só quem gerencia o quadro pode adicionar novas etiquetas. Peça a essa pessoa para adicioná-las e depois defina-as nos cartões."
 
-#: src/components/CardDetail.vue:5094
+#: src/components/CardDetail.vue:5091
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "há %n minuto"
@@ -463,13 +463,13 @@ msgid_plural "%n points"
 msgstr[0] "%n ponto"
 msgstr[1] "%n pontos"
 
-#: src/components/CardDetail.vue:1263
+#: src/components/CardDetail.vue:1258
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n projeto"
 msgstr[1] "%n projetos"
 
-#: src/components/CardDetail.vue:2353
+#: src/components/CardDetail.vue:2350
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n resposta"
@@ -520,6 +520,10 @@ msgstr "Uma conta separada só muda de quem é a cota consumida; para limitar o 
 #: src/components/BoardSettingsModal.vue
 msgid "Accept mail from (one address or @domain per line — leave empty to accept anyone)"
 msgstr "Aceitar e-mails de (um endereço ou @domínio por linha — deixe vazio para aceitar qualquer um)"
+
+#: src/components/ProjectShareDialog.vue
+msgid "Access level for {name}"
+msgstr "Nível de acesso de {name}"
 
 #: templates/admin-backup.php
 msgid "Account that owns the folder"
@@ -1017,7 +1021,7 @@ msgstr "Bloqueado"
 msgid "Blocked by"
 msgstr "Bloqueado por"
 
-#: src/views/ProjectView.vue:254
+#: src/views/ProjectView.vue:300
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Bloqueado por {count} cartão aberto"
@@ -1185,6 +1189,7 @@ msgid "Calendar feed"
 msgstr "Feed de calendário"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Can edit"
 msgstr "Pode editar"
 
@@ -1195,6 +1200,10 @@ msgstr "Pode gerenciar"
 #: src/components/BoardSettingsModal.vue
 msgid "Can share"
 msgstr "Pode compartilhar"
+
+#: src/components/ProjectShareDialog.vue
+msgid "Can view"
+msgstr "Pode ver"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
@@ -2032,7 +2041,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:2312
-#: src/components/CardDetail.vue:5287
+#: src/components/CardDetail.vue:5284
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dia"
@@ -2823,6 +2832,10 @@ msgstr "Não foi possível editar o comentário."
 msgid "Failed to leave board."
 msgstr "Não foi possível sair do quadro."
 
+#: src/views/ProjectView.vue
+msgid "Failed to leave project."
+msgstr "Falha ao sair do projeto."
+
 #: src/components/CardDetail.vue
 msgid "Failed to link card."
 msgstr "Não foi possível vincular o cartão."
@@ -2860,6 +2873,7 @@ msgstr "Não foi possível carregar a caixa de entrada. Tente novamente."
 msgid "Failed to load project cards. Please try again."
 msgstr "Não foi possível carregar os cartões do projeto. Tente novamente."
 
+#: src/views/ProjectView.vue
 #: src/views/ProjectsView.vue
 msgid "Failed to load projects. Please try again."
 msgstr "Não foi possível carregar os projetos. Tente novamente."
@@ -2875,6 +2889,10 @@ msgstr "Não foi possível carregar as regras de recorrência."
 #: src/views/MyReviewsView.vue
 msgid "Failed to load reviews. Please try again."
 msgstr "Não foi possível carregar as revisões. Tente novamente."
+
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to load shares."
+msgstr "Falha ao carregar os compartilhamentos."
 
 #: src/views/MyCardsView.vue
 msgid "Failed to load tasks. Please try again."
@@ -2893,6 +2911,10 @@ msgstr "Não foi possível carregar os anexos do quadro."
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the calendar feed config."
 msgstr "Não foi possível carregar a configuração do feed de calendário."
+
+#: src/views/ProjectView.vue
+msgid "Failed to load the discussion."
+msgstr "Falha ao carregar a discussão."
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the email intake settings."
@@ -2947,6 +2969,10 @@ msgstr "Não foi possível publicar a nota."
 #: src/views/ProjectView.vue
 msgid "Failed to post reply."
 msgstr "Não foi possível publicar a resposta."
+
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to remove access."
+msgstr "Falha ao remover o acesso."
 
 #: src/components/CardDetail.vue
 msgid "Failed to remove attachment."
@@ -3032,6 +3058,10 @@ msgstr "Não foi possível salvar o filtro."
 msgid "Failed to save."
 msgstr "Não foi possível salvar."
 
+#: src/composables/useProjectShares.js
+msgid "Failed to search."
+msgstr "Falha na pesquisa."
+
 #: src/components/CardDetail.vue
 msgid "Failed to set parent."
 msgstr "Não foi possível definir o cartão pai."
@@ -3048,6 +3078,10 @@ msgstr "Não foi possível definir o lembrete."
 msgid "Failed to share board."
 msgstr "Não foi possível compartilhar o quadro."
 
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to share project."
+msgstr "Falha ao compartilhar o projeto."
+
 #: src/components/CardDetail.vue
 msgid "Failed to submit review."
 msgstr "Não foi possível enviar a revisão."
@@ -3059,6 +3093,10 @@ msgstr "Não foi possível desarquivar o cartão."
 #: src/components/CardDetail.vue
 msgid "Failed to unassign step."
 msgstr "Não foi possível remover o responsável pela etapa."
+
+#: src/components/ProjectShareDialog.vue
+msgid "Failed to update access."
+msgstr "Falha ao atualizar o acesso."
 
 #: src/components/CardDetail.vue
 msgid "Failed to update assignee."
@@ -3387,6 +3425,7 @@ msgid "Green"
 msgstr "Verde"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Group"
 msgstr "Grupo"
 
@@ -3496,7 +3535,7 @@ msgstr "Importado para um novo quadro do Kanso:"
 msgid "Importing…"
 msgstr "Importando…"
 
-#: src/components/ProjectHealth.vue:157
+#: src/components/ProjectHealth.vue:160
 msgid "in {count} day"
 msgid_plural "in {count} days"
 msgstr[0] "em {count} dia"
@@ -3585,7 +3624,7 @@ msgstr "Seu propósito, escopo ou regras. Todos os membros do quadro podem lê-l
 msgid "Jump to the discussion"
 msgstr "Ir para a discussão"
 
-#: src/components/CardDetail.vue:7192
+#: src/components/CardDetail.vue:7189
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Ir para a discussão (%n comentário)"
@@ -3755,6 +3794,10 @@ msgstr "Sair"
 msgid "Leave board"
 msgstr "Sair do quadro"
 
+#: src/views/ProjectView.vue
+msgid "Leave project"
+msgstr "Sair do projeto"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Leave this board?"
 msgstr "Sair deste quadro?"
@@ -3875,6 +3918,7 @@ msgstr "Carregando seus quadros do Deck…"
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
 #: src/components/CsvImportModal.vue
+#: src/components/ProjectShareDialog.vue
 #: src/views/ArchivedView.vue
 #: src/views/PublicBoard.vue
 #: src/views/TrashView.vue
@@ -3962,7 +4006,7 @@ msgid "Mon"
 msgstr "Seg"
 
 #: src/components/BoardSettingsModal.vue:2314
-#: src/components/CardDetail.vue:5289
+#: src/components/CardDetail.vue:5286
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mês"
@@ -4356,6 +4400,10 @@ msgid "No matching tasks"
 msgstr "Nenhuma tarefa correspondente"
 
 #: src/views/ProjectView.vue
+msgid "No notes yet."
+msgstr "Ainda não há notas."
+
+#: src/views/ProjectView.vue
 msgid "No notes yet. Start a discussion log for this project."
 msgstr "Nenhuma nota ainda. Comece um registro de discussão para este projeto."
 
@@ -4437,6 +4485,10 @@ msgstr "Nenhuma conversa ainda. Todos que observam este cartão são notificados
 msgid "No type"
 msgstr "Sem tipo"
 
+#: src/components/ProjectShareDialog.vue
+msgid "No users or groups found."
+msgstr "Nenhum usuário ou grupo encontrado."
+
 #: src/components/CardDetail.vue
 msgid "Nobody has access to this board yet."
 msgstr "Ninguém tem acesso a este quadro ainda."
@@ -4470,6 +4522,7 @@ msgid "Not enough data yet"
 msgstr "Ainda não há dados suficientes"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Not shared with anyone yet."
 msgstr "Ainda não compartilhado com ninguém."
 
@@ -4718,6 +4771,10 @@ msgstr "URL do payload"
 #: src/components/CardDetail.vue
 msgid "Pending"
 msgstr "Pendente"
+
+#: src/components/ProjectShareDialog.vue
+msgid "People you share with see this project’s details and its whole discussion, including earlier notes. They only see the cards they can already access on their boards."
+msgstr "As pessoas com quem você compartilha veem os detalhes deste projeto e toda a discussão, incluindo notas anteriores. Elas veem apenas os cartões aos quais já têm acesso em seus quadros."
 
 #: src/components/BoardSettingsModal.vue
 msgid "per mailbox"
@@ -5020,6 +5077,10 @@ msgstr "Remover \"{name}\" do quadro?"
 #: src/components/BoardSettingsModal.vue
 msgid "Remove {label}"
 msgstr "Remover {label}"
+
+#: src/components/ProjectShareDialog.vue
+msgid "Remove {name}"
+msgstr "Remover {name}"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Remove {name} from board"
@@ -5415,15 +5476,18 @@ msgid "Search the people with access to this board"
 msgstr "Pesquisar as pessoas com acesso a este quadro"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Search users or groups"
 msgstr "Pesquisar usuários ou grupos"
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "Search users or groups…"
 msgstr "Pesquisar usuários ou grupos…"
 
 #: src/components/CardSearchPicker.vue
 #: src/components/CommandPalette.vue
+#: src/components/ProjectShareDialog.vue
 #: src/components/SearchBox.vue
 msgid "Searching…"
 msgstr "Pesquisando…"
@@ -5528,6 +5592,21 @@ msgstr "Compartilhe uma visualização somente leitura deste quadro com qualquer
 msgid "Share a read-only view of this board with anyone via a public link. No sign-in is required to view it. Read-only comments are shown; assignees, activity and members are never shown."
 msgstr "Compartilhe uma visualização somente leitura deste quadro com qualquer pessoa por um link público. Não é preciso fazer login para ver. Os comentários aparecem somente para leitura; responsáveis, atividade e membros nunca são exibidos."
 
+#: src/components/ProjectShareDialog.vue
+#: src/views/ProjectView.vue
+msgid "Share project"
+msgstr "Compartilhar projeto"
+
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Shared"
+msgstr "Compartilhado"
+
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Shared by {owner}"
+msgstr "Compartilhado por {owner}"
+
 #: src/views/PublicBoard.vue
 msgid "Shared read-only via Kanso"
 msgstr "Compartilhado somente para leitura pelo Kanso"
@@ -5572,7 +5651,7 @@ msgstr "Mostrar a discussão abaixo do cartão"
 msgid "Show the discussion panel"
 msgstr "Mostrar o painel de discussão"
 
-#: src/components/CardDetail.vue:7198
+#: src/components/CardDetail.vue:7195
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostrar o painel de discussão (%n comentário)"
@@ -5988,6 +6067,10 @@ msgstr "Este link expirou. Os visitantes veem um aviso de que o link expirou; es
 msgid "This link is invalid or has been disabled."
 msgstr "Este link é inválido ou foi desativado."
 
+#: src/views/ProjectView.vue
+msgid "This project no longer exists, or you no longer have access to it."
+msgstr "Este projeto não existe mais ou você não tem mais acesso a ele."
+
 #: templates/public-expired.php
 msgid "This public board link has expired. Ask whoever shared the board for a new link."
 msgstr "Este link público do quadro expirou. Peça um novo link a quem compartilhou o quadro."
@@ -6284,6 +6367,7 @@ msgid "Use the Add card button above to collect cards from any board."
 msgstr "Use o botão Adicionar cartão acima para reunir cartões de qualquer quadro."
 
 #: src/components/BoardSettingsModal.vue
+#: src/components/ProjectShareDialog.vue
 msgid "User"
 msgstr "Usuário"
 
@@ -6374,7 +6458,7 @@ msgid "Wed"
 msgstr "Qua"
 
 #: src/components/BoardSettingsModal.vue:2313
-#: src/components/CardDetail.vue:5288
+#: src/components/CardDetail.vue:5285
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "semana"
@@ -6483,7 +6567,7 @@ msgid "wrote"
 msgstr "escreveu"
 
 #: src/components/BoardSettingsModal.vue:2315
-#: src/components/CardDetail.vue:5290
+#: src/components/CardDetail.vue:5287
 msgid "year"
 msgid_plural "years"
 msgstr[0] "ano"
@@ -6517,6 +6601,10 @@ msgstr "você pode editar"
 #: src/components/BoardSettingsModal.vue
 msgid "you can manage"
 msgstr "você pode gerenciar"
+
+#: src/components/CardDetail.vue
+msgid "You can only view this project"
+msgstr "Você só pode ver este projeto"
 
 #: src/components/CardDetail.vue
 msgid "You cannot copy to that board."
@@ -6557,6 +6645,10 @@ msgstr "Você precisa de permissão de gerenciamento para configurar o link púb
 #: src/components/CardDetail.vue
 msgid "You no longer have access to this card."
 msgstr "Você não tem mais acesso a este cartão."
+
+#: src/views/ProjectView.vue
+msgid "You still have access to this project through a group."
+msgstr "Você ainda tem acesso a este projeto por meio de um grupo."
 
 #: src/views/InboxView.vue
 msgid "You're all caught up"

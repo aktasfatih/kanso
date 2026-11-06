@@ -23,9 +23,98 @@ use OCA\Kanso\Service\CardMovePersonalService;
 use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\PermissionService;
+use OCP\AppFramework\Db\DoesNotExistException;
 use PHPUnit\Framework\TestCase;
 
 class CardMovePersonalServiceTest extends TestCase {
+	private function source(): Card {
+		$card = new Card();
+		$card->setId(5);
+		return $card;
+	}
+
+	/** @return array{0: ProjectCardMapper, 1: ProjectMapper} */
+	private function membershipOfCarolsProject(): array {
+		$membership = new ProjectCard();
+		$membership->setProjectId(9);
+		$membership->setCardId(5);
+		$memberships = $this->createMock(ProjectCardMapper::class);
+		$memberships->method('findByCardForMove')->with(5)->willReturn([$membership]);
+		$project = new Project();
+		$project->setOwner('carol');
+		$projects = $this->createMock(ProjectMapper::class);
+		$projects->method('find')->with(9)->willReturn($project);
+		return [$memberships, $projects];
+	}
+
+	public function testProjectOwnerWhoNeverSawTheCardDoesNotBlockTheMove(): void {
+		[$memberships, $projects] = $this->membershipOfCarolsProject();
+		$memberships->expects(self::once())->method('update');
+		$permissions = $this->createMock(PermissionService::class);
+		$permissions->method('getPermissions')->willReturn(0);
+		$visibility = $this->createMock(CardVisibilityGuard::class);
+		$visibility->method('isVisible')->willReturn(true);
+		$timers = $this->createMock(CardRunningTimerMapper::class);
+		$timers->method('findByCard')->willThrowException(new DoesNotExistException('none'));
+
+		(new CardMovePersonalService(
+			$this->createMock(ReminderMapper::class),
+			$this->createMock(SubscriptionMapper::class),
+			$memberships,
+			$projects,
+			$timers,
+			$permissions,
+			$visibility,
+		))->transfer($this->source(), new Board(), new Card(), new Board(), []);
+	}
+
+	public function testProjectOwnerWhoCouldNotSeeTheHiddenCardDoesNotBlockTheMove(): void {
+		[$memberships, $projects] = $this->membershipOfCarolsProject();
+		$memberships->expects(self::once())->method('update');
+		$sourceBoard = new Board();
+		$permissions = $this->createMock(PermissionService::class);
+		$permissions->method('getPermissions')->willReturnCallback(
+			static fn (Board $board): int => $board === $sourceBoard ? PermissionService::PERMISSION_READ : 0
+		);
+		$visibility = $this->createMock(CardVisibilityGuard::class);
+		$visibility->method('isVisible')->willReturn(false);
+		$timers = $this->createMock(CardRunningTimerMapper::class);
+		$timers->method('findByCard')->willThrowException(new DoesNotExistException('none'));
+
+		(new CardMovePersonalService(
+			$this->createMock(ReminderMapper::class),
+			$this->createMock(SubscriptionMapper::class),
+			$memberships,
+			$projects,
+			$timers,
+			$permissions,
+			$visibility,
+		))->transfer($this->source(), $sourceBoard, new Card(), new Board(), []);
+	}
+
+	public function testProjectOwnerWhoWouldLoseTheCardBlocksTheMove(): void {
+		[$memberships, $projects] = $this->membershipOfCarolsProject();
+		$memberships->expects(self::never())->method('update');
+		$sourceBoard = new Board();
+		$permissions = $this->createMock(PermissionService::class);
+		$permissions->method('getPermissions')->willReturnCallback(
+			static fn (Board $board): int => $board === $sourceBoard ? PermissionService::PERMISSION_READ : 0
+		);
+		$visibility = $this->createMock(CardVisibilityGuard::class);
+		$visibility->method('isVisible')->willReturn(true);
+
+		$this->expectException(InvalidInputException::class);
+		(new CardMovePersonalService(
+			$this->createMock(ReminderMapper::class),
+			$this->createMock(SubscriptionMapper::class),
+			$memberships,
+			$projects,
+			$this->createMock(CardRunningTimerMapper::class),
+			$permissions,
+			$visibility,
+		))->transfer($this->source(), $sourceBoard, new Card(), new Board(), []);
+	}
+
 	public function testTransfersPersonalDataAndOneRunningTimerWithoutDuplicates(): void {
 		$reminders = $this->createMock(ReminderMapper::class);
 		$subscriptions = $this->createMock(SubscriptionMapper::class);
@@ -107,7 +196,7 @@ class CardMovePersonalServiceTest extends TestCase {
 		$board->setId(2);
 
 		(new CardMovePersonalService($reminders, $subscriptions, $memberships, $projects, $timers, $permissions, $visibility))
-			->transfer(5, $target, $board, [10 => 20]);
+			->transfer($this->source(), new Board(), $target, $board, [10 => 20]);
 	}
 
 	public function testRejectsInaccessibleReminderOwnerWithoutMovingAnyState(): void {
@@ -128,7 +217,7 @@ class CardMovePersonalServiceTest extends TestCase {
 		$timers->expects(self::never())->method('update');
 		$this->expectException(InvalidInputException::class);
 		(new CardMovePersonalService($reminders, $subscriptions, $memberships, $projects, $timers, $permissions, $visibility))
-			->transfer(5, new Card(), new Board(), []);
+			->transfer($this->source(), new Board(), new Card(), new Board(), []);
 	}
 
 	public function testRejectsUnmappedCommentReminder(): void {
@@ -148,7 +237,7 @@ class CardMovePersonalServiceTest extends TestCase {
 		$reminders->expects(self::never())->method('update');
 		$this->expectException(InvalidInputException::class);
 		(new CardMovePersonalService($reminders, $subscriptions, $memberships, $projects, $timers, $permissions, $visibility))
-			->transfer(5, new Card(), new Board(), []);
+			->transfer($this->source(), new Board(), new Card(), new Board(), []);
 	}
 
 	public function testRejectsThreadSubscriberWhoCannotSeeDestinationCard(): void {
@@ -168,7 +257,7 @@ class CardMovePersonalServiceTest extends TestCase {
 		$subscriptions->expects(self::never())->method('update');
 		$this->expectException(InvalidInputException::class);
 		(new CardMovePersonalService($reminders, $subscriptions, $memberships, $projects, $timers, $permissions, $visibility))
-			->transfer(5, new Card(), new Board(), [10 => 20]);
+			->transfer($this->source(), new Board(), new Card(), new Board(), [10 => 20]);
 	}
 
 	/** @return iterable<string, array{int, bool}> */
@@ -198,6 +287,6 @@ class CardMovePersonalServiceTest extends TestCase {
 		$memberships->expects(self::never())->method('update');
 		$this->expectException(InvalidInputException::class);
 		(new CardMovePersonalService($reminders, $subscriptions, $memberships, $projects, $timers, $permissions, $visibility))
-			->transfer(5, new Card(), new Board(), []);
+			->transfer($this->source(), new Board(), new Card(), new Board(), []);
 	}
 }

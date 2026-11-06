@@ -11,8 +11,8 @@ use OCP\AppFramework\Db\Entity;
 use OCP\DB\Types;
 
 /**
- * One project comment (table `kanso_project_comments`) - an owner-only personal
- * discussion log entry on a project (#3563). A top-level comment has a null
+ * One project comment (table `kanso_project_comments`) - a discussion entry on
+ * a project. A top-level comment has a null
  * `parentCommentId`; a reply carries the id of the top-level comment it answers
  * (one level only - enforced in {@see \OCA\Kanso\Service\ProjectCommentService}).
  *
