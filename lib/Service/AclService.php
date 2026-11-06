@@ -128,8 +128,9 @@ class AclService {
 	 * @throws NotPermittedException if the actor may not share the board, or
 	 *                               lacks MANAGE and flips bits beyond their own or the role
 	 * @throws InvalidInputException on unknown permission bits, an unknown
-	 *                               role, a rule of another board, or added bits
-	 *                               for a target the actor may no longer share with
+	 *                               role, a rule of another board, or added bits or
+	 *                               an internal role for a target the actor may no
+	 *                               longer share with
 	 */
 	public function update(int $boardId, int $aclId, int $permission, string $actorUid, ?string $role = null): Acl {
 		$board = $this->loadBoard($boardId);
@@ -138,13 +139,15 @@ class AclService {
 		$acl = $this->loadAcl($boardId, $aclId);
 		$permission = $this->validateMask($permission);
 		$this->assertNoEscalation($board, $actorUid, $permission ^ $acl->getPermission());
-		if (($permission & ~$acl->getPermission()) !== 0) {
+		$storedRole = $acl->getRole() ?? ViewerContext::ROLE_INTERNAL;
+		$role = $role === null ? null : $this->parseRole($role);
+		// An external member's stored bits only take full effect once internal.
+		$becomesInternal = $role === ViewerContext::ROLE_INTERNAL && $storedRole !== ViewerContext::ROLE_INTERNAL;
+		if (($permission & ~$acl->getPermission()) !== 0 || $becomesInternal) {
 			$this->shareeSearch->resolveParticipant($acl->getParticipantType(), (string)$acl->getParticipant(), $actorUid);
 		}
 
 		if ($role !== null) {
-			$role = $this->parseRole($role);
-			$storedRole = $acl->getRole() ?? ViewerContext::ROLE_INTERNAL;
 			if ($role !== $storedRole) {
 				$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
 				$acl->setRole($role);

@@ -627,6 +627,17 @@ class AclServiceTest extends TestCase {
 
 	// ---- update: member role (#3742) --------------------------------------
 
+	public function testUpdateMakingAMemberInternalRechecksTheSharingPolicy(): void {
+		$acl = $this->acl();
+		$acl->setRole(ViewerContext::ROLE_EXTERNAL);
+		$this->stubUpdateOf($acl);
+		$this->userManager->method('get')->with('bob')->willReturn(null);
+		$this->aclMapper->expects(self::never())->method('update');
+
+		$this->expectException(InvalidInputException::class);
+		$this->service->update(1, 40, $acl->getPermission(), 'alice', ViewerContext::ROLE_INTERNAL);
+	}
+
 	public function testUpdateFlippingRoleRequiresManage(): void {
 		$board = $this->board();
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
