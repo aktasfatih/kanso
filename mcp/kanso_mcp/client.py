@@ -640,7 +640,11 @@ class KansoClient:
         )
 
     async def list_project_shares(self, project_id: int) -> List[Dict[str, Any]]:
-        return await self._request("GET", f"/projects/{project_id}/shares") or []
+        path = f"/projects/{project_id}/shares"
+        data = await self._request("GET", path) or []
+        if not isinstance(data, list):
+            raise KansoApiError(200, "GET", path, "expected a list of shares")
+        return data
 
     async def share_project(
         self, project_id: int, participant: str, participant_type: str, permission: int

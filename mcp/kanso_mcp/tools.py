@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from pydantic import ValidationError
 
 from kanso_mcp.client import KansoApiError, KansoClient
 
@@ -1264,7 +1265,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         await client.leave_project(project_id)
         try:
             projects = await client.list_projects()
-        except (KansoApiError, httpx.HTTPError):
+        except (KansoApiError, httpx.HTTPError, ValidationError):
             return {"left": True, "stillHasAccess": None}
         return {
             "left": True,

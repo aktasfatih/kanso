@@ -1342,3 +1342,31 @@ async def test_unshare_project_deletes_the_share():
         await tools["kanso_unshare_project"](4, 9)
 
     assert route.called
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_leave_project_still_succeeds_when_the_recheck_is_malformed():
+    respx.delete(f"{BASE}/projects/4/shares/me").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    respx.get(f"{BASE}/projects").mock(
+        return_value=httpx.Response(200, json=[{"title": "no id"}])
+    )
+    tools, client = _tools()
+    async with client:
+        result = await tools["kanso_leave_project"](4)
+
+    assert result == {"left": True, "stillHasAccess": None}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_project_shares_rejects_a_non_list_body():
+    respx.get(f"{BASE}/projects/4/shares").mock(
+        return_value=httpx.Response(200, json={"id": 9})
+    )
+    tools, client = _tools()
+    async with client:
+        with pytest.raises(KansoApiError):
+            await tools["kanso_list_project_shares"](4)
