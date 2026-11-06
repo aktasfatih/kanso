@@ -288,9 +288,10 @@ class BoardDetail(_Base):
 
 
 class Project(_Base):
-    """A project from ``/api/projects``: an owner-only, cross-board collection
-    of cards. ``owner`` is the uid, ``color`` a bare 6-hex string (no '#'),
-    ``createdAt`` unix seconds and ``startDate``/``targetDate`` YYYY-MM-DD. There is no sharing: only the owner ever sees it.
+    """A project from ``/api/projects``: a cross-board collection of cards the
+    user owns or has been shared. ``owner`` is the uid, ``color`` a bare 6-hex
+    string (no '#'), ``createdAt`` unix seconds and ``startDate``/``targetDate``
+    YYYY-MM-DD. ``canLeave`` is true only for a direct share, not a group's.
     """
 
     id: int
@@ -301,6 +302,12 @@ class Project(_Base):
     createdAt: int = 0
     startDate: Optional[str] = None
     targetDate: Optional[str] = None
+    # Only `GET /api/projects` carries these; None means "not reported here".
+    isOwner: Optional[bool] = None
+    canEdit: Optional[bool] = None
+    canLeave: Optional[bool] = None
+    shared: Optional[bool] = None
+    ownerDisplayName: Optional[str] = None
 
 
 class ProjectCard(_Base):

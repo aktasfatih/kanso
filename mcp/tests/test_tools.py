@@ -1093,6 +1093,11 @@ async def test_project_tools_schema_and_hints():
         "kanso_create_project",
         "kanso_update_project",
         "kanso_delete_project",
+        "kanso_list_project_shares",
+        "kanso_share_project",
+        "kanso_update_project_share",
+        "kanso_unshare_project",
+        "kanso_leave_project",
         "kanso_list_project_cards",
         "kanso_get_project_stats",
         "kanso_get_project_plan",
@@ -1110,9 +1115,15 @@ async def test_project_tools_schema_and_hints():
         "kanso_get_project_stats",
         "kanso_get_project_plan",
         "kanso_list_project_comments",
+        "kanso_list_project_shares",
     ):
         assert tools[name].annotations.readOnlyHint is True, name
-    for name in ("kanso_delete_project", "kanso_delete_project_comment"):
+    for name in (
+        "kanso_delete_project",
+        "kanso_delete_project_comment",
+        "kanso_unshare_project",
+        "kanso_leave_project",
+    ):
         assert tools[name].annotations.destructiveHint is True, name
 
     assert tools["kanso_create_project"].inputSchema["required"] == ["title"]
@@ -1121,6 +1132,12 @@ async def test_project_tools_schema_and_hints():
         "project_id",
         "body",
     ]
+
+    share_schema = tools["kanso_share_project"].inputSchema
+    assert share_schema["required"] == ["project_id", "participant"]
+    assert share_schema["properties"]["participant_type"]["enum"] == ["user", "group"]
+    assert share_schema["properties"]["participant_type"]["default"] == "user"
+    assert share_schema["properties"]["can_edit"]["default"] is False
 
 
 def test_filter_to_query_covers_every_dimension_the_parity_fixture_exercises():
@@ -1144,3 +1161,184 @@ def test_filter_to_query_covers_every_dimension_the_parity_fixture_exercises():
                     assert q[short_key] == ",".join(str(v) for v in value)
                 else:
                     assert q[short_key] == value
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("can_edit,permission", [(False, 1), (True, 3)])
+async def test_share_project_maps_can_edit_to_the_permission_mask(can_edit, permission):
+    route = respx.post(f"{BASE}/projects/4/shares").mock(
+        return_value=httpx.Response(200, json={"id": 9, "permission": permission})
+    )
+    tools, client = _tools()
+    async with client:
+        share = await tools["kanso_share_project"](4, "devs", "group", can_edit)
+
+    assert json.loads(route.calls.last.request.content) == {
+        "participant": "devs",
+        "participantType": "group",
+        "permission": permission,
+    }
+    assert share["id"] == 9
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_share_project_defaults_to_a_view_only_user_share():
+    route = respx.post(f"{BASE}/projects/4/shares").mock(
+        return_value=httpx.Response(200, json={"id": 9, "permission": 1})
+    )
+    tools, client = _tools()
+    async with client:
+        await tools["kanso_share_project"](4, "bob")
+
+    assert json.loads(route.calls.last.request.content) == {
+        "participant": "bob",
+        "participantType": "user",
+        "permission": 1,
+    }
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_leave_project_reports_access_is_gone():
+    route = respx.delete(f"{BASE}/projects/4/shares/me").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    respx.get(f"{BASE}/projects").mock(
+        return_value=httpx.Response(200, json=[{"id": 5, "title": "Other"}])
+    )
+    tools, client = _tools()
+    async with client:
+        result = await tools["kanso_leave_project"](4)
+
+    assert route.called
+    assert result == {"left": True, "stillHasAccess": False}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_leave_project_still_succeeds_when_the_recheck_fails():
+    respx.delete(f"{BASE}/projects/4/shares/me").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    respx.get(f"{BASE}/projects").mock(return_value=httpx.Response(500, json={}))
+    tools, client = _tools()
+    async with client:
+        result = await tools["kanso_leave_project"](4)
+
+    assert result == {"left": True, "stillHasAccess": None}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_leave_project_still_succeeds_when_the_recheck_cannot_connect():
+    respx.delete(f"{BASE}/projects/4/shares/me").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    respx.get(f"{BASE}/projects").mock(side_effect=httpx.ConnectTimeout("t"))
+    tools, client = _tools()
+    async with client:
+        result = await tools["kanso_leave_project"](4)
+
+    assert result == {"left": True, "stillHasAccess": None}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_leave_project_reports_access_kept_through_a_group():
+    respx.delete(f"{BASE}/projects/4/shares/me").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    respx.get(f"{BASE}/projects").mock(
+        return_value=httpx.Response(
+            200, json=[{"id": 4, "title": "Shared", "canLeave": False}]
+        )
+    )
+    tools, client = _tools()
+    async with client:
+        result = await tools["kanso_leave_project"](4)
+
+    assert result == {"left": True, "stillHasAccess": True}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_projects_carries_the_viewers_access_fields():
+    respx.get(f"{BASE}/projects").mock(
+        return_value=httpx.Response(200, json=[{
+            "id": 4,
+            "title": "Shared",
+            "owner": "alice",
+            "isOwner": False,
+            "canEdit": True,
+            "canLeave": True,
+            "shared": True,
+            "ownerDisplayName": "Alice A",
+        }])
+    )
+    tools, client = _tools()
+    async with client:
+        projects = await tools["kanso_list_projects"]()
+
+    assert projects[0]["isOwner"] is False
+    assert projects[0]["canEdit"] is True
+    assert projects[0]["canLeave"] is True
+    assert projects[0]["shared"] is True
+    assert projects[0]["ownerDisplayName"] == "Alice A"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_project_does_not_invent_access_fields():
+    respx.patch(f"{BASE}/projects/4").mock(
+        return_value=httpx.Response(200, json={"id": 4, "title": "Renamed", "owner": "alice"})
+    )
+    tools, client = _tools()
+    async with client:
+        project = await tools["kanso_update_project"](4, title="Renamed")
+
+    assert project["isOwner"] is None
+    assert project["canEdit"] is None
+    assert project["shared"] is None
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_project_shares_reads_the_project():
+    route = respx.get(f"{BASE}/projects/4/shares").mock(
+        return_value=httpx.Response(200, json=[{"id": 9, "participant": "bob", "permission": 1}])
+    )
+    tools, client = _tools()
+    async with client:
+        shares = await tools["kanso_list_project_shares"](4)
+
+    assert route.called
+    assert shares[0]["participant"] == "bob"
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("can_edit,permission", [(True, 3), (False, 1)])
+async def test_update_project_share_sends_the_mask(can_edit, permission):
+    route = respx.patch(f"{BASE}/projects/4/shares/9").mock(
+        return_value=httpx.Response(200, json={"id": 9, "permission": permission})
+    )
+    tools, client = _tools()
+    async with client:
+        await tools["kanso_update_project_share"](4, 9, can_edit)
+
+    assert json.loads(route.calls[0].request.content) == {"permission": permission}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_unshare_project_deletes_the_share():
+    route = respx.delete(f"{BASE}/projects/4/shares/9").mock(
+        return_value=httpx.Response(200, json={})
+    )
+    tools, client = _tools()
+    async with client:
+        await tools["kanso_unshare_project"](4, 9)
+
+    assert route.called

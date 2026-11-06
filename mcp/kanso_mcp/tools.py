@@ -10,11 +10,12 @@ payload is JSON-serializable for the MCP transport.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
+import httpx
 from mcp.server.fastmcp import FastMCP
 
-from kanso_mcp.client import KansoClient
+from kanso_mcp.client import KansoApiError, KansoClient
 
 # The View filter's long serialised keys -> the flat short query keys the feed
 # decodes (ViewFilter::fromQuery, lib/Service/ViewFilter.php). This is a port of
@@ -85,6 +86,10 @@ def _filter_to_query(blob: Any) -> Dict[str, str]:
         if isinstance(value, str) and value:
             q[short_key] = value
     return q
+
+
+def _project_share_permission(can_edit: bool) -> int:
+    return 3 if can_edit else 1
 
 
 def _as_list(value: Any) -> List[Any]:
@@ -1056,14 +1061,16 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         annotations={"readOnlyHint": True},
     )
     async def kanso_list_projects() -> List[dict]:
-        """List the current user's projects, in title order.
+        """List the projects the current user owns or has been shared, in title
+        order.
 
-        A project is a personal, cross-board COLLECTION of cards: it holds no
-        cards of its own, it points at cards that stay on their boards. Projects
-        are private to their owner — there is no sharing, so this only ever
-        returns the authenticated user's own. Each carries `id`, `title`,
-        `description`, `color` (6-hex, no '#'), `owner`, `createdAt` and the
-        optional `startDate` / `targetDate` (YYYY-MM-DD).
+        A project is a cross-board COLLECTION of cards: it holds no cards of its
+        own, it points at cards that stay on their boards. Sharing a project
+        never widens card access, so two members can see different cards. Each
+        carries `id`, `title`, `description`, `color` (6-hex, no '#'), `owner`,
+        `createdAt`, the optional `startDate` / `targetDate` (YYYY-MM-DD), and
+        the viewer's access: `isOwner`, `canEdit`, `canLeave`, `shared` and
+        `ownerDisplayName`.
         """
         projects = await client.list_projects()
         return [p.model_dump() for p in projects]
@@ -1090,7 +1097,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         if project is None:
             known = ", ".join(f"{p.id} ({p.title})" for p in projects)
             raise ValueError(
-                f"No project with id {project_id} among yours. "
+                f"No project with id {project_id} among those you can reach. "
                 f"Available projects: {known or 'none'}."
             )
         cards = await client.list_project_cards(project_id)
@@ -1128,7 +1135,10 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         start_date: Optional[str] = None,
         target_date: Optional[str] = None,
     ) -> dict:
-        """Update one of your projects. Only the fields you pass are changed.
+        """Update a project you own or can edit. Only the fields you pass are changed.
+
+        The response omits the access fields (`isOwner`, `canEdit`, ...): they
+        come back null. Use `kanso_list_projects` to read them.
 
         Args:
             project_id: The numeric project id.
@@ -1154,14 +1164,112 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         annotations={"destructiveHint": True},
     )
     async def kanso_delete_project(project_id: int) -> dict:
-        """Delete one of your projects and its card memberships. The member cards
-        themselves are NOT touched — they stay on their boards.
+        """Delete a project you own, with its discussion, shares and card
+        memberships. Owner only. The member cards themselves are NOT touched —
+        they stay on their boards.
 
         Args:
             project_id: The numeric project id.
         """
         result = await client.delete_project(project_id)
         return {"deleted": True, "result": result}
+
+    @mcp.tool(
+        title="List a Kanso project's shares",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_project_shares(project_id: int) -> List[dict]:
+        """List who a project is shared with. Owner only.
+
+        Each share has `id`, `participant`, `participantType` ("user"/"group"),
+        `displayName` and a `permission` bitmask: 1 is view, 3 is edit.
+
+        Args:
+            project_id: The numeric project id.
+        """
+        return await client.list_project_shares(project_id)
+
+    @mcp.tool(title="Share a Kanso project")
+    async def kanso_share_project(
+        project_id: int,
+        participant: str,
+        participant_type: Literal["user", "group"] = "user",
+        can_edit: bool = False,
+    ) -> dict:
+        """Share a project you own with a user or group. Everyone it reaches sees
+        the project's details and whole discussion, including earlier comments;
+        they still only see the cards their boards let them see.
+
+        The instance's sharing settings apply, so a 400 "Cannot share with this
+        participant" can mean the id is unknown or that sharing with it is not
+        allowed. Raising a share's access goes through the same settings;
+        lowering it never does.
+
+        Args:
+            project_id: The numeric project id.
+            participant: The exact Nextcloud user id or group id.
+            participant_type: "user" or "group".
+            can_edit: True also lets them change details, add or remove cards
+                and comment. False is view-only. If the owner's account is
+                deleted, an editor takes over, direct shares first; with no
+                editor the project and its discussion are deleted. View-only
+                members are never promoted.
+        """
+        return await client.share_project(
+            project_id, participant, participant_type, _project_share_permission(can_edit)
+        )
+
+    @mcp.tool(title="Change a Kanso project share")
+    async def kanso_update_project_share(
+        project_id: int, share_id: int, can_edit: bool
+    ) -> dict:
+        """Change a share's access level. Owner only.
+
+        Args:
+            project_id: The numeric project id.
+            share_id: The share id (from `kanso_list_project_shares`).
+            can_edit: True for edit access, False for view-only.
+        """
+        return await client.update_project_share(
+            project_id, share_id, _project_share_permission(can_edit)
+        )
+
+    @mcp.tool(
+        title="Remove a Kanso project share",
+        annotations={"destructiveHint": True},
+    )
+    async def kanso_unshare_project(project_id: int, share_id: int) -> dict:
+        """Remove a share from a project you own.
+
+        Args:
+            project_id: The numeric project id.
+            share_id: The share id (from `kanso_list_project_shares`).
+        """
+        result = await client.delete_project_share(project_id, share_id)
+        return {"deleted": True, "result": result}
+
+    @mcp.tool(
+        title="Leave a shared Kanso project",
+        annotations={"destructiveHint": True},
+    )
+    async def kanso_leave_project(project_id: int) -> dict:
+        """Give up a project shared directly with you. Access through a group
+        cannot be left this way, so `stillHasAccess` is true when a group still
+        reaches the project after leaving, and null if that could not be checked.
+        The leave itself has still happened then, so do not retry it.
+
+        Args:
+            project_id: The numeric project id.
+        """
+        await client.leave_project(project_id)
+        try:
+            projects = await client.list_projects()
+        except (KansoApiError, httpx.HTTPError):
+            return {"left": True, "stillHasAccess": None}
+        return {
+            "left": True,
+            "stillHasAccess": any(p.id == project_id for p in projects),
+        }
 
     @mcp.tool(
         title="List a Kanso project's cards",
@@ -1226,7 +1334,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
 
     @mcp.tool(title="Add a card to a Kanso project")
     async def kanso_add_card_to_project(project_id: int, card_id: int) -> dict:
-        """Add a card (from any board you can read) to one of your projects.
+        """Add a card (from any board you can read) to a project you can edit.
         Idempotent — re-adding a member succeeds without a duplicate. The card
         stays where it is; the project only points at it.
 
@@ -1239,8 +1347,8 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
 
     @mcp.tool(title="Remove a card from a Kanso project")
     async def kanso_remove_card_from_project(project_id: int, card_id: int) -> dict:
-        """Remove a card from one of your projects. The card itself is untouched.
-        Idempotent.
+        """Remove a card from a project you can edit. The card itself is untouched.
+        Idempotent. Non-owners can only remove cards they can see.
 
         Args:
             project_id: The numeric project id.
@@ -1254,7 +1362,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         annotations={"readOnlyHint": True},
     )
     async def kanso_list_project_comments(project_id: int) -> List[dict]:
-        """List the discussion comments on one of your projects, oldest first.
+        """List the discussion comments on a project you can reach, oldest first.
 
         Each carries its `author` (uid), `authorDisplayName`, markdown `body`,
         `createdAt`/`editedAt` timestamps and, for replies, the
@@ -1270,7 +1378,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
     async def kanso_add_project_comment(
         project_id: int, body: str, parent_comment_id: Optional[int] = None
     ) -> dict:
-        """Post a comment on one of your projects. Pass `parent_comment_id` to
+        """Post a comment on a project you can edit. Pass `parent_comment_id` to
         reply to an existing top-level comment (replies are one level deep).
 
         Args:
@@ -1285,7 +1393,8 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
 
     @mcp.tool(title="Edit a Kanso project comment")
     async def kanso_update_project_comment(comment_id: int, body: str) -> dict:
-        """Replace the body of a project comment you wrote.
+        """Replace the body of a project comment you wrote, while you can still
+        edit the project.
 
         Note `comment_id` is the COMMENT's own id, NOT the project id.
 
@@ -1300,8 +1409,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         annotations={"destructiveHint": True},
     )
     async def kanso_delete_project_comment(comment_id: int) -> dict:
-        """Delete a project comment you wrote. Deleting a top-level comment also
-        deletes its replies.
+        """Delete a project comment you wrote, while you can still edit the
+        project, or any comment on a project you own. Deleting a top-level comment also deletes its replies, so only the owner
+        can delete one that other people replied to.
 
         Args:
             comment_id: The numeric comment id (NOT the project id).

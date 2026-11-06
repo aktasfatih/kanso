@@ -561,8 +561,8 @@ class KansoClient:
         return [CardSummary.model_validate(c) for c in (data or [])]
 
     # ---------------------------------------------------------------- projects
-    # Every project endpoint is owner-only: a project id the authenticated user
-    # does not own answers 403, and one that does not exist answers 404.
+    # A project the authenticated user cannot reach, or that does not exist,
+    # answers 404; a write or owner action their share does not allow answers 403.
     async def list_projects(self) -> List[Project]:
         data = await self._request("GET", "/projects")
         return [Project.model_validate(p) for p in (data or [])]
@@ -638,6 +638,37 @@ class KansoClient:
         return await self._request(
             "DELETE", f"/projects/{project_id}/cards/{card_id}"
         )
+
+    async def list_project_shares(self, project_id: int) -> List[Dict[str, Any]]:
+        return await self._request("GET", f"/projects/{project_id}/shares") or []
+
+    async def share_project(
+        self, project_id: int, participant: str, participant_type: str, permission: int
+    ) -> Dict[str, Any]:
+        return await self._request(
+            "POST",
+            f"/projects/{project_id}/shares",
+            json={
+                "participant": participant,
+                "participantType": participant_type,
+                "permission": permission,
+            },
+        )
+
+    async def update_project_share(
+        self, project_id: int, share_id: int, permission: int
+    ) -> Dict[str, Any]:
+        return await self._request(
+            "PATCH",
+            f"/projects/{project_id}/shares/{share_id}",
+            json={"permission": permission},
+        )
+
+    async def delete_project_share(self, project_id: int, share_id: int) -> Any:
+        return await self._request("DELETE", f"/projects/{project_id}/shares/{share_id}")
+
+    async def leave_project(self, project_id: int) -> Any:
+        return await self._request("DELETE", f"/projects/{project_id}/shares/me")
 
     async def list_project_comments(self, project_id: int) -> List[ProjectComment]:
         data = await self._request("GET", f"/projects/{project_id}/comments")
