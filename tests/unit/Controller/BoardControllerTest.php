@@ -208,7 +208,7 @@ class BoardControllerTest extends TestCase {
 		$this->boardService->method('find')->willReturn($this->board(1));
 		$this->changeMapper->method('getLatestChangeId')->willReturn(7);
 		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_ALL);
-		$this->projectCardMapper->method('boardDigest')->with(1, 'alice')->willReturn('abc');
+		$this->projectCardMapper->method('boardDigest')->willReturn('abc');
 		$this->request->method('getHeader')->willReturnMap([['If-None-Match', '"7-' . PermissionService::PERMISSION_ALL . '-internal"']]);
 
 		$response = $this->controller->show(1);
@@ -435,6 +435,7 @@ class BoardControllerTest extends TestCase {
 		self::assertSame(10, $data['projects'][0]['id']);
 		self::assertSame('Q3 Initiative', $data['projects'][0]['title']);
 		self::assertSame('e53935', $data['projects'][0]['color']);
+		self::assertSame(['id', 'title', 'color'], array_keys($data['projects'][0]));
 	}
 
 	public function testShowShipsProjectWithNoColor(): void {
@@ -1088,6 +1089,7 @@ class BoardControllerTest extends TestCase {
 		self::assertSame(10, $data['projects'][0]['id']);
 		self::assertSame('Q3 Initiative', $data['projects'][0]['title']);
 		self::assertSame('e53935', $data['projects'][0]['color']);
+		self::assertSame(['id', 'title', 'color'], array_keys($data['projects'][0]));
 	}
 
 	public function testChangesDoesNotLeakAProjectTheViewerDoesNotOwn(): void {

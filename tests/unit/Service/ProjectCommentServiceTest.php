@@ -28,6 +28,7 @@ class ProjectCommentServiceTest extends TestCase {
 	private ProjectCommentMapper&MockObject $commentMapper;
 	private ProjectMapper&MockObject $projectMapper;
 	private ProjectShareMapper&MockObject $shareMapper;
+	private IDBConnection&MockObject $db;
 	private ProjectCommentService $service;
 
 	protected function setUp(): void {
@@ -35,11 +36,35 @@ class ProjectCommentServiceTest extends TestCase {
 		$this->commentMapper = $this->createMock(ProjectCommentMapper::class);
 		$this->projectMapper = $this->createMock(ProjectMapper::class);
 		$this->shareMapper = $this->createMock(ProjectShareMapper::class);
+		$this->db = $this->createMock(IDBConnection::class);
 		$this->service = new ProjectCommentService(
 			$this->commentMapper,
 			$this->projectMapper,
 			new ProjectAccess($this->createMock(IDBConnection::class), $this->shareMapper, $this->createMock(PermissionService::class)),
+			$this->db,
 		);
+	}
+
+	public function testAFailedThreadDeleteRollsBack(): void {
+		$this->commentMapper->method('find')->with(1)->willReturn($this->comment(1, 5, null, 'alice'));
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$this->commentMapper->method('update')->willThrowException(new \RuntimeException('boom'));
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+
+		$this->expectException(\RuntimeException::class);
+		$this->service->deleteComment(1, 'alice');
+	}
+
+	public function testEditorCanEditTheirOwnComment(): void {
+		$this->sharedWithBob(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT);
+		$this->commentMapper->method('find')->with(1)->willReturn($this->comment(1, 5, null, 'bob'));
+		$this->commentMapper->expects(self::once())->method('update')->willReturnArgument(0);
+
+		$edited = $this->service->editComment(1, 'changed', 'bob');
+
+		self::assertSame('changed', $edited->getBody());
+		self::assertGreaterThan(0, $edited->getEditedAt());
 	}
 
 	private function sharedWithBob(int $permission): void {

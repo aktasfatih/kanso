@@ -442,6 +442,28 @@ test.describe('Project sharing', () => {
 		}
 	})
 
+	test('saving a new title keeps a description a collaborator changed meanwhile', async ({ page, user, peer }) => {
+		await shareWith(peer.user, 'user', EDIT)
+		const project = await api.post('/projects', { title: 'Edit race ' + stamp, description: 'Old text' })
+		try {
+			await api.post(`/projects/${project.id}/shares`, { participant: peer.user, participantType: 'user', permission: EDIT })
+			await ncLogin(page, { user: user.user, pass: user.pass })
+			await page.goto(projectUrl(project.id))
+			await openProjectMenu(page)
+			await page.getByRole('menuitem', { name: 'Edit project' }).click()
+
+			await peer.api.patch(`/projects/${project.id}`, { description: 'Newer text' })
+
+			await page.locator('#edit-project-title').fill('Renamed ' + stamp)
+			await page.getByRole('dialog', { name: 'Edit project' }).getByRole('button', { name: 'Save' }).click()
+
+			await expect.poll(async () => (await api.get('/projects')).find((p) => p.id === project.id).title).toBe('Renamed ' + stamp)
+			expect((await api.get('/projects')).find((p) => p.id === project.id).description).toBe('Newer text')
+		} finally {
+			await api.delete(`/projects/${project.id}`).catch(() => {})
+		}
+	})
+
 	test('a member leaves from the project menu', async ({ browser, peer }) => {
 		await shareWith(peer.user, 'user', VIEW)
 

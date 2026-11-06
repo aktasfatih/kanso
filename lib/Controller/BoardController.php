@@ -73,6 +73,15 @@ class BoardController extends Controller {
 		parent::__construct($appName, $request);
 	}
 
+	/**
+	 * What a card tile reads, and all that {@see ProjectCardMapper::boardDigest()} validates.
+	 *
+	 * @return array{id: int, title: ?string, color: ?string}
+	 */
+	private function projectTile(Project $project): array {
+		return ['id' => $project->getId(), 'title' => $project->getTitle(), 'color' => $project->getColor()];
+	}
+
 	#[NoAdminRequired]
 	public function index(): JSONResponse {
 		return $this->respond(function (): JSONResponse {
@@ -145,7 +154,7 @@ class BoardController extends Controller {
 			// validator, not just of the payload; the 200 path below reuses it.
 			$permissions = $this->permissionService->getPermissions($board, $uid);
 			$etag = $cursor . '-' . $permissions . '-' . $viewer->role;
-			$projectDigest = $this->projectCardMapper->boardDigest($id, $uid);
+			$projectDigest = $this->projectCardMapper->boardDigest($viewer);
 			if ($projectDigest !== '') {
 				$etag .= '-' . $projectDigest;
 			}
@@ -170,7 +179,7 @@ class BoardController extends Controller {
 			// Skip the lookup entirely when no visible card is collected into a
 			// project - an empty `IN ()` is invalid SQL and the query is wasted.
 			$projects = $projectIds === [] ? [] : array_values(array_map(
-				static fn (Project $project): array => $project->jsonSerialize(),
+				fn (Project $project): array => $this->projectTile($project),
 				$this->projectMapper->findAccessibleByIds(array_keys($projectIds), $uid)
 			));
 
@@ -383,7 +392,7 @@ class BoardController extends Controller {
 				}
 				if ($projectIds !== []) {
 					$payload['projects'] = array_values(array_map(
-						static fn (Project $project): array => $project->jsonSerialize(),
+						fn (Project $project): array => $this->projectTile($project),
 						$this->projectMapper->findAccessibleByIds(array_keys($projectIds), $uid)
 					));
 				}

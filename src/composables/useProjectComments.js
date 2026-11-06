@@ -40,8 +40,10 @@ function resolve(v) {
 
 /**
  * @param {import('vue').Ref<string|number>|string|number|Function} projectId
+ * @param {object} [options]
+ * @param {number|false} [options.refetchInterval] poll interval
  */
-export function useProjectComments(projectId) {
+export function useProjectComments(projectId, { refetchInterval = false } = {}) {
 	const queryClient = useQueryClient()
 
 	function getProjectId() {
@@ -68,6 +70,7 @@ export function useProjectComments(projectId) {
 		queryKey: computed(() => keyFor(getProjectId())),
 		queryFn: () => apiFetch(getProjectId()),
 		enabled: computed(() => resolve(projectId) != null),
+		refetchInterval,
 	})
 
 	// ── addComment ────────────────────────────────────────────────────────────

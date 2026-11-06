@@ -13,6 +13,7 @@ use OCA\Kanso\Db\ProjectComment;
 use OCA\Kanso\Db\ProjectCommentMapper;
 use OCA\Kanso\Db\ProjectMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IDBConnection;
 
 /**
  * Project comments / discussion: a one-level thread (top-level comments
@@ -34,6 +35,7 @@ class ProjectCommentService {
 		private ProjectCommentMapper $commentMapper,
 		private ProjectMapper $projectMapper,
 		private ProjectAccess $projectAccess,
+		private IDBConnection $db,
 	) {
 	}
 
@@ -135,14 +137,18 @@ class ProjectCommentService {
 
 		$now = time();
 
-		// Cascade over a top-level comment's replies so none is orphaned. One
-		// statement covers the replies.
-		if ($comment->getParentCommentId() === null) {
-			$this->commentMapper->softDeleteRepliesOf($commentId, $now);
+		$this->db->beginTransaction();
+		try {
+			if ($comment->getParentCommentId() === null) {
+				$this->commentMapper->softDeleteRepliesOf($commentId, $now);
+			}
+			$comment->setDeletedAt($now);
+			$this->commentMapper->update($comment);
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
 		}
-
-		$comment->setDeletedAt($now);
-		$this->commentMapper->update($comment);
 	}
 
 	/**

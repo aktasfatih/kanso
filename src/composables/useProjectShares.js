@@ -45,6 +45,8 @@ export function useProjectShares(projectId, enabled) {
 
 	const patchShare = useMutation({
 		mutationFn: ({ shareId, permission }) => apiUpdateProjectShare(projectId.value, shareId, permission),
+		// Two quick level changes must reach the server in the order they were picked.
+		scope: { id: `project-shares-${projectId.value}` },
 		onMutate: async ({ shareId, permission }) => {
 			await queryClient.cancelQueries({ queryKey: queryKey.value })
 			const previous = queryClient.getQueryData(queryKey.value)

@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Db;
 
 use OCA\Kanso\Access\ProjectAccess;
+use OCA\Kanso\Access\ViewerContext;
 use OCA\Kanso\Service\CardVisibilityScope;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\Exception;
@@ -141,16 +142,17 @@ class ProjectCardMapper extends QBMapper {
 	 *
 	 * @throws Exception
 	 */
-	public function boardDigest(int $boardId, string $uid): string {
+	public function boardDigest(ViewerContext $viewer): string {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('pc.card_id', 'p.id', 'p.title', 'p.color')
 			->from($this->getTableName(), 'pc')
 			->innerJoin('pc', 'kanso_projects', 'p', $qb->expr()->eq('pc.project_id', 'p.id'))
 			->innerJoin('pc', 'kanso_cards', 'c', $qb->expr()->eq('pc.card_id', 'c.id'))
-			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->where($qb->expr()->eq('c.board_id', $qb->createNamedParameter($viewer->boardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->orderBy('pc.id', 'ASC');
-		$this->projectAccess->restrict($qb, 'p', $uid);
+		$this->projectAccess->restrict($qb, 'p', $viewer->userId);
+		$this->visibilityScope->applyForViewer($qb, 'c', $viewer);
 
 		$result = $qb->executeQuery();
 		$rows = $result->fetchAll();

@@ -182,7 +182,7 @@ class ProjectCardMapperTest extends TestCase {
 	public function testBoardDigestCoversWhatTheViewerSeesOfProjects(): void {
 		$this->stubQuery([['card_id' => 9, 'id' => 4, 'title' => 'Q3', 'color' => 'ff0000']]);
 
-		self::assertNotSame('', $this->mapper->boardDigest(7, 'bob'));
+		self::assertNotSame('', $this->mapper->boardDigest(ViewerContext::forMember('bob', 7, ViewerContext::ROLE_INTERNAL, false)));
 
 		self::assertSame(['pc.card_id', 'p.id', 'p.title', 'p.color'], array_slice($this->selected, 0, 4));
 		preg_match('/eq\(c\.board_id,(:p\d+)\)/', (string)$this->predicateOn('c.board_id'), $board);
@@ -194,7 +194,7 @@ class ProjectCardMapperTest extends TestCase {
 	public function testBoardDigestIsScopedToWhatTheViewerCanReach(): void {
 		$this->stubQuery([]);
 
-		$this->mapper->boardDigest(7, 'bob');
+		$this->mapper->boardDigest(ViewerContext::forMember('bob', 7, ViewerContext::ROLE_INTERNAL, false));
 
 		preg_match('/eq\(p\.owner,(:p\d+)\)/', (string)$this->predicateOn('p.owner'), $owner);
 		self::assertSame('bob', $this->params[$owner[1]]);
@@ -202,10 +202,18 @@ class ProjectCardMapperTest extends TestCase {
 		self::assertSame(['staff'], $this->params[$groups[1]]);
 	}
 
+	public function testBoardDigestLeavesOutCardsHiddenFromTheViewer(): void {
+		$this->stubQuery([]);
+
+		$this->mapper->boardDigest(ViewerContext::forMember('bob', 7, ViewerContext::ROLE_EXTERNAL, false));
+
+		self::assertNotNull($this->predicateOn('c.visibility'));
+	}
+
 	public function testBoardDigestIsEmptyWithoutMemberships(): void {
 		$this->stubQuery([]);
 
-		self::assertSame('', $this->mapper->boardDigest(7, 'bob'));
+		self::assertSame('', $this->mapper->boardDigest(ViewerContext::forMember('bob', 7, ViewerContext::ROLE_INTERNAL, false)));
 	}
 
 	// ---- the card LISTING behind every project metric (#10734) --------------

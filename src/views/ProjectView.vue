@@ -649,6 +649,7 @@ import { relationPicker } from '../services/relationPicker.js'
 import ProjectHealth from '../components/ProjectHealth.vue'
 import ProjectShareDialog from '../components/ProjectShareDialog.vue'
 import { MY_WORK_POLL_INTERVAL } from '../composables/queryKeys.js'
+import { apiAnswerStatus } from '../services/apiErrors.js'
 import ProjectBurnup from '../components/ProjectBurnup.vue'
 import BoardTimelineView from '../components/BoardTimelineView.vue'
 import { renderMarkdown } from '../services/markdown.js'
@@ -696,7 +697,7 @@ const {
 	error: cardsError,
 	addCard,
 	removeCard,
-} = useProjectCards(computed(() => props.id))
+} = useProjectCards(computed(() => props.id), { refetchInterval: MY_WORK_POLL_INTERVAL })
 
 // Nothing pushes a revoked share to this page; the list poll and any refused
 // read find it. Sticky, since a poll in flight must not flash the old content.
@@ -704,7 +705,7 @@ const accessLost = ref(false)
 const leavingPage = ref(false)
 
 const projectGone = computed(() => projectsLoaded.value && !projectsFetching.value && project.value === null)
-const cardsRefused = computed(() => [403, 404].includes(cardsError.value?.response?.status))
+const cardsRefused = computed(() => [403, 404].includes(apiAnswerStatus(cardsError.value)))
 
 watch([projectGone, cardsRefused], ([gone, refused]) => {
 	if ((!gone && !refused) || accessLost.value || leavingPage.value) return
@@ -723,7 +724,7 @@ watch(project, (current) => {
 
 const cards = computed(() => cardsData.value ?? [])
 
-const { data: planData } = useProjectPlan(computed(() => props.id))
+const { data: planData } = useProjectPlan(computed(() => props.id), { refetchInterval: MY_WORK_POLL_INTERVAL })
 const plan = computed(() => planData.value ?? null)
 
 // Group cards by boardTitle, preserving server order within each group
@@ -897,9 +898,10 @@ const actionError = ref('')
 async function handleDelete() {
 	actionError.value = ''
 	leavingPage.value = true
+	const id = props.id
 	try {
-		await removeMutation.mutateAsync(Number(props.id))
-		router.push({ name: 'projects' })
+		await removeMutation.mutateAsync(Number(id))
+		if (props.id === id) router.push({ name: 'projects' })
 	} catch (err) {
 		leavingPage.value = false
 		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to delete project.')
@@ -911,8 +913,10 @@ const leaveMutation = useLeaveProject()
 async function handleLeave() {
 	actionError.value = ''
 	leavingPage.value = true
+	const id = props.id
 	try {
-		const stillHasAccess = await leaveMutation.mutateAsync(Number(props.id))
+		const stillHasAccess = await leaveMutation.mutateAsync(Number(id))
+		if (props.id !== id) return
 		if (stillHasAccess) {
 			leavingPage.value = false
 			actionError.value = t('kanso', 'You still have access to this project through a group.')
@@ -1046,10 +1050,15 @@ const mdToolbar = useMarkdownToolbar({
 	textareaRef: descTextareaRef,
 })
 
+// What the dialog opened with. Only fields changed from it are sent, so saving a
+// new title cannot overwrite a description a collaborator edited meanwhile.
+let editOriginal = { title: '', description: '', color: '' }
+
 function openEditDialog() {
 	editTitle.value = project.value?.title ?? ''
 	editDescription.value = project.value?.description ?? ''
 	editColor.value = project.value?.color ?? ''
+	editOriginal = { title: editTitle.value.trim(), description: editDescription.value.trim(), color: editColor.value }
 	editError.value = ''
 	showDescPreview.value = false
 	showEditDialog.value = true
@@ -1064,13 +1073,14 @@ async function submitEdit() {
 	const title = editTitle.value.trim()
 	if (!title || updateMutation.isPending.value) return
 	editError.value = ''
+	const edited = { title, description: editDescription.value.trim(), color: editColor.value }
+	const changes = Object.fromEntries(Object.entries(edited).filter(([field, value]) => value !== editOriginal[field]))
+	if (Object.keys(changes).length === 0) {
+		closeEditDialog()
+		return
+	}
 	try {
-		await updateMutation.mutateAsync({
-			id: Number(props.id),
-			title,
-			description: editDescription.value.trim() || undefined,
-			color: editColor.value || undefined,
-		})
+		await updateMutation.mutateAsync({ id: Number(props.id), ...changes })
 		closeEditDialog()
 	} catch (err) {
 		editError.value = err?.response?.data?.error || t('kanso', 'Failed to update project.')
@@ -1085,7 +1095,7 @@ const {
 	addComment,
 	editComment,
 	deleteComment,
-} = useProjectComments(computed(() => props.id))
+} = useProjectComments(computed(() => props.id), { refetchInterval: MY_WORK_POLL_INTERVAL })
 
 const commentTree = computed(() => buildCommentTree(commentsQuery.data.value ?? []))
 const commentTotal = computed(() => (commentsQuery.data.value ?? []).length)

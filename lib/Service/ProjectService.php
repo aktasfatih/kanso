@@ -175,7 +175,7 @@ class ProjectService {
 			}
 			$project->setTitle($title);
 		}
-		// Title edits re-send the description, so a row longer than the cap stays saveable.
+		// Unchanged text passes, so a row longer than the cap stays saveable.
 		if ($description !== null && $description !== $project->getDescription()) {
 			$this->assertDescriptionLength($description);
 			$project->setDescription($description);
