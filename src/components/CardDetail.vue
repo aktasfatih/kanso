@@ -706,10 +706,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<label class="card-modal__field-label">{{ t('kanso', 'Start date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="startDateHint" :aria-label="startDateHint"><InformationOutlineIcon :size="13" /></span></label>
 								<div class="card-modal__field-row">
 									<input
+										ref="startDateInputEl"
 										class="card-modal__date-input"
 										data-date="start"
 										type="datetime-local"
-										:value="startDateInputValue"
 										@blur="handleStartDateChange"
 										@keyup.enter="handleStartDateChange">
 									<button v-if="cardData.startDate" class="card-modal__field-clear" :title="t('kanso', 'Clear start date')" @click="clearStartDate">
@@ -719,10 +719,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<label class="card-modal__field-label">{{ t('kanso', 'Due date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="dueDateHint" :aria-label="dueDateHint"><InformationOutlineIcon :size="13" /></span></label>
 								<div class="card-modal__field-row">
 									<input
+										ref="dueDateInputEl"
 										class="card-modal__date-input"
 										data-date="end"
 										type="datetime-local"
-										:value="dueDateInputValue"
 										@blur="handleDueDateChange"
 										@keyup.enter="handleDueDateChange">
 									<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear due date')" @click="clearDueDate">
@@ -734,10 +734,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<label class="card-modal__field-label">{{ t('kanso', 'Due date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="dueDateHint" :aria-label="dueDateHint"><InformationOutlineIcon :size="13" /></span></label>
 								<div class="card-modal__field-row">
 									<input
+										ref="dueDateInputEl"
 										class="card-modal__date-input"
 										data-date="end"
 										type="date"
-										:value="dueDateInputValue"
 										@blur="handleDueDateChange"
 										@keyup.enter="handleDueDateChange">
 									<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear due date')" @click="clearDueDate">
@@ -1659,9 +1659,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										<label class="card-modal__field-label">{{ t('kanso', 'Step due date') }}</label>
 										<div class="card-modal__field-row">
 											<input
+												ref="stepDueInputEl"
 												class="card-modal__date-input"
 												type="datetime-local"
-												:value="stepDueInputValue(item)"
 												@change="handleStepDueChange(item, $event)">
 											<button
 												v-if="item.dueDate"
@@ -4156,6 +4156,21 @@ const dueDateInputValue = computed(() => {
 	return isAllDay.value ? allDayInputValue(d) : timedInputValue(d)
 })
 
+// The date inputs are NOT bound with :value. A live running timer re-renders
+// this whole component every second (timerNow), and Vue's value patch compares
+// against `el.value` - so a half-typed date was reset to the last saved value on
+// every tick and the field looked like it erased itself (it also made the blur
+// handler see an empty value and save nothing). Bind the DOM by hand instead and
+// only sync when the field is not focused, so an edit in progress survives.
+const dueDateInputEl = ref(null)
+function syncDueDateInput() {
+	const el = dueDateInputEl.value
+	if (!el || document.activeElement === el) return
+	if (el.value !== dueDateInputValue.value) el.value = dueDateInputValue.value
+}
+watch(dueDateInputEl, syncDueDateInput, { flush: 'post' })
+watch([dueDateInputValue, isAllDay], syncDueDateInput, { flush: 'post' })
+
 // Native segmented date inputs fire `change` per segment, so committing on
 // `change` kicks off updateCard → refetch mid-edit and clobbers the field (#64).
 // Commit on blur/Enter instead: the value is bound straight to the computed and
@@ -4228,6 +4243,17 @@ const startDateInputValue = computed(() => {
 	// the due date) and pin the time to 00:00; timed dates stay in local time.
 	return isAllDay.value ? `${allDayInputValue(d)}T00:00` : timedInputValue(d)
 })
+
+// Same hand-rolled binding as the due-date field (see syncDueDateInput): a
+// re-render must never overwrite a value the user is still typing.
+const startDateInputEl = ref(null)
+function syncStartDateInput() {
+	const el = startDateInputEl.value
+	if (!el || document.activeElement === el) return
+	if (el.value !== startDateInputValue.value) el.value = startDateInputValue.value
+}
+watch(startDateInputEl, syncStartDateInput, { flush: 'post' })
+watch([startDateInputValue, isAllDay], syncStartDateInput, { flush: 'post' })
 
 async function handleStartDateChange(event) {
 	const forCard = props.cardId
@@ -4718,6 +4744,21 @@ function stepDueInputValue(item) {
 	const pad = (n) => String(n).padStart(2, '0')
 	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
+
+// Same hand-rolled binding as the card due-date field (see syncDueDateInput):
+// the checklist row lives in this component, so a running timer's per-second
+// tick re-rendered the input and wiped a date still being typed - before @change
+// could read it. Bind the DOM by hand and never touch a focused field.
+const stepDueInputEl = ref(null)
+function syncStepDueInput() {
+	const el = stepDueInputEl.value
+	if (!el || document.activeElement === el) return
+	const id = String(openStepMenu.value ?? '').split(':')[1]
+	const item = checklistItems.value.find((i) => String(i.id) === id)
+	const next = item ? stepDueInputValue(item) : ''
+	if (el.value !== next) el.value = next
+}
+watch(stepDueInputEl, syncStepDueInput, { flush: 'post' })
 
 async function handleStepDueChange(item, event) {
 	const val = event.target.value
