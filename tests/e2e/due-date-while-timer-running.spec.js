@@ -66,8 +66,14 @@ test.describe('Date input with a running timer (#232)', () => {
 		await page.waitForTimeout(2500)
 		await expect(dueInput).toHaveValue(typed)
 
-		// Commit on blur, then prove it reached the server.
+		// Commit on blur, then prove it reached the server. Compared as an INSTANT,
+		// not as a calendar day: the input is local time and the stored value is
+		// UTC, so east/west of UTC the UTC date can legitimately be the day before.
+		const expectedMs = await page.evaluate((v) => new Date(v).getTime(), typed)
 		await dueInput.blur()
-		await expect.poll(() => cardDue(state.cardId)).toContain('2026-12-15')
+		await expect.poll(async () => {
+			const due = await cardDue(state.cardId)
+			return due ? new Date(due).getTime() : null
+		}).toBe(expectedMs)
 	})
 })

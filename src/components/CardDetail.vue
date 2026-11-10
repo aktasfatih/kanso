@@ -710,6 +710,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										class="card-modal__date-input"
 										data-date="start"
 										type="datetime-local"
+										@focus="rememberStartDateOnFocus"
 										@blur="handleStartDateChange"
 										@keyup.enter="handleStartDateChange">
 									<button v-if="cardData.startDate" class="card-modal__field-clear" :title="t('kanso', 'Clear start date')" @click="clearStartDate">
@@ -723,6 +724,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										class="card-modal__date-input"
 										data-date="end"
 										type="datetime-local"
+										@focus="rememberDueDateOnFocus"
 										@blur="handleDueDateChange"
 										@keyup.enter="handleDueDateChange">
 									<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear due date')" @click="clearDueDate">
@@ -738,6 +740,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										class="card-modal__date-input"
 										data-date="end"
 										type="date"
+										@focus="rememberDueDateOnFocus"
 										@blur="handleDueDateChange"
 										@keyup.enter="handleDueDateChange">
 									<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear due date')" @click="clearDueDate">
@@ -4171,6 +4174,17 @@ function syncDueDateInput() {
 watch(dueDateInputEl, syncDueDateInput, { flush: 'post' })
 watch([dueDateInputValue, isAllDay], syncDueDateInput, { flush: 'post' })
 
+// What the field held when it gained focus. This, not the saved value, is the
+// "did the user actually edit this?" baseline: with the field focused the sync
+// above deliberately does not touch it, so if someone else changed the card's
+// date in the meantime the field still shows the OLD date. Comparing against the
+// saved value there would PATCH that stale date back over their edit; comparing
+// against the value at focus time sends nothing when the user changed nothing.
+const dueDateFocusValue = ref('')
+function rememberDueDateOnFocus(event) {
+	dueDateFocusValue.value = event.target.value
+}
+
 // Native segmented date inputs fire `change` per segment, so committing on
 // `change` kicks off updateCard → refetch mid-edit and clobbers the field (#64).
 // Commit on blur/Enter instead: the value is bound straight to the computed and
@@ -4179,12 +4193,16 @@ async function handleDueDateChange(event) {
 	const forCard = props.cardId
 	const val = event.target.value
 	if (!val) return
-	// Leaving the field without editing it shouldn't fire a redundant PATCH.
-	if (val === dueDateInputValue.value) return
+	// Leaving the field without editing it shouldn't fire a redundant PATCH -
+	// and must not write back a value that went stale while the field was focused.
+	if (val === dueDateFocusValue.value) return
 	// An all-day "YYYY-MM-DD" parses as UTC midnight; a datetime-local as local.
 	const iso = new Date(val).toISOString()
 	try {
 		await updateCard.mutateAsync({ data: { duedate: iso } })
+		// The save just made this the field's baseline, so the blur that follows
+		// Enter (or a second blur) is a no-op instead of a duplicate PATCH.
+		dueDateFocusValue.value = val
 	} catch (err) {
 		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to update due date.'), forCard)
 	}
@@ -4255,15 +4273,23 @@ function syncStartDateInput() {
 watch(startDateInputEl, syncStartDateInput, { flush: 'post' })
 watch([startDateInputValue, isAllDay], syncStartDateInput, { flush: 'post' })
 
+// Same focus-time baseline as the due-date field (see dueDateFocusValue).
+const startDateFocusValue = ref('')
+function rememberStartDateOnFocus(event) {
+	startDateFocusValue.value = event.target.value
+}
+
 async function handleStartDateChange(event) {
 	const forCard = props.cardId
 	const val = event.target.value
 	if (!val) return
-	// Leaving the field without editing it shouldn't fire a redundant PATCH.
-	if (val === startDateInputValue.value) return
+	// Leaving the field without editing it shouldn't fire a redundant PATCH -
+	// and must not write back a value that went stale while the field was focused.
+	if (val === startDateFocusValue.value) return
 	const iso = new Date(val).toISOString()
 	try {
 		await updateCard.mutateAsync({ data: { startDate: iso } })
+		startDateFocusValue.value = val
 	} catch (err) {
 		setDateSaveError(err?.response?.data?.error || t('kanso', 'Failed to update start date.'), forCard)
 	}
@@ -4758,7 +4784,7 @@ function syncStepDueInput() {
 	const next = item ? stepDueInputValue(item) : ''
 	if (el.value !== next) el.value = next
 }
-watch(stepDueInputEl, syncStepDueInput, { flush: 'post' })
+watch([stepDueInputEl, checklistItems, openStepMenu], syncStepDueInput, { flush: 'post' })
 
 async function handleStepDueChange(item, event) {
 	const val = event.target.value
