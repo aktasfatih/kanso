@@ -23,7 +23,7 @@ test.describe('Realtime card modal freshness', () => {
 	// would start as admin and ncLogin would no-op.
 	test.use({ storageState: { cookies: [], origins: [] } })
 
-	const state = { boardId: 0, cardId: 0, cardUrl: '' }
+	const state = { boardId: 0, cardId: 0, cardUrl: '', textField: 0, numberField: 0 }
 
 	test.beforeAll(async ({ peer }) => {
 		const boards = await api.get('/boards')
@@ -37,6 +37,8 @@ test.describe('Realtime card modal freshness', () => {
 		const stack = await api.post('/stacks', { boardId: board.id, title: 'S1' })
 		const card = await api.post('/cards', { stackId: stack.id, title: 'Modal card v1' })
 		state.cardId = card.id
+		state.textField = (await api.post('/card-fields', { boardId: board.id, name: 'Owner note', type: 'text' })).id
+		state.numberField = (await api.post('/card-fields', { boardId: board.id, name: 'Story points', type: 'number' })).id
 		// Share with the peer (READ|EDIT = 3)
 		await api.post(`/boards/${board.id}/acl`, {
 			participant: peer.user,
@@ -141,6 +143,37 @@ test.describe('Realtime card modal freshness', () => {
 			// end state as before, but deliberately, never by accident.
 			await conflict.locator('button', { hasText: 'Keep my version' }).click()
 			await expect(page.locator('.card-modal__desc-rendered')).toContainText('my precious local draft', { timeout: 15_000 })
+		} finally {
+			await testerCtx.close()
+		}
+	})
+
+	test('a remote change never clobbers a field being typed, but still updates the others', async ({ browser, peer }) => {
+		const testerCtx = await browser.newContext()
+		try {
+			const page = await testerCtx.newPage()
+			await ncLogin(page, { user: peer.user, pass: peer.pass })
+			await page.goto(state.cardUrl)
+			await expect(page.locator('.card-modal__title')).toBeVisible({ timeout: 15_000 })
+
+			const note = page.locator(`[data-test="cf-input-${state.textField}"]`)
+			const points = page.locator(`[data-test="cf-input-${state.numberField}"]`)
+			await note.fill('typed locally')
+
+			await api.put(`/cards/${state.cardId}/fields/${state.textField}`, { value: 'remote note' })
+			await api.put(`/cards/${state.cardId}/fields/${state.numberField}`, { value: '5' })
+			await api.patch(`/cards/${state.cardId}`, { title: 'Modal card v4' })
+
+			await expect(page.locator('.card-modal__title')).toHaveText('Modal card v4', { timeout: 15_000 })
+			await expect(points).toHaveValue('5', { timeout: 15_000 })
+			await expect(note).toBeFocused()
+			await expect(note).toHaveValue('typed locally')
+
+			await note.blur()
+			await expect.poll(async () => {
+				const card = await api.get(`/cards/${state.cardId}`)
+				return card.fieldValues?.find((fv) => fv.fieldId === state.textField)?.value
+			}, { timeout: 15_000 }).toBe('typed locally')
 		} finally {
 			await testerCtx.close()
 		}

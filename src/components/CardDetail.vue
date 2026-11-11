@@ -705,26 +705,26 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<template v-if="!isAllDay">
 								<label class="card-modal__field-label">{{ t('kanso', 'Start date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="startDateHint" :aria-label="startDateHint"><InformationOutlineIcon :size="13" /></span></label>
 								<div class="card-modal__field-row">
-									<input
+									<DraftInput
 										class="card-modal__date-input"
 										data-date="start"
 										type="datetime-local"
-										:value="startDateInputValue"
+										:model-value="startDateInputValue"
 										@blur="handleStartDateChange"
-										@keyup.enter="handleStartDateChange">
+										@keyup.enter="handleStartDateChange" />
 									<button v-if="cardData.startDate" class="card-modal__field-clear" :title="t('kanso', 'Clear start date')" @click="clearStartDate">
 										<CloseIcon :size="14" />
 									</button>
 								</div>
 								<label class="card-modal__field-label">{{ t('kanso', 'Due date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="dueDateHint" :aria-label="dueDateHint"><InformationOutlineIcon :size="13" /></span></label>
 								<div class="card-modal__field-row">
-									<input
+									<DraftInput
 										class="card-modal__date-input"
 										data-date="end"
 										type="datetime-local"
-										:value="dueDateInputValue"
+										:model-value="dueDateInputValue"
 										@blur="handleDueDateChange"
-										@keyup.enter="handleDueDateChange">
+										@keyup.enter="handleDueDateChange" />
 									<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear due date')" @click="clearDueDate">
 										<CloseIcon :size="14" />
 									</button>
@@ -733,13 +733,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<template v-else>
 								<label class="card-modal__field-label">{{ t('kanso', 'Due date') }}<span class="card-modal__field-hint" tabindex="0" role="img" :title="dueDateHint" :aria-label="dueDateHint"><InformationOutlineIcon :size="13" /></span></label>
 								<div class="card-modal__field-row">
-									<input
+									<DraftInput
 										class="card-modal__date-input"
 										data-date="end"
 										type="date"
-										:value="dueDateInputValue"
+										:model-value="dueDateInputValue"
 										@blur="handleDueDateChange"
-										@keyup.enter="handleDueDateChange">
+										@keyup.enter="handleDueDateChange" />
 									<button v-if="cardData.duedate" class="card-modal__field-clear" :title="t('kanso', 'Clear due date')" @click="clearDueDate">
 										<CloseIcon :size="14" />
 									</button>
@@ -787,14 +787,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									</div>
 									<div v-if="recurFreq !== 'OFF'" class="card-modal__field-row card-modal__recur-interval">
 										<span class="card-modal__recur-every">{{ t('kanso', 'every') }}</span>
-										<input
+										<DraftInput
 											class="card-modal__date-input card-modal__recur-interval-input"
 											data-recur="interval"
 											type="number"
 											min="1"
-											:value="recurInterval"
+											:model-value="recurInterval"
 											:disabled="recurBusy"
-											@change="onRecurIntervalChange($event.target.value)">
+											@change="onRecurIntervalChange($event.target.value)" />
 										<span class="card-modal__recur-unit">{{ recurUnitLabel }}</span>
 									</div>
 									<div v-if="recurFreq !== 'OFF'" class="card-modal__field-row card-modal__recur-mode">
@@ -1658,11 +1658,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<div v-if="isStepMenuOpen(item, 'due')" class="card-modal__popover card-modal__popover--pad card-modal__step-popover">
 										<label class="card-modal__field-label">{{ t('kanso', 'Step due date') }}</label>
 										<div class="card-modal__field-row">
-											<input
+											<DraftInput
 												class="card-modal__date-input"
 												type="datetime-local"
-												:value="stepDueInputValue(item)"
-												@change="handleStepDueChange(item, $event)">
+												:model-value="stepDueInputValue(item)"
+												@change="handleStepDueChange(item, $event)" />
 											<button
 												v-if="item.dueDate"
 												class="card-modal__field-clear"
@@ -2052,40 +2052,40 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										{{ field.name }}
 									</label>
 									<!-- text -->
-									<input
+									<DraftInput
 										v-if="field.type === 'text'"
 										:id="`card-cf-${field.id}`"
 										class="card-modal__cf-input"
 										type="text"
-										:value="(cardData.fieldValues ?? []).find(fv => fv.fieldId === field.id)?.value ?? ''"
+										:model-value="(cardData.fieldValues ?? []).find(fv => fv.fieldId === field.id)?.value ?? ''"
 										:disabled="!canEdit"
 										:aria-label="field.name"
 										:data-test="`cf-input-${field.id}`"
 										@change="handleFieldChange(field, $event.target.value)"
-										@blur="handleFieldChange(field, $event.target.value)">
+										@blur="handleFieldChange(field, $event.target.value)" />
 									<!-- number -->
-									<input
+									<DraftInput
 										v-else-if="field.type === 'number'"
 										:id="`card-cf-${field.id}`"
 										class="card-modal__cf-input"
 										type="number"
-										:value="(cardData.fieldValues ?? []).find(fv => fv.fieldId === field.id)?.value ?? ''"
+										:model-value="(cardData.fieldValues ?? []).find(fv => fv.fieldId === field.id)?.value ?? ''"
 										:disabled="!canEdit"
 										:aria-label="field.name"
 										:data-test="`cf-input-${field.id}`"
 										@change="handleFieldChange(field, $event.target.value)"
-										@blur="handleFieldChange(field, $event.target.value)">
+										@blur="handleFieldChange(field, $event.target.value)" />
 									<!-- date -->
-									<input
+									<DraftInput
 										v-else-if="field.type === 'date'"
 										:id="`card-cf-${field.id}`"
 										class="card-modal__cf-input"
 										type="date"
-										:value="(cardData.fieldValues ?? []).find(fv => fv.fieldId === field.id)?.value ?? ''"
+										:model-value="(cardData.fieldValues ?? []).find(fv => fv.fieldId === field.id)?.value ?? ''"
 										:disabled="!canEdit"
 										:aria-label="field.name"
 										:data-test="`cf-input-${field.id}`"
-										@change="handleFieldChange(field, $event.target.value)">
+										@change="handleFieldChange(field, $event.target.value)" />
 									<!-- select -->
 									<select
 										v-else-if="field.type === 'select'"
@@ -2840,6 +2840,7 @@ import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
 import TimerOutlineIcon from 'vue-material-design-icons/TimerOutline.vue'
 import ElapsedCounter from './ElapsedCounter.vue'
+import DraftInput from './DraftInput.vue'
 import BellOutlineIcon from 'vue-material-design-icons/BellOutline.vue'
 import BellPlusOutlineIcon from 'vue-material-design-icons/BellPlusOutline.vue'
 import TableColumnIcon from 'vue-material-design-icons/TableColumn.vue'
