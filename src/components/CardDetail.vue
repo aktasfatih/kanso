@@ -1979,12 +1979,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<span v-if="timeSpentTotal > 0" class="card-modal__attachment-size">{{ formatDuration(timeSpentTotal) }}</span>
 							</div>
 
-							<!-- Live running timer row (#73): shown only while cardData.runningTimer
-							     is set. The elapsed counter ticks every second via the timerNow ref. -->
 							<div v-if="cardData?.runningTimer" class="card-modal__timer-running-row">
 								<TimerOutlineIcon :size="14" class="card-modal__timer-running-icon" />
 								<span class="card-modal__timer-running-label">{{ t('kanso', 'Timer running') }}</span>
-								<span class="card-modal__timer-running-elapsed">{{ formatDuration(timerElapsed) }}</span>
+								<ElapsedCounter class="card-modal__timer-running-elapsed" :started-at="cardData.runningTimer.startedAt" :format="formatDuration" />
 							</div>
 
 							<form v-if="canEdit" class="card-modal__time-add" @submit.prevent="handleAddTimeEntry">
@@ -2841,6 +2839,7 @@ import FolderMultipleOutlineIcon from 'vue-material-design-icons/FolderMultipleO
 import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
 import TimerOutlineIcon from 'vue-material-design-icons/TimerOutline.vue'
+import ElapsedCounter from './ElapsedCounter.vue'
 import BellOutlineIcon from 'vue-material-design-icons/BellOutline.vue'
 import BellPlusOutlineIcon from 'vue-material-design-icons/BellPlusOutline.vue'
 import TableColumnIcon from 'vue-material-design-icons/TableColumn.vue'
@@ -6705,36 +6704,6 @@ const timeEntryError = ref('')
 // summaries); the entries list only backs the breakdown and the delete buttons.
 const timeSpentTotal = computed(() => Number(cardData.value?.timeSpent) || 0)
 
-// Live running-timer counter (#73): ticks every second while a running timer
-// is present on the card. The ref is created once and the interval is kept in
-// sync with the timer's presence (card changes without unmounting the detail).
-const timerNow = ref(Math.floor(Date.now() / 1000))
-const timerElapsed = computed(() => {
-	const startedAt = cardData.value?.runningTimer?.startedAt
-	if (!startedAt) return 0
-	return Math.max(0, timerNow.value - startedAt)
-})
-
-let timerInterval = null
-
-function syncTimerInterval() {
-	// Only the visible counter needs the tick. With time tracking switched off
-	// (#5894) the row is not rendered, so skip the interval entirely - the timer
-	// itself is untouched and keeps running server-side.
-	const hasTimer = !!(cardData.value?.runningTimer) && cardFeatures.value.timeTracking
-	if (hasTimer && timerInterval === null) {
-		timerInterval = setInterval(() => {
-			timerNow.value = Math.floor(Date.now() / 1000)
-		}, 1000)
-	} else if (!hasTimer && timerInterval !== null) {
-		clearInterval(timerInterval)
-		timerInterval = null
-	}
-}
-
-// Start/stop the interval whenever the running timer appears or disappears.
-watch([() => cardData.value?.runningTimer, () => cardFeatures.value.timeTracking], syncTimerInterval, { immediate: true })
-
 // Human-readable duration: 5400 → "1h 30m", 45 → "45s", 0 → "0m".
 function formatDuration(totalSeconds) {
 	const secs = Math.max(0, Math.floor(Number(totalSeconds) || 0))
@@ -7296,11 +7265,6 @@ onBeforeUnmount(() => {
 		window.removeEventListener('pointercancel', onResizePointerUp)
 		document.body.style.userSelect = ''
 		document.body.style.cursor = ''
-	}
-	// Clear the running-timer tick interval so it doesn't leak after unmount.
-	if (timerInterval !== null) {
-		clearInterval(timerInterval)
-		timerInterval = null
 	}
 })
 
@@ -9305,8 +9269,7 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	align-items: center;
 }
 /* Timer running indicator (#73): a prominent "Timer running · elapsed" row at
- * the top of the Time tracking section. The icon pulses to draw the eye; the
- * elapsed counter ticks every second via the timerNow ref. */
+ * the top of the Time tracking section. The icon pulses to draw the eye. */
 .card-modal__timer-running-row {
 	display: flex;
 	align-items: center;
