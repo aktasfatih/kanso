@@ -67,7 +67,7 @@ class SavedFilterController extends Controller {
 	public function index(int $boardId): JSONResponse {
 		return $this->respond(function () use ($boardId): JSONResponse {
 			$all = $this->readAll();
-			return new JSONResponse(['filters' => $all[(string)$boardId] ?? []]);
+			return new JSONResponse(['filters' => $all[$boardId] ?? []]);
 		});
 	}
 
@@ -97,8 +97,7 @@ class SavedFilterController extends Controller {
 			}
 
 			$all = $this->readAll();
-			$key = (string)$boardId;
-			$list = $all[$key] ?? [];
+			$list = $all[$boardId] ?? [];
 
 			// Upsert by (case-sensitive) name.
 			$found = false;
@@ -117,7 +116,7 @@ class SavedFilterController extends Controller {
 				$list[] = ['name' => $name, 'filter' => $filter];
 			}
 
-			$all[$key] = $list;
+			$all[$boardId] = $list;
 			// Global size guard: reject if the whole value would exceed the cap.
 			// Only the create path grows the value, so this is the single choke point.
 			$encodedAll = json_encode($all);
@@ -137,13 +136,12 @@ class SavedFilterController extends Controller {
 	public function destroy(int $boardId, string $name): JSONResponse {
 		return $this->respond(function () use ($boardId, $name): JSONResponse {
 			$all = $this->readAll();
-			$key = (string)$boardId;
-			$list = $all[$key] ?? [];
+			$list = $all[$boardId] ?? [];
 			$list = array_values(array_filter($list, static fn ($v) => ($v['name'] ?? '') !== $name));
 			if (empty($list)) {
-				unset($all[$key]);
+				unset($all[$boardId]);
 			} else {
-				$all[$key] = $list;
+				$all[$boardId] = $list;
 			}
 			$this->writeAll($all);
 			return new JSONResponse(['filters' => $list]);
@@ -154,7 +152,7 @@ class SavedFilterController extends Controller {
 	 * Decode the whole saved-filters config value, tolerating a corrupt/legacy
 	 * value by falling back to an empty map.
 	 *
-	 * @return array<string, list<array{name: string, filter: mixed}>>
+	 * @return array<int, list<array{name: string, filter: mixed}>>
 	 */
 	private function readAll(): array {
 		$raw = $this->config->getUserValue($this->currentUserId(), 'kanso', self::KEY, '');
@@ -166,7 +164,7 @@ class SavedFilterController extends Controller {
 	}
 
 	/**
-	 * @param array<string, list<array{name: string, filter: mixed}>> $all
+	 * @param array<int, list<array{name: string, filter: mixed}>> $all
 	 * @param ?string $encoded optional pre-encoded JSON (create path already has it)
 	 */
 	private function writeAll(array $all, ?string $encoded = null): void {

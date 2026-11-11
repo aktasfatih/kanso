@@ -88,6 +88,7 @@ class MailHostGuard {
 	 * Resolves `$host` and returns the single IP literal the connection must be
 	 * made to.
 	 *
+	 * @psalm-taint-escape ssrf
 	 * @throws ImapException if the name does not resolve, or resolves anywhere
 	 *                       the server should not be dialling
 	 */
