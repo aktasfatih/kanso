@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— keine —"
 
-#: src/components/BoardSettingsModal.vue:4938
+#: src/components/BoardSettingsModal.vue:4939
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n-mal"
@@ -114,7 +114,7 @@ msgstr "{card} ist jetzt eine Unterkarte von {parent}"
 msgid "{card} moved to {stack}"
 msgstr "{card} wurde nach {stack} verschoben"
 
-#: src/components/ProjectHealth.vue:170
+#: src/components/ProjectHealth.vue:171
 msgid "{count} blocked"
 msgid_plural "{count} blocked"
 msgstr[0] "{count} blockiert"
@@ -126,7 +126,7 @@ msgid_plural "{count} cards"
 msgstr[0] "{count} Karte"
 msgstr[1] "{count} Karten"
 
-#: src/components/ProjectHealth.vue:181
+#: src/components/ProjectHealth.vue:182
 msgid "{count} card has no estimate and counts as the typical estimate of {points}."
 msgid_plural "{count} cards have no estimate and each counts as the typical estimate of {points}."
 msgstr[0] "{count} Karte hat keine Schätzung und zählt als die typische Schätzung von {points}."
@@ -142,19 +142,19 @@ msgid_plural "{count} characters left"
 msgstr[0] "{count} Zeichen übrig"
 msgstr[1] "{count} Zeichen übrig"
 
-#: src/components/ProjectHealth.vue:161
+#: src/components/ProjectHealth.vue:162
 msgid "{count} day ago"
 msgid_plural "{count} days ago"
 msgstr[0] "vor {count} Tag"
 msgstr[1] "vor {count} Tagen"
 
-#: src/components/ProjectHealth.vue:173
+#: src/components/ProjectHealth.vue:174
 msgid "{count} in progress"
 msgid_plural "{count} in progress"
 msgstr[0] "{count} in Bearbeitung"
 msgstr[1] "{count} in Bearbeitung"
 
-#: src/components/ProjectHealth.vue:167
+#: src/components/ProjectHealth.vue:168
 msgid "{count} overdue"
 msgid_plural "{count} overdue"
 msgstr[0] "{count} überfällig"
@@ -187,7 +187,7 @@ msgstr "frühestens {from}"
 msgid "{n} blocked"
 msgstr "{n} blockiert"
 
-#: src/components/ProjectHealth.vue:139
+#: src/components/ProjectHealth.vue:140
 msgid "{n} card / week"
 msgid_plural "{n} cards / week"
 msgstr[0] "{n} Karte / Woche"
@@ -228,7 +228,7 @@ msgid_plural "{n} points"
 msgstr[0] "{n} Punkt"
 msgstr[1] "{n} Punkte"
 
-#: src/components/ProjectHealth.vue:138
+#: src/components/ProjectHealth.vue:139
 msgid "{n} point / week"
 msgid_plural "{n} points / week"
 msgstr[0] "{n} Punkt / Woche"
@@ -2597,7 +2597,7 @@ msgstr "Alle"
 msgid "Every card in this project is done."
 msgstr "Alle Karten in diesem Projekt sind fertig."
 
-#: src/components/BoardSettingsModal.vue:4918
+#: src/components/BoardSettingsModal.vue:4919
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Täglich"
@@ -2607,19 +2607,19 @@ msgstr[1] "Alle %n Tage"
 msgid "Every estimate needs a label."
 msgstr "Jede Schätzung braucht ein Label."
 
-#: src/components/BoardSettingsModal.vue:4928
+#: src/components/BoardSettingsModal.vue:4929
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Monatlich"
 msgstr[1] "Alle %n Monate"
 
-#: src/components/BoardSettingsModal.vue:4920
+#: src/components/BoardSettingsModal.vue:4921
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Wöchentlich"
 msgstr[1] "Alle %n Wochen"
 
-#: src/components/BoardSettingsModal.vue:4930
+#: src/components/BoardSettingsModal.vue:4931
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Jährlich"
@@ -3535,7 +3535,7 @@ msgstr "In ein neues Kanso-Board importiert:"
 msgid "Importing…"
 msgstr "Wird importiert…"
 
-#: src/components/ProjectHealth.vue:160
+#: src/components/ProjectHealth.vue:161
 msgid "in {count} day"
 msgid_plural "in {count} days"
 msgstr[0] "in {count} Tag"

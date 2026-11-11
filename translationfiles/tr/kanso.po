@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— yok —"
 
-#: src/components/BoardSettingsModal.vue:4938
+#: src/components/BoardSettingsModal.vue:4939
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n kez"
@@ -114,7 +114,7 @@ msgstr "{card} artık {parent} kartının alt kartı"
 msgid "{card} moved to {stack}"
 msgstr "{card} şu sütuna taşındı: {stack}"
 
-#: src/components/ProjectHealth.vue:170
+#: src/components/ProjectHealth.vue:171
 msgid "{count} blocked"
 msgid_plural "{count} blocked"
 msgstr[0] "{count} engellenmiş"
@@ -126,7 +126,7 @@ msgid_plural "{count} cards"
 msgstr[0] "{count} kart"
 msgstr[1] "{count} kart"
 
-#: src/components/ProjectHealth.vue:181
+#: src/components/ProjectHealth.vue:182
 msgid "{count} card has no estimate and counts as the typical estimate of {points}."
 msgid_plural "{count} cards have no estimate and each counts as the typical estimate of {points}."
 msgstr[0] "{count} kartın tahmini yok ve tipik tahmin olan {points} sayılıyor."
@@ -142,19 +142,19 @@ msgid_plural "{count} characters left"
 msgstr[0] "{count} karakter kaldı"
 msgstr[1] "{count} karakter kaldı"
 
-#: src/components/ProjectHealth.vue:161
+#: src/components/ProjectHealth.vue:162
 msgid "{count} day ago"
 msgid_plural "{count} days ago"
 msgstr[0] "{count} gün önce"
 msgstr[1] "{count} gün önce"
 
-#: src/components/ProjectHealth.vue:173
+#: src/components/ProjectHealth.vue:174
 msgid "{count} in progress"
 msgid_plural "{count} in progress"
 msgstr[0] "{count} devam ediyor"
 msgstr[1] "{count} devam ediyor"
 
-#: src/components/ProjectHealth.vue:167
+#: src/components/ProjectHealth.vue:168
 msgid "{count} overdue"
 msgid_plural "{count} overdue"
 msgstr[0] "{count} gecikmiş"
@@ -187,7 +187,7 @@ msgstr "en erken {from}"
 msgid "{n} blocked"
 msgstr "{n} engelli"
 
-#: src/components/ProjectHealth.vue:139
+#: src/components/ProjectHealth.vue:140
 msgid "{n} card / week"
 msgid_plural "{n} cards / week"
 msgstr[0] "{n} kart / hafta"
@@ -228,7 +228,7 @@ msgid_plural "{n} points"
 msgstr[0] "{n} puan"
 msgstr[1] "{n} puan"
 
-#: src/components/ProjectHealth.vue:138
+#: src/components/ProjectHealth.vue:139
 msgid "{n} point / week"
 msgid_plural "{n} points / week"
 msgstr[0] "{n} puan / hafta"
@@ -2597,7 +2597,7 @@ msgstr "Her"
 msgid "Every card in this project is done."
 msgstr "Bu projedeki tüm kartlar tamamlandı."
 
-#: src/components/BoardSettingsModal.vue:4918
+#: src/components/BoardSettingsModal.vue:4919
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Her gün"
@@ -2607,19 +2607,19 @@ msgstr[1] "Her %n günde bir"
 msgid "Every estimate needs a label."
 msgstr "Her tahminin bir etiketi olmalı."
 
-#: src/components/BoardSettingsModal.vue:4928
+#: src/components/BoardSettingsModal.vue:4929
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Her ay"
 msgstr[1] "Her %n ayda bir"
 
-#: src/components/BoardSettingsModal.vue:4920
+#: src/components/BoardSettingsModal.vue:4921
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Her hafta"
 msgstr[1] "Her %n haftada bir"
 
-#: src/components/BoardSettingsModal.vue:4930
+#: src/components/BoardSettingsModal.vue:4931
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Her yıl"
@@ -3535,7 +3535,7 @@ msgstr "Yeni bir Kanso panosuna aktarıldı:"
 msgid "Importing…"
 msgstr "İçe aktarılıyor…"
 
-#: src/components/ProjectHealth.vue:160
+#: src/components/ProjectHealth.vue:161
 msgid "in {count} day"
 msgid_plural "in {count} days"
 msgstr[0] "{count} gün içinde"

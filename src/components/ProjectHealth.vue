@@ -50,28 +50,28 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 			<div class="health__metric">
 				<label class="health__label" :for="startId">{{ t('kanso', 'Start date') }}</label>
-				<input
+				<DraftInput
 					:id="startId"
 					class="health__date"
 					type="date"
 					data-test="project-start-date"
-					:value="plan.startDate ?? ''"
+					:model-value="plan.startDate ?? ''"
 					:max="plan.targetDate ?? undefined"
 					:disabled="readOnly"
-					@change="emit('update-dates', { startDate: $event.target.value })">
+					@change="emit('update-dates', { startDate: $event.target.value })" />
 			</div>
 
 			<div class="health__metric">
 				<label class="health__label" :for="targetId">{{ t('kanso', 'Target date') }}</label>
-				<input
+				<DraftInput
 					:id="targetId"
 					class="health__date"
 					type="date"
 					data-test="project-target-date"
-					:value="plan.targetDate ?? ''"
+					:model-value="plan.targetDate ?? ''"
 					:min="plan.startDate ?? undefined"
 					:disabled="readOnly"
-					@change="emit('update-dates', { targetDate: $event.target.value })">
+					@change="emit('update-dates', { targetDate: $event.target.value })" />
 				<span v-if="daysLeftLabel" class="health__sub" :class="{ 'health__sub--late': plan.daysLeft < 0 }">{{ daysLeftLabel }}</span>
 			</div>
 		</div>
@@ -99,6 +99,7 @@ import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import ClockAlertOutlineIcon from 'vue-material-design-icons/ClockAlertOutline.vue'
 import BlockHelperIcon from 'vue-material-design-icons/BlockHelper.vue'
 import ProgressClockIcon from 'vue-material-design-icons/ProgressClock.vue'
+import DraftInput from './DraftInput.vue'
 import { projectStatus, formatPlanDate } from '../services/projectStatus.js'
 
 const props = defineProps({

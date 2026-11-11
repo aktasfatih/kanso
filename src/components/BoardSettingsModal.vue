@@ -672,12 +672,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						<!-- Stage: lower stages gate higher ones -->
 						<label class="review-type-stage" :title="t('kanso', 'Stage — lower stages gate (defer) higher ones')">
 							<span class="review-type-stage__label">{{ t('kanso', 'Stage') }}</span>
-							<input
+							<DraftInput
 								class="review-type-stage__input"
 								type="number"
 								min="0"
 								step="1"
-								:value="rt.stage ?? 0"
+								:model-value="rt.stage ?? 0"
 								:disabled="!canManage"
 								:aria-label="t('kanso', 'Stage of review type {title}', { title: rt.title })"
 								@change="saveRtStage(rt, $event)" />
@@ -1401,14 +1401,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								class="workflow__label">
 								{{ t('kanso', 'WIP limit') }}
 							</label>
-							<input
+							<DraftInput
 								:id="`workflow-wip-${stack.id}`"
 								class="workflow__wip-input"
 								type="number"
 								min="0"
 								step="1"
 								:disabled="!canEdit || workflowSaving[stack.id]"
-								:value="wipLimitDisplay(stack)"
+								:model-value="wipLimitDisplay(stack)"
 								:placeholder="t('kanso', 'No limit')"
 								@change="onWipLimitChange(stack, $event.target)" />
 						</div>
@@ -2654,6 +2654,7 @@ import DownloadIcon from 'vue-material-design-icons/Download.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ArrowExpandIcon from 'vue-material-design-icons/ArrowExpand.vue'
+import DraftInput from './DraftInput.vue'
 import ArrowCollapseIcon from 'vue-material-design-icons/ArrowCollapse.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
