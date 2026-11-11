@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— ninguno —"
 
-#: src/components/BoardSettingsModal.vue:4938
+#: src/components/BoardSettingsModal.vue:4939
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n vez"
@@ -114,7 +114,7 @@ msgstr "{card} ahora es una subtarjeta de {parent}"
 msgid "{card} moved to {stack}"
 msgstr "{card} movida a {stack}"
 
-#: src/components/ProjectHealth.vue:170
+#: src/components/ProjectHealth.vue:171
 msgid "{count} blocked"
 msgid_plural "{count} blocked"
 msgstr[0] "{count} bloqueada"
@@ -126,7 +126,7 @@ msgid_plural "{count} cards"
 msgstr[0] "{count} tarjeta"
 msgstr[1] "{count} tarjetas"
 
-#: src/components/ProjectHealth.vue:181
+#: src/components/ProjectHealth.vue:182
 msgid "{count} card has no estimate and counts as the typical estimate of {points}."
 msgid_plural "{count} cards have no estimate and each counts as the typical estimate of {points}."
 msgstr[0] "{count} tarjeta no tiene estimación y cuenta como la estimación típica de {points}."
@@ -142,19 +142,19 @@ msgid_plural "{count} characters left"
 msgstr[0] "Queda {count} carácter"
 msgstr[1] "Quedan {count} caracteres"
 
-#: src/components/ProjectHealth.vue:161
+#: src/components/ProjectHealth.vue:162
 msgid "{count} day ago"
 msgid_plural "{count} days ago"
 msgstr[0] "hace {count} día"
 msgstr[1] "hace {count} días"
 
-#: src/components/ProjectHealth.vue:173
+#: src/components/ProjectHealth.vue:174
 msgid "{count} in progress"
 msgid_plural "{count} in progress"
 msgstr[0] "{count} en curso"
 msgstr[1] "{count} en curso"
 
-#: src/components/ProjectHealth.vue:167
+#: src/components/ProjectHealth.vue:168
 msgid "{count} overdue"
 msgid_plural "{count} overdue"
 msgstr[0] "{count} vencida"
@@ -187,7 +187,7 @@ msgstr "{from} como pronto"
 msgid "{n} blocked"
 msgstr "{n} bloqueadas"
 
-#: src/components/ProjectHealth.vue:139
+#: src/components/ProjectHealth.vue:140
 msgid "{n} card / week"
 msgid_plural "{n} cards / week"
 msgstr[0] "{n} tarjeta / semana"
@@ -228,7 +228,7 @@ msgid_plural "{n} points"
 msgstr[0] "{n} punto"
 msgstr[1] "{n} puntos"
 
-#: src/components/ProjectHealth.vue:138
+#: src/components/ProjectHealth.vue:139
 msgid "{n} point / week"
 msgid_plural "{n} points / week"
 msgstr[0] "{n} punto / semana"
@@ -469,7 +469,7 @@ msgid_plural "%n projects"
 msgstr[0] "%n proyecto"
 msgstr[1] "%n proyectos"
 
-#: src/components/CardDetail.vue:2350
+#: src/components/CardDetail.vue:2348
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n respuesta"
@@ -2597,7 +2597,7 @@ msgstr "Cada"
 msgid "Every card in this project is done."
 msgstr "Todas las tarjetas de este proyecto están terminadas."
 
-#: src/components/BoardSettingsModal.vue:4918
+#: src/components/BoardSettingsModal.vue:4919
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Cada día"
@@ -2607,19 +2607,19 @@ msgstr[1] "Cada %n días"
 msgid "Every estimate needs a label."
 msgstr "Cada estimación necesita una etiqueta."
 
-#: src/components/BoardSettingsModal.vue:4928
+#: src/components/BoardSettingsModal.vue:4929
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Cada mes"
 msgstr[1] "Cada %n meses"
 
-#: src/components/BoardSettingsModal.vue:4920
+#: src/components/BoardSettingsModal.vue:4921
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Cada semana"
 msgstr[1] "Cada %n semanas"
 
-#: src/components/BoardSettingsModal.vue:4930
+#: src/components/BoardSettingsModal.vue:4931
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Cada año"
@@ -3535,7 +3535,7 @@ msgstr "Importado a un tablero de Kanso nuevo:"
 msgid "Importing…"
 msgstr "Importando…"
 
-#: src/components/ProjectHealth.vue:160
+#: src/components/ProjectHealth.vue:161
 msgid "in {count} day"
 msgid_plural "in {count} days"
 msgstr[0] "en {count} día"
@@ -3624,7 +3624,7 @@ msgstr "Su propósito, alcance o normas. Cualquier miembro del tablero puede lee
 msgid "Jump to the discussion"
 msgstr "Ir a la conversación"
 
-#: src/components/CardDetail.vue:7189
+#: src/components/CardDetail.vue:7159
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Ir a la conversación (%n comentario)"
@@ -5651,7 +5651,7 @@ msgstr "Mostrar la conversación debajo de la tarjeta"
 msgid "Show the discussion panel"
 msgstr "Mostrar el panel de conversación"
 
-#: src/components/CardDetail.vue:7195
+#: src/components/CardDetail.vue:7165
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostrar el panel de conversación (%n comentario)"

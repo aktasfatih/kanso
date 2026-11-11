@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— нет —"
 
-#: src/components/BoardSettingsModal.vue:4938
+#: src/components/BoardSettingsModal.vue:4939
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· повторов: %n"
@@ -115,7 +115,7 @@ msgstr "{card} теперь подкарточка {parent}"
 msgid "{card} moved to {stack}"
 msgstr "{card} перемещена в {stack}"
 
-#: src/components/ProjectHealth.vue:170
+#: src/components/ProjectHealth.vue:171
 msgid "{count} blocked"
 msgid_plural "{count} blocked"
 msgstr[0] "{count} заблокирована"
@@ -129,7 +129,7 @@ msgstr[0] "{count} карточка"
 msgstr[1] "{count} карточки"
 msgstr[2] "{count} карточек"
 
-#: src/components/ProjectHealth.vue:181
+#: src/components/ProjectHealth.vue:182
 msgid "{count} card has no estimate and counts as the typical estimate of {points}."
 msgid_plural "{count} cards have no estimate and each counts as the typical estimate of {points}."
 msgstr[0] "{count} карточка без оценки, для нее берется типичная оценка {points}."
@@ -147,21 +147,21 @@ msgstr[0] "Остался {count} символ"
 msgstr[1] "Осталось {count} символа"
 msgstr[2] "Осталось {count} символов"
 
-#: src/components/ProjectHealth.vue:161
+#: src/components/ProjectHealth.vue:162
 msgid "{count} day ago"
 msgid_plural "{count} days ago"
 msgstr[0] "{count} день назад"
 msgstr[1] "{count} дня назад"
 msgstr[2] "{count} дней назад"
 
-#: src/components/ProjectHealth.vue:173
+#: src/components/ProjectHealth.vue:174
 msgid "{count} in progress"
 msgid_plural "{count} in progress"
 msgstr[0] "{count} в работе"
 msgstr[1] "{count} в работе"
 msgstr[2] "{count} в работе"
 
-#: src/components/ProjectHealth.vue:167
+#: src/components/ProjectHealth.vue:168
 msgid "{count} overdue"
 msgid_plural "{count} overdue"
 msgstr[0] "{count} просрочена"
@@ -196,7 +196,7 @@ msgstr "не раньше {from}"
 msgid "{n} blocked"
 msgstr "Заблокировано: {n}"
 
-#: src/components/ProjectHealth.vue:139
+#: src/components/ProjectHealth.vue:140
 msgid "{n} card / week"
 msgid_plural "{n} cards / week"
 msgstr[0] "Карточек в неделю: {n}"
@@ -239,7 +239,7 @@ msgstr[0] "{n} балл"
 msgstr[1] "{n} балла"
 msgstr[2] "{n} баллов"
 
-#: src/components/ProjectHealth.vue:138
+#: src/components/ProjectHealth.vue:139
 msgid "{n} point / week"
 msgid_plural "{n} points / week"
 msgstr[0] "Баллов в неделю: {n}"
@@ -501,7 +501,7 @@ msgstr[0] "%n проект"
 msgstr[1] "%n проекта"
 msgstr[2] "%n проектов"
 
-#: src/components/CardDetail.vue:2350
+#: src/components/CardDetail.vue:2348
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n ответ"
@@ -2639,7 +2639,7 @@ msgstr "Каждые"
 msgid "Every card in this project is done."
 msgstr "Все карточки в этом проекте готовы."
 
-#: src/components/BoardSettingsModal.vue:4918
+#: src/components/BoardSettingsModal.vue:4919
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Каждый %n день"
@@ -2650,21 +2650,21 @@ msgstr[2] "Каждые %n дней"
 msgid "Every estimate needs a label."
 msgstr "У каждой оценки должна быть метка."
 
-#: src/components/BoardSettingsModal.vue:4928
+#: src/components/BoardSettingsModal.vue:4929
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Каждый %n месяц"
 msgstr[1] "Каждые %n месяца"
 msgstr[2] "Каждые %n месяцев"
 
-#: src/components/BoardSettingsModal.vue:4920
+#: src/components/BoardSettingsModal.vue:4921
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Каждую %n неделю"
 msgstr[1] "Каждые %n недели"
 msgstr[2] "Каждые %n недель"
 
-#: src/components/BoardSettingsModal.vue:4930
+#: src/components/BoardSettingsModal.vue:4931
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Каждый %n год"
@@ -3581,7 +3581,7 @@ msgstr "Импортировано в новую доску Kanso:"
 msgid "Importing…"
 msgstr "Импорт…"
 
-#: src/components/ProjectHealth.vue:160
+#: src/components/ProjectHealth.vue:161
 msgid "in {count} day"
 msgid_plural "in {count} days"
 msgstr[0] "через {count} день"
@@ -3671,7 +3671,7 @@ msgstr "Назначение, границы или правила. Любой �
 msgid "Jump to the discussion"
 msgstr "Перейти к обсуждению"
 
-#: src/components/CardDetail.vue:7189
+#: src/components/CardDetail.vue:7159
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Перейти к обсуждению (%n комментарий)"
@@ -5702,7 +5702,7 @@ msgstr "Показывать обсуждение под карточкой"
 msgid "Show the discussion panel"
 msgstr "Показать панель обсуждения"
 
-#: src/components/CardDetail.vue:7195
+#: src/components/CardDetail.vue:7165
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Показать панель обсуждения (%n комментарий)"
