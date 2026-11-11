@@ -11,6 +11,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+## [0.45.1](https://github.com/aktasfatih/kanso/compare/v0.45.0...v0.45.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* a card update arriving while you type no longer wipes the date or field you are editing ([486e215](https://github.com/aktasfatih/kanso/commit/486e215ae8645f3c518563bca0c536da6885d172))
+* dates and fields typed in a card no longer vanish while its timer is running ([ff7616b](https://github.com/aktasfatih/kanso/commit/ff7616ba9d655babe44a541415cffac5eb61f3a8))
+* **deps:** bump the npm-production group across 1 directory with 11 updates ([816d663](https://github.com/aktasfatih/kanso/commit/816d6637cb59741d4a41438511d14b68649551c9))
+* WIP limits, review stages and project dates keep what you type when the board or project updates ([6020d73](https://github.com/aktasfatih/kanso/commit/6020d73fba6db02d18896cd5beb713de731b3353))
+
 # [0.45.0](https://github.com/aktasfatih/kanso/compare/v0.44.2...v0.45.0) (2026-11-06)
 
 
