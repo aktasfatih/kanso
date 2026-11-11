@@ -20,5 +20,7 @@ export default createAppConfig({
 	// Styles must ship inside the JS bundle: the page only loads the script
 	// via Util::addScript, and the alternative is a hash-named CSS chunk
 	// that PHP cannot reference.
-	inlineCSS: true,
+	// Per-chunk, or every style lands in kanso-main only and the Files dialog
+	// silently relies on core's own @nextcloud/vue styles matching our version.
+	inlineCSS: { relativeCSSInjection: true },
 })
