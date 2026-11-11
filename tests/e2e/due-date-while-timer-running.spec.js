@@ -36,11 +36,16 @@ test.describe('Date input with a running timer', () => {
 		expect((await api.send('GET', `/cards/${state.cardId}`)).runningTimer).toBeTruthy()
 
 		await ncLogin(page)
+		await page.clock.install()
 		await page.goto(state.cardUrl)
 		await page.setViewportSize({ width: 1280, height: 800 })
 		await page.waitForSelector('.card-modal__attrbar', { timeout: 15_000 })
 
-		await expect(page.locator('.card-modal__timer-running-row')).toBeVisible()
+		const elapsed = page.locator('.card-modal__timer-running-elapsed')
+		await expect(elapsed).toBeVisible()
+		const before = await elapsed.textContent()
+		await page.clock.runFor(60_000)
+		await expect(elapsed).not.toHaveText(before)
 
 		await page.locator('.card-modal__attrbar button.card-modal__pill[data-pill="due"]').click()
 		const dueInput = page.locator('.card-modal__popover .card-modal__date-input[data-date="end"]')
@@ -49,7 +54,7 @@ test.describe('Date input with a running timer', () => {
 		const typed = '2026-12-15T09:30'
 		await dueInput.fill(typed)
 
-		await page.waitForTimeout(2500)
+		await page.clock.runFor(3_000)
 		await expect(dueInput).toHaveValue(typed)
 
 		// Compared as an instant: the input is local time, the stored value UTC.
