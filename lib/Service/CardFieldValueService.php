@@ -42,6 +42,7 @@ class CardFieldValueService {
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private CardVisibilityGuard $visibilityGuard,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -55,34 +56,36 @@ class CardFieldValueService {
 	 * @throws InvalidInputException if the field is not on the card's board or the value is invalid for its type
 	 */
 	public function set(int $cardId, int $fieldId, ?string $value, string $uid): CardFieldValue {
-		$card = $this->cardMapper->find($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $uid);
+		return $this->cardMutation->run($cardId, function () use ($cardId, $fieldId, $value, $uid): CardFieldValue {
+			$card = $this->cardMapper->find($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $uid);
 
-		$field = $this->loadFieldForCard($fieldId, $card);
+			$field = $this->loadFieldForCard($fieldId, $card);
 
-		$coerced = $this->coerce($field, $value);
-		if ($coerced === null) {
-			// Empty write == clear (no value row for an empty value).
-			return $this->clearInternal($cardId, $fieldId, $card, $board, $uid);
-		}
+			$coerced = $this->coerce($field, $value);
+			if ($coerced === null) {
+				// Empty write == clear (no value row for an empty value).
+				return $this->clearInternal($cardId, $fieldId, $card, $board, $uid);
+			}
 
-		$existing = $this->cardFieldValueMapper->findByCardAndField($cardId, $fieldId);
-		if ($existing !== null) {
-			$existing->setValue($coerced);
-			$saved = $this->cardFieldValueMapper->update($existing);
-		} else {
-			$entity = new CardFieldValue();
-			$entity->setCardId($cardId);
-			$entity->setFieldId($fieldId);
-			$entity->setValue($coerced);
-			$saved = $this->cardFieldValueMapper->insert($entity);
-		}
+			$existing = $this->cardFieldValueMapper->findByCardAndField($cardId, $fieldId);
+			if ($existing !== null) {
+				$existing->setValue($coerced);
+				$saved = $this->cardFieldValueMapper->update($existing);
+			} else {
+				$entity = new CardFieldValue();
+				$entity->setCardId($cardId);
+				$entity->setFieldId($fieldId);
+				$entity->setValue($coerced);
+				$saved = $this->cardFieldValueMapper->insert($entity);
+			}
 
-		$this->notifyCardChanged($board->getId(), $cardId, $uid);
+			$this->notifyCardChanged($board->getId(), $cardId, $uid);
 
-		return $saved;
+			return $saved;
+		});
 	}
 
 	/**
@@ -94,13 +97,15 @@ class CardFieldValueService {
 	 * @throws InvalidInputException if the field is not on the card's board
 	 */
 	public function clear(int $cardId, int $fieldId, string $uid): void {
-		$card = $this->cardMapper->find($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $uid);
+		$this->cardMutation->run($cardId, function () use ($cardId, $fieldId, $uid): void {
+			$card = $this->cardMapper->find($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $uid);
 
-		$this->loadFieldForCard($fieldId, $card);
-		$this->clearInternal($cardId, $fieldId, $card, $board, $uid);
+			$this->loadFieldForCard($fieldId, $card);
+			$this->clearInternal($cardId, $fieldId, $card, $board, $uid);
+		});
 	}
 
 	private function clearInternal(int $cardId, int $fieldId, Card $card, Board $board, string $uid): CardFieldValue {

@@ -69,6 +69,7 @@ class AssigneeServiceTest extends TestCase {
 			$this->visibilityGuard,
 			$this->changeDetailMapper,
 			$this->userManager,
+			$this->cardMutation(),
 		);
 	}
 
@@ -262,6 +263,7 @@ class AssigneeServiceTest extends TestCase {
 			$this->visibilityGuard,
 			$this->changeDetailMapper,
 			$userManager,
+			$this->cardMutation(),
 		);
 
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
@@ -576,6 +578,7 @@ class AssigneeServiceTest extends TestCase {
 			$visibilityGuard,
 			$this->changeDetailMapper,
 			$this->userManager,
+			$this->cardMutation(),
 		);
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
@@ -584,4 +587,12 @@ class AssigneeServiceTest extends TestCase {
 		$this->expectException(DoesNotExistException::class);
 		$service->listForCard(9, 'external');
 	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('run')->willReturnCallback(static fn (int $cardId, callable $write): mixed => $write());
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
 }

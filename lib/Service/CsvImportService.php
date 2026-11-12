@@ -114,6 +114,7 @@ class CsvImportService {
 		private CardService $cardService,
 		private IUserManager $userManager,
 		private IDBConnection $db,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -225,15 +226,7 @@ class CsvImportService {
 	 * @return array{boardId: int, stackId: int, cards: int, skipped: int, labelsCreated: int, labelsSkipped: int}
 	 */
 	private function attempt($handle, bool $hasHeader, Board $board, Stack $stack, array $mapping, string $actorUid, int $dataRows): array {
-		$this->db->beginTransaction();
-		try {
-			$result = $this->rebuild($handle, $hasHeader, $board, $stack, $mapping, $actorUid, $dataRows);
-			$this->db->commit();
-			return $result;
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
-		}
+		return $this->cardMutation->runForBoards([$board->getId()], fn (): array => $this->rebuild($handle, $hasHeader, $board, $stack, $mapping, $actorUid, $dataRows));
 	}
 
 	/**

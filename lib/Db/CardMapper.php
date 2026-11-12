@@ -30,6 +30,7 @@ use OCP\IDBConnection;
  * @template-extends QBMapper<Card>
  */
 class CardMapper extends QBMapper {
+
 	/**
 	 * Every column EXCEPT `description`. The description is deliberately
 	 * excluded from board/stack listings - this is the charter's
@@ -83,6 +84,18 @@ class CardMapper extends QBMapper {
 		private CardVisibilityScope $visibilityScope,
 	) {
 		parent::__construct($db, 'kanso_cards', Card::class);
+	}
+
+	public function findForMutation(int $id): Card {
+		if (!$this->db->inTransaction()) {
+			throw new \LogicException('A card write lock requires a transaction');
+		}
+		if ($this->db->getDatabaseProvider() !== IDBConnection::PLATFORM_SQLITE) {
+			$result = $this->db->executeQuery('SELECT id FROM *PREFIX*kanso_cards WHERE id = ? FOR UPDATE', [(string)$id], [IQueryBuilder::PARAM_INT]);
+			$result->fetch();
+			$result->closeCursor();
+		}
+		return $this->find($id);
 	}
 
 	/**

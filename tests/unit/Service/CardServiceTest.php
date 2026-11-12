@@ -155,7 +155,8 @@ class CardServiceTest extends TestCase {
 			$this->moveRecurrenceService,
 			$this->moveAliasService,
 			$this->moveCleanupService,
-			$container
+			$container,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService($this->db),
 		);
 	}
 

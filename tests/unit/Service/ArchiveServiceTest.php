@@ -60,6 +60,7 @@ class ArchiveServiceTest extends TestCase {
 			$this->permissionService,
 			$this->time,
 			$this->db,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 

@@ -45,6 +45,7 @@ class StackService {
 		private SortKeyService $sortKeyService,
 		private IDBConnection $db,
 		private BoardAccess $boardAccess,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -68,30 +69,32 @@ class StackService {
 	 * @throws InvalidInputException on invalid title
 	 */
 	public function create(int $boardId, string $title, string $uid): Stack {
-		$board = $this->loadBoard($boardId);
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		$this->assertInternal($board, $uid);
+		return $this->cardMutation->runForBoards([$boardId], function () use ($boardId, $title, $uid): Stack {
+			$board = $this->loadBoard($boardId);
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			$this->assertInternal($board, $uid);
 
-		$stacks = $this->stackMapper->findByBoard($boardId);
-		$lastStack = end($stacks);
-		$sortKey = $lastStack === false
-			? $this->sortKeyService->initial()
-			: $this->sortKeyService->after($lastStack->getSortKey());
+			$stacks = $this->stackMapper->findByBoard($boardId);
+			$lastStack = end($stacks);
+			$sortKey = $lastStack === false
+				? $this->sortKeyService->initial()
+				: $this->sortKeyService->after($lastStack->getSortKey());
 
-		$stack = new Stack();
-		$stack->setBoardId($boardId);
-		$stack->setTitle($this->validateTitle($title));
-		$stack->setSortKey($sortKey);
-		$stack->setArchived(false);
-		$stack->setDeletedAt(0);
+			$stack = new Stack();
+			$stack->setBoardId($boardId);
+			$stack->setTitle($this->validateTitle($title));
+			$stack->setSortKey($sortKey);
+			$stack->setArchived(false);
+			$stack->setDeletedAt(0);
 
-		// Atomic entity-write + change-row (#3579); push after commit.
-		return $this->writeStackChange(
-			$boardId,
-			Change::ACTION_CREATE,
-			$uid,
-			fn (): Stack => $this->stackMapper->insert($stack),
-		);
+			// Atomic entity-write + change-row (#3579); push after commit.
+			return $this->writeStackChange(
+				$boardId,
+				Change::ACTION_CREATE,
+				$uid,
+				fn (): Stack => $this->stackMapper->insert($stack),
+			);
+		});
 	}
 
 	/**
@@ -116,39 +119,42 @@ class StackService {
 		?string $color = null,
 		?string $description = null,
 	): Stack {
-		$stack = $this->loadStack($id);
-		$board = $this->loadBoard($stack->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		$this->assertInternal($board, $uid);
+		$boardId = $this->stackMapper->find($id)->getBoardId();
+		return $this->cardMutation->runForBoards([$boardId], function () use ($id, $title, $archived, $role, $wipLimit, $uid, $color, $description): Stack {
+			$stack = $this->loadStack($id);
+			$board = $this->loadBoard($stack->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			$this->assertInternal($board, $uid);
 
-		if ($title !== null) {
-			$stack->setTitle($this->validateTitle($title));
-		}
-		if ($archived !== null) {
-			$stack->setArchived($archived);
-		}
-		if ($role !== null) {
-			$stack->setRole($this->validateRole($role));
-		}
-		if ($wipLimit !== null) {
-			$stack->setWipLimit($this->validateWipLimit($wipLimit));
-		}
-		if ($color !== null) {
-			// '' clears; otherwise the shared validator normalises to bare hex.
-			$stack->setColor($color === '' ? null : ColorValidator::assertValid($color));
-		}
-		if ($description !== null) {
-			// '' (or whitespace only) clears the description.
-			$stack->setDescription($this->validateDescription($description));
-		}
+			if ($title !== null) {
+				$stack->setTitle($this->validateTitle($title));
+			}
+			if ($archived !== null) {
+				$stack->setArchived($archived);
+			}
+			if ($role !== null) {
+				$stack->setRole($this->validateRole($role));
+			}
+			if ($wipLimit !== null) {
+				$stack->setWipLimit($this->validateWipLimit($wipLimit));
+			}
+			if ($color !== null) {
+				// '' clears; otherwise the shared validator normalises to bare hex.
+				$stack->setColor($color === '' ? null : ColorValidator::assertValid($color));
+			}
+			if ($description !== null) {
+				// '' (or whitespace only) clears the description.
+				$stack->setDescription($this->validateDescription($description));
+			}
 
-		// Atomic entity-write + change-row (#3579); push after commit.
-		return $this->writeStackChange(
-			$stack->getBoardId(),
-			Change::ACTION_UPDATE,
-			$uid,
-			fn (): Stack => $this->stackMapper->update($stack),
-		);
+			// Atomic entity-write + change-row (#3579); push after commit.
+			return $this->writeStackChange(
+				$stack->getBoardId(),
+				Change::ACTION_UPDATE,
+				$uid,
+				fn (): Stack => $this->stackMapper->update($stack),
+			);
+		});
 	}
 
 	/**
@@ -158,21 +164,24 @@ class StackService {
 	 * @throws NotPermittedException if the user may not edit the board
 	 */
 	public function delete(int $id, string $uid): Stack {
-		$stack = $this->loadStack($id);
-		$board = $this->loadBoard($stack->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		$this->assertInternal($board, $uid);
+		$boardId = $this->stackMapper->find($id)->getBoardId();
+		return $this->cardMutation->runForBoards([$boardId], function () use ($id, $uid): Stack {
+			$stack = $this->loadStack($id);
+			$board = $this->loadBoard($stack->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			$this->assertInternal($board, $uid);
 
-		$now = time();
-		$stack->setDeletedAt($now);
+			$now = time();
+			$stack->setDeletedAt($now);
 
-		// Atomic entity-write + change-row (#3579); push after commit.
-		return $this->writeStackChange(
-			$stack->getBoardId(),
-			Change::ACTION_DELETE,
-			$uid,
-			fn (): Stack => $this->stackMapper->update($stack),
-		);
+			// Atomic entity-write + change-row (#3579); push after commit.
+			return $this->writeStackChange(
+				$stack->getBoardId(),
+				Change::ACTION_DELETE,
+				$uid,
+				fn (): Stack => $this->stackMapper->update($stack),
+			);
+		});
 	}
 
 	/**
@@ -186,24 +195,27 @@ class StackService {
 	 * @throws NotPermittedException if the user may not edit the board
 	 */
 	public function restore(int $id, string $uid): Stack {
-		$stack = $this->stackMapper->find($id);
-		if ($stack->getDeletedAt() === 0) {
-			throw new DoesNotExistException('Stack ' . $id . ' is not deleted');
-		}
-		$board = $this->loadBoard($stack->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		$this->assertInternal($board, $uid);
+		$boardId = $this->stackMapper->find($id)->getBoardId();
+		return $this->cardMutation->runForBoards([$boardId], function () use ($id, $uid): Stack {
+			$stack = $this->stackMapper->find($id);
+			if ($stack->getDeletedAt() === 0) {
+				throw new DoesNotExistException('Stack ' . $id . ' is not deleted');
+			}
+			$board = $this->loadBoard($stack->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			$this->assertInternal($board, $uid);
 
-		$stack->setDeletedAt(0);
+			$stack->setDeletedAt(0);
 
-		// Atomic entity-write + change-row (#3579); push after commit. Emits an
-		// ACTION_CREATE so clients re-add the restored column.
-		return $this->writeStackChange(
-			$stack->getBoardId(),
-			Change::ACTION_CREATE,
-			$uid,
-			fn (): Stack => $this->stackMapper->update($stack),
-		);
+			// Atomic entity-write + change-row (#3579); push after commit. Emits an
+			// ACTION_CREATE so clients re-add the restored column.
+			return $this->writeStackChange(
+				$stack->getBoardId(),
+				Change::ACTION_CREATE,
+				$uid,
+				fn (): Stack => $this->stackMapper->update($stack),
+			);
+		});
 	}
 
 	/**
@@ -223,43 +235,46 @@ class StackService {
 	 * @throws \OverflowException if the new sort key would overflow (board needs a rebalance)
 	 */
 	public function move(int $id, ?int $afterStackId, string $uid): Stack {
-		$stack = $this->loadStack($id);
-		$board = $this->loadBoard($stack->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		$this->assertInternal($board, $uid);
+		$boardId = $this->stackMapper->find($id)->getBoardId();
+		return $this->cardMutation->runForBoards([$boardId], function () use ($id, $afterStackId, $uid): Stack {
+			$stack = $this->loadStack($id);
+			$board = $this->loadBoard($stack->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			$this->assertInternal($board, $uid);
 
-		// Board stacks in display order, without the moved stack itself.
-		$siblings = array_values(array_filter(
-			$this->stackMapper->findByBoard($stack->getBoardId()),
-			static fn (Stack $s): bool => $s->getId() !== $id
-		));
-		$anchor = $afterStackId === null ? null : $this->resolveAnchor($afterStackId, $id, $siblings);
+			// Board stacks in display order, without the moved stack itself.
+			$siblings = array_values(array_filter(
+				$this->stackMapper->findByBoard($stack->getBoardId()),
+				static fn (Stack $s): bool => $s->getId() !== $id
+			));
+			$anchor = $afterStackId === null ? null : $this->resolveAnchor($afterStackId, $id, $siblings);
 
-		// Change row is written inside the transaction (delta-sync source of
-		// truth); the realtime push is deferred until after commit.
-		$this->db->beginTransaction();
-		try {
-			$stack->setSortKey($this->deriveMoveKey($siblings, $anchor));
-			$stack = $this->stackMapper->update($stack);
+			// Change row is written inside the transaction (delta-sync source of
+			// truth); the realtime push is deferred until after commit.
+			$this->db->beginTransaction();
+			try {
+				$stack->setSortKey($this->deriveMoveKey($siblings, $anchor));
+				$stack = $this->stackMapper->update($stack);
 
-			$this->changeNotifier->recordChange(
-				$stack->getBoardId(),
-				Change::ENTITY_STACK,
-				$id,
-				Change::ACTION_MOVE,
-				$uid,
-			);
+				$this->changeNotifier->recordChange(
+					$stack->getBoardId(),
+					Change::ENTITY_STACK,
+					$id,
+					Change::ACTION_MOVE,
+					$uid,
+				);
 
-			$this->db->commit();
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
-		}
+				$this->db->commit();
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
 
-		// Commit succeeded - now it is safe to broadcast the move.
-		$this->changeNotifier->pushBoardChanged($stack->getBoardId());
+			// Commit succeeded - now it is safe to broadcast the move.
+			$this->changeNotifier->pushBoardChanged($stack->getBoardId());
 
-		return $stack;
+			return $stack;
+		});
 	}
 
 	/**

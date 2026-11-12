@@ -49,6 +49,7 @@ class ContactService {
 		private IContactsManager $contactsManager,
 		private IUserManager $userManager,
 		private CardVisibilityGuard $visibilityGuard,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -116,48 +117,50 @@ class ContactService {
 	 * @throws InvalidInputException if the contact cannot be resolved
 	 */
 	public function link(int $cardId, string $contactUri, string $displayName, string $actorUid): array {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		return $this->cardMutation->run($cardId, function () use ($cardId, $contactUri, $displayName, $actorUid): array {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		if (!$this->isAvailable($actorUid)) {
-			throw new ContactsUnavailableException('Contacts app is not available');
-		}
+			if (!$this->isAvailable($actorUid)) {
+				throw new ContactsUnavailableException('Contacts app is not available');
+			}
 
-		$resolved = $this->resolveContact($contactUri);
-		if ($resolved === null) {
-			throw new InvalidInputException('Contact could not be resolved');
-		}
-		// Trust the server-resolved display name over the client-submitted one -
-		// the snapshot must reflect what the address book actually holds.
-		$name = $resolved['displayName'] !== '' ? $resolved['displayName'] : $displayName;
+			$resolved = $this->resolveContact($contactUri);
+			if ($resolved === null) {
+				throw new InvalidInputException('Contact could not be resolved');
+			}
+			// Trust the server-resolved display name over the client-submitted one -
+			// the snapshot must reflect what the address book actually holds.
+			$name = $resolved['displayName'] !== '' ? $resolved['displayName'] : $displayName;
 
-		if ($this->cardContactMapper->exists($cardId, $contactUri)) {
-			return ['contactUri' => $contactUri, 'displayName' => $name];
-		}
-
-		try {
-			$this->cardContactMapper->insertLink($cardId, $contactUri, $name);
-		} catch (\OCP\DB\Exception $e) {
-			if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
-				// Concurrent PUT lost the check-then-insert race - the link
-				// exists, which is the idempotent success case.
+			if ($this->cardContactMapper->exists($cardId, $contactUri)) {
 				return ['contactUri' => $contactUri, 'displayName' => $name];
 			}
-			throw $e;
-		}
 
-		$this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_UPDATE,
-			$actorUid,
-			verb: Change::VERB_CONTACT_LINKED,
-		);
+			try {
+				$this->cardContactMapper->insertLink($cardId, $contactUri, $name);
+			} catch (\OCP\DB\Exception $e) {
+				if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+					// Concurrent PUT lost the check-then-insert race - the link
+					// exists, which is the idempotent success case.
+					return ['contactUri' => $contactUri, 'displayName' => $name];
+				}
+				throw $e;
+			}
 
-		return ['contactUri' => $contactUri, 'displayName' => $name];
+			$this->changeNotifier->notify(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$cardId,
+				Change::ACTION_UPDATE,
+				$actorUid,
+				verb: Change::VERB_CONTACT_LINKED,
+			);
+
+			return ['contactUri' => $contactUri, 'displayName' => $name];
+		});
 	}
 
 	/**
@@ -169,23 +172,25 @@ class ContactService {
 	 * @throws NotPermittedException if the actor may not edit the board
 	 */
 	public function unlink(int $cardId, string $contactUri, string $actorUid): void {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$this->cardMutation->run($cardId, function () use ($cardId, $contactUri, $actorUid): void {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		if ($this->cardContactMapper->deleteLink($cardId, $contactUri) === 0) {
-			return;
-		}
+			if ($this->cardContactMapper->deleteLink($cardId, $contactUri) === 0) {
+				return;
+			}
 
-		$this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_UPDATE,
-			$actorUid,
-			verb: Change::VERB_CONTACT_UNLINKED,
-		);
+			$this->changeNotifier->notify(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$cardId,
+				Change::ACTION_UPDATE,
+				$actorUid,
+				verb: Change::VERB_CONTACT_UNLINKED,
+			);
+		});
 	}
 
 	/**

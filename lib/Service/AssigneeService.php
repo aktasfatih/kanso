@@ -41,6 +41,7 @@ class AssigneeService {
 		private CardVisibilityGuard $visibilityGuard,
 		private ChangeDetailMapper $changeDetailMapper,
 		private IUserManager $userManager,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -57,48 +58,50 @@ class AssigneeService {
 	 * @throws InvalidInputException if the assignee cannot read the board (or does not exist), or an AI actor name is set on a board that does not allow it
 	 */
 	public function assign(int $cardId, string $participantUid, string $actorUid, ?string $actorName = null): void {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
-		$actorName = $this->normalizeActorName($board, $actorName);
+		$this->cardMutation->run($cardId, function () use ($cardId, $participantUid, $actorUid, $actorName): void {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+			$actorName = $this->normalizeActorName($board, $actorName);
 
-		// Directly or via a group ACL, the assignee must at least see the
-		// board. Unknown users hold no permissions, so they fail this too.
-		if (($this->permissionService->getPermissions($board, $participantUid) & PermissionService::PERMISSION_READ) === 0) {
-			throw new InvalidInputException('User has no access to this board');
-		}
+			// Directly or via a group ACL, the assignee must at least see the
+			// board. Unknown users hold no permissions, so they fail this too.
+			if (($this->permissionService->getPermissions($board, $participantUid) & PermissionService::PERMISSION_READ) === 0) {
+				throw new InvalidInputException('User has no access to this board');
+			}
 
-		if ($this->cardAssigneeMapper->exists($cardId, $participantUid)) {
-			return;
-		}
-
-		try {
-			$this->cardAssigneeMapper->insertAssignment($cardId, $participantUid, $actorName);
-		} catch (\OCP\DB\Exception $e) {
-			if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
-				// Concurrent PUT lost the check-then-insert race - the
-				// assignment exists, which is the idempotent success case.
+			if ($this->cardAssigneeMapper->exists($cardId, $participantUid)) {
 				return;
 			}
-			throw $e;
-		}
 
-		$change = $this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_UPDATE,
-			$actorUid,
-			verb: Change::VERB_ASSIGNED,
-		);
-		// Record the assignee's display name so the Activity feed can say WHO.
-		$this->changeDetailMapper->insertDetail($change->getId(), null, $this->capDetail($this->displayName($participantUid)));
+			try {
+				$this->cardAssigneeMapper->insertAssignment($cardId, $participantUid, $actorName);
+			} catch (\OCP\DB\Exception $e) {
+				if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+					// Concurrent PUT lost the check-then-insert race - the
+					// assignment exists, which is the idempotent success case.
+					return;
+				}
+				throw $e;
+			}
 
-		// Targeted bell notification to the assignee (not the board fan-out).
-		$this->notificationService->notifyCardAssigned($cardId, $participantUid, $actorUid);
-		// Being assigned auto-subscribes you to the card (unless you opted out).
-		$this->subscriptionService->autoSubscribe($cardId, SubscriptionMapper::THREAD_CARD, $participantUid);
+			$change = $this->changeNotifier->notify(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$cardId,
+				Change::ACTION_UPDATE,
+				$actorUid,
+				verb: Change::VERB_ASSIGNED,
+			);
+			// Record the assignee's display name so the Activity feed can say WHO.
+			$this->changeDetailMapper->insertDetail($change->getId(), null, $this->capDetail($this->displayName($participantUid)));
+
+			// Targeted bell notification to the assignee (not the board fan-out).
+			$this->notificationService->notifyCardAssigned($cardId, $participantUid, $actorUid);
+			// Being assigned auto-subscribes you to the card (unless you opted out).
+			$this->subscriptionService->autoSubscribe($cardId, SubscriptionMapper::THREAD_CARD, $participantUid);
+		});
 	}
 
 	/**
@@ -109,28 +112,30 @@ class AssigneeService {
 	 * @throws NotPermittedException if the actor may not edit the board
 	 */
 	public function unassign(int $cardId, string $participantUid, string $actorUid): void {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$this->cardMutation->run($cardId, function () use ($cardId, $participantUid, $actorUid): void {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		if ($this->cardAssigneeMapper->deleteAssignment($cardId, $participantUid) === 0) {
-			return;
-		}
+			if ($this->cardAssigneeMapper->deleteAssignment($cardId, $participantUid) === 0) {
+				return;
+			}
 
-		$change = $this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_UPDATE,
-			$actorUid,
-			verb: Change::VERB_UNASSIGNED,
-		);
-		// Record the removed assignee's display name so the Activity feed can say WHO.
-		$this->changeDetailMapper->insertDetail($change->getId(), $this->capDetail($this->displayName($participantUid)), null);
+			$change = $this->changeNotifier->notify(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$cardId,
+				Change::ACTION_UPDATE,
+				$actorUid,
+				verb: Change::VERB_UNASSIGNED,
+			);
+			// Record the removed assignee's display name so the Activity feed can say WHO.
+			$this->changeDetailMapper->insertDetail($change->getId(), $this->capDetail($this->displayName($participantUid)), null);
 
-		// Clear any pending "assigned to you" bell notification for this card.
-		$this->notificationService->dismissCardAssigned($cardId, $participantUid);
+			// Clear any pending "assigned to you" bell notification for this card.
+			$this->notificationService->dismissCardAssigned($cardId, $participantUid);
+		});
 	}
 
 	/**

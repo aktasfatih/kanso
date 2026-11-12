@@ -80,6 +80,7 @@ class TrashService {
 		private NotificationService $notificationService,
 		private CardMoveAliasMapper $moveAliases,
 		private IDBConnection $db,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -130,32 +131,39 @@ class TrashService {
 	 * @throws InvalidInputException if the card is not in the trash
 	 */
 	public function restore(int $cardId, string $actorUid): Card {
-		$card = $this->assertAccess($cardId, $actorUid);
-		// Only AFTER access is settled may the card's trash state be revealed:
-		// a 400 "not in the trash" ahead of the guards is an existence oracle.
-		$this->assertTrashed($card);
+		$boardId = $this->cardMapper->find($cardId)->getBoardId();
+		$aliasTarget = $this->moveAliases->findByOldId($cardId)?->getTargetCardId();
+		return $this->cardMutation->runForBoards([$boardId], function () use ($cardId, $actorUid, $aliasTarget): Card {
+			$card = $this->assertAccess($cardId, $actorUid);
+			// Only AFTER access is settled may the card's trash state be revealed:
+			// a 400 "not in the trash" ahead of the guards is an existence oracle.
+			$this->assertTrashed($card);
+			if ($this->moveAliases->findByOldId($cardId)?->getTargetCardId() !== $aliasTarget) {
+				throw new InvalidInputException('Card changed; reload before restoring');
+			}
 
-		$this->db->beginTransaction();
-		try {
-			$card->setDeletedAt(0);
-			$card->setLastModified(time());
-			$card = $this->cardMapper->update($card);
-			$this->moveAliases->deleteByOldId($cardId);
-			$this->changeNotifier->recordChange(
-				$card->getBoardId(),
-				Change::ENTITY_CARD,
-				$cardId,
-				Change::ACTION_CREATE,
-				$actorUid
-			);
-			$this->db->commit();
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
-		}
-		$this->changeNotifier->pushBoardChanged($card->getBoardId());
+			$this->db->beginTransaction();
+			try {
+				$card->setDeletedAt(0);
+				$card->setLastModified(time());
+				$card = $this->cardMapper->update($card);
+				$this->moveAliases->deleteByOldId($cardId);
+				$this->changeNotifier->recordChange(
+					$card->getBoardId(),
+					Change::ENTITY_CARD,
+					$cardId,
+					Change::ACTION_CREATE,
+					$actorUid
+				);
+				$this->db->commit();
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+			$this->changeNotifier->pushBoardChanged($card->getBoardId());
 
-		return $card;
+			return $card;
+		}, true);
 	}
 
 	/**
@@ -171,55 +179,54 @@ class TrashService {
 	 *                           whole in the trash and the caller can retry
 	 */
 	public function purge(int $cardId, string $actorUid): void {
-		$card = $this->cardMapper->find($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
-		// Access first, trash state second - see restore().
-		$this->assertTrashed($card);
+		$boardId = $this->cardMapper->find($cardId)->getBoardId();
+		$this->cardMutation->runForBoards([$boardId], function () use ($cardId, $actorUid): void {
+			$card = $this->cardMapper->find($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+			// Access first, trash state second - see restore().
+			$this->assertTrashed($card);
 
-		// Nextcloud's own notification rows go first, while the objects that key
-		// them still exist. Only THIS card's id and the checklist items resolved
-		// from it: the sweep matches on app + object type + object id with no
-		// user, so every id named here clears that object's bell entries for
-		// every recipient, and a foreign id would wipe a live card's. Sub-cards
-		// are deliberately absent - CardService::delete() detaches children
-		// (parent_card_id cleared) before the soft-delete, so a trashed card has
-		// none and the purge below cascades to no other card; sweeping child ids
-		// would be exactly the foreign-id mistake.
-		$this->notificationService->dismissAllForObjects(
-			NotificationService::OBJECT_CARD,
-			[$cardId],
-		);
-		$this->notificationService->dismissAllForObjects(
-			NotificationService::OBJECT_CHECKLIST_ITEM,
-			$this->cascade->idsIn('kanso_checklist_items', 'card_id', [$cardId]),
-		);
+			// Nextcloud's own notification rows go first, while the objects that key
+			// them still exist. Only THIS card's id and the checklist items resolved
+			// from it: the sweep matches on app + object type + object id with no
+			// user, so every id named here clears that object's bell entries for
+			// every recipient, and a foreign id would wipe a live card's. Sub-cards
+			// are deliberately absent - CardService::delete() detaches children
+			// (parent_card_id cleared) before the soft-delete, so a trashed card has
+			// none and the purge below cascades to no other card; sweeping child ids
+			// would be exactly the foreign-id mistake.
+			$this->notificationService->dismissAllForObjects(
+				NotificationService::OBJECT_CARD,
+				[$cardId],
+			);
+			$this->notificationService->dismissAllForObjects(
+				NotificationService::OBJECT_CHECKLIST_ITEM,
+				$this->cascade->idsIn('kanso_checklist_items', 'card_id', [$cardId]),
+			);
 
-		// Grandchildren first: a reaction hangs off comment_id, so it has to go
-		// BEFORE the comments that locate it are hard-deleted, or the rows are
-		// orphaned with nothing left to find them by (#3550).
-		$this->purgeGrandchildren($cardId);
-		// Then the bytes. Attachments are app-data OBJECTS plus rows, so the
-		// cascade goes through the service (it removes both) and has to run while
-		// the rows naming the storage keys are still there - otherwise a purge
-		// leaks the bytes on disk forever (#3526).
-		$this->cardAttachmentService->deleteAllForCard($cardId);
-		// Then every card-scoped table, straight from the shared registry: labels,
-		// assignees, contacts, reviews, checklist items, comments, subscriptions,
-		// links, relations (both ends), project memberships, running timers,
-		// time entries, custom-field values, reminders and the recurrence rules
-		// anchored on this card as a template.
-		$this->cascade->deleteByCardIds([$cardId]);
-		$this->cardMapper->delete($card);
+			// Grandchildren first: a reaction hangs off comment_id, so it has to go
+			// BEFORE the comments that locate it are hard-deleted, or the rows are
+			// orphaned with nothing left to find them by (#3550).
+			$this->purgeGrandchildren($cardId);
+			$this->cardAttachmentService->deleteAllForCard($cardId);
+			// Then every card-scoped table, straight from the shared registry: labels,
+			// assignees, contacts, reviews, checklist items, comments, subscriptions,
+			// links, relations (both ends), project memberships, running timers,
+			// time entries, custom-field values, reminders and the recurrence rules
+			// anchored on this card as a template.
+			$this->cascade->deleteByCardIds([$cardId]);
+			$this->cardMapper->delete($card);
 
-		$this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_DELETE,
-			$actorUid
-		);
+			$this->changeNotifier->notify(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$cardId,
+				Change::ACTION_DELETE,
+				$actorUid
+			);
+		}, true);
 	}
 
 	/**

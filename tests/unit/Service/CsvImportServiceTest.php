@@ -94,6 +94,7 @@ class CsvImportServiceTest extends TestCase {
 			$this->db,
 			$this->createMock(CardVisibilityGuard::class),
 			$this->createMock(ChangeDetailMapper::class),
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 
 		return new CsvImportService(
@@ -110,6 +111,7 @@ class CsvImportServiceTest extends TestCase {
 			$this->cardService,
 			$this->userManager,
 			$this->db,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService($this->db, true),
 		);
 	}
 

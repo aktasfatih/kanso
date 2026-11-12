@@ -49,6 +49,7 @@ class ChecklistService {
 		private CardVisibilityGuard $visibilityGuard,
 		private BoardAccess $boardAccess,
 		private NotificationService $notificationService,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -81,29 +82,31 @@ class ChecklistService {
 	 * @throws \OverflowException if the appended sort key would overflow (rebalance needed)
 	 */
 	public function addItem(int $cardId, string $title, string $actorUid, bool $done = false, ?\DateTime $dueDate = null): ChecklistItem {
-		$title = $this->normalizeTitle($title);
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		return $this->cardMutation->run($cardId, function () use ($cardId, $title, $actorUid, $done, $dueDate): ChecklistItem {
+			$title = $this->normalizeTitle($title);
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		$last = $this->itemMapper->findLastByCard($cardId);
-		$sortKey = $last === null
-			? $this->sortKeyService->initial()
-			: $this->sortKeyService->after($last->getSortKey());
+			$last = $this->itemMapper->findLastByCard($cardId);
+			$sortKey = $last === null
+				? $this->sortKeyService->initial()
+				: $this->sortKeyService->after($last->getSortKey());
 
-		$item = new ChecklistItem();
-		$item->setCardId($cardId);
-		$item->setTitle($title);
-		$item->setDone($done);
-		$item->setSortKey($sortKey);
-		$item->setCreatedAt(time());
-		if ($dueDate !== null) {
-			$item->setDueDate($dueDate);
-		}
+			$item = new ChecklistItem();
+			$item->setCardId($cardId);
+			$item->setTitle($title);
+			$item->setDone($done);
+			$item->setSortKey($sortKey);
+			$item->setCreatedAt(time());
+			if ($dueDate !== null) {
+				$item->setDueDate($dueDate);
+			}
 
-		// Atomic item-write + card change-row (#3579); push after commit.
-		return $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->insert($item));
+			// Atomic item-write + card change-row (#3579); push after commit.
+			return $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->insert($item));
+		});
 	}
 
 	/**
@@ -116,34 +119,37 @@ class ChecklistService {
 	 * @throws InvalidInputException if a supplied title is empty or too long
 	 */
 	public function updateItem(int $itemId, ?string $title, ?bool $done, string $actorUid): ChecklistItem {
-		$item = $this->itemMapper->find($itemId);
-		$card = $this->loadCard($item->getCardId());
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$cardId = $this->itemMapper->find($itemId)->getCardId();
+		return $this->cardMutation->run($cardId, function () use ($itemId, $title, $done, $actorUid): ChecklistItem {
+			$item = $this->itemMapper->find($itemId);
+			$card = $this->loadCard($item->getCardId());
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		$changed = false;
-		if ($title !== null) {
-			$normalized = $this->normalizeTitle($title);
-			if ($normalized !== $item->getTitle()) {
-				$item->setTitle($normalized);
+			$changed = false;
+			if ($title !== null) {
+				$normalized = $this->normalizeTitle($title);
+				if ($normalized !== $item->getTitle()) {
+					$item->setTitle($normalized);
+					$changed = true;
+				}
+			}
+			if ($done !== null && $done !== $item->getDone()) {
+				$item->setDone($done);
+				// `done` stays the source of truth; `done_at` is only the stamp of
+				// the flip (#3745) - set on complete, cleared on un-done.
+				$item->setDoneAt($done ? time() : null);
 				$changed = true;
 			}
-		}
-		if ($done !== null && $done !== $item->getDone()) {
-			$item->setDone($done);
-			// `done` stays the source of truth; `done_at` is only the stamp of
-			// the flip (#3745) - set on complete, cleared on un-done.
-			$item->setDoneAt($done ? time() : null);
-			$changed = true;
-		}
 
-		if (!$changed) {
-			return $item;
-		}
+			if (!$changed) {
+				return $item;
+			}
 
-		// Atomic item-write + card change-row (#3579); push after commit.
-		return $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
+			// Atomic item-write + card change-row (#3579); push after commit.
+			return $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
+		});
 	}
 
 	/**
@@ -160,49 +166,51 @@ class ChecklistService {
 		if ($afterItemId === $itemId) {
 			throw new InvalidInputException('An item cannot be moved after itself');
 		}
+		$cardId = $this->itemMapper->find($itemId)->getCardId();
+		return $this->cardMutation->run($cardId, function () use ($itemId, $afterItemId, $actorUid): ChecklistItem {
+			$item = $this->itemMapper->find($itemId);
+			$card = $this->loadCard($item->getCardId());
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		$item = $this->itemMapper->find($itemId);
-		$card = $this->loadCard($item->getCardId());
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+			// Siblings in display order, excluding the item being moved.
+			$siblings = array_values(array_filter(
+				$this->itemMapper->findByCard($item->getCardId()),
+				static fn (ChecklistItem $i): bool => $i->getId() !== $itemId
+			));
 
-		// Siblings in display order, excluding the item being moved.
-		$siblings = array_values(array_filter(
-			$this->itemMapper->findByCard($item->getCardId()),
-			static fn (ChecklistItem $i): bool => $i->getId() !== $itemId
-		));
-
-		if ($afterItemId === null) {
-			$newKey = $siblings === []
-				? $this->sortKeyService->initial()
-				: $this->sortKeyService->before($siblings[0]->getSortKey());
-		} else {
-			$anchorIndex = null;
-			foreach ($siblings as $idx => $sibling) {
-				if ($sibling->getId() === $afterItemId) {
-					$anchorIndex = $idx;
-					break;
+			if ($afterItemId === null) {
+				$newKey = $siblings === []
+					? $this->sortKeyService->initial()
+					: $this->sortKeyService->before($siblings[0]->getSortKey());
+			} else {
+				$anchorIndex = null;
+				foreach ($siblings as $idx => $sibling) {
+					if ($sibling->getId() === $afterItemId) {
+						$anchorIndex = $idx;
+						break;
+					}
 				}
+				if ($anchorIndex === null) {
+					throw new InvalidInputException('afterItemId is not an item of this card');
+				}
+				$anchor = $siblings[$anchorIndex];
+				$next = $siblings[$anchorIndex + 1] ?? null;
+				$newKey = $next === null
+					? $this->sortKeyService->after($anchor->getSortKey())
+					: $this->sortKeyService->between($anchor->getSortKey(), $next->getSortKey());
 			}
-			if ($anchorIndex === null) {
-				throw new InvalidInputException('afterItemId is not an item of this card');
+
+			if ($newKey === $item->getSortKey()) {
+				return $item;
 			}
-			$anchor = $siblings[$anchorIndex];
-			$next = $siblings[$anchorIndex + 1] ?? null;
-			$newKey = $next === null
-				? $this->sortKeyService->after($anchor->getSortKey())
-				: $this->sortKeyService->between($anchor->getSortKey(), $next->getSortKey());
-		}
 
-		if ($newKey === $item->getSortKey()) {
-			return $item;
-		}
+			$item->setSortKey($newKey);
 
-		$item->setSortKey($newKey);
-
-		// Atomic item-write + card change-row (#3579); push after commit.
-		return $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
+			// Atomic item-write + card change-row (#3579); push after commit.
+			return $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
+		});
 	}
 
 	/**
@@ -212,18 +220,21 @@ class ChecklistService {
 	 * @throws NotPermittedException if the actor may not edit the board
 	 */
 	public function deleteItem(int $itemId, string $actorUid): void {
-		$item = $this->itemMapper->find($itemId);
-		$card = $this->loadCard($item->getCardId());
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$cardId = $this->itemMapper->find($itemId)->getCardId();
+		$this->cardMutation->run($cardId, function () use ($itemId, $actorUid): void {
+			$item = $this->itemMapper->find($itemId);
+			$card = $this->loadCard($item->getCardId());
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		// Atomic item-delete + card change-row (#3579); push after commit. The
-		// deleted item is returned so the shared helper's contract holds; the
-		// caller (void) ignores it.
-		$this->writeItemChange($card, $actorUid, function () use ($item): ChecklistItem {
-			$this->itemMapper->delete($item);
-			return $item;
+			// Atomic item-delete + card change-row (#3579); push after commit. The
+			// deleted item is returned so the shared helper's contract holds; the
+			// caller (void) ignores it.
+			$this->writeItemChange($card, $actorUid, function () use ($item): ChecklistItem {
+				$this->itemMapper->delete($item);
+				return $item;
+			});
 		});
 	}
 
@@ -244,53 +255,56 @@ class ChecklistService {
 	 * @throws InvalidInputException if the assignee cannot read the board, cannot see the card, or does not exist
 	 */
 	public function assignItem(int $itemId, string $participantUid, string $actorUid): ChecklistItem {
-		$item = $this->itemMapper->find($itemId);
-		$card = $this->loadCard($item->getCardId());
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$cardId = $this->itemMapper->find($itemId)->getCardId();
+		return $this->cardMutation->run($cardId, function () use ($itemId, $participantUid, $actorUid): ChecklistItem {
+			$item = $this->itemMapper->find($itemId);
+			$card = $this->loadCard($item->getCardId());
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		// Directly or via a group ACL, the assignee must at least see the
-		// board. Unknown users hold no permissions, so they fail this too
-		// (mirrors AssigneeService::assign()).
-		if (($this->permissionService->getPermissions($board, $participantUid) & PermissionService::PERMISSION_READ) === 0) {
-			throw new InvalidInputException('User has no access to this board');
-		}
-		// ...and the CARD itself: assigning a step of a card its assignee
-		// cannot see would leak the card into their my-steps feed.
-		if (!$this->visibilityGuard->isVisible($board, $card, $participantUid)) {
-			throw new InvalidInputException('User cannot see this card');
-		}
+			// Directly or via a group ACL, the assignee must at least see the
+			// board. Unknown users hold no permissions, so they fail this too
+			// (mirrors AssigneeService::assign()).
+			if (($this->permissionService->getPermissions($board, $participantUid) & PermissionService::PERMISSION_READ) === 0) {
+				throw new InvalidInputException('User has no access to this board');
+			}
+			// ...and the CARD itself: assigning a step of a card its assignee
+			// cannot see would leak the card into their my-steps feed.
+			if (!$this->visibilityGuard->isVisible($board, $card, $participantUid)) {
+				throw new InvalidInputException('User cannot see this card');
+			}
 
-		if ($item->getAssignedUser() === $participantUid) {
-			return $item;
-		}
-		$previousAssignee = $item->getAssignedUser();
+			if ($item->getAssignedUser() === $participantUid) {
+				return $item;
+			}
+			$previousAssignee = $item->getAssignedUser();
 
-		try {
-			$role = $this->boardAccess->contextFor($board, $participantUid)->role;
-		} catch (NotAMemberException) {
-			// READ resolved but no membership row - cannot happen through the
-			// permission model above, but never freeze a made-up role.
-			throw new InvalidInputException('User has no access to this board');
-		}
+			try {
+				$role = $this->boardAccess->contextFor($board, $participantUid)->role;
+			} catch (NotAMemberException) {
+				// READ resolved but no membership row - cannot happen through the
+				// permission model above, but never freeze a made-up role.
+				throw new InvalidInputException('User has no access to this board');
+			}
 
-		$item->setAssignedUser($participantUid);
-		$item->setAssignedRole($role);
-		$item->setAssignedAt(time());
+			$item->setAssignedUser($participantUid);
+			$item->setAssignedRole($role);
+			$item->setAssignedAt(time());
 
-		// Atomic item-write + card change-row (#3579); push after commit.
-		$saved = $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
+			// Atomic item-write + card change-row (#3579); push after commit.
+			$saved = $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
 
-		// Bell notifications only after the commit stuck. The audience gate is
-		// the assign validation itself (the assignee provably sees the card);
-		// self-assignment is suppressed inside the service.
-		if ($previousAssignee !== null) {
-			$this->notificationService->dismissStepAssigned($itemId, $previousAssignee);
-		}
-		$this->notificationService->notifyStepAssigned($itemId, $card->getId(), $participantUid, $actorUid);
+			// Bell notifications only after the commit stuck. The audience gate is
+			// the assign validation itself (the assignee provably sees the card);
+			// self-assignment is suppressed inside the service.
+			if ($previousAssignee !== null) {
+				$this->notificationService->dismissStepAssigned($itemId, $previousAssignee);
+			}
+			$this->notificationService->notifyStepAssigned($itemId, $card->getId(), $participantUid, $actorUid);
 
-		return $saved;
+			return $saved;
+		});
 	}
 
 	/**
@@ -302,28 +316,31 @@ class ChecklistService {
 	 * @throws NotPermittedException if the actor may not edit the board
 	 */
 	public function unassignItem(int $itemId, string $actorUid): ChecklistItem {
-		$item = $this->itemMapper->find($itemId);
-		$card = $this->loadCard($item->getCardId());
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$cardId = $this->itemMapper->find($itemId)->getCardId();
+		return $this->cardMutation->run($cardId, function () use ($itemId, $actorUid): ChecklistItem {
+			$item = $this->itemMapper->find($itemId);
+			$card = $this->loadCard($item->getCardId());
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		$previousAssignee = $item->getAssignedUser();
-		if ($previousAssignee === null) {
-			return $item;
-		}
+			$previousAssignee = $item->getAssignedUser();
+			if ($previousAssignee === null) {
+				return $item;
+			}
 
-		$item->setAssignedUser(null);
-		$item->setAssignedRole(null);
-		$item->setAssignedAt(null);
+			$item->setAssignedUser(null);
+			$item->setAssignedRole(null);
+			$item->setAssignedAt(null);
 
-		// Atomic item-write + card change-row (#3579); push after commit.
-		$saved = $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
+			// Atomic item-write + card change-row (#3579); push after commit.
+			$saved = $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
 
-		// Clear any pending "step assigned to you" bell for this step.
-		$this->notificationService->dismissStepAssigned($itemId, $previousAssignee);
+			// Clear any pending "step assigned to you" bell for this step.
+			$this->notificationService->dismissStepAssigned($itemId, $previousAssignee);
 
-		return $saved;
+			return $saved;
+		});
 	}
 
 	/**
@@ -336,20 +353,23 @@ class ChecklistService {
 	 * @throws InvalidInputException if $due is not a valid ISO 8601 datetime
 	 */
 	public function setItemDue(int $itemId, ?string $due, string $actorUid): ChecklistItem {
-		$item = $this->itemMapper->find($itemId);
-		$card = $this->loadCard($item->getCardId());
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$cardId = $this->itemMapper->find($itemId)->getCardId();
+		return $this->cardMutation->run($cardId, function () use ($itemId, $due, $actorUid): ChecklistItem {
+			$item = $this->itemMapper->find($itemId);
+			$card = $this->loadCard($item->getCardId());
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		$parsed = DueDateParser::parse($due ?? '');
-		if ($parsed?->getTimestamp() === $item->getDueDate()?->getTimestamp()) {
-			return $item;
-		}
-		$item->setDueDate($parsed);
+			$parsed = DueDateParser::parse($due ?? '');
+			if ($parsed?->getTimestamp() === $item->getDueDate()?->getTimestamp()) {
+				return $item;
+			}
+			$item->setDueDate($parsed);
 
-		// Atomic item-write + card change-row (#3579); push after commit.
-		return $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
+			// Atomic item-write + card change-row (#3579); push after commit.
+			return $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
+		});
 	}
 
 	/**

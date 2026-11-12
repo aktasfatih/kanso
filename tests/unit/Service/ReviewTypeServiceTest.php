@@ -45,7 +45,8 @@ class ReviewTypeServiceTest extends TestCase {
 			$this->boardMapper,
 			$this->changeNotifier,
 			$this->permissionService,
-			$this->db
+			$this->db,
+			$this->cardMutation(),
 		);
 	}
 
@@ -237,4 +238,11 @@ class ReviewTypeServiceTest extends TestCase {
 		$this->expectException(NotPermittedException::class);
 		$this->service->delete(3, 'mallory');
 	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
 }

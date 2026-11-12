@@ -67,7 +67,8 @@ class AclServiceTest extends TestCase {
 			$this->cardAssigneeMapper,
 			$this->changeNotifier,
 			$this->permissionService,
-			new ShareeSearchService($this->userManager, $this->groupManager, $this->shareManager, $this->appConfig())
+			new ShareeSearchService($this->userManager, $this->groupManager, $this->shareManager, $this->appConfig()),
+			$this->cardMutation(),
 		);
 	}
 
@@ -1189,7 +1190,15 @@ class AclServiceTest extends TestCase {
 			$this->cardAssigneeMapper,
 			$this->changeNotifier,
 			$this->permissionService,
-			new ShareeSearchService($this->userManager, $this->groupManager, $share, $this->appConfig())
+			new ShareeSearchService($this->userManager, $this->groupManager, $share, $this->appConfig()),
+			$this->cardMutation(),
 		);
 	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
 }

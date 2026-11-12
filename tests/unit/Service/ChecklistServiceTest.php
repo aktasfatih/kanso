@@ -74,6 +74,7 @@ class ChecklistServiceTest extends TestCase {
 			$guard,
 			$this->boardAccess,
 			$this->notificationService,
+			$this->cardMutation(),
 		);
 	}
 
@@ -732,4 +733,12 @@ class ChecklistServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
 		return $board;
 	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('run')->willReturnCallback(static fn (int $cardId, callable $write): mixed => $write());
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
 }

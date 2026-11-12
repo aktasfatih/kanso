@@ -38,6 +38,7 @@ class SubscriptionService {
 		private NotificationService $notificationService,
 		private BoardSubscriptionMapper $boardSubscriptionMapper,
 		private CardVisibilityGuard $visibilityGuard,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -66,14 +67,16 @@ class SubscriptionService {
 	 * @throws NotPermittedException if the actor may not read the board
 	 */
 	public function subscribe(int $cardId, string $actorUid): array {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		return $this->cardMutation->run($cardId, function () use ($cardId, $actorUid): array {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		$this->setState($actorUid, $cardId, SubscriptionMapper::THREAD_CARD, Subscription::STATE_SUBSCRIBED);
+			$this->setState($actorUid, $cardId, SubscriptionMapper::THREAD_CARD, Subscription::STATE_SUBSCRIBED);
 
-		return $this->buildCardSubscription($cardId, $actorUid);
+			return $this->buildCardSubscription($cardId, $actorUid);
+		});
 	}
 
 	/**
@@ -85,14 +88,16 @@ class SubscriptionService {
 	 * @throws NotPermittedException if the actor may not read the board
 	 */
 	public function unsubscribe(int $cardId, string $actorUid): array {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		return $this->cardMutation->run($cardId, function () use ($cardId, $actorUid): array {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_READ);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		$this->setState($actorUid, $cardId, SubscriptionMapper::THREAD_CARD, Subscription::STATE_OPTED_OUT);
+			$this->setState($actorUid, $cardId, SubscriptionMapper::THREAD_CARD, Subscription::STATE_OPTED_OUT);
 
-		return $this->buildCardSubscription($cardId, $actorUid);
+			return $this->buildCardSubscription($cardId, $actorUid);
+		});
 	}
 
 	/**
@@ -108,20 +113,22 @@ class SubscriptionService {
 	 * @throws InvalidInputException if the target cannot read the board (or does not exist)
 	 */
 	public function subscribeOther(int $cardId, string $targetUid, string $actorUid): array {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		return $this->cardMutation->run($cardId, function () use ($cardId, $targetUid, $actorUid): array {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		// Directly or via a group ACL, the target must at least see the board.
-		// Unknown users hold no permissions, so they fail this too.
-		if (($this->permissionService->getPermissions($board, $targetUid) & PermissionService::PERMISSION_READ) === 0) {
-			throw new InvalidInputException('User has no access to this board');
-		}
+			// Directly or via a group ACL, the target must at least see the board.
+			// Unknown users hold no permissions, so they fail this too.
+			if (($this->permissionService->getPermissions($board, $targetUid) & PermissionService::PERMISSION_READ) === 0) {
+				throw new InvalidInputException('User has no access to this board');
+			}
 
-		$this->setState($targetUid, $cardId, SubscriptionMapper::THREAD_CARD, Subscription::STATE_SUBSCRIBED);
+			$this->setState($targetUid, $cardId, SubscriptionMapper::THREAD_CARD, Subscription::STATE_SUBSCRIBED);
 
-		return $this->buildCardSubscription($cardId, $actorUid);
+			return $this->buildCardSubscription($cardId, $actorUid);
+		});
 	}
 
 	/**
@@ -136,22 +143,24 @@ class SubscriptionService {
 	 * @throws NotPermittedException if the actor may not edit the board
 	 */
 	public function unsubscribeOther(int $cardId, string $targetUid, string $actorUid): array {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		return $this->cardMutation->run($cardId, function () use ($cardId, $targetUid, $actorUid): array {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		// Only tombstone an EXISTING subscription row. Planting an opt-out for a
-		// user who is not currently watching would silently suppress a later
-		// auto-subscribe once they join/comment - so removing a non-watcher is a
-		// no-op rather than a crafted-uid tombstone.
-		$existing = $this->subscriptionMapper->findOne($targetUid, $cardId, SubscriptionMapper::THREAD_CARD);
-		if ($existing !== null && $existing->getState() !== Subscription::STATE_OPTED_OUT) {
-			$existing->setState(Subscription::STATE_OPTED_OUT);
-			$this->subscriptionMapper->update($existing);
-		}
+			// Only tombstone an EXISTING subscription row. Planting an opt-out for a
+			// user who is not currently watching would silently suppress a later
+			// auto-subscribe once they join/comment - so removing a non-watcher is a
+			// no-op rather than a crafted-uid tombstone.
+			$existing = $this->subscriptionMapper->findOne($targetUid, $cardId, SubscriptionMapper::THREAD_CARD);
+			if ($existing !== null && $existing->getState() !== Subscription::STATE_OPTED_OUT) {
+				$existing->setState(Subscription::STATE_OPTED_OUT);
+				$this->subscriptionMapper->update($existing);
+			}
 
-		return $this->buildCardSubscription($cardId, $actorUid);
+			return $this->buildCardSubscription($cardId, $actorUid);
+		});
 	}
 
 	/**

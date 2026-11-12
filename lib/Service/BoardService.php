@@ -48,6 +48,7 @@ class BoardService {
 		private BoardGroupMemberMapper $boardGroupMemberMapper,
 		private BoardPinMapper $boardPinMapper,
 		private BoardAccess $boardAccess,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -238,141 +239,143 @@ class BoardService {
 	 * @param bool|null $autoCompleteParent the "all children done → parent done" gate (#198); null = leave unchanged
 	 */
 	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null, ?array $cardFeatures = null, ?string $description = null, ?array $estimateCustom = null, ?bool $allowAiActors = null, ?bool $autoCompleteParent = null): Board {
-		$board = $this->loadBoard($id);
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+		return $this->cardMutation->runForBoards([$id], function () use ($id, $title, $color, $archived, $uid, $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl, $cardFeatures, $description, $estimateCustom, $allowAiActors, $autoCompleteParent): Board {
+			$board = $this->loadBoard($id);
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
-		if ($title !== null) {
-			$board->setTitle($this->validateTitle($title));
-		}
-		if ($color !== null) {
-			$board->setColor(ColorValidator::assertValid($color));
-		}
-		if ($background !== null) {
-			$board->setBackground(BackgroundValidator::assertValid($background));
-		}
-		if ($archived !== null) {
-			$board->setArchived($archived);
-		}
-		// A scale change may strand card estimates that no longer fit the new
-		// scale; capture the transition so we can clear them below (after the
-		// board row is persisted).
-		$scaleChangedTo = null;
-		if ($estimateScale !== null) {
-			if (!EstimateScale::isValidScale($estimateScale)) {
-				throw new InvalidInputException('Unknown estimate scale');
+			if ($title !== null) {
+				$board->setTitle($this->validateTitle($title));
 			}
-			if ($estimateScale !== $board->getEstimateScale()) {
-				$scaleChangedTo = $estimateScale;
+			if ($color !== null) {
+				$board->setColor(ColorValidator::assertValid($color));
 			}
-			$board->setEstimateScale($estimateScale);
-		}
-		if ($estimateCustom !== null) {
-			$encoded = EstimateScale::encodeCustom($estimateCustom);
-			if ($encoded !== $board->getEstimateCustom()) {
-				$board->setEstimateCustom($encoded);
-				$scaleChangedTo ??= $board->getEstimateScale();
+			if ($background !== null) {
+				$board->setBackground(BackgroundValidator::assertValid($background));
 			}
-		}
-		if (($scaleChangedTo ?? $board->getEstimateScale()) === EstimateScale::CUSTOM && $board->customEstimates() === []) {
-			throw new InvalidInputException('A custom estimate scale needs at least one label');
-		}
-		if ($newCardsOnTop !== null) {
-			$board->setNewCardsOnTop($newCardsOnTop);
-		}
-		if ($allowAiActors !== null) {
-			// AI-actor attribution gate (#352): a plain boolean, OFF by default.
-			$board->setAllowAiActors($allowAiActors);
-		}
-		if ($autoCompleteParent !== null) {
-			// "All children done → parent done" gate (#198): a plain boolean, OFF by default.
-			$board->setAutoCompleteParent($autoCompleteParent);
-		}
-		if ($prefix !== null) {
-			// Normalize to the stored shape (uppercased, alnum, capped). A value
-			// that reduces to nothing is invalid - the caller must pick real chars.
-			// Changing the prefix only re-displays existing cards; their assigned
-			// numbers (board_seq) are immutable and unaffected.
-			$normalized = BoardPrefix::normalize($prefix);
-			if ($normalized === null) {
-				throw new InvalidInputException('Prefix must contain at least one letter or digit');
+			if ($archived !== null) {
+				$board->setArchived($archived);
 			}
-			$board->setPrefix($normalized);
-		}
-		if ($chatUrl !== null) {
-			// "Project chat" link (#3748): a pure display address, deliberately
-			// dumb (no Talk API coupling). An empty string clears it; a non-empty
-			// value must be a plain http(s) URL - the scheme allow-list is the
-			// XSS gate (rejects javascript:, data:, etc.) since the client
-			// renders this as an <a href>.
-			$board->setChatUrl($this->validateChatUrl($chatUrl));
-		}
-		if ($description !== null) {
-			// What the board is for (#173). Markdown source, stored raw - the
-			// client renders it through the same sanitising renderer as a card
-			// body, so there is nothing to escape here. '' (or whitespace only)
-			// clears it.
-			$board->setDescription($this->validateDescription($description));
-		}
-		// An empty patch is a no-op, not a write: it would bump lastModified and
-		// invalidate every client's board cache for nothing.
-		if ($cardFeatures !== null && $cardFeatures !== []) {
-			// Built-in card sections (#5894). A PARTIAL patch merged onto the
-			// board's current state, so flipping one switch can't clobber the
-			// other four. Switching a feature off HIDES it and nothing else -
-			// no attachment, contact link, GitHub link, time entry or cover
-			// colour is deleted here, and a running timer is deliberately left
-			// running (see CardFeatures for the full rationale, including why
-			// enforcement is client-side only).
-			$board->setDisabledCardFeatures(
-				CardFeatures::encode(
-					CardFeatures::applyPatch(
-						CardFeatures::decode($board->getDisabledCardFeatures()),
-						$cardFeatures
+			// A scale change may strand card estimates that no longer fit the new
+			// scale; capture the transition so we can clear them below (after the
+			// board row is persisted).
+			$scaleChangedTo = null;
+			if ($estimateScale !== null) {
+				if (!EstimateScale::isValidScale($estimateScale)) {
+					throw new InvalidInputException('Unknown estimate scale');
+				}
+				if ($estimateScale !== $board->getEstimateScale()) {
+					$scaleChangedTo = $estimateScale;
+				}
+				$board->setEstimateScale($estimateScale);
+			}
+			if ($estimateCustom !== null) {
+				$encoded = EstimateScale::encodeCustom($estimateCustom);
+				if ($encoded !== $board->getEstimateCustom()) {
+					$board->setEstimateCustom($encoded);
+					$scaleChangedTo ??= $board->getEstimateScale();
+				}
+			}
+			if (($scaleChangedTo ?? $board->getEstimateScale()) === EstimateScale::CUSTOM && $board->customEstimates() === []) {
+				throw new InvalidInputException('A custom estimate scale needs at least one label');
+			}
+			if ($newCardsOnTop !== null) {
+				$board->setNewCardsOnTop($newCardsOnTop);
+			}
+			if ($allowAiActors !== null) {
+				// AI-actor attribution gate (#352): a plain boolean, OFF by default.
+				$board->setAllowAiActors($allowAiActors);
+			}
+			if ($autoCompleteParent !== null) {
+				// "All children done → parent done" gate (#198): a plain boolean, OFF by default.
+				$board->setAutoCompleteParent($autoCompleteParent);
+			}
+			if ($prefix !== null) {
+				// Normalize to the stored shape (uppercased, alnum, capped). A value
+				// that reduces to nothing is invalid - the caller must pick real chars.
+				// Changing the prefix only re-displays existing cards; their assigned
+				// numbers (board_seq) are immutable and unaffected.
+				$normalized = BoardPrefix::normalize($prefix);
+				if ($normalized === null) {
+					throw new InvalidInputException('Prefix must contain at least one letter or digit');
+				}
+				$board->setPrefix($normalized);
+			}
+			if ($chatUrl !== null) {
+				// "Project chat" link (#3748): a pure display address, deliberately
+				// dumb (no Talk API coupling). An empty string clears it; a non-empty
+				// value must be a plain http(s) URL - the scheme allow-list is the
+				// XSS gate (rejects javascript:, data:, etc.) since the client
+				// renders this as an <a href>.
+				$board->setChatUrl($this->validateChatUrl($chatUrl));
+			}
+			if ($description !== null) {
+				// What the board is for (#173). Markdown source, stored raw - the
+				// client renders it through the same sanitising renderer as a card
+				// body, so there is nothing to escape here. '' (or whitespace only)
+				// clears it.
+				$board->setDescription($this->validateDescription($description));
+			}
+			// An empty patch is a no-op, not a write: it would bump lastModified and
+			// invalidate every client's board cache for nothing.
+			if ($cardFeatures !== null && $cardFeatures !== []) {
+				// Built-in card sections (#5894). A PARTIAL patch merged onto the
+				// board's current state, so flipping one switch can't clobber the
+				// other four. Switching a feature off HIDES it and nothing else -
+				// no attachment, contact link, GitHub link, time entry or cover
+				// colour is deleted here, and a running timer is deliberately left
+				// running (see CardFeatures for the full rationale, including why
+				// enforcement is client-side only).
+				$board->setDisabledCardFeatures(
+					CardFeatures::encode(
+						CardFeatures::applyPatch(
+							CardFeatures::decode($board->getDisabledCardFeatures()),
+							$cardFeatures
+						)
 					)
-				)
+				);
+			}
+
+			$now = time();
+			$board->setLastModified($now);
+			$board = $this->boardMapper->update($board);
+
+			// Clear card estimates stranded by a scale change (e.g. fibonacci "8" after
+			// a switch to t-shirt, or every estimate when switching to 'none'). Each
+			// cleared card gets a change row so delta-sync/realtime clients patch their
+			// cache; the single board push below (notify with push=true) covers the
+			// whole batch, so these are recorded WITHOUT their own push.
+			if ($scaleChangedTo !== null) {
+				$staleIds = [];
+				foreach ($this->cardMapper->findEstimatedCards($id) as $row) {
+					if (!EstimateScale::allows($scaleChangedTo, $row['estimate'], $board->customEstimates())) {
+						$staleIds[] = $row['id'];
+					}
+				}
+				if ($staleIds !== []) {
+					$this->cardMapper->clearEstimatesByIds($staleIds);
+					foreach ($staleIds as $cardId) {
+						$this->changeNotifier->recordChange(
+							$id,
+							Change::ENTITY_CARD,
+							$cardId,
+							Change::ACTION_UPDATE,
+							$uid,
+							Change::VERB_UPDATED
+						);
+					}
+				}
+			}
+
+			$this->changeNotifier->notify(
+				$id,
+				Change::ENTITY_BOARD,
+				$id,
+				Change::ACTION_UPDATE,
+				$uid
 			);
-		}
 
-		$now = time();
-		$board->setLastModified($now);
-		$board = $this->boardMapper->update($board);
-
-		// Clear card estimates stranded by a scale change (e.g. fibonacci "8" after
-		// a switch to t-shirt, or every estimate when switching to 'none'). Each
-		// cleared card gets a change row so delta-sync/realtime clients patch their
-		// cache; the single board push below (notify with push=true) covers the
-		// whole batch, so these are recorded WITHOUT their own push.
-		if ($scaleChangedTo !== null) {
-			$staleIds = [];
-			foreach ($this->cardMapper->findEstimatedCards($id) as $row) {
-				if (!EstimateScale::allows($scaleChangedTo, $row['estimate'], $board->customEstimates())) {
-					$staleIds[] = $row['id'];
-				}
-			}
-			if ($staleIds !== []) {
-				$this->cardMapper->clearEstimatesByIds($staleIds);
-				foreach ($staleIds as $cardId) {
-					$this->changeNotifier->recordChange(
-						$id,
-						Change::ENTITY_CARD,
-						$cardId,
-						Change::ACTION_UPDATE,
-						$uid,
-						Change::VERB_UPDATED
-					);
-				}
-			}
-		}
-
-		$this->changeNotifier->notify(
-			$id,
-			Change::ENTITY_BOARD,
-			$id,
-			Change::ACTION_UPDATE,
-			$uid
-		);
-
-		return $board;
+			return $board;
+		}, true);
 	}
 
 	/**
@@ -391,23 +394,25 @@ class BoardService {
 	 * @throws NotPermittedException if the user may not manage the board
 	 */
 	public function delete(int $id, string $uid): Board {
-		$board = $this->loadBoard($id);
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+		return $this->cardMutation->runForBoards([$id], function () use ($id, $uid): Board {
+			$board = $this->loadBoard($id);
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
-		$now = time();
-		$board->setDeletedAt($now);
-		$board->setLastModified($now);
-		$board = $this->boardMapper->update($board);
+			$now = time();
+			$board->setDeletedAt($now);
+			$board->setLastModified($now);
+			$board = $this->boardMapper->update($board);
 
-		$this->changeNotifier->notify(
-			$id,
-			Change::ENTITY_BOARD,
-			$id,
-			Change::ACTION_DELETE,
-			$uid
-		);
+			$this->changeNotifier->notify(
+				$id,
+				Change::ENTITY_BOARD,
+				$id,
+				Change::ACTION_DELETE,
+				$uid
+			);
 
-		return $board;
+			return $board;
+		}, true);
 	}
 
 	/**

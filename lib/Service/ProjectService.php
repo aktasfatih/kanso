@@ -15,6 +15,7 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardMoveAliasMapper;
 use OCA\Kanso\Db\Project;
 use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\ProjectCommentMapper;
@@ -61,6 +62,8 @@ class ProjectService {
 		private IDBConnection $db,
 		private IGroupManager $groupManager,
 		private ShareeSearchService $shareeSearch,
+		private CardMutationService $cardMutation,
+		private CardMoveAliasMapper $moveAliases,
 	) {
 	}
 
@@ -354,11 +357,14 @@ class ProjectService {
 	 * @throws NotPermittedException if the actor cannot edit the project or see the card
 	 */
 	public function addCard(int $projectId, int $cardId, string $uid): void {
-		$project = $this->loadProject($projectId, $uid, PermissionService::PERMISSION_EDIT);
-		$card = $this->loadCard($cardId);
-		$this->assertCardReadable($card, $uid);
+		$this->loadProject($projectId, $uid, PermissionService::PERMISSION_EDIT);
+		$this->cardMutation->run($cardId, function () use ($projectId, $cardId, $uid): void {
+			$project = $this->loadProject($projectId, $uid, PermissionService::PERMISSION_EDIT);
+			$card = $this->loadCard($cardId);
+			$this->assertCardReadable($card, $uid);
 
-		$this->projectCardMapper->add($project->getId(), $card->getId());
+			$this->projectCardMapper->add($project->getId(), $card->getId());
+		});
 	}
 
 	/**
@@ -370,10 +376,25 @@ class ProjectService {
 	 */
 	public function removeCard(int $projectId, int $cardId, string $uid): void {
 		$project = $this->loadProject($projectId, $uid, PermissionService::PERMISSION_EDIT);
-		if ($project->getOwner() !== $uid) {
-			$this->assertCardReadable($this->loadCard($cardId), $uid);
+		try {
+			$boardId = $this->cardMapper->find($cardId)->getBoardId();
+		} catch (DoesNotExistException $e) {
+			if ($project->getOwner() !== $uid) {
+				throw $e;
+			}
+			$this->projectCardMapper->remove($projectId, $cardId);
+			return;
 		}
-		$this->projectCardMapper->remove($project->getId(), $cardId);
+		$this->cardMutation->runForBoards([$boardId], function () use ($projectId, $cardId, $uid): void {
+			$project = $this->loadProject($projectId, $uid, PermissionService::PERMISSION_EDIT);
+			if ($this->moveAliases->findByOldId($cardId) !== null) {
+				throw new DoesNotExistException('Card has moved; reload before editing');
+			}
+			if ($project->getOwner() !== $uid) {
+				$this->assertCardReadable($this->loadCard($cardId), $uid);
+			}
+			$this->projectCardMapper->remove($projectId, $cardId);
+		});
 	}
 
 	/**

@@ -62,6 +62,7 @@ class ContactServiceTest extends TestCase {
 			$this->contactsManager,
 			$this->userManager,
 			$this->visibilityGuard,
+			$this->cardMutation(),
 		);
 	}
 
@@ -308,4 +309,12 @@ class ContactServiceTest extends TestCase {
 		$this->expectException(NotPermittedException::class);
 		$this->service->search(1, 'stranger', 'jane');
 	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('run')->willReturnCallback(static fn (int $cardId, callable $write): mixed => $write());
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
 }

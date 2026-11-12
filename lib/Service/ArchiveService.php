@@ -50,6 +50,7 @@ class ArchiveService {
 		private PermissionService $permissionService,
 		private ITimeFactory $time,
 		private IDBConnection $db,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -232,36 +233,38 @@ class ArchiveService {
 	 * @return int number of cards archived
 	 */
 	public function sweep(ArchiveRule $rule): int {
-		$count = 0;
-		foreach ($this->findEligibleCards($rule) as $card) {
-			$this->db->beginTransaction();
-			try {
-				$card->setArchived(true);
-				$this->cardMapper->update($card);
-				// System actor (null) - the sweep is not attributed to a user.
-				// Record the row only; the coalesced push fires once after the loop.
-				$this->changeNotifier->recordChange(
-					$rule->getBoardId(),
-					Change::ENTITY_CARD,
-					$card->getId(),
-					Change::ACTION_UPDATE,
-					null,
-				);
-				$this->db->commit();
-			} catch (\Throwable $e) {
-				$this->db->rollBack();
-				throw $e;
+		return $this->cardMutation->runForBoards([$rule->getBoardId()], function () use ($rule): int {
+			$count = 0;
+			foreach ($this->findEligibleCards($rule) as $card) {
+				$this->db->beginTransaction();
+				try {
+					$card->setArchived(true);
+					$this->cardMapper->update($card);
+					// System actor (null) - the sweep is not attributed to a user.
+					// Record the row only; the coalesced push fires once after the loop.
+					$this->changeNotifier->recordChange(
+						$rule->getBoardId(),
+						Change::ENTITY_CARD,
+						$card->getId(),
+						Change::ACTION_UPDATE,
+						null,
+					);
+					$this->db->commit();
+				} catch (\Throwable $e) {
+					$this->db->rollBack();
+					throw $e;
+				}
+				$count++;
 			}
-			$count++;
-		}
 
-		// One coalesced realtime push for the whole batch (#3418): only broadcast
-		// when at least one card actually changed, so an empty sweep stays a no-op.
-		if ($count > 0) {
-			$this->changeNotifier->pushBoardChanged($rule->getBoardId());
-		}
+			// One coalesced realtime push for the whole batch (#3418): only broadcast
+			// when at least one card actually changed, so an empty sweep stays a no-op.
+			if ($count > 0) {
+				$this->changeNotifier->pushBoardChanged($rule->getBoardId());
+			}
 
-		return $count;
+			return $count;
+		});
 	}
 
 	// ---- helpers ----------------------------------------------------------

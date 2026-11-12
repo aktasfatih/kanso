@@ -15,6 +15,8 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardMoveAlias;
+use OCA\Kanso\Db\CardMoveAliasMapper;
 use OCA\Kanso\Db\Project;
 use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\ProjectCommentMapper;
@@ -48,6 +50,7 @@ class ProjectServiceTest extends TestCase {
 	private BoardService&MockObject $boardService;
 	private PermissionService&MockObject $permissionService;
 	private CardMapper&MockObject $cardMapper;
+	private CardMoveAliasMapper&MockObject $moveAliases;
 	private BoardMapper&MockObject $boardMapper;
 	private StatsService&MockObject $statsService;
 	private BoardAccess&MockObject $boardAccess;
@@ -60,6 +63,7 @@ class ProjectServiceTest extends TestCase {
 	private IGroupManager&MockObject $groupManager;
 	private IUserManager&MockObject $userManager;
 	private ShareeSearchService&MockObject $shareeSearch;
+	private \OCA\Kanso\Service\CardMutationService&MockObject $mutation;
 	private ProjectService $service;
 
 	protected function setUp(): void {
@@ -69,6 +73,7 @@ class ProjectServiceTest extends TestCase {
 		$this->boardService = $this->createMock(BoardService::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
+		$this->moveAliases = $this->createMock(CardMoveAliasMapper::class);
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->statsService = $this->createMock(StatsService::class);
 		$this->boardAccess = $this->createMock(BoardAccess::class);
@@ -82,6 +87,7 @@ class ProjectServiceTest extends TestCase {
 		$this->groupManager = $this->createMock(IGroupManager::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->shareeSearch = $this->createMock(ShareeSearchService::class);
+		$this->mutation = $this->cardMutation();
 		$this->service = new ProjectService(
 			$this->projectMapper,
 			$this->projectCardMapper,
@@ -102,6 +108,8 @@ class ProjectServiceTest extends TestCase {
 			$this->db,
 			$this->groupManager,
 			$this->shareeSearch,
+			$this->mutation,
+			$this->moveAliases,
 		);
 	}
 
@@ -294,7 +302,8 @@ class ProjectServiceTest extends TestCase {
 
 	public function testOwnerCanRemoveACardTheyLostAccessTo(): void {
 		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
-		$this->cardMapper->expects(self::never())->method('find');
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card(1));
+		$this->permissionService->expects(self::never())->method('assertPermission');
 		$this->projectCardMapper->expects(self::once())->method('remove')->with(5, 9);
 		$this->service->removeCard(5, 9, 'alice');
 	}
@@ -844,6 +853,7 @@ class ProjectServiceTest extends TestCase {
 	}
 
 	public function testAddCardRejectsNonOwnerBeforeTouchingCard(): void {
+		$this->mutation->expects(self::never())->method('run');
 		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
 		$this->cardMapper->expects(self::never())->method('find');
 		$this->projectCardMapper->expects(self::never())->method('add');
@@ -1035,4 +1045,46 @@ class ProjectServiceTest extends TestCase {
 		$result = $this->service->stats(5, 'alice');
 		self::assertSame(1, $result['cardCount']);
 	}
+
+	public function testOwnerCanRemoveAPurgedCard(): void {
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$this->cardMapper->method('find')->with(9)->willThrowException(new DoesNotExistException('gone'));
+		$this->projectCardMapper->expects(self::once())->method('remove')->with(5, 9);
+
+		$this->service->removeCard(5, 9, 'alice');
+	}
+
+	public function testOwnerCanRemoveATrashedCard(): void {
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$card = $this->card(1);
+		$card->setDeletedAt(123);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->projectCardMapper->expects(self::once())->method('remove')->with(5, 9);
+
+		$this->service->removeCard(5, 9, 'alice');
+	}
+
+	public function testOwnerMustReloadBeforeRemovingAMovedCard(): void {
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$card = $this->card(1);
+		$card->setDeletedAt(123);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$alias = new CardMoveAlias();
+		$alias->setOldCardId(9);
+		$alias->setTargetCardId(19);
+		$this->moveAliases->method('findByOldId')->with(9)->willReturn($alias);
+		$this->projectCardMapper->expects(self::never())->method('remove');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->expectExceptionMessage('Card has moved');
+		$this->service->removeCard(5, 9, 'alice');
+	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('run')->willReturnCallback(static fn (int $cardId, callable $write): mixed => $write());
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
 }

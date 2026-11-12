@@ -57,6 +57,7 @@ class CommentServiceTest extends TestCase {
 			$this->subscriptionService,
 			$this->mentionService,
 			$this->visibilityGuard,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 

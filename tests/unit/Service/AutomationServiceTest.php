@@ -75,6 +75,7 @@ class AutomationServiceTest extends TestCase {
 			$this->runningTimerMapper,
 			$this->timeEntryMapper,
 			$this->timeFactory,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 

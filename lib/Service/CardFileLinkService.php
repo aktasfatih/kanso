@@ -32,6 +32,7 @@ class CardFileLinkService {
 		private ChangeNotifier $changeNotifier,
 		private ChangeDetailMapper $changeDetailMapper,
 		private IRootFolder $rootFolder,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -55,53 +56,48 @@ class CardFileLinkService {
 	 * @throws InvalidInputException
 	 */
 	public function addLink(int $cardId, int $fileId, string $actorUid): CardFileLink {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		return $this->cardMutation->run($cardId, function () use ($cardId, $fileId, $actorUid): CardFileLink {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		try {
-			$userFolder = $this->rootFolder->getUserFolder($actorUid);
-		} catch (\Throwable $e) {
-			throw new InvalidInputException('File not found');
-		}
-		$node = $userFolder->getById($fileId)[0] ?? null;
-		if (!$node instanceof File) {
-			throw new InvalidInputException('File not found');
-		}
+			try {
+				$userFolder = $this->rootFolder->getUserFolder($actorUid);
+			} catch (\Throwable $e) {
+				throw new InvalidInputException('File not found');
+			}
+			$node = $userFolder->getById($fileId)[0] ?? null;
+			if (!$node instanceof File) {
+				throw new InvalidInputException('File not found');
+			}
 
-		if ($this->fileLinkMapper->countByCard($cardId) >= CardFileLinkMapper::MAX_PER_CARD) {
-			// Re-linking on a full card is still an idempotent no-op, not a cap error.
 			$existing = $this->findExistingLink($cardId, $fileId);
 			if ($existing !== null) {
 				return $existing;
 			}
-			throw new InvalidInputException(
-				'A card may have at most ' . CardFileLinkMapper::MAX_PER_CARD . ' file links'
-			);
-		}
 
-		$link = new CardFileLink();
-		$link->setCardId($cardId);
-		$link->setFileId($fileId);
-		// Bare name only, never getPath() (privacy).
-		$link->setName(AttachmentSanitizer::filename($node->getName()));
-		$link->setMime(mb_substr($node->getMimetype(), 0, 255));
-		$link->setLinkedBy($actorUid);
-		$link->setCreatedAt(time());
-
-		try {
-			$link = $this->fileLinkMapper->insert($link);
-		} catch (\OCP\DB\Exception $e) {
-			if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
-				throw $e;
+			if ($this->fileLinkMapper->countByCard($cardId) >= CardFileLinkMapper::MAX_PER_CARD) {
+				throw new InvalidInputException(
+					'A card may have at most ' . CardFileLinkMapper::MAX_PER_CARD . ' file links'
+				);
 			}
-			return $this->findExistingLink($cardId, $fileId) ?? throw $e;
-		}
 
-		$this->recordChange($card, $link->getName(), $actorUid, Change::VERB_FILE_LINKED);
+			$link = new CardFileLink();
+			$link->setCardId($cardId);
+			$link->setFileId($fileId);
+			// Bare name only, never getPath() (privacy).
+			$link->setName(AttachmentSanitizer::filename($node->getName()));
+			$link->setMime(mb_substr($node->getMimetype(), 0, 255));
+			$link->setLinkedBy($actorUid);
+			$link->setCreatedAt(time());
 
-		return $link;
+			$link = $this->fileLinkMapper->insert($link);
+
+			$this->recordChange($card, $link->getName(), $actorUid, Change::VERB_FILE_LINKED);
+
+			return $link;
+		});
 	}
 
 	private function findExistingLink(int $cardId, int $fileId): ?CardFileLink {
@@ -118,19 +114,21 @@ class CardFileLinkService {
 	 * @throws NotPermittedException
 	 */
 	public function deleteLink(int $cardId, int $linkId, string $actorUid): void {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$this->cardMutation->run($cardId, function () use ($cardId, $linkId, $actorUid): void {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		// IDOR guard: a link id from another card is "not found".
-		$link = $this->fileLinkMapper->find($linkId);
-		if ($link->getCardId() !== $cardId) {
-			throw new DoesNotExistException('File link ' . $linkId . ' is not on card ' . $cardId);
-		}
-		$this->fileLinkMapper->delete($link);
+			// IDOR guard: a link id from another card is "not found".
+			$link = $this->fileLinkMapper->find($linkId);
+			if ($link->getCardId() !== $cardId) {
+				throw new DoesNotExistException('File link ' . $linkId . ' is not on card ' . $cardId);
+			}
+			$this->fileLinkMapper->delete($link);
 
-		$this->recordChange($card, $link->getName(), $actorUid, Change::VERB_FILE_UNLINKED);
+			$this->recordChange($card, $link->getName(), $actorUid, Change::VERB_FILE_UNLINKED);
+		});
 	}
 
 	private function recordChange(Card $card, string $name, string $actorUid, int $verb): void {

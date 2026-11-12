@@ -54,7 +54,8 @@ class BoardServiceTest extends TestCase {
 			$this->cardReviewMapper,
 			$this->boardGroupMemberMapper,
 			$this->boardPinMapper,
-			$this->boardAccess
+			$this->boardAccess,
+			$this->cardMutation(),
 		);
 	}
 
@@ -813,4 +814,11 @@ class BoardServiceTest extends TestCase {
 	public function testNormalizeDescription(?string $input, ?string $expected): void {
 		self::assertSame($expected, BoardService::normalizeDescription($input));
 	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
 }

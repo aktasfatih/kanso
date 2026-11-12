@@ -43,6 +43,7 @@ class CommentService {
 		private SubscriptionService $subscriptionService,
 		private MentionService $mentionService,
 		private CardVisibilityGuard $visibilityGuard,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -75,43 +76,45 @@ class CommentService {
 	 * @throws InvalidInputException if the body is empty/too long, the parent is invalid (missing, other card, deleted, or itself a reply - one level only), or an AI actor name is set on a board that does not allow it
 	 */
 	public function addComment(int $cardId, string $body, ?int $parentCommentId, string $actorUid, ?string $actorName = null): Comment {
-		$body = $this->normalizeBody($body);
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
-		$actorName = $this->normalizeActorName($board, $actorName);
+		return $this->cardMutation->run($cardId, function () use ($cardId, $body, $parentCommentId, $actorUid, $actorName): Comment {
+			$body = $this->normalizeBody($body);
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+			$actorName = $this->normalizeActorName($board, $actorName);
 
-		if ($parentCommentId !== null) {
-			$parent = $this->loadParentComment($parentCommentId);
-			if ($parent->getCardId() !== $cardId) {
-				throw new InvalidInputException('Parent comment belongs to a different card');
+			if ($parentCommentId !== null) {
+				$parent = $this->loadParentComment($parentCommentId);
+				if ($parent->getCardId() !== $cardId) {
+					throw new InvalidInputException('Parent comment belongs to a different card');
+				}
+				if ($parent->getParentCommentId() !== null) {
+					throw new InvalidInputException('Replies can only be one level deep');
+				}
 			}
-			if ($parent->getParentCommentId() !== null) {
-				throw new InvalidInputException('Replies can only be one level deep');
-			}
-		}
 
-		$comment = new Comment();
-		$comment->setCardId($cardId);
-		$comment->setParentCommentId($parentCommentId);
-		$comment->setAuthor($actorUid);
-		$comment->setActorName($actorName);
-		$comment->setBody($body);
-		$comment->setCreatedAt(time());
-		$comment->setEditedAt(0);
-		$comment->setDeletedAt(0);
-		$comment->setResolvedAt(0);
-		$saved = $this->commentMapper->insert($comment);
+			$comment = new Comment();
+			$comment->setCardId($cardId);
+			$comment->setParentCommentId($parentCommentId);
+			$comment->setAuthor($actorUid);
+			$comment->setActorName($actorName);
+			$comment->setBody($body);
+			$comment->setCreatedAt(time());
+			$comment->setEditedAt(0);
+			$comment->setDeletedAt(0);
+			$comment->setResolvedAt(0);
+			$saved = $this->commentMapper->insert($comment);
 
-		$this->notifyCard($card, $actorUid);
-		// Auto-subscribe the commenter and fan out to the card's watchers.
-		$this->subscriptionService->handleNewComment($cardId, $parentCommentId, $actorUid);
-		// @mentioned readable-board participants who can SEE the card are
-		// pinged + auto-subscribed (#3760).
-		$this->mentionService->handleMentions($card, $board, $body, $actorUid);
+			$this->notifyCard($card, $actorUid);
+			// Auto-subscribe the commenter and fan out to the card's watchers.
+			$this->subscriptionService->handleNewComment($cardId, $parentCommentId, $actorUid);
+			// @mentioned readable-board participants who can SEE the card are
+			// pinged + auto-subscribed (#3760).
+			$this->mentionService->handleMentions($card, $board, $body, $actorUid);
 
-		return $saved;
+			return $saved;
+		});
 	}
 
 	/**
@@ -123,31 +126,33 @@ class CommentService {
 	 * @throws InvalidInputException if the body is empty or too long
 	 */
 	public function editComment(int $commentId, string $body, string $actorUid): Comment {
-		$body = $this->normalizeBody($body);
-		$comment = $this->loadComment($commentId);
-		$card = $this->loadCard($comment->getCardId());
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		return $this->cardMutation->run($this->commentMapper->find($commentId)->getCardId(), function () use ($commentId, $body, $actorUid): Comment {
+			$body = $this->normalizeBody($body);
+			$comment = $this->loadComment($commentId);
+			$card = $this->loadCard($comment->getCardId());
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		if ($comment->getAuthor() !== $actorUid) {
-			throw new NotPermittedException('Only the author may edit this comment');
-		}
+			if ($comment->getAuthor() !== $actorUid) {
+				throw new NotPermittedException('Only the author may edit this comment');
+			}
 
-		if ($body === $comment->getBody()) {
-			return $comment;
-		}
+			if ($body === $comment->getBody()) {
+				return $comment;
+			}
 
-		$comment->setBody($body);
-		$comment->setEditedAt(time());
-		$saved = $this->commentMapper->update($comment);
+			$comment->setBody($body);
+			$comment->setEditedAt(time());
+			$saved = $this->commentMapper->update($comment);
 
-		$this->notifyCard($card, $actorUid);
-		// Intentional MVP gap: editing a comment does NOT re-run mention handling.
-		// Notifying only NEWLY-added mentions needs an old-vs-new mention diff;
-		// mentions fire on the initial post (addComment) which covers the case.
+			$this->notifyCard($card, $actorUid);
+			// Intentional MVP gap: editing a comment does NOT re-run mention handling.
+			// Notifying only NEWLY-added mentions needs an old-vs-new mention diff;
+			// mentions fire on the initial post (addComment) which covers the case.
 
-		return $saved;
+			return $saved;
+		});
 	}
 
 	/**
@@ -159,36 +164,38 @@ class CommentService {
 	 * @throws NotPermittedException if the actor may neither manage the board nor delete their own comment
 	 */
 	public function deleteComment(int $commentId, string $actorUid): void {
-		$comment = $this->loadComment($commentId);
-		$card = $this->loadCard($comment->getCardId());
-		$board = $this->loadBoard($card->getBoardId());
-		// Visibility (#3743): comments inherit their card - a comment on a
-		// hidden card is unaddressable, even for a manager.
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$this->cardMutation->run($this->commentMapper->find($commentId)->getCardId(), function () use ($commentId, $actorUid): void {
+			$comment = $this->loadComment($commentId);
+			$card = $this->loadCard($comment->getCardId());
+			$board = $this->loadBoard($card->getBoardId());
+			// Visibility (#3743): comments inherit their card - a comment on a
+			// hidden card is unaddressable, even for a manager.
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		$isManager = ($this->permissionService->getPermissions($board, $actorUid) & PermissionService::PERMISSION_MANAGE) !== 0;
-		$isAuthor = $comment->getAuthor() === $actorUid;
-		if (!$isManager) {
-			// A non-manager may only delete their own comment, and only with EDIT.
-			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-			if (!$isAuthor) {
-				throw new NotPermittedException('Only the author or a board manager may delete this comment');
+			$isManager = ($this->permissionService->getPermissions($board, $actorUid) & PermissionService::PERMISSION_MANAGE) !== 0;
+			$isAuthor = $comment->getAuthor() === $actorUid;
+			if (!$isManager) {
+				// A non-manager may only delete their own comment, and only with EDIT.
+				$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+				if (!$isAuthor) {
+					throw new NotPermittedException('Only the author or a board manager may delete this comment');
+				}
 			}
-		}
 
-		$now = time();
+			$now = time();
 
-		// Cascade over a top-level comment's replies so none is orphaned. A
-		// single set-based UPDATE also catches a reply inserted concurrently
-		// with this delete (no read-then-write window).
-		if ($comment->getParentCommentId() === null) {
-			$this->commentMapper->softDeleteRepliesOf($commentId, $now);
-		}
+			// Cascade over a top-level comment's replies so none is orphaned. A
+			// single set-based UPDATE also catches a reply inserted concurrently
+			// with this delete (no read-then-write window).
+			if ($comment->getParentCommentId() === null) {
+				$this->commentMapper->softDeleteRepliesOf($commentId, $now);
+			}
 
-		$comment->setDeletedAt($now);
-		$this->commentMapper->update($comment);
+			$comment->setDeletedAt($now);
+			$this->commentMapper->update($comment);
 
-		$this->notifyCard($card, $actorUid);
+			$this->notifyCard($card, $actorUid);
+		});
 	}
 
 	/**
@@ -210,31 +217,33 @@ class CommentService {
 	 * @throws InvalidInputException if the comment is a reply
 	 */
 	public function setResolved(int $commentId, bool $resolved, string $actorUid): Comment {
-		$comment = $this->loadComment($commentId);
-		$card = $this->loadCard($comment->getCardId());
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		return $this->cardMutation->run($this->commentMapper->find($commentId)->getCardId(), function () use ($commentId, $resolved, $actorUid): Comment {
+			$comment = $this->loadComment($commentId);
+			$card = $this->loadCard($comment->getCardId());
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		if ($comment->getParentCommentId() !== null) {
-			throw new InvalidInputException('Only a top-level comment can be resolved');
-		}
+			if ($comment->getParentCommentId() !== null) {
+				throw new InvalidInputException('Only a top-level comment can be resolved');
+			}
 
-		$isResolved = $comment->getResolvedAt() > 0;
-		if ($isResolved === $resolved) {
-			return $comment;
-		}
+			$isResolved = $comment->getResolvedAt() > 0;
+			if ($isResolved === $resolved) {
+				return $comment;
+			}
 
-		$comment->setResolvedAt($resolved ? time() : 0);
-		$saved = $this->commentMapper->update($comment);
+			$comment->setResolvedAt($resolved ? time() : 0);
+			$saved = $this->commentMapper->update($comment);
 
-		$this->notifyCard(
-			$card,
-			$actorUid,
-			$resolved ? Change::VERB_THREAD_RESOLVED : Change::VERB_THREAD_REOPENED,
-		);
+			$this->notifyCard(
+				$card,
+				$actorUid,
+				$resolved ? Change::VERB_THREAD_RESOLVED : Change::VERB_THREAD_REOPENED,
+			);
 
-		return $saved;
+			return $saved;
+		});
 	}
 
 	private function notifyCard(Card $card, string $actorUid, int $verb = Change::VERB_COMMENTED): void {

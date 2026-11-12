@@ -55,6 +55,7 @@ class CommentReactionServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->permissionService,
 			$this->visibilityGuard,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 
