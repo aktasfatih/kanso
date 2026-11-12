@@ -794,9 +794,7 @@ class CardMapper extends QBMapper {
 	 * baseline now matches the archived-BOARD rule search already applies
 	 * ({@see \OCA\Kanso\Service\SearchService::search()}, #10126); the flag only
 	 * ever WIDENS it, so the archive stays reachable as the historical record it
-	 * is. Still NOT matched to the other listings here in one respect: they also
-	 * carry `is_template = false`, and this query does not, so template cards do
-	 * still turn up in search - a separate gap, deliberately left alone here.
+	 * is. Template cards are excluded from all search paths.
 	 *
 	 * @param int[] $boardIds
 	 * @param array<int, string> $rolesByBoard the viewer's role per board id
@@ -825,6 +823,7 @@ class CardMapper extends QBMapper {
 			->from($this->getTableName())
 			->where($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->orX(
 				$qb->expr()->iLike('title', $qb->createNamedParameter($likePattern)),
 				$qb->expr()->iLike('description', $qb->createNamedParameter($likePattern)),
@@ -863,6 +862,7 @@ class CardMapper extends QBMapper {
 			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->setMaxResults(1);
 		if (!$includeArchived) {
 			$qb->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)));
@@ -893,6 +893,7 @@ class CardMapper extends QBMapper {
 			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('board_seq', $qb->createNamedParameter($seq, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->setMaxResults(1);
 		if (!$includeArchived) {
 			$qb->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)));
