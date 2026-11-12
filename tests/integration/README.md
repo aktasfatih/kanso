@@ -42,6 +42,50 @@ Every worker verifies the same source paths and hashes before its operation star
 A successful run ends with `OK <driver>: <count> integration checks` and exits zero.
 The fixture boards remain in the disposable installation for inspection.
 
+## Card references and allocation
+
+Run this harness against a disposable installation after applying the checkout's
+migrations:
+
+```sh
+docker exec -u www-data \
+  -e NEXTCLOUD_ROOT=/var/www/html \
+  -e KANSO_INTEGRATION_DISPOSABLE=1 \
+  YOUR_DISPOSABLE_NEXTCLOUD_CONTAINER \
+  php /var/www/html/custom_apps/kanso/tests/integration/card-references.php
+```
+
+Use the isolated configuration and database-driver permissions described above.
+Human aliases retain the prefix used at the move, within the original board's
+context, with no expiry. Resolution requires READ on that live source board and
+READ plus card visibility at the final destination. Restoring an original cancels
+its alias and uses the source board's current prefix. Source-card purge retains
+aliases; source-board deletion disables its human-reference context while numeric
+chains survive. Destination trash, deletion or purge makes the reference unavailable.
+Counters retain committed allocation history through card purge; imports may leave
+gaps. Upgrade backfill can only seed from surviving numbers and metadata, so it
+cannot recover previously purged numbers or unknown older prefixes.
+
+The harness checks monotonic numbering after permanent deletion, import,
+duplication and CSV intake, plus allocator initialization through a legacy import
+that owns its outer transaction. Separate PHP processes exercise simultaneous card
+creation in the same and different stacks, with database lock evidence on the
+sequence allocator. SQLite's lock rejection and retry are checked explicitly;
+a bounded same-stack sort-key conflict can also be retried after commit.
+
+Move checks cover chains, source-card purge, duplicate board prefixes, prefix
+renames, restored originals, destination deletion and source-board purge. The
+real services and controller must enforce source-board access, destination READ
+and private/internal card visibility. Synthetic legacy collisions check live-card
+precedence and hidden-card denial. Migration backfill is rerun after clearing
+only owned fixture metadata and counters, checking recovery from surviving
+sources under their current prefix, preservation of existing counters and
+numeric-only purged-source aliases. Missing historical prefixes cannot be inferred.
+Source paths and SHA-256 fingerprints are verified in the parent and worker
+processes. A successful run ends with
+`OK <driver>: <count> reference integration checks`; owned fixture boards, aliases
+and the temporary reader account are removed in `finally`.
+
 ## Webhook availability
 
 Run against a disposable installation with Kanso enabled and all checkout

@@ -59,6 +59,7 @@ class BoardCascade {
 		'kanso_card_fields',
 		'kanso_card_relations',
 		'kanso_card_running_timers',
+		'kanso_card_sequences',
 		'kanso_card_time_entries',
 		'kanso_changes',
 		'kanso_labels',
@@ -149,6 +150,8 @@ class BoardCascade {
 	 *    spans boards, so only its card links (kanso_project_cards) go.
 	 *  - kanso_project_comments: hang off a project, not off a board.
 	 *  - kanso_project_pins: a user's pins on projects.
+	 *  - kanso_card_move_aliases: numeric chains survive source-card and board
+	 *    purge; human lookup still requires a readable, live source board.
 	 */
 	public const NOT_BOARD_SCOPED = [
 		'kanso_board_groups',

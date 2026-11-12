@@ -7,7 +7,9 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
+use OCA\Kanso\Db\BoardPrefix;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardMoveAliasMapper;
@@ -23,10 +25,28 @@ class CardMoveAliasService {
 	) {
 	}
 
-	/** @param array<int, Card> $movedCards */
-	public function record(array $movedCards): void {
-		foreach ($movedCards as $oldId => $card) {
-			$this->aliases->record($oldId, $card->getId());
+	/**
+	 * @param array<int, Card> $movedCards
+	 * @param list<Card> $sourceCards
+	 */
+	public function record(array $movedCards, array $sourceCards, Board $sourceBoard): void {
+		foreach ($sourceCards as $source) {
+			$this->aliases->record(
+				$source->getId(), $movedCards[$source->getId()]->getId(),
+				$sourceBoard->getId(), $sourceBoard->getPrefix() ?? BoardPrefix::DEFAULT, $source->getBoardSeq(),
+			);
+		}
+	}
+
+	public function resolveRef(int $boardId, string $prefix, int $seq, string $uid): ?Card {
+		$alias = $this->aliases->findByRef($boardId, $prefix, $seq);
+		if ($alias === null || $this->cards->hasLiveBoardSeq($boardId, $seq)) {
+			return null;
+		}
+		try {
+			return $this->resolve($alias->getOldCardId(), $uid);
+		} catch (DoesNotExistException) {
+			return null;
 		}
 	}
 

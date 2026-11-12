@@ -748,6 +748,22 @@ class CardServiceTest extends TestCase {
 		self::assertNull($this->service->findByRef(1, 'not a ref', 'alice'));
 	}
 
+	public function testFindByRefFallsBackToMoveTimePrefixInTheSourceBoard(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->boardWithPrefix('NEW'));
+		$this->cardMapper->expects(self::never())->method('findByBoardAndSeq');
+		$target = $this->card(42, 8, 2);
+		$this->moveAliasService->expects(self::once())->method('resolveRef')->with(1, 'OLD', 9, 'alice')->willReturn($target);
+		self::assertSame($target, $this->service->findByRef(1, 'OLD-9', 'alice'));
+	}
+
+	public function testFindByRefPrefersTheLiveReferenceOverAnAlias(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->boardWithPrefix('KAN'));
+		$card = $this->card();
+		$this->cardMapper->method('findByBoardAndSeq')->with(1, 9, self::isInstanceOf(ViewerContext::class))->willReturn($card);
+		$this->moveAliasService->expects(self::never())->method('resolveRef');
+		self::assertSame($card, $this->service->findByRef(1, 'KAN-9', 'alice'));
+	}
+
 	public function testFindByRefFallsBackToDefaultPrefixForUnprefixedBoard(): void {
 		// A board created before the prefix backfill has a null prefix; it defaults
 		// to the shared "KAN", so a KAN-<n> reference still resolves.

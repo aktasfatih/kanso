@@ -244,6 +244,7 @@ class CsvImportService {
 		$boardId = $board->getId();
 		$stackId = $stack->getId();
 		$now = time();
+		$nextBoardSeq = $dataRows === 0 ? 1 : $this->cardMapper->nextBoardSeq($boardId, $dataRows);
 
 		// Existing labels on the board, indexed case-insensitively by title, so a
 		// name that already exists is REUSED rather than duplicated.
@@ -313,7 +314,7 @@ class CsvImportService {
 			$card->setDescription($description !== '' ? $description : null);
 			$card->setSortKey($sortKeys[$keyIndex]);
 			$keyIndex++;
-			$card->setBoardSeq($this->cardMapper->nextBoardSeq($boardId));
+			$card->setBoardSeq($nextBoardSeq++);
 			$due = $dueIdx === null ? null : $this->toDate($this->cell($row, $dueIdx));
 			$card->setDuedate($due);
 			// A date-only value (no time component) is an all-day due date, so the

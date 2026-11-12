@@ -98,27 +98,41 @@ class CardMapper extends QBMapper {
 		return $this->find($id);
 	}
 
-	/**
-	 * The next per-board human-id sequence number: MAX(board_seq) + 1 for the
-	 * board, or 1 when the board has no numbered card yet. Deleted cards still
-	 * count so a number is never reused after a card is trashed (the id stays
-	 * stable and unambiguous). The (board_id, board_seq) unique index guards the
-	 * actual assignment against a concurrent create deriving the same value -
-	 * {@see \OCA\Kanso\Service\CardService::create} retries on that collision.
-	 *
-	 * @throws Exception
-	 */
-	public function nextBoardSeq(int $boardId): int {
+	public function hasLiveBoardSeq(int $boardId, int $seq): bool {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select($qb->func()->max('board_seq'))
-			->from($this->getTableName())
-			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)));
-
+		$qb->select('id')->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('board_seq', $qb->createNamedParameter($seq, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
 		$result = $qb->executeQuery();
-		$max = $result->fetchOne();
+		$found = $result->fetchOne() !== false;
 		$result->closeCursor();
+		return $found;
+	}
 
-		return ((int)$max) + 1;
+	/** Reserve a range in the caller's transaction and return its first number. */
+	public function nextBoardSeq(int $boardId, int $count = 1): int {
+		if (!$this->db->inTransaction()) {
+			throw new \LogicException('Card number allocation requires a transaction');
+		}
+		if ($count < 1) {
+			throw new \InvalidArgumentException('Card number reservation must be positive');
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->update('kanso_card_sequences')
+			->set('last_seq', $qb->createFunction($qb->getColumnName('last_seq') . ' + ' . (string)$qb->createNamedParameter($count, IQueryBuilder::PARAM_INT)))
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->lte('last_seq', $qb->createNamedParameter(PHP_INT_MAX - $count, IQueryBuilder::PARAM_INT)));
+		if ($qb->executeStatement() !== 1) {
+			throw new \OverflowException('Card number sequence is unavailable or exhausted');
+		}
+		$read = $this->db->getQueryBuilder();
+		$read->select('last_seq')->from('kanso_card_sequences')
+			->where($read->expr()->eq('board_id', $read->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)));
+		$result = $read->executeQuery();
+		$last = (int)$result->fetchOne();
+		$result->closeCursor();
+		return $last - $count + 1;
 	}
 
 	/**

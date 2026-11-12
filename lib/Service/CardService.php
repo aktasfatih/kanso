@@ -177,13 +177,8 @@ class CardService {
 
 	/**
 	 * Board-scoped resolution of a `PREFIX-<board_seq>` human reference (e.g.
-	 * "KAN-123") to a card on the given board (#3611). Per-board prefixes make a
-	 * reference unambiguous only WITHIN a board, so this is deliberately scoped to
-	 * a single board (cross-board references are a follow-up). The reference's
-	 * prefix half is validated against the board's own prefix - a reference whose
-	 * prefix does not match the board resolves to null rather than silently
-	 * matching on the number alone. Only the numeric sequence is looked up (the
-	 * (board_id, board_seq) unique index); a trashed card resolves to null.
+	 * "KAN-123"). Live cards use the board's current prefix. Moved cards retain
+	 * their move-time prefix in this board's context and require destination access.
 	 *
 	 * Returns null (not an exception) for a malformed/mismatched/unknown reference
 	 * so the caller can fall back to plain text; only a genuinely missing/deleted
@@ -207,22 +202,16 @@ class CardService {
 			return null;
 		}
 
-		// The board's prefix must match the reference's prefix (a reference to a
-		// different board's prefix is not resolvable here). Fall back to the shared
-		// default for boards created before the prefix backfill, mirroring the
-		// board payload's default (Board::jsonSerialize / BoardPrefix::DEFAULT).
 		$boardPrefix = $board->getPrefix() ?? BoardPrefix::DEFAULT;
-		if ($prefix !== $boardPrefix) {
-			return null;
+		if ($prefix === $boardPrefix) {
+			$card = $this->cardMapper->findByBoardAndSeq(
+				$boardId, $seq, $this->boardAccess->contextFor($board, $uid),
+			);
+			if ($card !== null) {
+				return $card;
+			}
 		}
-
-		// Viewer-scoped (#3743): a reference to a hidden card resolves to null,
-		// indistinguishable from a reference that never matched.
-		return $this->cardMapper->findByBoardAndSeq(
-			$boardId,
-			$seq,
-			$this->boardAccess->contextFor($board, $uid),
-		);
+		return $this->moveAliasService->resolveRef($boardId, $prefix, $seq, $uid);
 	}
 
 	/**
@@ -275,16 +264,10 @@ class CardService {
 			$creatorSide = $this->boardAccess->contextFor($board, $uid)->role;
 			$now = time();
 
-			// Default: append to the bottom of the stack. When the board opts in,
-			// place the new card at the TOP instead (before the current head). A
-			// concurrent create into the same stack can derive the same key; the
-			// (stack_id, sort_key, deleted_at) unique index rejects the loser, so
-			// re-read the now-current neighbour and re-derive once before giving up
-			// with a retryable 409. The same retry also covers a per-board sequence
-			// collision (two creates on one board deriving the same board_seq): the
-			// (board_id, board_seq) unique index rejects the loser and we recompute.
+			// Reserve before reading neighbours so concurrent creators see the committed tail.
 			$onTop = $board->getNewCardsOnTop() === true;
 			for ($attempt = 0; ; $attempt++) {
+				$boardSeq = $this->cardMapper->nextBoardSeq($stack->getBoardId());
 				if ($onTop) {
 					$firstCard = $this->cardMapper->findFirstInStack($stackId);
 					$sortKey = $firstCard === null
@@ -296,11 +279,6 @@ class CardService {
 						? $this->sortKeyService->initial()
 						: $this->sortKeyService->after($lastCard->getSortKey());
 				}
-
-				// Assign the next per-board number atomically-ish: MAX+1 guarded by the
-				// (board_id, board_seq) unique index. Recomputed each attempt so a retry
-				// after a collision picks up the winner's number.
-				$boardSeq = $this->cardMapper->nextBoardSeq($stack->getBoardId());
 
 				$card = new Card();
 				$card->setBoardId($stack->getBoardId());
@@ -617,7 +595,7 @@ class CardService {
 
 					$this->moveGraphService->recreate($graph['cards'], $graph['relations'], $movedCards, $targetBoard->getId());
 					$this->moveRecurrenceService->transfer($graph['cards'], $movedCards, $sourceBoard, $targetBoard, $targetStackId, $uid);
-					$this->moveAliasService->record($movedCards);
+					$this->moveAliasService->record($movedCards, $graph['cards'], $sourceBoard);
 					foreach ($graph['cards'] as $card) {
 						$oldId = $card->getId();
 						$trashed = clone $card;

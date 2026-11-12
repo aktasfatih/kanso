@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Db;
 
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\AppFramework\Db\Entity;
 use OCP\AppFramework\Db\MultipleObjectsReturnedException;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\Exception;
@@ -22,6 +23,29 @@ use OCP\IDBConnection;
 class BoardMapper extends QBMapper {
 	public function __construct(IDBConnection $db) {
 		parent::__construct($db, 'kanso_boards', Board::class);
+	}
+
+	/**
+	 * @param Board $entity
+	 * @return Board
+	 */
+	#[\Override]
+	public function insert(Entity $entity): Entity {
+		$this->db->beginTransaction();
+		try {
+			$board = parent::insert($entity);
+			$qb = $this->db->getQueryBuilder();
+			$qb->insert('kanso_card_sequences')->values([
+				'board_id' => $qb->createNamedParameter($board->getId(), IQueryBuilder::PARAM_INT),
+				'last_seq' => $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT),
+			]);
+			$qb->executeStatement();
+			$this->db->commit();
+			return $board;
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
 	}
 
 	/**

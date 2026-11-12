@@ -536,14 +536,10 @@ class ImportService {
 		$parentOf = [];
 		$count = 0;
 
-		// Assign human-id numbers locally: seed once from the board's next value
-		// (1 for the freshly-created import target) and increment per inserted
-		// card - a single query, never one per card. Import runs single-threaded
-		// so no unique-index contention; the (board_id, board_seq) index still
-		// guards it. Cards are numbered in export/iteration order.
-		$nextBoardSeq = $this->cardMapper->nextBoardSeq($boardId);
+		$rows = $this->rows($board, 'cards');
+		$nextBoardSeq = $rows === [] ? 1 : $this->cardMapper->nextBoardSeq($boardId, count($rows));
 
-		foreach ($this->rows($board, 'cards') as $row) {
+		foreach ($rows as $row) {
 			$oldStackId = isset($row['stackId']) ? (int)$row['stackId'] : null;
 			$newStackId = $oldStackId !== null ? ($stackIdMap[$oldStackId] ?? null) : null;
 			// A card pointing at a stack that is not in the export is skipped

@@ -110,11 +110,47 @@ class CardMoveAliasServiceTest extends TestCase {
 	public function testRecordsEveryMovedCard(): void {
 		$aliases = $this->createMock(CardMoveAliasMapper::class);
 		$calls = [];
-		$aliases->method('record')->willReturnCallback(static function (int $old, int $new) use (&$calls): void {
-			$calls[] = [$old, $new];
+		$aliases->method('record')->willReturnCallback(static function (int $old, int $new, int $boardId, string $prefix, ?int $seq) use (&$calls): void {
+			$calls[] = [$old, $new, $boardId, $prefix, $seq];
 		});
 		$service = new CardMoveAliasService($aliases, $this->createMock(CardMapper::class), $this->createMock(BoardMapper::class), $this->createMock(PermissionService::class), $this->createMock(CardVisibilityGuard::class));
-		$service->record([10 => $this->card(20, 2, 0), 11 => $this->card(21, 2, 0)]);
-		self::assertSame([[10, 20], [11, 21]], $calls);
+		$board = new Board();
+		$board->setId(1);
+		$board->setPrefix('OLD');
+		$source = $this->card(10, 1, 0);
+		$source->setBoardSeq(9);
+		$other = $this->card(11, 1, 0);
+		$other->setBoardSeq(10);
+		$service->record([10 => $this->card(20, 2, 0), 11 => $this->card(21, 2, 0)], [$source, $other], $board);
+		self::assertSame([[10, 20, 1, 'OLD', 9], [11, 21, 1, 'OLD', 10]], $calls);
+	}
+
+	public function testHumanReferenceDoesNotReplaceALiveSequence(): void {
+		$aliases = $this->createMock(CardMoveAliasMapper::class);
+		$aliases->method('findByRef')->with(1, 'OLD', 9)->willReturn($this->alias(20));
+		$cards = $this->createMock(CardMapper::class);
+		$cards->method('hasLiveBoardSeq')->with(1, 9)->willReturn(true);
+		$cards->expects(self::never())->method('find');
+		$service = new CardMoveAliasService($aliases, $cards, $this->createMock(BoardMapper::class), $this->createMock(PermissionService::class), $this->createMock(CardVisibilityGuard::class));
+		self::assertNull($service->resolveRef(1, 'OLD', 9, 'bob'));
+	}
+
+	public function testHumanReferenceMasksInaccessibleDestination(): void {
+		$aliases = $this->createMock(CardMoveAliasMapper::class);
+		$alias = $this->alias(20);
+		$alias->setOldCardId(10);
+		$aliases->method('findByRef')->with(1, 'OLD', 9)->willReturn($alias);
+		$aliases->method('findByOldId')->with(10)->willReturn($alias);
+		$cards = $this->createMock(CardMapper::class);
+		$cards->method('find')->willReturnCallback(fn (int $id): Card => $id === 10
+			? throw new DoesNotExistException('purged') : $this->card(20, 2, 0));
+		$boards = $this->createMock(BoardMapper::class);
+		$board = new Board();
+		$board->setDeletedAt(0);
+		$boards->method('find')->with(2)->willReturn($board);
+		$permissions = $this->createMock(PermissionService::class);
+		$permissions->method('assertPermission')->willThrowException(new NotPermittedException('secret'));
+		$service = new CardMoveAliasService($aliases, $cards, $boards, $permissions, $this->createMock(CardVisibilityGuard::class));
+		self::assertNull($service->resolveRef(1, 'OLD', 9, 'bob'));
 	}
 }
