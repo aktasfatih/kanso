@@ -485,7 +485,8 @@ try {
 		[$backfillSource->getId(), $unrecoverableSource->getId()]);
 	$db->executeStatement('DELETE FROM *PREFIX*kanso_card_sequences WHERE board_id = ?', [$backfillBoard->getId()]);
 	$migration = new Version007600Date20261112000000($db);
-	$migration->postSchemaChange(new \OC\Migration\NullOutput(), static fn () => null, []);
+	$migrationOptions = ['tablePrefix' => \OCP\Server::get(\OCP\IConfig::class)->getSystemValueString('dbtableprefix', 'oc_')];
+	$migration->postSchemaChange(new \OC\Migration\NullOutput(), static fn () => null, $migrationOptions);
 	$backfilled = $container->get(CardMoveAliasMapper::class)->findByOldId($backfillSource->getId());
 	check($backfilled?->getBoardId() === $backfillBoard->getId() && $backfilled->getPrefix() === $backfillBoard->getPrefix()
 		&& $backfilled->getBoardSeq() === $backfillSource->getBoardSeq(), 'Migration did not reconstruct surviving source metadata');
@@ -499,7 +500,7 @@ try {
 	check($afterBackfill->getBoardSeq() > $backfillHighest->getBoardSeq(), 'Counter backfill missed a surviving trashed high-water mark');
 	$cards->delete($afterBackfill->getId(), 'admin');
 	$trash->purge($afterBackfill->getId(), 'admin');
-	$migration->postSchemaChange(new \OC\Migration\NullOutput(), static fn () => null, []);
+	$migration->postSchemaChange(new \OC\Migration\NullOutput(), static fn () => null, $migrationOptions);
 	check($cards->create($backfillStack->getId(), 'After idempotent backfill', 'admin')->getBoardSeq() > $afterBackfill->getBoardSeq(),
 		'Rerunning backfill reset a durable high-water mark');
 	$pass('migration backfills surviving source metadata and counters without resetting history or inventing purged context');

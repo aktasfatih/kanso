@@ -63,8 +63,9 @@ its alias and uses the source board's current prefix. Source-card purge retains
 aliases; source-board deletion disables its human-reference context while numeric
 chains survive. Destination trash, deletion or purge makes the reference unavailable.
 Counters retain committed allocation history through card purge; imports may leave
-gaps. Upgrade backfill can only seed from surviving numbers and metadata, so it
-cannot recover previously purged numbers or unknown older prefixes.
+gaps. Upgrade backfill seeds missing counters above retained card identities,
+surviving numbers and aliases. It cannot recover history erased from every source
+or unknown older prefixes.
 
 The harness checks monotonic numbering after permanent deletion, import,
 duplication and CSV intake, plus allocator initialization through a legacy import
@@ -85,6 +86,40 @@ Source paths and SHA-256 fingerprints are verified in the parent and worker
 processes. A successful run ends with
 `OK <driver>: <count> reference integration checks`; owned fixture boards, aliases
 and the temporary reader account are removed in `finally`.
+
+## Reference upgrade boundaries
+
+```sh
+docker exec -u www-data \
+  -e NEXTCLOUD_ROOT=/var/www/html \
+  -e KANSO_INTEGRATION_DISPOSABLE=1 \
+  YOUR_DISPOSABLE_NEXTCLOUD_CONTAINER \
+  php /var/www/html/custom_apps/kanso/tests/integration/card-reference-upgrade.php
+```
+
+Run once per disposable SQLite, PostgreSQL and MySQL/MariaDB configuration.
+Real card creation, trash and purge paths construct legacy highest-number
+deletions, including a board with every card purged. Removing only each owned
+fixture's counter simulates the pre-counter cutover. The actual migration must
+seed past the retained native identity; surviving `MAX(board_seq)` alone fails
+these checks. Existing counters stay unchanged and fresh boards still start at one.
+
+The harness also creates a separate temporary SQLite file with minimal tables,
+using the selected configuration's table prefix and Nextcloud's connection and
+schema APIs. `PRAGMA database_list` must identify that newly owned file before any
+schema change. It runs the unchanged estimate-widening migration against that file.
+This reproduces a concrete limit: SQLite can lose a purged identity during a
+pre-counter table rebuild, leaving no retained row or alias from which to recover
+that old reference. A historical number may then be reissued at cutover. The
+harness prints the lost value and the bounded residual
+explicitly; it does not claim that the upgrade reconstructs erased history.
+After cutover, the durable board counter must survive another actual card-table
+widening and purge even when SQLite's card identity falls again.
+
+Source paths and SHA-256 hashes are printed and verified. Only owned boards,
+counters and the new SQLite file are changed; fixtures are removed in `finally`.
+The shared session card schema, published migrations and global configuration
+are never changed. A successful run ends with `OK <driver>: <count> upgrade checks`.
 
 ## Webhook availability
 
