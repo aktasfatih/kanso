@@ -209,6 +209,9 @@ async def test_update_card_serializes_all_fields():
     route = respx.patch(f"{BASE}/cards/100").mock(
         return_value=httpx.Response(200, json={"id": 100, "title": "T", "stackId": 11})
     )
+    respx.get(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json={"id": 100, "title": "T", "stackId": 11})
+    )
     async with _client() as c:
         card = await c.update_card(
             100,
@@ -255,12 +258,76 @@ async def test_update_card_drops_none():
     route = respx.patch(f"{BASE}/cards/100").mock(
         return_value=httpx.Response(200, json={"id": 100, "title": "T", "stackId": 11})
     )
+    respx.get(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json={"id": 100, "title": "T", "stackId": 11})
+    )
     async with _client() as c:
         await c.update_card(100, status="done")
     import json as _json
 
     # Every unset field (incl. the new ones) must be dropped; only status is sent.
     assert _json.loads(route.calls.last.request.content) == {"status": "done"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_card_returns_refreshed_details():
+    respx.patch(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json={"id": 100, "title": "T"})
+    )
+    details = {
+        "id": 100,
+        "title": "T",
+        "description": "Updated",
+        "labelIds": [5],
+        "assigneeIds": ["bob"],
+        "assignees": [{"uid": "bob", "displayName": "Bob", "actorName": None}],
+        "relations": {
+            "blocks": [],
+            "blockedBy": [],
+            "duplicates": [],
+            "relates": [{"id": 9, "cardId": 200, "title": "Related"}],
+        },
+    }
+    respx.get(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json=details)
+    )
+    async with _client() as c:
+        card = await c.update_card(100, description="Updated")
+
+    assert [call.request.method for call in respx.calls] == ["PATCH", "GET"]
+    for call in respx.calls:
+        _assert_api_headers(call.request)
+    assert card.description == "Updated"
+    assert card.labelIds == [5]
+    assert card.assigneeIds == ["bob"]
+    assert card.assignees == details["assignees"]
+    assert card.relations == details["relations"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [403, 404, 503])
+async def test_update_card_surfaces_detail_read_failure_after_successful_patch(
+    status_code,
+):
+    patch = respx.patch(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json={"id": 100, "title": "Updated"})
+    )
+    read = respx.get(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(status_code, json={"error": "Details unavailable"})
+    )
+    async with _client() as c:
+        with pytest.raises(KansoApiError) as excinfo:
+            await c.update_card(100, title="Updated")
+
+    assert patch.call_count == 1
+    assert read.call_count == 1
+    assert [call.request.method for call in respx.calls] == ["PATCH", "GET"]
+    assert excinfo.value.method == "GET"
+    assert excinfo.value.path == "/cards/100"
+    assert excinfo.value.status_code == status_code
+    assert "GET /cards/100" in str(excinfo.value)
 
 
 @respx.mock
@@ -275,6 +342,20 @@ async def test_move_card_body_uses_targetStackId():
 
     # after_card_id=None is dropped; only targetStackId is sent.
     assert _json.loads(route.calls.last.request.content) == {"targetStackId": 12}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_move_card_preserves_sparse_response():
+    payload = {"id": 100, "title": "Moved", "stackId": 12}
+    respx.post(f"{BASE}/cards/100/move").mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+    async with _client() as c:
+        result = await c.move_card(100, target_stack_id=12)
+
+    assert result == payload
+    assert not {"labelIds", "assigneeIds", "assignees", "relations"} & result.keys()
 
 
 @respx.mock
@@ -942,6 +1023,7 @@ async def test_done_gate_403_surfaces_which_review_blocks():
     assert excinfo.value.status_code == 403
     assert "bob (review #12)" in excinfo.value.body
     assert "bob (review #12)" in str(excinfo.value)
+    assert [call.request.method for call in respx.calls] == ["PATCH"]
 
 
 @respx.mock

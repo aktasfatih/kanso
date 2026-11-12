@@ -395,6 +395,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
     ) -> dict:
         """Update a card. Only the fields you pass are changed.
 
+        Returns full card details read after the update. If that read fails,
+        the update has already succeeded.
+
         Args:
             card_id: The numeric card id.
             title: New title.
@@ -455,6 +458,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         card_id: int, target_stack_id: int, after_card_id: Optional[int] = None
     ) -> dict:
         """Move a card into a stack, optionally after a specific card.
+
+        The result is sparse: omitted detail fields are not empty values.
+        Use `kanso_get_card` to read labels, assignees and relations.
 
         Args:
             card_id: The card to move.

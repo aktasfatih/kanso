@@ -289,6 +289,56 @@ async def test_recur_rule_create_now_tool_unwraps_the_card():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_update_card_tool_returns_refreshed_details():
+    respx.patch(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json={"id": 100, "title": "Updated"})
+    )
+    details = {
+        "id": 100,
+        "title": "Updated",
+        "labelIds": [5],
+        "assigneeIds": ["bob"],
+        "assignees": [{"uid": "bob", "displayName": "Bob"}],
+        "relations": {
+            "blocks": [{"id": 9, "cardId": 200, "title": "Blocked"}],
+            "blockedBy": [],
+            "duplicates": [],
+            "relates": [],
+        },
+    }
+    respx.get(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json=details)
+    )
+    tools, client = _tools()
+    async with client:
+        result = await tools["kanso_update_card"](100, title="Updated")
+
+    assert result["title"] == "Updated"
+    assert result["labelIds"] == [5]
+    assert result["assigneeIds"] == ["bob"]
+    assert result["assignees"] == details["assignees"]
+    assert result["relations"] == details["relations"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_move_card_tool_preserves_sparse_result():
+    payload = {"id": 100, "title": "Moved", "stackId": 12}
+    respx.post(f"{BASE}/cards/100/move").mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+    tools, client = _tools()
+    async with client:
+        result = await tools["kanso_move_card"](100, 12)
+
+    assert result == {"moved": True, "result": payload}
+    assert not {"labelIds", "assigneeIds", "assignees", "relations"} & result[
+        "result"
+    ].keys()
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_move_card_to_board_tool_returns_the_new_card():
     route = respx.post(f"{BASE}/cards/100/move-to-board").mock(
         return_value=httpx.Response(

@@ -150,7 +150,11 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
 
 - `kanso_get_card` — full card incl. description
 - `kanso_create_card` / `kanso_update_card` / `kanso_delete_card`
-- `kanso_move_card` — move a card into a stack on its own board (optionally after a card)
+  — updates return full card details read after the write succeeds. A failure of
+  that detail read does not undo the update.
+- `kanso_move_card` — move a card into a stack on its own board (optionally after a card).
+  Its result is sparse: missing labels, assignees or relations are omitted, not empty.
+  Use `kanso_get_card` for full details.
 - `kanso_move_card_to_board` — move a card to a stack on **another** board. Needs edit
   permission on both. On servers with connected-move support, the full connected card graph
   moves together, with its data and relationships, or the move fails if access or board

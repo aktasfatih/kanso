@@ -241,7 +241,7 @@ class KansoClient:
         type: Optional[str] = None,
         visibility: Optional[str] = None,
     ) -> Card:
-        data = await self._request(
+        await self._request(
             "PATCH",
             f"/cards/{card_id}",
             json={
@@ -261,7 +261,7 @@ class KansoClient:
                 "visibility": visibility,
             },
         )
-        return Card.model_validate(data)
+        return await self.get_card(card_id)
 
     async def delete_card(self, card_id: int) -> Any:
         return await self._request("DELETE", f"/cards/{card_id}")
