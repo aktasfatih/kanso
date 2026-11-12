@@ -129,7 +129,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:placeholder="t('kanso', 'New folder name…')"
 				:disabled="createGroup.isPending.value"
 				data-test="new-folder-input"
-				@keydown.enter.prevent="submitNewFolder">
+				@keydown.enter="submitOnEnter($event, submitNewFolder)">
 			<NcButton
 				type="primary"
 				:disabled="!newFolderName.trim() || createGroup.isPending.value"
@@ -150,7 +150,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				maxlength="100"
 				:placeholder="t('kanso', 'New board name…')"
 				:disabled="createBoard.isPending.value"
-				@keydown.enter.prevent="submitNewBoard">
+				@keydown.enter="submitOnEnter($event, submitNewBoard)">
 			<NcButton
 				type="primary"
 				:disabled="!newBoardTitle.trim() || createBoard.isPending.value"
@@ -450,7 +450,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								type="text"
 								maxlength="100"
 								:data-test="'rename-folder-input-' + folder.id"
-								@keydown.enter.prevent="submitRenameFolder(folder)"
+								@keydown.enter="submitOnEnter($event, () => submitRenameFolder(folder))"
 								@keydown.esc="renamingId = null">
 							<NcButton type="primary" native-type="submit" :disabled="!renameName.trim()">
 								{{ t('kanso', 'Save') }}
@@ -541,6 +541,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
+import { submitOnEnter } from '../utils/keyboard.js'
 import { ref, computed, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'

@@ -61,7 +61,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					class="stack-column__title-input"
 					maxlength="100"
 					:aria-label="t('kanso', 'Column name')"
-					@keydown.enter.prevent="saveTitle"
+					@keydown.enter="submitOnEnter($event, saveTitle)"
 					@keydown.esc.prevent="cancelEditTitle"
 					@blur="onTitleBlur">
 				<span
@@ -287,7 +287,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					@paste="onComposerPaste"
 					@blur="composerReturnFocus = null"
 					@keydown.esc="leaveComposer"
-					@keydown.enter.prevent="submitCard" />
+					@keydown.enter="submitOnEnter($event, submitCard)" />
 			</form>
 			<!-- "+ from template" picker (#3409): lists the board's card templates
 			     and creates a new card pre-filled from the chosen one. -->
@@ -406,6 +406,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
+import { submitOnEnter } from '../utils/keyboard.js'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'

@@ -116,7 +116,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					maxlength="255"
 					:placeholder="t('kanso', 'Project title')"
 					:disabled="create.isPending.value"
-					@keydown.enter.prevent="submitCreate">
+					@keydown.enter="submitOnEnter($event, submitCreate)">
 
 				<label class="projects-view__form-label" for="project-desc">
 					{{ t('kanso', 'Description') }}
@@ -178,6 +178,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
+import { submitOnEnter } from '../utils/keyboard.js'
 import { ref, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'

@@ -345,8 +345,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						rows="3"
 						:placeholder="t('kanso', 'Add a note to this project — markdown supported')"
 						:disabled="addComment.isPending.value"
-						@keydown.ctrl.enter.prevent="submitNewComment"
-						@keydown.meta.enter.prevent="submitNewComment" />
+						@keydown.ctrl.enter="submitOnEnter($event, submitNewComment)"
+						@keydown.meta.enter="submitOnEnter($event, submitNewComment)" />
 					<div class="project-view__comment-actions">
 						<NcButton type="primary" :disabled="addComment.isPending.value || !newCommentBody.trim()" @click="submitNewComment">
 							{{ t('kanso', 'Post') }}
@@ -384,8 +384,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										v-model="editingCommentBody"
 										class="project-view__comment-textarea"
 										rows="3"
-										@keydown.ctrl.enter.prevent="saveCommentEdit(topComment)"
-										@keydown.meta.enter.prevent="saveCommentEdit(topComment)"
+										@keydown.ctrl.enter="submitOnEnter($event, () => saveCommentEdit(topComment))"
+										@keydown.meta.enter="submitOnEnter($event, () => saveCommentEdit(topComment))"
 										@keydown.escape.stop="cancelCommentEdit" />
 									<div class="project-view__comment-edit-actions">
 										<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(topComment)">{{ t('kanso', 'Save') }}</NcButton>
@@ -427,8 +427,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								class="project-view__comment-textarea"
 								:placeholder="t('kanso', 'Write a reply…')"
 								rows="2"
-								@keydown.ctrl.enter.prevent="submitReply(topComment.id)"
-								@keydown.meta.enter.prevent="submitReply(topComment.id)"
+								@keydown.ctrl.enter="submitOnEnter($event, () => submitReply(topComment.id))"
+								@keydown.meta.enter="submitOnEnter($event, () => submitReply(topComment.id))"
 								@keydown.escape.stop="closeReplyBox" />
 							<div class="project-view__comment-edit-actions">
 								<NcButton type="primary" :disabled="addComment.isPending.value || !replyBody.trim()" @click="submitReply(topComment.id)">{{ t('kanso', 'Post reply') }}</NcButton>
@@ -450,8 +450,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											v-model="editingCommentBody"
 											class="project-view__comment-textarea"
 											rows="3"
-											@keydown.ctrl.enter.prevent="saveCommentEdit(reply)"
-											@keydown.meta.enter.prevent="saveCommentEdit(reply)"
+											@keydown.ctrl.enter="submitOnEnter($event, () => saveCommentEdit(reply))"
+											@keydown.meta.enter="submitOnEnter($event, () => saveCommentEdit(reply))"
 											@keydown.escape.stop="cancelCommentEdit" />
 										<div class="project-view__comment-edit-actions">
 											<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(reply)">{{ t('kanso', 'Save') }}</NcButton>
@@ -511,7 +511,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					maxlength="255"
 					:placeholder="t('kanso', 'Project title')"
 					:disabled="updateMutation.isPending.value"
-					@keydown.enter.prevent="submitEdit">
+					@keydown.enter="submitOnEnter($event, submitEdit)">
 
 				<label class="project-view__form-label" for="edit-project-desc">
 					{{ t('kanso', 'Description') }}
@@ -602,6 +602,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
+import { submitOnEnter } from '../utils/keyboard.js'
 import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
@@ -1020,6 +1021,7 @@ function saveDescriptionOnBlur(event) {
 }
 
 function onInlineDescKeydown(event) {
+	if (event.isComposing) return
 	if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
 		event.preventDefault()
 		saveDescription()

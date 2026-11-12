@@ -208,7 +208,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								class="card-modal__title-input"
 								type="text"
 								maxlength="100"
-								@keydown.enter.prevent="saveTitle"
+								@keydown.enter="submitOnEnter($event, saveTitle)"
 								@keydown.escape.stop="cancelTitleEdit"
 								@blur="saveTitle">
 							<h2
@@ -1230,7 +1230,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:placeholder="t('kanso', 'New label…')"
 									:disabled="isCreatingLabel"
 									:aria-label="t('kanso', 'New label name')"
-									@keydown.enter.prevent="submitCreateLabel" />
+									@keydown.enter="submitOnEnter($event, submitCreateLabel)" />
 								<button
 									class="card-modal__label-create-btn"
 									type="button"
@@ -1558,7 +1558,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										type="text"
 										maxlength="255"
 										enterkeyhint="done"
-										@keydown.enter.prevent="saveItemTitle(item)"
+										@keydown.enter="submitOnEnter($event, () => saveItemTitle(item))"
 										@keydown.escape.stop="cancelItemEdit"
 										@blur="saveItemTitle(item)">
 									<span
@@ -1686,7 +1686,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:placeholder="t('kanso', 'Add an item…')"
 									enterkeyhint="enter"
 									:disabled="addItem.isPending.value"
-									@keydown.enter.prevent="handleAddItem">
+									@keydown.enter="submitOnEnter($event, handleAddItem)">
 							</div>
 							<span v-if="checklistError" class="card-modal__save-error">{{ checklistError }}</span>
 						</section>
@@ -1728,7 +1728,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:placeholder="t('kanso', 'Add a sub-card…')"
 									enterkeyhint="enter"
 									:disabled="addChildMutation.isPending.value"
-									@keydown.enter.prevent="handleAddChild">
+									@keydown.enter="submitOnEnter($event, handleAddChild)">
 							</div>
 							<div v-if="children.length > 0" class="card-modal__children-list">
 								<div
@@ -2384,8 +2384,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 													v-model="editingCommentBody"
 													class="card-modal__comment-edit-textarea"
 													rows="3"
-													@keydown.ctrl.enter.prevent="saveCommentEdit(topComment)"
-													@keydown.meta.enter.prevent="saveCommentEdit(topComment)"
+													@keydown.ctrl.enter="submitOnEnter($event, () => saveCommentEdit(topComment))"
+													@keydown.meta.enter="submitOnEnter($event, () => saveCommentEdit(topComment))"
 													@keydown.escape.stop="cancelCommentEdit" />
 												<div class="card-modal__comment-edit-actions">
 													<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(topComment)">
@@ -2520,8 +2520,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 														v-model="editingCommentBody"
 														class="card-modal__comment-edit-textarea"
 														rows="3"
-														@keydown.ctrl.enter.prevent="saveCommentEdit(reply)"
-														@keydown.meta.enter.prevent="saveCommentEdit(reply)"
+														@keydown.ctrl.enter="submitOnEnter($event, () => saveCommentEdit(reply))"
+														@keydown.meta.enter="submitOnEnter($event, () => saveCommentEdit(reply))"
 														@keydown.escape.stop="cancelCommentEdit" />
 													<div class="card-modal__comment-edit-actions">
 														<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(reply)">
@@ -2766,6 +2766,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
+import { submitOnEnter } from '../utils/keyboard.js'
 import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useRouter, useRoute } from 'vue-router'

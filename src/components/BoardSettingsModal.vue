@@ -113,7 +113,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										maxlength="100"
 										:disabled="nameSaving"
 										:placeholder="t('kanso', 'Board name')"
-										@keydown.enter.prevent="saveName">
+										@keydown.enter="submitOnEnter($event, saveName)">
 									<NcButton
 										:disabled="nameSaving || !nameDirty"
 										@click="saveName">
@@ -231,7 +231,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									maxlength="5"
 									:disabled="prefixSaving"
 									:placeholder="t('kanso', 'e.g. KAN')"
-									@keydown.enter.prevent="savePrefix">
+									@keydown.enter="submitOnEnter($event, savePrefix)">
 								<NcButton
 									:disabled="prefixSaving || !prefixDirty"
 									@click="savePrefix">
@@ -262,7 +262,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:disabled="chatUrlSaving"
 									:placeholder="t('kanso', 'https://cloud.example.com/call/abc123')"
 									data-test="board-chat-url-input"
-									@keydown.enter.prevent="saveChatUrl">
+									@keydown.enter="submitOnEnter($event, saveChatUrl)">
 								<NcButton
 									:disabled="chatUrlSaving || !chatUrlDirty"
 									data-test="board-chat-url-save"
@@ -466,7 +466,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								type="text"
 								maxlength="100"
 								:aria-label="t('kanso', 'Rename label')"
-								@keydown.enter.prevent="saveRename(label)"
+								@keydown.enter="submitOnEnter($event, () => saveRename(label))"
 								@keydown.escape="cancelRename"
 								@blur="saveRename(label)" />
 						</template>
@@ -570,7 +570,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:placeholder="t('kanso', 'Label name…')"
 							:disabled="isCreating"
 							:aria-label="t('kanso', 'New label name')"
-							@keydown.enter.prevent="submitCreate" />
+							@keydown.enter="submitOnEnter($event, submitCreate)" />
 						<button
 							class="label-settings__create-btn"
 							type="submit"
@@ -656,7 +656,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								type="text"
 								maxlength="100"
 								:aria-label="t('kanso', 'Rename review type')"
-								@keydown.enter.prevent="saveRtRename(rt)"
+								@keydown.enter="submitOnEnter($event, () => saveRtRename(rt))"
 								@keydown.escape="cancelRtRename"
 								@blur="saveRtRename(rt)" />
 						</template>
@@ -772,7 +772,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:placeholder="t('kanso', 'Review type name…')"
 							:disabled="isCreatingRt"
 							:aria-label="t('kanso', 'New review type name')"
-							@keydown.enter.prevent="submitCreateRt" />
+							@keydown.enter="submitOnEnter($event, submitCreateRt)" />
 						<label class="review-type-stage review-type-stage--create" :title="t('kanso', 'Stage — lower stages gate (defer) higher ones')">
 							<span class="review-type-stage__label">{{ t('kanso', 'Stage') }}</span>
 							<input
@@ -845,7 +845,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								type="text"
 								maxlength="100"
 								:aria-label="t('kanso', 'Rename field')"
-								@keydown.enter.prevent="saveCfRename(field)"
+								@keydown.enter="submitOnEnter($event, () => saveCfRename(field))"
 								@keydown.escape="cancelCfRename"
 								@blur="saveCfRename(field)" />
 						</template>
@@ -952,7 +952,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:disabled="isCreatingCf"
 							:aria-label="t('kanso', 'New custom field name')"
 							data-test="cf-name-input"
-							@keydown.enter.prevent="submitCreateCf" />
+							@keydown.enter="submitOnEnter($event, submitCreateCf)" />
 						<select
 							v-model="newCfType"
 							class="workflow__select cf-settings__type-select"
@@ -1530,7 +1530,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:placeholder="t('kanso', 'GitHub label name')"
 									:aria-label="t('kanso', 'GitHub label name')"
 									:disabled="intakeBusy"
-									@keyup.enter="saveIntakeLabel">
+									@keydown.enter="submitOnEnter($event, saveIntakeLabel)">
 								<NcButton :disabled="intakeBusy || !intakeLabelInput.trim()" @click="saveIntakeLabel">
 									{{ t('kanso', 'Save') }}
 								</NcButton>
@@ -1633,7 +1633,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:placeholder="t('kanso', 'Forgejo label name')"
 									:aria-label="t('kanso', 'Forgejo label name')"
 									:disabled="forgejoIntakeBusy"
-									@keyup.enter="saveForgejoIntakeLabel">
+									@keydown.enter="submitOnEnter($event, saveForgejoIntakeLabel)">
 								<NcButton :disabled="forgejoIntakeBusy || !forgejoIntakeLabelInput.trim()" @click="saveForgejoIntakeLabel">
 									{{ t('kanso', 'Save') }}
 								</NcButton>
@@ -2640,6 +2640,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
+import { submitOnEnter } from '../utils/keyboard.js'
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
