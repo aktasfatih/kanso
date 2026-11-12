@@ -3090,9 +3090,25 @@ async function handleFieldChange(field, value) {
 }
 
 // ── Card lifecycle actions (archive / delete) ────────────────────────────────
-const { setArchived, deleteCard, restoreCard } = useCardActions(boardId, computed(() => props.cardId))
+const { captureTarget, setArchived, deleteCard, restoreCard } = useCardActions(boardId, computed(() => props.cardId))
 const actionError = ref('')
 const deleteWithRuleConfirm = ref(false)  // true = show the recurring-source delete guard
+let lifecycleDisplayGeneration = 0
+let lifecycleGestureGeneration = 0
+watch([() => props.cardId, () => props.boardId, () => route.fullPath], () => {
+	lifecycleDisplayGeneration++
+	actionError.value = ''
+}, { flush: 'sync' })
+onBeforeUnmount(() => { lifecycleDisplayGeneration++ })
+
+function lifecycleGesture() {
+	const display = lifecycleDisplayGeneration
+	const gesture = ++lifecycleGestureGeneration
+	return {
+		target: captureTarget(),
+		current: () => display === lifecycleDisplayGeneration && gesture === lifecycleGestureGeneration,
+	}
+}
 
 // Buttons for the recurring-source delete guard dialog (NcDialog renders them
 // right-aligned in array order; the two destructive choices carry the error type).
@@ -3110,19 +3126,18 @@ const deleteGuardButtons = [
  */
 async function handleArchiveToggle(next) {
 	actionError.value = ''
+	const gesture = lifecycleGesture()
 	const archived = typeof next === 'boolean' ? next : !cardData.value?.archived
 	try {
-		await setArchived.mutateAsync({ archived })
-		// On archive, close the modal so the card visually leaves the board columns.
-		// On unarchive, the modal can stay open; the card returns to its column.
-		if (archived) {
-			closeModal()
+		const receipt = await setArchived.mutateAsync({ target: gesture.target, archived })
+		if (archived && receipt.current()) {
+			if (gesture.current()) closeModal()
 			showUndo(t('kanso', 'Card archived'), () => {
-				setArchived.mutate({ archived: false })
+				setArchived.mutate({ target: receipt.target, undoOf: receipt.operationId, archived: false })
 			})
 		}
 	} catch (err) {
-		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to update card.')
+		if (gesture.current()) actionError.value = err?.response?.data?.error || t('kanso', 'Failed to update card.')
 	}
 }
 
@@ -3156,18 +3171,21 @@ async function handleTemplateToggle() {
 	}
 }
 
-async function handleDelete() {
+async function handleDelete(stopRecurrence = false) {
 	actionError.value = ''
+	const gesture = lifecycleGesture()
+	const ruleId = stopRecurrence ? cardRecurRule.value?.id : null
 	try {
-		await deleteCard.mutateAsync()
-		closeModal()
-		// Note: restore does NOT re-attach sub-cards that were detached on delete -
-		// this is documented self-healing behaviour acceptable for this MVP.
-		showUndo(t('kanso', 'Card deleted'), () => {
-			restoreCard.mutate()
-		})
+		if (ruleId) await deleteRecurRule.mutateAsync(ruleId)
+		const receipt = await deleteCard.mutateAsync({ target: gesture.target })
+		if (receipt.current()) {
+			if (gesture.current()) closeModal()
+			showUndo(t('kanso', 'Card deleted'), () => {
+				restoreCard.mutate({ target: receipt.target, undoOf: receipt.operationId })
+			})
+		}
 	} catch (err) {
-		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to delete card.')
+		if (gesture.current()) actionError.value = err?.response?.data?.error || t('kanso', 'Failed to delete card.')
 	}
 }
 
@@ -3187,19 +3205,7 @@ async function handleDeleteCardOnly() {
 
 async function handleDeleteCardAndRule() {
 	deleteWithRuleConfirm.value = false
-	actionError.value = ''
-	try {
-		if (cardRecurRule.value) {
-			await deleteRecurRule.mutateAsync(cardRecurRule.value.id)
-		}
-		await deleteCard.mutateAsync()
-		closeModal()
-		showUndo(t('kanso', 'Card deleted'), () => {
-			restoreCard.mutate()
-		})
-	} catch (err) {
-		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to delete card.')
-	}
+	await handleDelete(true)
 }
 
 // Current card's assigned label ids as a Set for O(1) .has() in the template

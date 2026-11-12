@@ -5,6 +5,7 @@ import { computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { fetchCard, updateCard as apiUpdateCard } from '../services/api.js'
 import { boardQueryKey, invalidateCrossBoardFeeds } from './queryKeys.js'
+import { beginLifecycleRead, finishLifecycleRead, projectLifecycleCard, projectLifecycleCardError } from './cardLifecycle.js'
 
 export function useCard(id, enabled) {
 	const queryClient = useQueryClient()
@@ -17,7 +18,17 @@ export function useCard(id, enabled) {
 
 	const query = useQuery({
 		queryKey: computed(() => ['card', typeof id === 'object' ? id.value : id]),
-		queryFn: () => fetchCard(typeof id === 'object' ? id.value : id),
+		queryFn: async () => {
+			const cardId = typeof id === 'object' ? id.value : id
+			const ticket = beginLifecycleRead(queryClient, { cardId })
+			try {
+				return projectLifecycleCard(queryClient, cardId, await fetchCard(cardId), ticket)
+			} catch (error) {
+				throw projectLifecycleCardError(queryClient, cardId, error, ticket)
+			} finally {
+				finishLifecycleRead(queryClient, ticket)
+			}
+		},
 		enabled: isEnabled,
 	})
 

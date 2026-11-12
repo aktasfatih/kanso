@@ -17,6 +17,7 @@ import { pushActive } from '../services/realtime.js'
 import { isBoardMovePending } from './useCardMove.js'
 import { seedCursor, syncBoardDelta } from './useBoardDelta.js'
 import { boardQueryKey } from './queryKeys.js'
+import { beginLifecycleRead, finishLifecycleRead, projectLifecycleBoard, requiresUnconditionalLifecycleRead } from './cardLifecycle.js'
 // Re-export from the shared key module so existing callers of
 // import { boardQueryKey } from './useBoard.js' continue to work.
 export { boardQueryKey } from './queryKeys.js'
@@ -111,12 +112,16 @@ export function useBoard(id) {
 			// failed. Passing the cache entry in (rather than fetchBoard reaching
 			// for it) is what keeps the "never overwrite a rendered board with an
 			// empty 304 body" guarantee inside one function; see services/api.js.
-			const previous = queryClient.getQueryData(boardKey.value)
-			const data = await fetchBoard(boardId, previous)
-			// Seed / re-seed the delta-sync cursor from the board payload's
-			// latest change id, so the delta poll can advance from here (#3675).
-			seedCursor(boardId, data.cursor)
-			return data
+			const ticket = beginLifecycleRead(queryClient, { boardId })
+			try {
+				const previous = requiresUnconditionalLifecycleRead(queryClient, boardId)
+					? null : queryClient.getQueryData(boardQueryKey(boardId))
+				const data = projectLifecycleBoard(queryClient, boardId, await fetchBoard(boardId, previous), ticket)
+				if (!ticket.lifecycleDeclined) seedCursor(boardId, data.cursor)
+				return data
+			} finally {
+				finishLifecycleRead(queryClient, ticket)
+			}
 		},
 		// Belt-and-suspenders full refetch (charter's state pattern): a slow 60s
 		// safety net that self-heals any missed delta and re-seeds the cursor.
