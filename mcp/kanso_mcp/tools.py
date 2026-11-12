@@ -657,7 +657,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         actor_name: Optional[str] = None,
     ) -> dict:
         """Post a comment on a card. Pass `parent_comment_id` to reply to an
-        existing top-level comment (replies are one level deep).
+        existing top-level comment (replies are one level deep). Requires signed-in
+        board membership with Comment (bit 16) or Edit (bit 2) permission and
+        access to the card. Public links remain read-only.
 
         Args:
             card_id: The numeric card id.

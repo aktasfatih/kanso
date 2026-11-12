@@ -27,6 +27,7 @@ use OCP\IGroupManager;
 use OCP\IUser;
 use OCP\IUserManager;
 use OCP\Share\IManager as IShareManager;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -262,7 +263,36 @@ class AclServiceTest extends TestCase {
 
 		$this->expectException(InvalidInputException::class);
 		$this->expectExceptionMessage('Unknown permission bits');
-		$this->service->create(1, 'bob', 'user', 16, 'alice');
+		$this->service->create(1, 'bob', 'user', 32, 'alice');
+	}
+
+	#[DataProvider('commentGrants')]
+	public function testCreateCapsCommentAndImpliedCapabilities(int $actorMask, int $requestedMask, bool $allowed): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->method('getPermissions')->willReturn($actorMask);
+		$this->userManager->method('get')->with('bob')->willReturn($this->user('bob', 'Bob'));
+		$this->aclMapper->expects($allowed ? self::once() : self::never())->method('insert')->willReturnCallback(static function (Acl $acl): Acl {
+			$acl->setId(40);
+			return $acl;
+		});
+		$this->changeNotifier->expects($allowed ? self::once() : self::never())->method('notify')->willReturn(new Change());
+		if (!$allowed) {
+			$this->expectException(NotPermittedException::class);
+		}
+
+		$acl = $this->service->create(1, 'bob', 'user', $requestedMask, 'carol');
+		self::assertSame($requestedMask | PermissionService::PERMISSION_READ, $acl->getPermission());
+	}
+
+	public static function commentGrants(): array {
+		return [
+			'comment sharer grants comment' => [21, 17, true],
+			'legacy editor grants comment' => [7, 17, true],
+			'read sharer cannot grant comment' => [5, 17, false],
+			'comment sharer cannot grant editing' => [21, 3, false],
+			'manager cannot grant missing comment' => [13, 17, false],
+			'manager cannot grant missing editing' => [13, 3, false],
+		];
 	}
 
 	public function testCreateRejectsInvalidParticipantType(): void {
@@ -589,6 +619,38 @@ class AclServiceTest extends TestCase {
 
 		$acl = $this->service->update(1, 40, $existingMask, 'carol');
 		self::assertSame($existingMask, $acl->getPermission());
+	}
+
+	#[DataProvider('commentUpdates')]
+	public function testUpdateCapsChangedEffectiveCapabilities(int $actorMask, int $oldMask, int $newMask, string $role, bool $allowed): void {
+		$stored = $this->acl(40, 1, 'bob', Acl::TYPE_USER, $oldMask);
+		$stored->setRole($role);
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->method('getPermissions')->willReturn($actorMask);
+		$this->aclMapper->method('find')->with(40)->willReturn($stored);
+		$this->userManager->method('get')->with('bob')->willReturn($this->user('bob', 'Bob'));
+		$this->aclMapper->expects($allowed ? self::once() : self::never())->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects($allowed ? self::once() : self::never())->method('notify')->willReturn(new Change());
+		if (!$allowed) {
+			$this->expectException(NotPermittedException::class);
+		}
+
+		$acl = $this->service->update(1, 40, $newMask, 'carol');
+		self::assertSame($newMask, $acl->getPermission());
+	}
+
+	public static function commentUpdates(): array {
+		return [
+			'comment sharer grants comment' => [21, 1, 17, ViewerContext::ROLE_INTERNAL, true],
+			'legacy editor grants comment' => [7, 1, 17, ViewerContext::ROLE_INTERNAL, true],
+			'read sharer cannot grant comment' => [5, 1, 17, ViewerContext::ROLE_INTERNAL, false],
+			'comment sharer cannot grant editing' => [21, 17, 19, ViewerContext::ROLE_INTERNAL, false],
+			'manager cannot grant missing comment' => [13, 1, 17, ViewerContext::ROLE_INTERNAL, false],
+			'manager cannot grant missing editing' => [13, 1, 3, ViewerContext::ROLE_INTERNAL, false],
+			'explicit comment on editor changes no capability' => [5, 3, 19, ViewerContext::ROLE_INTERNAL, true],
+			'removing explicit comment from editor changes no capability' => [5, 19, 3, ViewerContext::ROLE_INTERNAL, true],
+			'external row can activate manage through mixed membership' => [5, 17, 25, ViewerContext::ROLE_EXTERNAL, false],
+		];
 	}
 
 	private function stubUpdateOf(Acl $stored): void {

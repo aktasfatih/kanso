@@ -136,13 +136,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</template>
 							<ChevronRightIcon :size="14" class="card-modal__crumb-chevron" />
 							<span class="card-modal__attr card-modal__status-wrap">
-								<!-- Both halves of this switcher are writes: the column list calls
-								     CardService::move() and the status list CardService::update(),
-								     and BOTH assert PERMISSION_EDIT. The role model has no "may
-								     move but not edit" seat - the bits are READ/EDIT/SHARE/MANAGE
-								     and nothing else - so a member with READ only gets the chip as
-								     a plain label (#10732): the status still reads, the switcher
-								     goes. -->
+								<!-- Changing column or status requires card editing permission. -->
 								<button
 									v-if="canEdit"
 									class="card-modal__status-chip card-modal__status-chip--btn"
@@ -214,9 +208,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<h2
 								v-else
 								class="card-modal__title"
-								role="button"
-								tabindex="0"
-								:aria-label="t('kanso', 'Edit title')"
+								:class="{ 'card-modal__title--editable': canEdit }"
+								:role="canEdit ? 'button' : undefined"
+								:tabindex="canEdit ? 0 : undefined"
+								:aria-label="canEdit ? t('kanso', 'Edit title') : undefined"
 								@click="startTitleEdit"
 								@keydown.enter.prevent="startTitleEdit"
 								@keydown.space.prevent="startTitleEdit">
@@ -2399,7 +2394,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 											<div class="card-modal__comment-controls">
 												<button
-													v-if="canEdit && editingCommentId !== topComment.id"
+													v-if="canComment && editingCommentId !== topComment.id"
 													class="card-modal__comment-link-btn"
 													@click="openReplyBox(topComment, topComment)">
 													{{ t('kanso', 'Reply') }}
@@ -2444,30 +2439,33 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 														{{ t('kanso', 'Remind me at a custom time…') }}
 													</NcActionButton>
 												</NcActions>
-												<template v-if="canEdit && currentUserId === topComment.author">
-													<button class="card-modal__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(topComment)">
-														<PencilIcon :size="14" />
-													</button>
-													<button
-														class="card-modal__comment-icon-btn card-modal__comment-icon-btn--danger"
-														:title="t('kanso', 'Delete comment')"
-														:disabled="deleteComment.isPending.value"
-														@click="handleDeleteComment(topComment)">
-														<TrashCanIcon :size="14" />
-													</button>
-												</template>
+												<button
+													v-if="canEditComment(topComment)"
+													class="card-modal__comment-icon-btn"
+													:title="t('kanso', 'Edit comment')"
+													@click="startCommentEdit(topComment)">
+													<PencilIcon :size="14" />
+												</button>
+												<button
+													v-if="canManage || canEditComment(topComment)"
+													class="card-modal__comment-icon-btn card-modal__comment-icon-btn--danger"
+													:title="canDeleteComment(topComment) ? t('kanso', 'Delete comment') : t('kanso', 'Only a board manager can delete a thread with replies from other people.')"
+													:disabled="deleteComment.isPending.value || !canDeleteComment(topComment)"
+													@click="handleDeleteComment(topComment)">
+													<TrashCanIcon :size="14" />
+												</button>
 												<button
 													v-for="summary in topComment.reactions"
 													:key="summary.emoji"
 													class="card-modal__reaction-chip"
 													:class="{ 'card-modal__reaction-chip--mine': summary.mine }"
 													:title="reactorTooltip(summary)"
-													:disabled="!canEdit || toggleReaction.isPending.value"
+													:disabled="!canComment || toggleReaction.isPending.value"
 													@click="onReactionClick(topComment, summary.emoji)">
 													<span class="card-modal__reaction-emoji">{{ summary.emoji }}</span>
 													<span class="card-modal__reaction-count">{{ summary.count }}</span>
 												</button>
-												<div v-if="canEdit" class="card-modal__reaction-add-wrap">
+												<div v-if="canComment" class="card-modal__reaction-add-wrap">
 													<button
 														class="card-modal__reaction-add"
 														:title="t('kanso', 'Add reaction')"
@@ -2533,37 +2531,40 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
 												<div v-else class="card-modal__comment-body kanso-md" v-html="renderedComments.get(reply.id)" @click="handleRefClick" />
 
-												<div v-if="canEdit" class="card-modal__comment-controls">
+												<div class="card-modal__comment-controls">
 													<button
-														v-if="editingCommentId !== reply.id"
+														v-if="canComment && editingCommentId !== reply.id"
 														class="card-modal__comment-link-btn"
 														@click="openReplyBox(reply, topComment)">
 														{{ t('kanso', 'Reply') }}
 													</button>
-													<template v-if="currentUserId === reply.author">
-														<button class="card-modal__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(reply)">
-															<PencilIcon :size="14" />
-														</button>
-														<button
-															class="card-modal__comment-icon-btn card-modal__comment-icon-btn--danger"
-															:title="t('kanso', 'Delete comment')"
-															:disabled="deleteComment.isPending.value"
-															@click="handleDeleteComment(reply)">
-															<TrashCanIcon :size="14" />
-														</button>
-													</template>
+													<button
+														v-if="canEditComment(reply)"
+														class="card-modal__comment-icon-btn"
+														:title="t('kanso', 'Edit comment')"
+														@click="startCommentEdit(reply)">
+														<PencilIcon :size="14" />
+													</button>
+													<button
+														v-if="canManage || canEditComment(reply)"
+														class="card-modal__comment-icon-btn card-modal__comment-icon-btn--danger"
+														:title="canDeleteComment(reply) ? t('kanso', 'Delete comment') : t('kanso', 'Only a board manager can delete a thread with replies from other people.')"
+														:disabled="deleteComment.isPending.value || !canDeleteComment(reply)"
+														@click="handleDeleteComment(reply)">
+														<TrashCanIcon :size="14" />
+													</button>
 													<button
 														v-for="summary in reply.reactions"
 														:key="summary.emoji"
 														class="card-modal__reaction-chip"
 														:class="{ 'card-modal__reaction-chip--mine': summary.mine }"
 														:title="reactorTooltip(summary)"
-														:disabled="!canEdit || toggleReaction.isPending.value"
+														:disabled="!canComment || toggleReaction.isPending.value"
 														@click="onReactionClick(reply, summary.emoji)">
 															<span class="card-modal__reaction-emoji">{{ summary.emoji }}</span>
 															<span class="card-modal__reaction-count">{{ summary.count }}</span>
 													</button>
-													<div v-if="canEdit" class="card-modal__reaction-add-wrap">
+													<div v-if="canComment" class="card-modal__reaction-add-wrap">
 														<button
 															class="card-modal__reaction-add"
 															:title="t('kanso', 'Add reaction')"
@@ -2585,7 +2586,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											</div>
 										</div>
 									</div>
-									<div v-if="replyingToId === topComment.id && canEdit" class="card-modal__reply-compose">
+									<div v-if="replyingToId === topComment.id && canComment" class="card-modal__reply-compose">
 										<Suspense>
 											<MarkdownEditor
 												:ref="(el) => setReplyRef(topComment.id, el)"
@@ -2595,7 +2596,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												:autofocus="true"
 												min-height="60px"
 												:participants="participantList"
-												:upload-image="(file) => uploadAttachment.mutateAsync(file)"
+												:upload-image="canEdit ? (file) => uploadAttachment.mutateAsync(file) : null"
 												:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
 												:show-toolbar="!editorToolbarHidden"
 												@submit="submitReply(topComment.id)"
@@ -2622,7 +2623,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</div>
 						</div>
 
-						<div v-if="canEdit && discussionTab === 'discussion'" class="card-modal__composer">
+						<div v-if="canComment && discussionTab === 'discussion'" class="card-modal__composer">
 							<NcAvatar
 								:user="currentUserId"
 								:size="28"
@@ -2636,7 +2637,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:disabled="addComment.isPending.value"
 										min-height="60px"
 										:participants="participantList"
-										:upload-image="(file) => uploadAttachment.mutateAsync(file)"
+										:upload-image="canEdit ? (file) => uploadAttachment.mutateAsync(file) : null"
 										:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
 										:show-toolbar="!editorToolbarHidden"
 										@submit="submitNewComment"
@@ -4309,6 +4310,7 @@ const draftTitle = ref('')
 const titleInputRef = ref(null)
 
 async function startTitleEdit() {
+	if (!canEdit.value) return
 	draftTitle.value = cardData.value?.title || ''
 	editingTitle.value = true
 	await nextTick()
@@ -5191,6 +5193,8 @@ const canEdit = computed(() => {
 	return (perms & 2) !== 0
 })
 
+const canComment = computed(() => canEdit.value || ((boardData.value?.permissions ?? 0) & 16) !== 0)
+
 // MANAGE permission bit (bit 3, value 8) - board management, e.g. creating labels
 const canManage = computed(() => {
 	const perms = boardData.value?.permissions ?? 0
@@ -5726,6 +5730,17 @@ async function saveCommentEdit(comment) {
 	} catch (err) {
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to edit comment.')
 	}
+}
+
+function canEditComment(comment) {
+	return canComment.value && currentUserId === comment.author
+}
+
+function canDeleteComment(comment) {
+	if (canManage.value) return true
+	return canEditComment(comment) && !flatComments.value.some((reply) =>
+		reply.parentCommentId === comment.id && reply.author !== currentUserId,
+	)
 }
 
 async function handleDeleteComment(comment) {
@@ -7713,12 +7728,15 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	line-height: 1.25;
 	font-weight: 700;
 	color: var(--color-main-text);
-	cursor: text;
+	cursor: default;
 	border-radius: 3px;
 	padding: 1px 4px;
 	word-break: break-word;
 }
-.card-modal__title:hover {
+.card-modal__title--editable {
+	cursor: text;
+}
+.card-modal__title--editable:hover {
 	background: var(--color-background-hover);
 }
 .card-modal__title-input {

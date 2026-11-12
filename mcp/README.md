@@ -189,7 +189,14 @@ requested. Approving/rejecting stays a human action in the UI.
 **Comments**
 
 - `kanso_list_comments` — read a card's comments (author + body + timestamps)
-- `kanso_add_comment` — post a comment (optionally reply to a comment)
+- `kanso_add_comment` — post a comment (optionally reply to a comment); needs
+  signed-in membership with Comment or Edit permission on a visible card. Public
+  links stay read-only.
+
+Board payload `permissions` is an effective bitmask: Read=1, Edit=2, Share=4,
+Manage=8, Comment=16. Edit implies Comment, including existing editor shares.
+Comment alone does not allow card edits or thread resolution. Sharing remains
+limited to capabilities the acting user holds, including managers.
 
 **Checklist**
 

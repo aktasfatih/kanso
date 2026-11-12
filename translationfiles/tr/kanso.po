@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— yok —"
 
-#: src/components/BoardSettingsModal.vue:4940
+#: src/components/BoardSettingsModal.vue:4950
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n kez"
@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n veri satırı bulundu"
 msgstr[1] "%n veri satırı bulundu"
 
-#: src/components/CardDetail.vue:5102
+#: src/components/CardDetail.vue:5104
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n gün önce"
@@ -409,7 +409,7 @@ msgid_plural "%n files"
 msgstr[0] "%n dosya"
 msgstr[1] "%n dosya"
 
-#: src/components/CardDetail.vue:5100
+#: src/components/CardDetail.vue:5102
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
@@ -439,7 +439,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 msgstr[1] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 
-#: src/components/CardDetail.vue:5098
+#: src/components/CardDetail.vue:5100
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n dakika önce"
@@ -463,13 +463,13 @@ msgid_plural "%n points"
 msgstr[0] "%n puan"
 msgstr[1] "%n puan"
 
-#: src/components/CardDetail.vue:1258
+#: src/components/CardDetail.vue:1253
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n proje"
 msgstr[1] "%n proje"
 
-#: src/components/CardDetail.vue:2348
+#: src/components/CardDetail.vue:2343
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n yanıt"
@@ -487,7 +487,7 @@ msgid_plural "%n unscheduled cards"
 msgstr[0] "%n zamanlanmamış kart"
 msgstr[1] "%n zamanlanmamış kart"
 
-#: src/components/CardDetail.vue:326
+#: src/components/CardDetail.vue:321
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n izleyici"
@@ -1189,6 +1189,10 @@ msgid "Calendar feed"
 msgstr "Takvim akışı"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Can comment"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue
 msgid "Can edit"
 msgstr "Düzenleyebilir"
@@ -1685,6 +1689,7 @@ msgstr "Komut paleti"
 msgid "comment"
 msgstr "yorum"
 
+#: src/components/BoardSettingsModal.vue
 #: src/components/SearchBox.vue
 msgid "Comment"
 msgstr "Yorum"
@@ -2044,8 +2049,8 @@ msgstr "Tehlikeli bölge"
 msgid "Date"
 msgstr "Tarih"
 
-#: src/components/BoardSettingsModal.vue:2312
-#: src/components/CardDetail.vue:5291
+#: src/components/BoardSettingsModal.vue:2323
+#: src/components/CardDetail.vue:5295
 msgid "day"
 msgid_plural "days"
 msgstr[0] "gün"
@@ -2501,6 +2506,10 @@ msgid "Editor"
 msgstr "Düzenleyici"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Editors can also comment."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Email intake"
 msgstr "E-posta alma"
 
@@ -2602,7 +2611,7 @@ msgstr "Her"
 msgid "Every card in this project is done."
 msgstr "Bu projedeki tüm kartlar tamamlandı."
 
-#: src/components/BoardSettingsModal.vue:4920
+#: src/components/BoardSettingsModal.vue:4930
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Her gün"
@@ -2612,19 +2621,19 @@ msgstr[1] "Her %n günde bir"
 msgid "Every estimate needs a label."
 msgstr "Her tahminin bir etiketi olmalı."
 
-#: src/components/BoardSettingsModal.vue:4930
+#: src/components/BoardSettingsModal.vue:4940
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Her ay"
 msgstr[1] "Her %n ayda bir"
 
-#: src/components/BoardSettingsModal.vue:4922
+#: src/components/BoardSettingsModal.vue:4932
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Her hafta"
 msgstr[1] "Her %n haftada bir"
 
-#: src/components/BoardSettingsModal.vue:4932
+#: src/components/BoardSettingsModal.vue:4942
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Her yıl"
@@ -3631,7 +3640,7 @@ msgstr "Amacı, kapsamı veya kuralları. Panodaki herkes pano adının yanında
 msgid "Jump to the discussion"
 msgstr "Tartışmaya atla"
 
-#: src/components/CardDetail.vue:7166
+#: src/components/CardDetail.vue:7181
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Tartışmaya atla (%n yorum)"
@@ -4022,8 +4031,8 @@ msgstr "Mod"
 msgid "Mon"
 msgstr "Pzt"
 
-#: src/components/BoardSettingsModal.vue:2314
-#: src/components/CardDetail.vue:5293
+#: src/components/BoardSettingsModal.vue:2325
+#: src/components/CardDetail.vue:5297
 msgid "month"
 msgid_plural "months"
 msgstr[0] "ay"
@@ -4624,6 +4633,10 @@ msgstr "Yolunda"
 #: templates/admin-backup.php
 msgid "Once a day, Kanso saves a copy of every board as a zip file."
 msgstr "Kanso, günde bir kez her panonun bir kopyasını zip dosyası olarak kaydeder."
+
+#: src/components/CardDetail.vue
+msgid "Only a board manager can delete a thread with replies from other people."
+msgstr ""
 
 #: templates/admin-backup.php
 msgid "Only administrators can download them, and they can never be shared by a link."
@@ -5681,7 +5694,7 @@ msgstr "Tartışmayı kartın altında göster"
 msgid "Show the discussion panel"
 msgstr "Tartışma panelini göster"
 
-#: src/components/CardDetail.vue:7172
+#: src/components/CardDetail.vue:7187
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Tartışma panelini göster (%n yorum)"
@@ -6487,8 +6500,8 @@ msgstr "Webhook etkin"
 msgid "Wed"
 msgstr "Çar"
 
-#: src/components/BoardSettingsModal.vue:2313
-#: src/components/CardDetail.vue:5292
+#: src/components/BoardSettingsModal.vue:2324
+#: src/components/CardDetail.vue:5296
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "hafta"
@@ -6596,8 +6609,8 @@ msgstr "Yazıldı"
 msgid "wrote"
 msgstr "yazdı"
 
-#: src/components/BoardSettingsModal.vue:2315
-#: src/components/CardDetail.vue:5294
+#: src/components/BoardSettingsModal.vue:2326
+#: src/components/CardDetail.vue:5298
 msgid "year"
 msgid_plural "years"
 msgstr[0] "yıl"

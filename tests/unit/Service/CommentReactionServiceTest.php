@@ -106,7 +106,7 @@ class CommentReactionServiceTest extends TestCase {
 		$board = $this->wireChain();
 		$this->permissionService->expects(self::once())
 			->method('assertPermission')
-			->with($board, 'bob', PermissionService::PERMISSION_EDIT);
+			->with($board, 'bob', PermissionService::PERMISSION_COMMENT);
 		$this->reactionMapper->method('exists')->with(50, 'bob', '👍')->willReturn(false);
 		$this->reactionMapper->expects(self::once())
 			->method('insert')
@@ -158,11 +158,11 @@ class CommentReactionServiceTest extends TestCase {
 		$this->service->react(50, '💩', 'bob');
 	}
 
-	public function testReactRequiresEditPermission(): void {
+	public function testReactRequiresCommentPermission(): void {
 		$board = $this->wireChain();
 		$this->permissionService->expects(self::once())
 			->method('assertPermission')
-			->with($board, 'mallory', PermissionService::PERMISSION_EDIT)
+			->with($board, 'mallory', PermissionService::PERMISSION_COMMENT)
 			->willThrowException(new NotPermittedException());
 		$this->reactionMapper->expects(self::never())->method('insert');
 
@@ -202,11 +202,11 @@ class CommentReactionServiceTest extends TestCase {
 		$this->service->unreact(50, '👍', 'bob');
 	}
 
-	public function testUnreactRequiresEditPermission(): void {
+	public function testUnreactRequiresCommentPermission(): void {
 		$board = $this->wireChain();
 		$this->permissionService->expects(self::once())
 			->method('assertPermission')
-			->with($board, 'mallory', PermissionService::PERMISSION_EDIT)
+			->with($board, 'mallory', PermissionService::PERMISSION_COMMENT)
 			->willThrowException(new NotPermittedException());
 		$this->reactionMapper->expects(self::never())->method('deleteReaction');
 

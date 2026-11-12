@@ -19,10 +19,10 @@ use OCP\AppFramework\Db\DoesNotExistException;
 /**
  * Card comments / discussions - a ONE-level thread (top-level comments + their
  * replies, no deeper nesting). Reading needs READ on the card's board; posting
- * and replying need EDIT; a comment may be edited only by its author, and
- * deleted by its author or a board MANAGE-holder. Deleting a top-level comment
- * cascades a soft-delete over its replies so no reply is orphaned. A thread can
- * also be marked resolved (EDIT, top-level only) - a shared signal that clients
+ * and replying need COMMENT (also implied by EDIT). Only the author may edit;
+ * the author or a MANAGE-holder may delete. Deleting a top-level comment
+ * cascades to its replies; only a manager may delete others' replies. A thread
+ * can also be marked resolved (EDIT, top-level only) - a shared signal that clients
  * render as a collapsed thread. Every
  * mutation appends a card-targeted row to the `kanso_changes` log (reusing
  * ENTITY_CARD/ACTION_UPDATE - a comment change is a card change for sync) so the
@@ -65,14 +65,14 @@ class CommentService {
 
 	/**
 	 * Posts a comment ($parentCommentId null) or a reply to a top-level comment.
-	 * Requires EDIT.
+	 * Requires COMMENT.
 	 *
 	 * @param string|null $actorName optional AI actor name (#352) the comment is
 	 *                               attributed to; the $actorUid stays the token owner. Refused when the
 	 *                               board's `allowAiActors` gate is off.
 	 *
 	 * @throws DoesNotExistException if the card or its board does not exist or is deleted
-	 * @throws NotPermittedException if the actor may not edit the board
+	 * @throws NotPermittedException if the actor may not comment on the board
 	 * @throws InvalidInputException if the body is empty/too long, the parent is invalid (missing, other card, deleted, or itself a reply - one level only), or an AI actor name is set on a board that does not allow it
 	 */
 	public function addComment(int $cardId, string $body, ?int $parentCommentId, string $actorUid, ?string $actorName = null): Comment {
@@ -80,7 +80,7 @@ class CommentService {
 			$body = $this->normalizeBody($body);
 			$card = $this->loadCard($cardId);
 			$board = $this->loadBoard($card->getBoardId());
-			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_COMMENT);
 			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 			$actorName = $this->normalizeActorName($board, $actorName);
 
@@ -118,11 +118,11 @@ class CommentService {
 	}
 
 	/**
-	 * Edits a comment body. Only the author may edit, and only with EDIT on the
+	 * Edits a comment body. Only the author may edit, and only with COMMENT on the
 	 * board. Stamps edited_at.
 	 *
 	 * @throws DoesNotExistException if the comment, card or board does not exist or is deleted
-	 * @throws NotPermittedException if the actor is not the author or may not edit the board
+	 * @throws NotPermittedException if the actor is not the author or may not comment on the board
 	 * @throws InvalidInputException if the body is empty or too long
 	 */
 	public function editComment(int $commentId, string $body, string $actorUid): Comment {
@@ -131,7 +131,7 @@ class CommentService {
 			$comment = $this->loadComment($commentId);
 			$card = $this->loadCard($comment->getCardId());
 			$board = $this->loadBoard($card->getBoardId());
-			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_COMMENT);
 			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 			if ($comment->getAuthor() !== $actorUid) {
@@ -156,9 +156,8 @@ class CommentService {
 	}
 
 	/**
-	 * Soft-deletes a comment. The author (with EDIT) or a board MANAGE-holder
-	 * may delete. Deleting a top-level comment cascades to its non-deleted
-	 * replies so the thread disappears as a unit.
+	 * Soft-deletes a comment. The author (with COMMENT) or a board MANAGE-holder
+	 * may delete. Only a manager may delete a thread with other authors' replies.
 	 *
 	 * @throws DoesNotExistException if the comment, card or board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may neither manage the board nor delete their own comment
@@ -175,10 +174,12 @@ class CommentService {
 			$isManager = ($this->permissionService->getPermissions($board, $actorUid) & PermissionService::PERMISSION_MANAGE) !== 0;
 			$isAuthor = $comment->getAuthor() === $actorUid;
 			if (!$isManager) {
-				// A non-manager may only delete their own comment, and only with EDIT.
-				$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+				$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_COMMENT);
 				if (!$isAuthor) {
 					throw new NotPermittedException('Only the author or a board manager may delete this comment');
+				}
+				if ($comment->getParentCommentId() === null && $this->commentMapper->hasRepliesFromOthers($commentId, $actorUid)) {
+					throw new NotPermittedException('Only a board manager may delete a comment other people replied to');
 				}
 			}
 

@@ -59,7 +59,12 @@ your work, on your own Nextcloud, laid out plainly.
 <img src="docs/kanso-card.png" alt="A Kanso card with a markdown description, a checklist, priority, due date, an assignee and a threaded discussion" width="900">
 
 ### 👥 Collaboration
-- **Board sharing** with per-user and per-group access control.
+- **Board sharing** with per-user and per-group access control. Give signed-in
+  members **Comment** access to post, reply, react and edit or delete their own
+  comments without editing cards. Editors retain commenting access; resolving
+  threads needs Edit, and deleting others’ discussion needs Manage. Only a
+  manager can delete a thread that other people replied to. Sharers can grant
+  only capabilities they hold.
 - **Public link**: publish a board **read-only** at a link that needs no
   Nextcloud account — optionally with its comments visible. Rotate or switch
   the link off at any time from board settings.

@@ -1078,8 +1078,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ t('kanso', 'External') }}
 						</span>
 
-						<!-- Permission toggles: Edit (bit 2), Share (bit 4), Manage (bit 8) -->
+						<!-- Permission toggles -->
 						<div class="sharing__perms">
+							<label
+								class="sharing__perm-label"
+								:class="{ 'sharing__perm-label--disabled': !canToggleBit(entry, PERM_COMMENT) }"
+								:title="hasBit(entry.permission, PERM_EDIT) ? t('kanso', 'Editors can also comment.') : t('kanso', 'Can comment')">
+								<input
+									type="checkbox"
+									:checked="hasBit(effectivePermissions(entry.permission), PERM_COMMENT)"
+									:disabled="!canToggleBit(entry, PERM_COMMENT) || patchingAclId === entry.id"
+									@change="togglePerm(entry, PERM_COMMENT, $event.target.checked)" />
+								{{ t('kanso', 'Comment') }}
+							</label>
 							<label
 								class="sharing__perm-label"
 								:class="{ 'sharing__perm-label--disabled': !canToggleBit(entry, PERM_EDIT) }"
@@ -2832,6 +2843,7 @@ const PERM_READ = 1
 const PERM_EDIT = 2
 const PERM_SHARE = 4
 const PERM_MANAGE = 8
+const PERM_COMMENT = 16
 
 const canManage = computed(() => (props.permissions & PERM_MANAGE) !== 0)
 const canShare = computed(() => (props.permissions & PERM_SHARE) !== 0)
@@ -3415,14 +3427,15 @@ function hasBit(mask, bit) {
 	return (mask & bit) !== 0
 }
 
-/**
- * Can the current user toggle a given bit on an entry?
- * Rule mirrors server cap: non-MANAGE holders can only touch bits they themselves hold.
- * MANAGE holders can toggle any bit.
- */
+function effectivePermissions(mask) {
+	return hasBit(mask, PERM_EDIT) ? mask | PERM_COMMENT : mask
+}
+
 function canToggleBit(entry, bit) {
-	if (canManage.value) return true
-	return hasBit(props.permissions, bit)
+	if (bit === PERM_COMMENT && hasBit(entry.permission, PERM_EDIT)) return false
+	const current = effectivePermissions(entry.permission)
+	const next = effectivePermissions(entry.permission ^ bit)
+	return ((current ^ next) & ~effectivePermissions(props.permissions)) === 0
 }
 
 // ── Tab / section-rail state ──────────────────────────────────────────────────
@@ -4526,11 +4539,10 @@ async function pickSharee(result) {
 	clearSearch()
 	addAclError.value = ''
 	try {
-		// Default permission: READ | EDIT (3)
 		await addAcl.mutateAsync({
 			participant: result.id,
 			participantType: result.type,
-			permission: PERM_READ | PERM_EDIT,
+			permission: PERM_READ | (canEdit.value ? PERM_EDIT : effectivePermissions(props.permissions) & PERM_COMMENT),
 		})
 	} catch (err) {
 		addAclError.value = err?.response?.data?.error || t('kanso', 'Failed to share board.')
@@ -4564,9 +4576,7 @@ async function togglePerm(entry, bit, checked) {
 // ── ACL: board side (internal/external, #3742) ────────────────────────────────
 
 /**
- * Re-assign a member's board side. MANAGE-gated (the selector only renders
- * for managers); the permission mask is re-submitted unchanged so the
- * escalation cap sees zero flipped bits.
+ * Re-assign a member's board side without changing their stored permission mask.
  */
 async function changeRole(entry, role) {
 	if (role === (entry.role || 'internal')) return

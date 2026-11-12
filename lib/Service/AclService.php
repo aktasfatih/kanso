@@ -19,8 +19,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
 /**
  * Board sharing (ACL) management. SHARE lets a user hand out or adjust
  * sharing rules, but never with more permission bits than they hold
- * themselves - only MANAGE may grant beyond the actor's own bits (the
- * escalation cap). Revoking needs MANAGE, except for self-removal (leaving
+ * themselves. Revoking needs MANAGE, except for self-removal (leaving
  * a board). Every mutation appends an ENTITY_ACL row to the `kanso_changes`
  * log so shared boards delta-sync their member lists like any other entity.
  */
@@ -49,7 +48,7 @@ class AclService {
 	 * @param string $role one of the ViewerContext::ROLE_* values
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not share the board,
-	 *                               lacks MANAGE and tries to grant bits beyond their own,
+	 *                               tries to grant effective permissions beyond their own,
 	 *                               or lacks MANAGE and sets a non-default role
 	 * @throws InvalidInputException on unknown permission bits, an invalid
 	 *                               participant type or role, the board owner or a nonexistent
@@ -72,7 +71,7 @@ class AclService {
 				throw new InvalidInputException('Cannot share a board with its owner');
 			}
 
-			$this->assertNoEscalation($board, $actorUid, $permission);
+			$this->assertNoEscalation($board, $actorUid, PermissionService::withImpliedPermissions($permission));
 
 			if ($this->aclMapper->findByParticipant($boardId, $type, $participant) !== null) {
 				throw new InvalidInputException('Already shared with this participant');
@@ -114,9 +113,9 @@ class AclService {
 
 	/**
 	 * Replaces the permission mask of a sharing rule. The escalation cap
-	 * applies to the CHANGED bits only, so an actor without MANAGE may
-	 * re-submit an existing mask untouched even when it contains bits they
-	 * do not hold - they just cannot flip such bits.
+	 * includes Edit's implied Comment permission and applies to changed grants
+	 * only. An actor may re-submit an existing mask untouched even when it
+	 * contains bits they do not hold - they just cannot flip such bits.
 	 *
 	 * A non-null $role additionally re-assigns the member's board side
 	 * (#3742); FLIPPING the role is MANAGE-gated (re-submitting the current
@@ -129,7 +128,7 @@ class AclService {
 	 *                          null to leave the stored role untouched
 	 * @throws DoesNotExistException if the board or the sharing rule does not exist
 	 * @throws NotPermittedException if the actor may not share the board, or
-	 *                               lacks MANAGE and flips bits beyond their own or the role
+	 *                               flips capabilities beyond their own or lacks MANAGE to change the role
 	 * @throws InvalidInputException on unknown permission bits, an unknown
 	 *                               role, a rule of another board, or added bits or
 	 *                               an internal role for a target the actor may no
@@ -142,9 +141,14 @@ class AclService {
 
 			$acl = $this->loadAcl($boardId, $aclId);
 			$permission = $this->validateMask($permission);
-			$this->assertNoEscalation($board, $actorUid, $permission ^ $acl->getPermission());
 			$storedRole = $acl->getRole() ?? ViewerContext::ROLE_INTERNAL;
 			$role = $role === null ? null : $this->parseRole($role);
+			$this->assertNoEscalation(
+				$board,
+				$actorUid,
+				PermissionService::withImpliedPermissions($permission)
+					^ PermissionService::withImpliedPermissions($acl->getPermission()),
+			);
 			// An external member's stored bits only take full effect once internal.
 			$becomesInternal = $role === ViewerContext::ROLE_INTERNAL && $storedRole !== ViewerContext::ROLE_INTERNAL;
 			if (($permission & ~$acl->getPermission()) !== 0 || $becomesInternal) {
@@ -285,18 +289,11 @@ class AclService {
 		};
 	}
 
-	/**
-	 * The escalation cap: an actor without MANAGE may only hand out (or
-	 * flip, for updates - pass the XOR of old and new mask) bits they hold
-	 * themselves.
-	 *
-	 * @param int $bits the granted bits (create) or the changed bits (update)
-	 * @throws NotPermittedException
-	 */
+	/** @throws NotPermittedException */
 	private function assertNoEscalation(Board $board, string $actorUid, int $bits): void {
-		$actorBits = $this->permissionService->getPermissions($board, $actorUid);
-		if (($actorBits & PermissionService::PERMISSION_MANAGE) === 0
-			&& ($bits & ~$actorBits) !== 0) {
+		// Another matching ACL can make an external row's stored internal-only bits effective.
+		$actorBits = PermissionService::withImpliedPermissions($this->permissionService->getPermissions($board, $actorUid));
+		if (($bits & ~$actorBits) !== 0) {
 			throw new NotPermittedException('Cannot grant permissions beyond your own');
 		}
 	}
