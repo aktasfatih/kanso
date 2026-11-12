@@ -57,7 +57,10 @@ docker exec -u www-data \
 
 Use the isolated configuration and database-driver permissions described above.
 Human aliases retain the prefix used at the move, within the original board's
-context, with no expiry. Resolution requires READ on that live source board and
+context, with no expiry. New moves also capture the destination board and number;
+every human-reference hop must match that identity. Legacy numeric aliases without
+that captured destination remain unresolved as human references, even if a current
+row has the same numeric ID. Numeric navigation remains separate. Resolution requires READ on that live source board and
 READ plus card visibility at the final destination. Restoring an original cancels
 its alias and uses the source board's current prefix. Source-card purge retains
 aliases; source-board deletion disables its human-reference context while numeric
@@ -120,6 +123,75 @@ Source paths and SHA-256 hashes are printed and verified. Only owned boards,
 counters and the new SQLite file are changed; fixtures are removed in `finally`.
 The shared session card schema, published migrations and global configuration
 are never changed. A successful run ends with `OK <driver>: <count> upgrade checks`.
+
+## Oracle MySQL 8 metadata cache
+
+Run `card-reference-mysql8.php` with the disposable guard and an isolated
+configuration using database and user `kanso_reference`, with grants limited to
+that database. The harness rejects MariaDB and administrative or diagnostic
+grants. It records the actual account, grants, server version and source hashes,
+measures cached and fresh `AUTO_INCREMENT` after a real card purge, and verifies
+session `information_schema_stats_expiry` restoration after both successful and
+failed migration reads. Only its own board and counter are removed.
+
+Run this normal-privilege check before granting any temporary lock-observation
+access for the separate concurrency harness, and revoke that access afterward.
+The metadata harness changes no global database settings.
+
+## Human aliases after SQLite table rebuilds
+
+`card-reference-alias-lifecycle.php` requires a separate, fresh Nextcloud SQLite
+installation inside the disposable container. Its root must be named
+`/tmp/kanso-reference-alias-lifecycle-<unique>`, with `config/` and `data/`
+subdirectories, database name `nextcloud`, an `admin` user and Kanso enabled from
+the checkout. Configure its `apps_paths` to include the container's `apps` and
+`custom_apps` directories. Do not point it at the ordinary session installation:
+this harness deliberately rebuilds its owned card table.
+
+Install that fresh configuration with `occ maintenance:install --database sqlite
+--database-name nextcloud --data-dir <root>/data --admin-user admin`, setting
+`NEXTCLOUD_CONFIG_DIR=<root>/config` for installation and `occ app:enable kanso`.
+Then run:
+
+```sh
+docker exec -u www-data \
+  -e NEXTCLOUD_ROOT=/var/www/html \
+  -e NEXTCLOUD_CONFIG_DIR=/tmp/kanso-reference-alias-lifecycle-UNIQUE/config \
+  -e KANSO_ALIAS_LIFECYCLE_ROOT=/tmp/kanso-reference-alias-lifecycle-UNIQUE \
+  -e KANSO_INTEGRATION_DISPOSABLE=1 \
+  YOUR_DISPOSABLE_NEXTCLOUD_CONTAINER \
+  php /var/www/html/custom_apps/kanso/tests/integration/card-reference-alias-lifecycle.php
+```
+
+Before any mutation, `PRAGMA database_list` and the schema connection must both
+identify `<root>/data/nextcloud.db`, and the Kanso board table must be empty.
+The harness uses actual card creation, graph moves, trash, purge and restore;
+Nextcloud's schema APIs perform the card-table rebuilds. Source paths and hashes
+are verified. Assertions use both `CardService::findByRef` and the human-reference
+controller, with numeric navigation reported separately.
+
+Cases retain surviving targets, purge intermediate chains, reuse final target IDs
+on another board and on the same board with a new sequence, reuse original IDs,
+and reuse every ID of a fully purged chain. A reused intermediate is also moved
+again, so an unrelated new outgoing alias cannot redirect an earlier chain.
+Further checks cover canceled aliases
+after restore, deleted source contexts, source-number collisions and destination
+READ/private/internal visibility. An unrelated card must never become the result
+of the old human alias. A fully purged direct numeric ID can address a newly
+created resource when SQLite reuses that ID; this is recorded as a separate
+control. Surviving higher target IDs prevent original-ID reuse naturally.
+
+Aliases predating captured destination identity remain unavailable to human
+reference lookup. The migration leaves missing destination context unknown even
+when the old numeric target currently names a row; it does not infer historical
+identity from that row. Tests cover an already-reused target and a surviving
+target with unknown legacy context, plus restoration of the original card.
+Existing numeric navigation remains a separate path; no historical recovery is
+attempted.
+
+A successful run ends with `OK SQLite: <count> alias lifecycle cases`. Owned
+boards, cards, aliases and peer accounts are removed in `finally`; remove the
+entire dedicated configuration/data root after inspecting the results.
 
 ## Webhook availability
 

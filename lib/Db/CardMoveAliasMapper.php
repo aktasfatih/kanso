@@ -42,7 +42,7 @@ class CardMoveAliasMapper extends QBMapper {
 		}
 	}
 
-	public function record(int $oldId, int $targetId, int $boardId, string $prefix, ?int $seq): void {
+	public function record(int $oldId, int $targetId, int $boardId, string $prefix, ?int $seq, int $targetBoardId, int $targetSeq): void {
 		$alias = $this->findByOldId($oldId);
 		$new = $alias === null;
 		if ($alias === null) {
@@ -53,6 +53,8 @@ class CardMoveAliasMapper extends QBMapper {
 		$alias->setBoardId($boardId);
 		$alias->setPrefix($prefix);
 		$alias->setBoardSeq($seq);
+		$alias->setTargetBoardId($targetBoardId);
+		$alias->setTargetBoardSeq($targetSeq);
 		if ($new) {
 			$this->insert($alias);
 		} else {

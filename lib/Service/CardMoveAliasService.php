@@ -12,6 +12,7 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\BoardPrefix;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardMoveAlias;
 use OCA\Kanso\Db\CardMoveAliasMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 
@@ -31,9 +32,15 @@ class CardMoveAliasService {
 	 */
 	public function record(array $movedCards, array $sourceCards, Board $sourceBoard): void {
 		foreach ($sourceCards as $source) {
+			$target = $movedCards[$source->getId()];
+			$targetSeq = $target->getBoardSeq();
+			if ($targetSeq === null || $targetSeq < 1) {
+				throw new \LogicException('A moved card requires a destination number');
+			}
 			$this->aliases->record(
-				$source->getId(), $movedCards[$source->getId()]->getId(),
+				$source->getId(), $target->getId(),
 				$sourceBoard->getId(), $sourceBoard->getPrefix() ?? BoardPrefix::DEFAULT, $source->getBoardSeq(),
+				$target->getBoardId(), $targetSeq,
 			);
 		}
 	}
@@ -44,10 +51,37 @@ class CardMoveAliasService {
 			return null;
 		}
 		try {
-			return $this->resolve($alias->getOldCardId(), $uid);
+			return $this->resolveHumanAlias($alias, $uid);
 		} catch (DoesNotExistException) {
 			return null;
 		}
+	}
+
+	private function resolveHumanAlias(CardMoveAlias $alias, string $uid): ?Card {
+		$seen = [];
+		while (!isset($seen[$alias->getOldCardId()])) {
+			$seen[$alias->getOldCardId()] = true;
+			$boardId = $alias->getTargetBoardId();
+			$seq = $alias->getTargetBoardSeq();
+			if ($boardId === null || $boardId < 1 || $seq === null || $seq < 1) {
+				return null;
+			}
+			$id = $alias->getTargetCardId();
+			try {
+				$card = $this->cards->find($id);
+			} catch (DoesNotExistException) {
+				$card = null;
+			}
+			if ($card !== null && $card->getDeletedAt() === 0 && $card->getBoardId() === $boardId && $card->getBoardSeq() === $seq) {
+				return $this->visibleCard($card, $uid);
+			}
+			$next = $this->aliases->findByOldId($id);
+			if ($next === null || $next->getBoardId() !== $boardId || $next->getBoardSeq() !== $seq) {
+				return null;
+			}
+			$alias = $next;
+		}
+		return null;
 	}
 
 	/** Resolve for navigation only, never for mutation endpoints. */
@@ -64,23 +98,27 @@ class CardMoveAliasService {
 				$card = null;
 			}
 			if ($card !== null && $card->getDeletedAt() === 0) {
-				try {
-					$board = $this->boards->find($card->getBoardId());
-					if ($board->getDeletedAt() !== 0) {
-						throw new DoesNotExistException('Card does not exist');
-					}
-					$this->permissions->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
-					$this->visibilityGuard->assertVisible($board, $card, $uid);
-					return $card;
-				} catch (NotPermittedException|DoesNotExistException) {
-					throw new DoesNotExistException('Card does not exist');
-				}
+				return $this->visibleCard($card, $uid);
 			}
 			$alias = $this->aliases->findByOldId($id);
 			if ($alias === null) {
 				throw new DoesNotExistException('Card does not exist');
 			}
 			$id = $alias->getTargetCardId();
+		}
+	}
+
+	private function visibleCard(Card $card, string $uid): Card {
+		try {
+			$board = $this->boards->find($card->getBoardId());
+			if ($board->getDeletedAt() !== 0) {
+				throw new DoesNotExistException('Card does not exist');
+			}
+			$this->permissions->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
+			$this->visibilityGuard->assertVisible($board, $card, $uid);
+			return $card;
+		} catch (NotPermittedException|DoesNotExistException) {
+			throw new DoesNotExistException('Card does not exist');
 		}
 	}
 }

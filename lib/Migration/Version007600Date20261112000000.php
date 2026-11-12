@@ -40,6 +40,11 @@ class Version007600Date20261112000000 extends SimpleMigrationStep {
 			$table->addColumn('prefix', Types::STRING, ['notnull' => false, 'length' => BoardPrefix::MAX_LENGTH]);
 			$table->addColumn('board_seq', Types::BIGINT, ['notnull' => false, 'length' => 8]);
 		}
+		// A numeric alias alone cannot establish its historical destination identity.
+		if (!$table->hasColumn('target_board_id')) {
+			$table->addColumn('target_board_id', Types::BIGINT, ['notnull' => false, 'length' => 8]);
+			$table->addColumn('target_board_seq', Types::BIGINT, ['notnull' => false, 'length' => 8]);
+		}
 		if (!$table->hasIndex('kanso_cmove_alias_ref')) {
 			$table->addUniqueIndex(['board_id', 'prefix', 'board_seq'], 'kanso_cmove_alias_ref');
 		}
@@ -81,7 +86,7 @@ class Version007600Date20261112000000 extends SimpleMigrationStep {
 		$floor = $this->identityFloor($table);
 		foreach ([
 			'SELECT MAX(id) AS card_id, MAX(board_seq) AS board_seq FROM *PREFIX*kanso_cards',
-			'SELECT MAX(old_card_id) AS old_id, MAX(target_card_id) AS target_id, MAX(board_seq) AS board_seq FROM *PREFIX*kanso_card_move_aliases',
+			'SELECT MAX(old_card_id) AS old_id, MAX(target_card_id) AS target_id, MAX(board_seq) AS board_seq, MAX(target_board_seq) AS target_seq FROM *PREFIX*kanso_card_move_aliases',
 		] as $sql) {
 			$result = $this->db->executeQuery($sql);
 			$row = $result->fetch();
