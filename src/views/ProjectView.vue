@@ -688,6 +688,9 @@ const props = defineProps({
 
 const router = useRouter()
 const queryClient = useQueryClient()
+let projectGeneration = 0
+
+watch(() => props.id, () => { projectGeneration++ }, { flush: 'sync' })
 
 // Resolve the project from the list query (already in cache)
 const {
@@ -830,9 +833,11 @@ const datesError = ref('')
 
 async function saveDates(dates) {
 	datesError.value = ''
+	const generation = projectGeneration
 	try {
 		await updateMutation.mutateAsync({ id: Number(props.id), ...dates })
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		datesError.value = err?.response?.data?.error || t('kanso', 'Failed to update dates.')
 	}
 }
@@ -894,18 +899,22 @@ function closePicker() {
 async function handlePickCard(result) {
 	if (cardIdsInProject.value.has(result.cardId)) return
 	addError.value = ''
+	const generation = projectGeneration
 	try {
 		await addCard.mutateAsync({ projectId: props.id, cardId: result.cardId })
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		addError.value = err?.response?.data?.error || t('kanso', 'Failed to add card.')
 	}
 }
 
 async function handleRemoveCard(cardId) {
 	actionError.value = ''
+	const generation = projectGeneration
 	try {
 		await removeCard.mutateAsync({ projectId: props.id, cardId })
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to remove card.')
 	}
 }
@@ -917,10 +926,12 @@ async function handleDelete() {
 	actionError.value = ''
 	leavingPage.value = true
 	const id = props.id
+	const generation = projectGeneration
 	try {
 		await removeMutation.mutateAsync(Number(id))
 		if (props.id === id) router.push({ name: 'projects' })
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		leavingPage.value = false
 		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to delete project.')
 	}
@@ -932,6 +943,7 @@ async function handleLeave() {
 	actionError.value = ''
 	leavingPage.value = true
 	const id = props.id
+	const generation = projectGeneration
 	try {
 		const stillHasAccess = await leaveMutation.mutateAsync(Number(id))
 		if (props.id !== id) return
@@ -942,6 +954,7 @@ async function handleLeave() {
 		}
 		router.push({ name: 'projects' })
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		leavingPage.value = false
 		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to leave project.')
 	}
@@ -1015,14 +1028,17 @@ async function saveDescription() {
 		return
 	}
 	descError.value = ''
+	const generation = projectGeneration
 	try {
 		await updateMutation.mutateAsync({
 			id: Number(props.id),
 			// Send the empty string (not undefined) to clear an existing description.
 			description: next,
 		})
+		if (generation !== projectGeneration) return
 		editingDescription.value = false
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		descError.value = err?.response?.data?.error || t('kanso', 'Failed to update description.')
 	}
 }
@@ -1104,10 +1120,13 @@ async function submitEdit() {
 		closeEditDialog()
 		return
 	}
+	const generation = projectGeneration
 	try {
 		await updateMutation.mutateAsync({ id: Number(props.id), ...changes })
+		if (generation !== projectGeneration) return
 		closeEditDialog()
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		editError.value = err?.response?.data?.error || t('kanso', 'Failed to update project.')
 	}
 }
@@ -1160,11 +1179,14 @@ async function submitNewComment() {
 	const body = newCommentBody.value.trim()
 	if (!body || addComment.isPending.value) return
 	commentError.value = ''
+	const generation = projectGeneration
 	try {
 		await addComment.mutateAsync({ projectId: props.id, body, parentCommentId: null })
+		if (generation !== projectGeneration) return
 		// Only clear after a successful post so a failed post keeps the text (#3510).
 		newCommentBody.value = ''
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to post note.')
 	}
 }
@@ -1187,10 +1209,13 @@ async function submitReply(parentId) {
 	const body = replyBody.value.trim()
 	if (!body || addComment.isPending.value) return
 	commentError.value = ''
+	const generation = projectGeneration
 	try {
 		await addComment.mutateAsync({ projectId: props.id, body, parentCommentId: parentId })
+		if (generation !== projectGeneration) return
 		closeReplyBox()
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to post reply.')
 	}
 }
@@ -1243,10 +1268,13 @@ async function saveCommentEdit(comment) {
 		return
 	}
 	commentError.value = ''
+	const generation = projectGeneration
 	try {
 		await editComment.mutateAsync({ projectId: props.id, comment, body })
+		if (generation !== projectGeneration) return
 		cancelCommentEdit()
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to update note.')
 	}
 }
@@ -1254,9 +1282,11 @@ async function saveCommentEdit(comment) {
 // ── Delete ───────────────────────────────────────────────────────────────────
 async function handleDeleteComment(comment) {
 	commentError.value = ''
+	const generation = projectGeneration
 	try {
 		await deleteComment.mutateAsync({ projectId: props.id, comment })
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to delete note.')
 	}
 }
