@@ -123,7 +123,13 @@ your work, on your own Nextcloud, laid out plainly.
   board. No credentials, no OAuth. A board can run both webhooks at once; Gitea
   webhooks work with the Forgejo endpoint. For self-hosted forges Kanso is
   **receive-only** — it never calls your instance, so link badges come from the
-  deliveries themselves.
+  deliveries themselves. Invalid or missing signatures return `401`; failures
+  do not lock out later valid deliveries from the same IP, board or provider.
+  Configure request size, request rate and concurrency limits at your ingress
+  to bound flood resources: Kanso reads each body and verifies each signature.
+  Ingress limits or Nextcloud rate-limit overrides may still reject deliveries.
+  Check the forge's delivery log for `401` responses when diagnosing a wrong
+  secret; rotate and update the secret on both sides if needed.
 - **MCP server (AI access)**: an optional
   [Model Context Protocol](https://modelcontextprotocol.io) server (under
   [`mcp/`](mcp/README.md)) lets Claude and other MCP clients read and manage
