@@ -212,6 +212,7 @@ return [
 
 		['name' => 'project#index', 'url' => '/api/projects', 'verb' => 'GET'],
 		['name' => 'project#create', 'url' => '/api/projects', 'verb' => 'POST'],
+		['name' => 'project#leadCandidates', 'url' => '/api/projects/leads', 'verb' => 'GET'],
 		['name' => 'project#update', 'url' => '/api/projects/{id}', 'verb' => 'PATCH'],
 		['name' => 'project#destroy', 'url' => '/api/projects/{id}', 'verb' => 'DELETE'],
 		['name' => 'project#cards', 'url' => '/api/projects/{id}/cards', 'verb' => 'GET'],

@@ -44,7 +44,10 @@ export function useProjects({ refetchInterval = false } = {}) {
 			const previous = queryClient.getQueryData(['projects'])
 			queryClient.setQueryData(['projects'], (old) => {
 				if (!Array.isArray(old)) return old
-				return old.map((p) => p.id === id ? { ...p, ...data } : p)
+				const changes = { ...data }
+				if (data.lead === null) delete changes.lead
+				else if (data.lead !== undefined) changes.leadDisplayName = null
+				return old.map((p) => p.id === id ? { ...p, ...changes } : p)
 			})
 			return { previous }
 		},

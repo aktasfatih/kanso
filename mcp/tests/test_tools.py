@@ -982,7 +982,16 @@ def test_filter_to_query_matches_the_js_original_key_for_key():
 
 
 PROJECTS = [
-    {"id": 4, "title": "Launch", "color": "0082c9", "owner": "admin", "createdAt": 1},
+    {
+        "id": 4,
+        "title": "Launch",
+        "color": "0082c9",
+        "owner": "admin",
+        "createdAt": 1,
+        "lead": "alice",
+        "leadDisplayName": "Alice",
+        "lifecycleStatus": "in_progress",
+    },
     {"id": 5, "title": "Hiring", "owner": "admin", "createdAt": 2},
 ]
 PROJECT_CARDS = [
@@ -1004,6 +1013,9 @@ async def test_get_project_merges_the_record_and_its_cards():
 
     assert project["id"] == 4
     assert project["title"] == "Launch"
+    assert project["lead"] == "alice"
+    assert project["leadDisplayName"] == "Alice"
+    assert project["lifecycleStatus"] == "in_progress"
     assert [c["id"] for c in project["cards"]] == [100, 200]
     assert {c["boardTitle"] for c in project["cards"]} == {"Board", "Other"}
 
@@ -1037,6 +1049,55 @@ async def test_update_project_tool_sends_only_what_changed():
 
     assert json.loads(route.calls.last.request.content) == {"title": "Ship"}
     assert project["title"] == "Ship"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_create_project_tool_forwards_metadata():
+    route = respx.post(f"{BASE}/projects").mock(
+        return_value=httpx.Response(200, json=PROJECTS[0])
+    )
+    tools, client = _tools()
+    async with client:
+        project = await tools["kanso_create_project"](
+            "Launch", lead="alice", lifecycle_status="in_progress"
+        )
+
+    assert json.loads(route.calls.last.request.content) == {
+        "title": "Launch",
+        "lead": "alice",
+        "lifecycleStatus": "in_progress",
+    }
+    assert project["lead"] == "alice"
+    assert project["lifecycleStatus"] == "in_progress"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_project_tool_clears_lead_and_sets_lifecycle():
+    route = respx.patch(f"{BASE}/projects/4").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                **PROJECTS[0],
+                "lead": None,
+                "leadDisplayName": None,
+                "lifecycleStatus": "done",
+            },
+        )
+    )
+    tools, client = _tools()
+    async with client:
+        project = await tools["kanso_update_project"](
+            4, lead="", lifecycle_status="done"
+        )
+
+    assert json.loads(route.calls.last.request.content) == {
+        "lead": "",
+        "lifecycleStatus": "done",
+    }
+    assert project["lead"] is None
+    assert project["lifecycleStatus"] == "done"
 
 
 @respx.mock
@@ -1128,6 +1189,17 @@ async def test_project_tools_schema_and_hints():
 
     assert tools["kanso_create_project"].inputSchema["required"] == ["title"]
     assert tools["kanso_update_project"].inputSchema["required"] == ["project_id"]
+    for name in ("kanso_create_project", "kanso_update_project"):
+        properties = tools[name].inputSchema["properties"]
+        assert properties["lead"]["anyOf"] == [
+            {"type": "string"},
+            {"type": "null"},
+        ]
+        assert properties["lifecycle_status"]["anyOf"] == [
+            {"enum": ["planned", "in_progress", "done"], "type": "string"},
+            {"type": "null"},
+        ]
+        assert properties["lifecycle_status"]["default"] is None
     assert tools["kanso_add_project_comment"].inputSchema["required"] == [
         "project_id",
         "body",

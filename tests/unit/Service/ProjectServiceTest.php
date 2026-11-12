@@ -29,6 +29,7 @@ use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\ProjectForecast;
 use OCA\Kanso\Service\ProjectService;
+use OCA\Kanso\Service\ShareeSearchService;
 use OCA\Kanso\Service\StatsService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IDBConnection;
@@ -58,6 +59,7 @@ class ProjectServiceTest extends TestCase {
 	private IDBConnection&MockObject $db;
 	private IGroupManager&MockObject $groupManager;
 	private IUserManager&MockObject $userManager;
+	private ShareeSearchService&MockObject $shareeSearch;
 	private ProjectService $service;
 
 	protected function setUp(): void {
@@ -79,6 +81,7 @@ class ProjectServiceTest extends TestCase {
 		$this->db = $this->createMock(IDBConnection::class);
 		$this->groupManager = $this->createMock(IGroupManager::class);
 		$this->userManager = $this->createMock(IUserManager::class);
+		$this->shareeSearch = $this->createMock(ShareeSearchService::class);
 		$this->service = new ProjectService(
 			$this->projectMapper,
 			$this->projectCardMapper,
@@ -98,6 +101,7 @@ class ProjectServiceTest extends TestCase {
 			$this->userManager,
 			$this->db,
 			$this->groupManager,
+			$this->shareeSearch,
 		);
 	}
 
@@ -334,6 +338,149 @@ class ProjectServiceTest extends TestCase {
 			->with(self::callback(fn (Project $p): bool => $p->getStartDate() === '2026-10-01' && $p->getTargetDate() === '2026-11-15'))
 			->willReturnArgument(0);
 		$this->service->create('alice', 'Dated', null, null, '2026-10-01', '2026-11-15');
+	}
+
+	public function testCreateDefaultsToPlannedWithoutALeadOrSharing(): void {
+		$this->projectMapper->method('insert')->willReturnArgument(0);
+		$this->shareMapper->expects(self::never())->method('insert');
+		$this->shareeSearch->expects(self::never())->method('resolveParticipant');
+
+		$project = $this->service->create('alice', 'New', null, null)->jsonSerialize();
+
+		self::assertNull($project['lead']);
+		self::assertSame('planned', $project['lifecycleStatus']);
+	}
+
+	public function testCreateStoresACanonicalLeadWithoutGrantingAccess(): void {
+		$this->shareeSearch->expects(self::once())->method('resolveParticipant')->with(Acl::TYPE_USER, 'Bob', 'alice')->willReturn('bob');
+		$this->shareMapper->expects(self::never())->method('insert');
+		$this->projectMapper->method('insert')->willReturnArgument(0);
+
+		$project = $this->service->create('alice', 'New', null, null, lead: 'Bob', lifecycleStatus: 'in_progress')->jsonSerialize();
+
+		self::assertSame('bob', $project['lead']);
+		self::assertSame('in_progress', $project['lifecycleStatus']);
+		self::assertSame('alice', $project['owner']);
+	}
+
+	public function testCreateCanSelectSelfWithoutSharingEnabled(): void {
+		$this->shareeSearch->expects(self::never())->method('resolveParticipant');
+		$this->projectMapper->method('insert')->willReturnArgument(0);
+
+		self::assertSame('alice', $this->service->create('alice', 'New', null, null, lead: 'alice')->getLead());
+	}
+
+	public function testCreateRejectsAForbiddenOrUnknownLead(): void {
+		$this->shareeSearch->method('resolveParticipant')->willThrowException(new InvalidInputException('Cannot share with this participant'));
+		$this->projectMapper->expects(self::never())->method('insert');
+		$this->expectException(InvalidInputException::class);
+
+		$this->service->create('alice', 'New', null, null, lead: 'unknown');
+	}
+
+	public function testCreateRejectsForecastHealthAsLifecycle(): void {
+		$this->projectMapper->expects(self::never())->method('insert');
+		$this->expectException(InvalidInputException::class);
+
+		$this->service->create('alice', 'New', null, null, lifecycleStatus: 'on_track');
+	}
+
+	public function testEditorCanChangeLeadAndLifecycle(): void {
+		$this->sharedWithBob(self::EDIT);
+		$this->shareeSearch->expects(self::once())->method('resolveParticipant')->with(Acl::TYPE_USER, 'carol', 'bob')->willReturn('carol');
+		$this->projectMapper->method('update')->willReturnArgument(0);
+		$this->shareMapper->expects(self::never())->method('insert');
+
+		$project = $this->service->update(5, 'bob', null, null, null, lead: 'carol', lifecycleStatus: 'done');
+
+		self::assertSame('carol', $project->getLead());
+		self::assertSame('done', $project->getLifecycleStatus());
+		self::assertSame('alice', $project->getOwner());
+	}
+
+	public function testUpdateKeepsOmittedMetadataWithoutResolvingTheLead(): void {
+		$project = $this->project();
+		$project->setLead('former-user');
+		$project->setLifecycleStatus('in_progress');
+		$this->projectMapper->method('find')->willReturn($project);
+		$this->projectMapper->method('update')->willReturnArgument(0);
+		$this->shareeSearch->expects(self::never())->method('resolveParticipant');
+
+		$updated = $this->service->update(5, 'alice', 'Renamed', null, null);
+
+		self::assertSame('former-user', $updated->getLead());
+		self::assertSame('in_progress', $updated->getLifecycleStatus());
+	}
+
+	public function testUpdateClearsLeadWithAnEmptyString(): void {
+		$project = $this->project();
+		$project->setLead('bob');
+		$this->projectMapper->method('find')->willReturn($project);
+		$this->projectMapper->method('update')->willReturnArgument(0);
+		$this->shareeSearch->expects(self::never())->method('resolveParticipant');
+
+		self::assertNull($this->service->update(5, 'alice', null, null, null, lead: '')->getLead());
+	}
+
+	public function testUpdateRejectsAnEmptyLifecycle(): void {
+		$this->projectMapper->method('find')->willReturn($this->project());
+		$this->projectMapper->expects(self::never())->method('update');
+		$this->expectException(InvalidInputException::class);
+
+		$this->service->update(5, 'alice', null, null, null, lifecycleStatus: '');
+	}
+
+	public function testViewerCannotChangeMetadataOrProbeALead(): void {
+		$this->sharedWithBob(PermissionService::PERMISSION_READ);
+		$this->projectMapper->expects(self::never())->method('update');
+		$this->shareeSearch->expects(self::never())->method('resolveParticipant');
+		$this->expectException(NotPermittedException::class);
+
+		$this->service->update(5, 'bob', null, null, null, lead: 'unknown', lifecycleStatus: 'invalid');
+	}
+
+	public function testStrangerCannotChangeMetadataOrProbeALead(): void {
+		$this->projectMapper->method('find')->willReturn($this->project());
+		$this->projectMapper->expects(self::never())->method('update');
+		$this->shareeSearch->expects(self::never())->method('resolveParticipant');
+		$this->expectException(DoesNotExistException::class);
+
+		$this->service->update(5, 'mallory', null, null, null, lead: 'unknown', lifecycleStatus: 'invalid');
+	}
+
+	public function testLeadCandidatesUseSharingPolicyAndExcludeGroups(): void {
+		$this->shareeSearch->expects(self::once())->method('search')->with('bob', 'alice', [], [])->willReturn([
+			['id' => 'bob', 'displayName' => 'Bob', 'type' => 'user'],
+			['id' => 'devs', 'displayName' => 'Developers', 'type' => 'group'],
+		]);
+		$this->userManager->method('getDisplayName')->with('alice')->willReturn('Alice');
+
+		self::assertSame([
+			['id' => 'alice', 'displayName' => 'Alice', 'type' => 'user'],
+			['id' => 'bob', 'displayName' => 'Bob', 'type' => 'user'],
+		], $this->service->leadCandidates('bob', 'alice'));
+	}
+
+	public function testLeadCandidatesKeepSelfWhenSharingIsDisabled(): void {
+		$this->shareeSearch->method('search')->willReturn([]);
+
+		self::assertSame([
+			['id' => 'alice', 'displayName' => 'alice', 'type' => 'user'],
+		], $this->service->leadCandidates('', 'alice'));
+	}
+
+	public function testFindMineIncludesLeadDisplayNameAndLifecycle(): void {
+		$project = $this->project();
+		$project->setLead('bob');
+		$project->setLifecycleStatus('done');
+		$this->projectMapper->method('findAccessible')->willReturn([$project]);
+		$this->userManager->method('getDisplayName')->willReturnMap([['alice', 'Alice'], ['bob', 'Bob']]);
+
+		$record = $this->service->findMine('alice')[0];
+
+		self::assertSame('bob', $record['lead']);
+		self::assertSame('Bob', $record['leadDisplayName']);
+		self::assertSame('done', $record['lifecycleStatus']);
 	}
 
 	public function testCreateRejectsImpossibleDate(): void {

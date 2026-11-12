@@ -302,12 +302,15 @@ class Project(_Base):
     createdAt: int = 0
     startDate: Optional[str] = None
     targetDate: Optional[str] = None
+    lead: Optional[str] = None
+    lifecycleStatus: str = "planned"
     # Only `GET /api/projects` carries these; None means "not reported here".
     isOwner: Optional[bool] = None
     canEdit: Optional[bool] = None
     canLeave: Optional[bool] = None
     shared: Optional[bool] = None
     ownerDisplayName: Optional[str] = None
+    leadDisplayName: Optional[str] = None
 
 
 class ProjectCard(_Base):

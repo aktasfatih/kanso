@@ -70,6 +70,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					{{ project.isOwner ? t('kanso', 'Shared') : t('kanso', 'Shared by {owner}', { owner: project.ownerDisplayName }, { escape: false, sanitize: false }) }}
 				</span>
 				<span v-if="project.description" class="projects-view__project-desc">{{ project.description }}</span>
+				<span class="projects-view__meta" data-test="project-tile-lifecycle">{{ t('kanso', 'Lifecycle') }}: {{ projectLifecycleLabel(project.lifecycleStatus) }}</span>
+				<span v-if="project.lead" class="projects-view__meta" data-test="project-tile-lead">{{ t('kanso', 'Lead') }}: {{ project.leadDisplayName || project.lead }}</span>
 
 				<template v-if="plans[project.id]">
 					<span
@@ -139,6 +141,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					type="date"
 					:disabled="create.isPending.value">
 
+				<label class="projects-view__form-label" for="project-lead">{{ t('kanso', 'Lead') }}</label>
+				<ProjectLeadPicker v-model="newLead" input-id="project-lead" :disabled="create.isPending.value" />
+				<label class="projects-view__form-label" for="project-lifecycle">{{ t('kanso', 'Lifecycle') }}</label>
+				<select id="project-lifecycle" v-model="newLifecycleStatus" class="projects-view__form-input" :disabled="create.isPending.value">
+					<option v-for="option in PROJECT_LIFECYCLE_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option>
+				</select>
+
 				<label class="projects-view__form-label">{{ t('kanso', 'Color') }}</label>
 				<div class="projects-view__color-grid">
 					<button
@@ -195,6 +204,8 @@ import { useProjects } from '../composables/useProjects.js'
 import { getProjectPlan } from '../services/api.js'
 import { projectStatus, formatPlanDate } from '../services/projectStatus.js'
 import { usePageTitle } from '../composables/usePageTitle.js'
+import ProjectLeadPicker from '../components/ProjectLeadPicker.vue'
+import { PROJECT_LIFECYCLE_OPTIONS, projectLifecycleLabel } from '../services/projectLifecycle.js'
 
 // Browser tab title (#125).
 usePageTitle(t('kanso', 'Projects'))
@@ -240,6 +251,8 @@ const newTitle = ref('')
 const newDescription = ref('')
 const newColor = ref('')
 const newTargetDate = ref('')
+const newLead = ref('')
+const newLifecycleStatus = ref('planned')
 const createError = ref('')
 const titleInputRef = ref(null)
 
@@ -248,6 +261,8 @@ function openCreateDialog() {
 	newDescription.value = ''
 	newColor.value = ''
 	newTargetDate.value = ''
+	newLead.value = ''
+	newLifecycleStatus.value = 'planned'
 	createError.value = ''
 	showCreateDialog.value = true
 	nextTick(() => titleInputRef.value?.focus())
@@ -267,6 +282,8 @@ async function submitCreate() {
 			description: newDescription.value.trim() || undefined,
 			color: newColor.value || undefined,
 			targetDate: newTargetDate.value || undefined,
+			lead: newLead.value || undefined,
+			lifecycleStatus: newLifecycleStatus.value,
 		})
 		closeCreateDialog()
 		router.push({ name: 'project', params: { id: String(project.id) } })

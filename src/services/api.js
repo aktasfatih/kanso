@@ -836,6 +836,9 @@ export const createProject = (data) =>
 export const updateProject = (id, data) =>
 	axios.patch(url(`/api/projects/${id}`), data).then((r) => r.data)
 
+export const searchProjectLeads = (q) =>
+	axios.get(url('/api/projects/leads'), { params: { q } }).then((r) => r.data)
+
 export const deleteProject = (id) =>
 	axios.delete(url(`/api/projects/${id}`)).then((r) => r.data)
 

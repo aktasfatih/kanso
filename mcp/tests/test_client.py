@@ -1229,6 +1229,33 @@ async def test_list_projects_parses():
     assert projects[0].title == "Launch"
     assert projects[0].color == "0082c9"
     assert projects[0].createdAt == 1700000000
+    assert projects[0].lead is None
+    assert projects[0].leadDisplayName is None
+    assert projects[0].lifecycleStatus == "planned"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_projects_keeps_lead_and_lifecycle():
+    respx.get(f"{BASE}/projects").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    **PROJECT,
+                    "lead": "alice",
+                    "leadDisplayName": "Alice",
+                    "lifecycleStatus": "in_progress",
+                }
+            ],
+        )
+    )
+    async with _client() as c:
+        project = (await c.list_projects())[0]
+
+    assert project.lead == "alice"
+    assert project.leadDisplayName == "Alice"
+    assert project.lifecycleStatus == "in_progress"
 
 
 @respx.mock
@@ -1262,12 +1289,64 @@ async def test_create_project_drops_unset_fields():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_create_project_with_lead_and_lifecycle():
+    route = respx.post(f"{BASE}/projects").mock(
+        return_value=httpx.Response(
+            200, json={**PROJECT, "lead": "alice", "lifecycleStatus": "in_progress"}
+        )
+    )
+    async with _client() as c:
+        project = await c.create_project(
+            "Launch", lead="alice", lifecycle_status="in_progress"
+        )
+
+    assert json.loads(route.calls.last.request.content) == {
+        "title": "Launch",
+        "lead": "alice",
+        "lifecycleStatus": "in_progress",
+    }
+    assert project.lead == "alice"
+    assert project.lifecycleStatus == "in_progress"
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("lead", ["alice", ""])
+@pytest.mark.parametrize("lifecycle_status", ["planned", "in_progress", "done"])
+async def test_update_project_sets_or_clears_metadata(lead, lifecycle_status):
+    route = respx.patch(f"{BASE}/projects/4").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                **PROJECT,
+                "lead": lead or None,
+                "lifecycleStatus": lifecycle_status,
+            },
+        )
+    )
+    async with _client() as c:
+        project = await c.update_project(
+            4, lead=lead, lifecycle_status=lifecycle_status
+        )
+
+    assert json.loads(route.calls.last.request.content) == {
+        "lead": lead,
+        "lifecycleStatus": lifecycle_status,
+    }
+    assert project.lead == (lead or None)
+    assert project.lifecycleStatus == lifecycle_status
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_update_project_patches_only_what_changed():
     route = respx.patch(f"{BASE}/projects/4").mock(
         return_value=httpx.Response(200, json={**PROJECT, "color": None})
     )
     async with _client() as c:
-        project = await c.update_project(4, color="")
+        project = await c.update_project(
+            4, color="", lead=None, lifecycle_status=None
+        )
     # "" is how the caller CLEARS the colour, so it must survive the None-filter.
     assert json.loads(route.calls.last.request.content) == {"color": ""}
     assert project.color is None

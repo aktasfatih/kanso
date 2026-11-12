@@ -1069,7 +1069,8 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         own, it points at cards that stay on their boards. Sharing a project
         never widens card access, so two members can see different cards. Each
         carries `id`, `title`, `description`, `color` (6-hex, no '#'), `owner`,
-        `createdAt`, the optional `startDate` / `targetDate` (YYYY-MM-DD), and
+        `createdAt`, the optional `startDate` / `targetDate` (YYYY-MM-DD),
+        `lead` (user id), `leadDisplayName`, `lifecycleStatus`, and
         the viewer's access: `isOwner`, `canEdit`, `canLeave`, `shared` and
         `ownerDisplayName`.
         """
@@ -1111,6 +1112,8 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         color: Optional[str] = None,
         start_date: Optional[str] = None,
         target_date: Optional[str] = None,
+        lead: Optional[str] = None,
+        lifecycle_status: Optional[Literal["planned", "in_progress", "done"]] = None,
     ) -> dict:
         """Create a project owned by you. Add cards to it afterwards with
         `kanso_add_card_to_project`.
@@ -1122,9 +1125,14 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             start_date: Optional start date, YYYY-MM-DD.
             target_date: Optional target (deadline) date, YYYY-MM-DD; must not
                 be before the start date.
+            lead: Optional Nextcloud user id. This does not grant project access.
+            lifecycle_status: planned (default), in_progress or done; separate
+                from the calculated forecast-health status.
         """
         return (
-            await client.create_project(title, description, color, start_date, target_date)
+            await client.create_project(
+                title, description, color, start_date, target_date, lead, lifecycle_status
+            )
         ).model_dump()
 
     @mcp.tool(title="Update a Kanso project")
@@ -1135,6 +1143,8 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         color: Optional[str] = None,
         start_date: Optional[str] = None,
         target_date: Optional[str] = None,
+        lead: Optional[str] = None,
+        lifecycle_status: Optional[Literal["planned", "in_progress", "done"]] = None,
     ) -> dict:
         """Update a project you own or can edit. Only the fields you pass are changed.
 
@@ -1148,6 +1158,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             color: New colour (6-hex, no '#'); "" clears it.
             start_date: New start date (YYYY-MM-DD); "" clears it.
             target_date: New target date (YYYY-MM-DD); "" clears it.
+            lead: New Nextcloud user id; "" clears it. Does not grant access.
+            lifecycle_status: planned, in_progress or done; separate from the
+                calculated forecast-health status.
         """
         return (
             await client.update_project(
@@ -1157,6 +1170,8 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
                 color=color,
                 start_date=start_date,
                 target_date=target_date,
+                lead=lead,
+                lifecycle_status=lifecycle_status,
             )
         ).model_dump()
 

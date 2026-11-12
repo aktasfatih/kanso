@@ -231,9 +231,9 @@ If the owner's account is deleted, an editor takes over, direct shares first.
 With no editor the project and its discussion are deleted. View-only members are
 never promoted.
 
-- `kanso_list_projects` — your projects (`id`, `title`, `description`, `color`, `owner`, `createdAt`, `startDate`, `targetDate`, plus `isOwner`, `canEdit`, `canLeave`, `shared`, `ownerDisplayName`)
+- `kanso_list_projects` — your projects (`id`, `title`, `description`, `color`, `owner`, `createdAt`, `startDate`, `targetDate`, `lead`, `lifecycleStatus`, plus `isOwner`, `canEdit`, `canLeave`, `shared`, `ownerDisplayName`, `leadDisplayName`)
 - `kanso_get_project` — one project's record plus its member cards
-- `kanso_create_project` / `kanso_update_project` (title, description, color, start and target date) / `kanso_delete_project`
+- `kanso_create_project` / `kanso_update_project` (title, description, color, start and target date, lead and lifecycle) / `kanso_delete_project`
   (memberships go, the cards stay)
 - `kanso_list_project_cards` — the member cards, with `boardTitle` + `stackTitle`; archived cards and
   cards on boards you can no longer read are left out
@@ -250,6 +250,12 @@ never promoted.
 - `kanso_update_project_comment` / `kanso_delete_project_comment` — edit or delete by **comment** id,
   your own while you can still edit the project; the owner can delete any comment (deleting a
   top-level comment takes its replies with it, so only the owner can delete one others replied to)
+
+`lead` takes a Nextcloud user id and does not grant access or share the project.
+`lifecycle_status` is `planned` (the default), `in_progress`, or `done`, independent
+of the forecast health returned by `kanso_get_project_plan`. On update, omitted
+or null fields stay unchanged; `lead=""` clears the lead. Owners and editors can
+update this metadata; viewers can read it.
 
 **Search**
 

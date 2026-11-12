@@ -155,10 +155,12 @@ your work, on your own Nextcloud, laid out plainly.
   under your Nextcloud sharing settings (members only see the cards they can
   already access; if the owner's account is deleted, an editor takes over, direct
   shares first, and with no editor the project and its discussion are deleted;
-  view-only members are never promoted), with a start and target date, a
+  view-only members are never promoted), with an optional lead and an explicit
+  Planned / In progress / Done lifecycle, plus a start and target date, a
   forecast finish date from your recent pace, an on-track / at-risk / late
   status, a burn-up chart, estimates normalized across boards, blocked and
-  overdue work grouped up top, and the project's cards on a timeline.
+  overdue work grouped up top, and the project's cards on a timeline. Lifecycle
+  is separate from forecast health; choosing a lead does not share the project.
 
 ### 📈 Analytics
 - **Estimates** on any scale, chosen per board: Fibonacci, planning poker,

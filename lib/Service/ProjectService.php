@@ -60,6 +60,7 @@ class ProjectService {
 		private IUserManager $userManager,
 		private IDBConnection $db,
 		private IGroupManager $groupManager,
+		private ShareeSearchService $shareeSearch,
 	) {
 	}
 
@@ -87,10 +88,11 @@ class ProjectService {
 
 	/**
 	 * @param ProjectShare[] $shares
-	 * @return array{isOwner: bool, canEdit: bool, canLeave: bool, shared: bool, ownerDisplayName: string}
+	 * @return array{isOwner: bool, canEdit: bool, canLeave: bool, shared: bool, ownerDisplayName: string, leadDisplayName: ?string}
 	 */
 	private function accessFields(Project $project, array $shares, string $uid): array {
 		$owner = (string)$project->getOwner();
+		$lead = $project->getLead();
 		$isOwner = $owner === $uid;
 		$permissions = $isOwner ? PermissionService::PERMISSION_ALL : $this->projectAccess->foldPermissions($shares, $uid);
 		$hasOwnRow = false;
@@ -105,6 +107,7 @@ class ProjectService {
 			'canLeave' => $hasOwnRow,
 			'shared' => $shares !== [],
 			'ownerDisplayName' => $this->userManager->getDisplayName($owner) ?? $owner,
+			'leadDisplayName' => $lead !== null ? ($this->userManager->getDisplayName($lead) ?? $lead) : null,
 		];
 	}
 
@@ -129,7 +132,7 @@ class ProjectService {
 	 *
 	 * @throws InvalidInputException on an empty or over-long title, an over-long description, or a malformed date
 	 */
-	public function create(string $uid, string $title, ?string $description, ?string $color, ?string $startDate = null, ?string $targetDate = null): Project {
+	public function create(string $uid, string $title, ?string $description, ?string $color, ?string $startDate = null, ?string $targetDate = null, ?string $lead = null, string $lifecycleStatus = 'planned'): Project {
 		$title = trim($title);
 		if ($title === '') {
 			throw new InvalidInputException('Project title must not be empty');
@@ -147,6 +150,8 @@ class ProjectService {
 		$project->setColor(ColorValidator::assertValid($color));
 		$project->setStartDate($this->parseDate($startDate));
 		$project->setTargetDate($this->parseDate($targetDate));
+		$project->setLead($this->resolveLead($lead, $uid));
+		$project->setLifecycleStatus($this->validateLifecycleStatus($lifecycleStatus));
 		$this->assertDateOrder($project);
 		$project->setOwner($uid);
 		$project->setCreatedAt(time());
@@ -162,7 +167,7 @@ class ProjectService {
 	 * @throws InvalidInputException on an empty or over-long title, a changed description
 	 *                               over the cap, or a malformed date
 	 */
-	public function update(int $id, string $uid, ?string $title, ?string $description, ?string $color, ?string $startDate = null, ?string $targetDate = null): Project {
+	public function update(int $id, string $uid, ?string $title, ?string $description, ?string $color, ?string $startDate = null, ?string $targetDate = null, ?string $lead = null, ?string $lifecycleStatus = null): Project {
 		$project = $this->loadProject($id, $uid, PermissionService::PERMISSION_EDIT);
 
 		if ($title !== null) {
@@ -191,9 +196,47 @@ class ProjectService {
 		if ($targetDate !== null) {
 			$project->setTargetDate($this->parseDate($targetDate));
 		}
+		if ($lead !== null && $lead !== $project->getLead()) {
+			$project->setLead($this->resolveLead($lead, $uid));
+		}
+		if ($lifecycleStatus !== null) {
+			$project->setLifecycleStatus($this->validateLifecycleStatus($lifecycleStatus));
+		}
 		$this->assertDateOrder($project);
 
 		return $this->projectMapper->update($project);
+	}
+
+	/** @return list<array{id: string, displayName: string, type: string}> */
+	public function leadCandidates(string $q, string $uid): array {
+		$users = array_values(array_filter(
+			$this->shareeSearch->search($q, $uid, [], []),
+			static fn (array $candidate): bool => $candidate['type'] === 'user' && $candidate['id'] !== $uid,
+		));
+		return array_merge([
+			['id' => $uid, 'displayName' => $this->userManager->getDisplayName($uid) ?? $uid, 'type' => 'user'],
+		], $users);
+	}
+
+	private function resolveLead(?string $lead, string $uid): ?string {
+		if ($lead === null || $lead === '') {
+			return null;
+		}
+		if ($lead === $uid) {
+			return $uid;
+		}
+		try {
+			return $this->shareeSearch->resolveParticipant(Acl::TYPE_USER, $lead, $uid);
+		} catch (InvalidInputException) {
+			throw new InvalidInputException('Lead must be an available Nextcloud user');
+		}
+	}
+
+	private function validateLifecycleStatus(string $status): string {
+		if (!in_array($status, ['planned', 'in_progress', 'done'], true)) {
+			throw new InvalidInputException('Lifecycle status must be planned, in_progress or done');
+		}
+		return $status;
 	}
 
 	/**

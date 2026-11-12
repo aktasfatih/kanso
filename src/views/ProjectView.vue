@@ -113,6 +113,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 			<span v-if="actionError" class="project-view__action-error">{{ actionError }}</span>
 			<span v-if="projectsFailed" class="project-view__action-error" role="alert">{{ t('kanso', 'Failed to load projects. Please try again.') }}</span>
+			<div class="project-view__metadata">
+				<span data-test="project-lifecycle">{{ t('kanso', 'Lifecycle') }}: {{ projectLifecycleLabel(project?.lifecycleStatus) }}</span>
+				<span data-test="project-lead">{{ t('kanso', 'Lead') }}: {{ project?.leadDisplayName || project?.lead || t('kanso', 'No lead') }}</span>
+			</div>
 
 			<!-- Prominent, in-place editable description directly under the title.
 			     Reuses the shipped markdown editor (#3562): useMarkdownToolbar +
@@ -550,6 +554,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<div class="project-view__desc-rendered kanso-md" v-html="renderMarkdown(editDescription)" />
 				</div>
 
+				<label class="project-view__form-label" for="edit-project-lead">{{ t('kanso', 'Lead') }}</label>
+				<ProjectLeadPicker
+					v-model="editLead"
+					input-id="edit-project-lead"
+					:display-name="editLeadDisplayName"
+					:disabled="updateMutation.isPending.value" />
+				<label class="project-view__form-label" for="edit-project-lifecycle">{{ t('kanso', 'Lifecycle') }}</label>
+				<select id="edit-project-lifecycle" v-model="editLifecycleStatus" class="project-view__form-input" :disabled="updateMutation.isPending.value">
+					<option v-for="option in PROJECT_LIFECYCLE_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option>
+				</select>
+
 				<label class="project-view__form-label">{{ t('kanso', 'Color') }}</label>
 				<div class="project-view__color-grid">
 					<button
@@ -649,6 +664,8 @@ import CardModal from '../components/CardModal.vue'
 import { relationPicker } from '../services/relationPicker.js'
 import ProjectHealth from '../components/ProjectHealth.vue'
 import ProjectShareDialog from '../components/ProjectShareDialog.vue'
+import ProjectLeadPicker from '../components/ProjectLeadPicker.vue'
+import { PROJECT_LIFECYCLE_OPTIONS, projectLifecycleLabel } from '../services/projectLifecycle.js'
 import { MY_WORK_POLL_INTERVAL } from '../composables/queryKeys.js'
 import { apiAnswerStatus } from '../services/apiErrors.js'
 import ProjectBurnup from '../components/ProjectBurnup.vue'
@@ -1039,6 +1056,9 @@ const showEditDialog = ref(false)
 const editTitle = ref('')
 const editDescription = ref('')
 const editColor = ref('')
+const editLead = ref('')
+const editLeadDisplayName = ref('')
+const editLifecycleStatus = ref('planned')
 const editError = ref('')
 const editTitleInputRef = ref(null)
 const descTextareaRef = ref(null)
@@ -1054,13 +1074,16 @@ const mdToolbar = useMarkdownToolbar({
 
 // What the dialog opened with. Only fields changed from it are sent, so saving a
 // new title cannot overwrite a description a collaborator edited meanwhile.
-let editOriginal = { title: '', description: '', color: '' }
+let editOriginal = { title: '', description: '', color: '', lead: '', lifecycleStatus: 'planned' }
 
 function openEditDialog() {
 	editTitle.value = project.value?.title ?? ''
 	editDescription.value = project.value?.description ?? ''
 	editColor.value = project.value?.color ?? ''
-	editOriginal = { title: editTitle.value.trim(), description: editDescription.value.trim(), color: editColor.value }
+	editLead.value = project.value?.lead ?? ''
+	editLeadDisplayName.value = project.value?.leadDisplayName ?? ''
+	editLifecycleStatus.value = project.value?.lifecycleStatus ?? 'planned'
+	editOriginal = { title: editTitle.value.trim(), description: editDescription.value.trim(), color: editColor.value, lead: editLead.value, lifecycleStatus: editLifecycleStatus.value }
 	editError.value = ''
 	showDescPreview.value = false
 	showEditDialog.value = true
@@ -1075,7 +1098,7 @@ async function submitEdit() {
 	const title = editTitle.value.trim()
 	if (!title || updateMutation.isPending.value) return
 	editError.value = ''
-	const edited = { title, description: editDescription.value.trim(), color: editColor.value }
+	const edited = { title, description: editDescription.value.trim(), color: editColor.value, lead: editLead.value, lifecycleStatus: editLifecycleStatus.value }
 	const changes = Object.fromEntries(Object.entries(edited).filter(([field, value]) => value !== editOriginal[field]))
 	if (Object.keys(changes).length === 0) {
 		closeEditDialog()
@@ -1240,6 +1263,13 @@ async function handleDeleteComment(comment) {
 </script>
 
 <style scoped>
+.project-view__metadata {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 24px;
+	color: var(--color-text-maxcontrast);
+}
+
 .project-view__shared {
 	flex-shrink: 0;
 	color: var(--color-text-maxcontrast);
