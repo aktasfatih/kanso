@@ -65,6 +65,14 @@ your work, on your own Nextcloud, laid out plainly.
   threads needs Edit, and deleting others’ discussion needs Manage. Only a
   manager can delete a thread that other people replied to. Sharers can grant
   only capabilities they hold.
+- **Single-assignee boards**: owners and managers can enable **One assignee per
+  card** in board settings. Choosing a different person replaces the current
+  assignee. Existing cards with multiple assignees keep everyone; remove extra
+  people before choosing someone new. Multiple assignees remain the default.
+  CSV imports and cross-board moves into a single-assignee board must fit the
+  setting. Recurring clones pause until their template has at most one assignee.
+  Board exports, restores and duplicates preserve the setting and
+  existing assignments; individual card copies start unassigned.
 - **Deleted boards**: owners and managers can restore a board from the board list
   for 30 days after deletion, with its contents and shares intact. Archive a
   board to hide it without a deletion deadline.

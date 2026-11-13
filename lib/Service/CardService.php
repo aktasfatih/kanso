@@ -500,11 +500,15 @@ class CardService {
 								$actorNames[$assignee['uid']] = $assignee['actorName'];
 							}
 						}
+						$assignees = array_values(array_unique($this->cardAssigneeMapper->findUserIdsByCard($cardId)));
+						if ($targetBoard->getSingleAssignee() === true && count($assignees) > 1) {
+							throw new InvalidInputException('The destination board allows one assignee per card; remove extra assignees before moving');
+						}
 						$snapshots[$cardId] = [
 							'labels' => $labels,
 							'labelMap' => $labelMap,
 							'items' => $this->checklistItemMapper->findByCard($cardId),
-							'assignees' => array_values(array_unique($this->cardAssigneeMapper->findUserIdsByCard($cardId))),
+							'assignees' => $assignees,
 							'watchers' => array_values(array_unique($this->subscriptionMapper->findCardSubscriberUids($cardId))),
 							'actorNames' => $actorNames,
 						];

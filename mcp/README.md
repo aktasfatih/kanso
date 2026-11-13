@@ -173,7 +173,11 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
 
 - `kanso_create_label` — create a board label
 - `kanso_assign_label` / `kanso_unassign_label`
-- `kanso_assign_user` / `kanso_unassign_user`
+- `kanso_assign_user` / `kanso_unassign_user`: on a single-assignee board,
+  selecting another person replaces the sole assignee. Existing cards with
+  multiple people require manual removals to at most one before a new selection.
+  Managers can toggle this through `kanso_update_board(single_assignee=true)`;
+  board reads report `singleAssignee`, which defaults to false.
 
 **Reviews** (hand work back to a human without it getting lost)
 

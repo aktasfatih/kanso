@@ -4233,4 +4233,20 @@ class CardServiceTest extends TestCase {
 		$result = $this->service->rebalanceBoard(1);
 		self::assertSame([5 => 2, 6 => 1], $result);
 	}
+	public function testMoveToSingleAssigneeBoardRejectsMultiplePeopleBeforeAnyShellOrStorageCopy(): void {
+		$source = $this->card(9, 5, 1);
+		$target = $this->board(2);
+		$target->setSingleAssignee(true);
+		$this->cardMapper->method('find')->with(9)->willReturn($source);
+		$this->boardMapper->method('find')->willReturnMap([[1, $this->board(1)], [2, $target]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, 2));
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn(['alice', 'bob']);
+		$this->cardMapper->expects(self::never())->method('insert');
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->moveContentService->expects(self::never())->method('copyAttachments');
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('The destination board allows one assignee');
+		$this->service->moveToBoard(9, 7, 'alice');
+	}
+
 }

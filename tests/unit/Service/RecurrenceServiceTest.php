@@ -2972,4 +2972,25 @@ class RecurrenceServiceTest extends TestCase {
 		self::assertSame(0, $rule->getNextOccurrenceAt());
 		self::assertFalse($rule->getEnabled());
 	}
+	public function testSingleAssigneeCloneRejectsGrandfatheredTemplateWithoutAdvancingRule(): void {
+		$board = $this->board();
+		$board->setSingleAssignee(true);
+		$this->boardMapper->method('find')->willReturn($board);
+		$rule = $this->rule(mode: RecurRule::MODE_CLONE, nextOccurrenceAt: self::NOW);
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
+		$this->cardMapper->method('find')->willReturn($this->templateCard());
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn(['bob', 'carol']);
+		$this->cardService->expects(self::never())->method('create');
+		$this->ruleMapper->expects(self::never())->method('update');
+		$this->cardAssigneeMapper->expects(self::never())->method('insertAssignment');
+		try {
+			$this->service->spawn($rule, true);
+			self::fail('A single-assignee clone copied multiple people');
+		} catch (InvalidInputException $e) {
+			self::assertStringContainsString('one assignee', $e->getMessage());
+		}
+		self::assertSame(self::NOW, $rule->getNextOccurrenceAt());
+		self::assertSame(0, $rule->getOccurrencesSpawned());
+	}
+
 }

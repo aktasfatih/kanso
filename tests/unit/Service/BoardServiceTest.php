@@ -922,4 +922,25 @@ class BoardServiceTest extends TestCase {
 		return $mutation;
 	}
 
+	public function testSingleAssigneeDefaultsOffAndCanBeToggledWithManageUnderExclusiveFence(): void {
+		$board = $this->board();
+		self::assertFalse($board->jsonSerialize()['singleAssignee']);
+		$this->boardMapper->method('find')->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->mutation->expects(self::exactly(3))->method('runForBoards')->with([1], self::isType('callable'), true);
+		$this->permissionService->expects(self::exactly(3))->method('assertPermission')->with($board, 'alice', PermissionService::PERMISSION_MANAGE);
+		self::assertTrue($this->service->update(1, null, null, null, 'alice', singleAssignee: true)->jsonSerialize()['singleAssignee']);
+		self::assertTrue($this->service->update(1, null, null, null, 'alice')->jsonSerialize()['singleAssignee']);
+		self::assertFalse($this->service->update(1, null, null, null, 'alice', singleAssignee: false)->jsonSerialize()['singleAssignee']);
+	}
+
+	public function testSingleAssigneeSettingDeniesEditors(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->willReturn($board);
+		$this->permissionService->method('assertPermission')->willThrowException(new NotPermittedException());
+		$this->boardMapper->expects(self::never())->method('update');
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(1, null, null, null, 'editor', singleAssignee: true);
+	}
+
 }

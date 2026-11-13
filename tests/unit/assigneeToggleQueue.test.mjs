@@ -80,7 +80,7 @@ after(() => {
  * @param {number} latency How long each assignee write takes to answer.
  * @param {Array<object|null>} outcomes Per call: a rejection value, or null to succeed.
  */
-function harness(t, boardId, cardId, latency, outcomes = []) {
+function harness(t, boardId, cardId, latency, outcomes = [], { singleAssignee = false, assigned = [], gate } = {}) {
 	const app = createApp({})
 	// A SHORT gcTime, not TanStack's five-minute default, which parks a real
 	// timer and keeps `node --test` from ever exiting (that is why
@@ -98,9 +98,10 @@ function harness(t, boardId, cardId, latency, outcomes = []) {
 	app.use(VueQueryPlugin, { queryClient })
 	clients.push(queryClient)
 
-	queryClient.setQueryData(['card', String(cardId)], { id: cardId, assigneeIds: [] })
+	queryClient.setQueryData(['card', String(cardId)], { id: cardId, assigneeIds: [...assigned] })
 	queryClient.setQueryData(['board', String(boardId)], {
-		cards: [{ id: cardId, assigneeIds: [] }],
+		board: { id: boardId, singleAssignee },
+		cards: [{ id: cardId, assigneeIds: [...assigned] }],
 	})
 
 	const writes = []
@@ -114,6 +115,7 @@ function harness(t, boardId, cardId, latency, outcomes = []) {
 		}
 		writes.push({ method: config.method.toUpperCase(), userId: match[2] })
 		const outcome = outcomes[call++]
+		if (gate) await gate(call)
 		if (latency > 0) await sleep(latency)
 		if (outcome) throw outcome
 		return { status: 200, statusText: 'OK', data: { ok: true }, headers: {}, config }
@@ -215,4 +217,88 @@ test('a refused pick does not strand the picks queued behind it', async (t) => {
 
 	assert.deepEqual(writes.map((w) => w.userId), ['alice', 'bob'],
 		'the queue must carry on after a refusal')
+})
+
+function deferred() {
+	let resolve
+	const promise = new Promise((r) => { resolve = r })
+	return { promise, resolve }
+}
+
+test('single mode replaces the sole person optimistically in detail and summary', async (t) => {
+	const entered = deferred()
+	const release = deferred()
+	t.after(() => release.resolve())
+	const h = harness(t, 10, 101, 0, [], {
+		singleAssignee: true, assigned: ['alice'],
+		gate: async () => { entered.resolve(); await release.promise },
+	})
+	const pick = h.enqueueToggle({ cardId: 101, userId: 'bob', assign: true })
+	await entered.promise
+	assert.deepEqual(cached(h.queryClient, 101), ['bob'])
+	assert.deepEqual(h.queryClient.getQueryData(['board', '10']).cards[0].assigneeIds, ['bob'])
+	release.resolve()
+	await pick
+})
+
+test('a refused single-person replacement restores only assignees', async (t) => {
+	const entered = deferred()
+	const release = deferred()
+	t.after(() => release.resolve())
+	const h = harness(t, 11, 111, 0, [{ response: { status: 403 } }], {
+		singleAssignee: true, assigned: ['alice'],
+		gate: async () => { entered.resolve(); await release.promise },
+	})
+	const pick = h.enqueueToggle({ cardId: 111, userId: 'bob', assign: true })
+	const rejected = assert.rejects(pick)
+	await entered.promise
+	h.queryClient.setQueryData(['card', '111'], (old) => ({ ...old, title: 'Concurrent title', labelIds: [9] }))
+	release.resolve()
+	await rejected
+	assert.deepEqual(cached(h.queryClient, 111), ['alice'])
+	assert.equal(h.queryClient.getQueryData(['card', '111']).title, 'Concurrent title')
+	assert.deepEqual(h.queryClient.getQueryData(['card', '111']).labelIds, [9])
+	assert.deepEqual(h.queryClient.getQueryData(['board', '11']).cards[0].assigneeIds, ['alice'])
+})
+
+test('single mode keeps grandfathered people on idempotent and refused new picks', async (t) => {
+	const entered = deferred()
+	const release = deferred()
+	t.after(() => release.resolve())
+	const h = harness(t, 12, 121, 0, [null, { response: { status: 400 } }], {
+		singleAssignee: true, assigned: ['alice', 'bob'],
+		gate: async (call) => { if (call === 2) { entered.resolve(); await release.promise } },
+	})
+	await h.enqueueToggle({ cardId: 121, userId: 'alice', assign: true })
+	assert.deepEqual(cached(h.queryClient, 121), ['alice', 'bob'])
+	const next = h.enqueueToggle({ cardId: 121, userId: 'carol', assign: true })
+	const rejected = assert.rejects(next)
+	await entered.promise
+	assert.deepEqual(cached(h.queryClient, 121), ['alice', 'bob'])
+	release.resolve()
+	await rejected
+	assert.deepEqual(cached(h.queryClient, 121), ['alice', 'bob'])
+	await h.enqueueToggle({ cardId: 121, userId: 'alice', assign: false })
+	await h.enqueueToggle({ cardId: 121, userId: 'carol', assign: true })
+	assert.deepEqual(cached(h.queryClient, 121), ['carol'])
+})
+
+test('queued picks read the current board mode when they execute', async (t) => {
+	const entered = deferred()
+	const release = deferred()
+	t.after(() => release.resolve())
+	const h = harness(t, 13, 131, 0, [], {
+		assigned: ['alice'],
+		gate: async (call) => { if (call === 1) { entered.resolve(); await release.promise } },
+	})
+	const first = h.enqueueToggle({ cardId: 131, userId: 'alice', assign: false })
+	const second = h.enqueueToggle({ cardId: 131, userId: 'bob', assign: true })
+	const third = h.enqueueToggle({ cardId: 131, userId: 'carol', assign: true })
+	await entered.promise
+	h.queryClient.setQueryData(['board', '13'], (old) => ({ ...old, board: { ...old.board, singleAssignee: true } }))
+	release.resolve()
+	await Promise.all([first, second, third])
+	assert.deepEqual(h.writes.map((w) => w.userId), ['alice', 'bob', 'carol'])
+	assert.deepEqual(cached(h.queryClient, 131), ['carol'])
+	assert.deepEqual(h.queryClient.getQueryData(['board', '13']).cards[0].assigneeIds, ['carol'])
 })

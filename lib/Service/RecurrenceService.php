@@ -1145,6 +1145,10 @@ class RecurrenceService {
 		// exactly as when the owner lost board access.
 		$board = $this->loadBoard($rule->getBoardId());
 		$this->visibilityGuard->assertVisible($board, $template, $rule->getOwner());
+		$assignees = $this->cardAssigneeMapper->findUserIdsByCard($template->getId());
+		if ($board->getSingleAssignee() === true && count($assignees) > 1) {
+			throw new InvalidInputException('This board allows one assignee per card; remove extra assignees from the recurring template');
+		}
 
 		// CardService::create runs as the owner: EDIT check, bottom-of-stack
 		// sort key, CREATE change - all in one place. The spawned card inherits
@@ -1180,7 +1184,7 @@ class RecurrenceService {
 				$this->cardLabelMapper->insertAssignment($card->getId(), $labelId);
 			}
 		}
-		foreach ($this->cardAssigneeMapper->findUserIdsByCard($template->getId()) as $assigneeUid) {
+		foreach ($assignees as $assigneeUid) {
 			if (!$this->cardAssigneeMapper->exists($card->getId(), $assigneeUid)) {
 				$this->cardAssigneeMapper->insertAssignment($card->getId(), $assigneeUid);
 			}

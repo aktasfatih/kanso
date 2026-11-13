@@ -185,6 +185,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						</p>
 						<span v-if="newCardsOnTopError" class="label-settings__error">{{ newCardsOnTopError }}</span>
 
+						<NcCheckboxRadioSwitch
+							v-if="canManage"
+							:model-value="singleAssignee"
+							:disabled="singleAssigneeSaving"
+							data-test="single-assignee-switch"
+							@update:model-value="onSingleAssigneeChange">
+							{{ t('kanso', 'One assignee per card') }}
+						</NcCheckboxRadioSwitch>
+						<p v-if="canManage" class="board-settings__general-hint">
+							{{ t('kanso', 'Choosing another person replaces the current assignee. Existing cards with multiple assignees keep everyone; remove extra people before choosing someone new.') }}
+						</p>
+						<span v-if="singleAssigneeError" class="label-settings__error">{{ singleAssigneeError }}</span>
+
 						<!-- AI-actor attribution (#352): when on, comments, review
 						     requests and assignees on this board may carry an AI
 						     name (e.g. "Claude Code") alongside the human uid, so
@@ -3868,6 +3881,21 @@ async function onNewCardsOnTopChange(checked) {
 		newCardsOnTopError.value = err?.response?.data?.error || t('kanso', 'Failed to update setting.')
 	} finally {
 		newCardsOnTopSaving.value = false
+	}
+}
+
+const singleAssignee = computed(() => boardQueryData.value?.board?.singleAssignee === true)
+const singleAssigneeSaving = ref(false)
+const singleAssigneeError = ref('')
+async function onSingleAssigneeChange(checked) {
+	singleAssigneeSaving.value = true
+	singleAssigneeError.value = ''
+	try {
+		await updateBoard.mutateAsync({ singleAssignee: checked })
+	} catch (err) {
+		singleAssigneeError.value = err?.response?.data?.error || t('kanso', 'Failed to update setting.')
+	} finally {
+		singleAssigneeSaving.value = false
 	}
 }
 

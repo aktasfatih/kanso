@@ -45,6 +45,7 @@ class BoardSummary(_Base):
     allowAiActors: bool = False
     # "All children done → parent done" gate (#198); OFF by default.
     autoCompleteParent: bool = False
+    singleAssignee: bool = False
     groupId: Optional[int] = None
     pinned: bool = False
     permissions: Optional[int] = None
@@ -78,6 +79,7 @@ class Board(_Base):
     allowAiActors: bool = False
     # "All children done → parent done" gate (#198); OFF by default.
     autoCompleteParent: bool = False
+    singleAssignee: bool = False
 
 
 class Stack(_Base):

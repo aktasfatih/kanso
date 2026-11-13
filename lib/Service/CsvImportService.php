@@ -226,7 +226,11 @@ class CsvImportService {
 	 * @return array{boardId: int, stackId: int, cards: int, skipped: int, labelsCreated: int, labelsSkipped: int}
 	 */
 	private function attempt($handle, bool $hasHeader, Board $board, Stack $stack, array $mapping, string $actorUid, int $dataRows): array {
-		return $this->cardMutation->runForBoards([$board->getId()], fn (): array => $this->rebuild($handle, $hasHeader, $board, $stack, $mapping, $actorUid, $dataRows));
+		return $this->cardMutation->runForBoards([$board->getId()], function () use ($handle, $hasHeader, $board, $stack, $mapping, $actorUid, $dataRows): array {
+			$board = $this->boardService->find($board->getId(), $actorUid);
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			return $this->rebuild($handle, $hasHeader, $board, $stack, $mapping, $actorUid, $dataRows);
+		});
 	}
 
 	/**
@@ -459,6 +463,7 @@ class CsvImportService {
 	 */
 	private function attachAssignees(array $uids, int $cardId, Board $board): void {
 		$seen = [];
+		$accepted = [];
 		foreach ($uids as $uid) {
 			$uid = trim($uid);
 			if ($uid === '' || isset($seen[$uid])) {
@@ -471,6 +476,12 @@ class CsvImportService {
 			if (($this->permissionService->getPermissions($board, $uid) & PermissionService::PERMISSION_READ) === 0) {
 				continue;
 			}
+			$accepted[] = $uid;
+		}
+		if ($board->getSingleAssignee() === true && count($accepted) > 1) {
+			throw new InvalidInputException('This board allows one assignee per card; import each card with at most one assignee');
+		}
+		foreach ($accepted as $uid) {
 			$this->cardAssigneeMapper->insertAssignment($cardId, $uid);
 		}
 	}

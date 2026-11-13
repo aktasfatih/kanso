@@ -421,6 +421,10 @@ class ImportService {
 			$archive, $writtenObjects
 		);
 
+		if (($board['singleAssignee'] ?? false) === true) {
+			$this->boardService->update($boardId, null, null, null, $actorUid, singleAssignee: true);
+		}
+
 		$this->importArchiveRules($board, $boardId, $stackIdMap, $now);
 		$this->importRecurRules($board, $boardId, $stackIdMap, $cardIdMap, $actorUid, $now);
 		$this->importAutomationRules($board, $boardId, $labelIdMap, $now);

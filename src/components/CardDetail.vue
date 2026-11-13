@@ -972,9 +972,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:aria-expanded="openPicker === 'assign'"
 							@click="toggleAssignPicker()">
 							<AccountPlusIcon :size="14" />
-							{{ cardAssigneeIds.length > 0 ? t('kanso', 'Add assignee') : t('kanso', 'Assign') }}
+							{{ cardAssigneeIds.length > 0 ? (singleAssignee ? t('kanso', 'Change assignee') : t('kanso', 'Add assignee')) : t('kanso', 'Assign') }}
 						</button>
 						<div v-if="openPicker === 'assign'" class="card-modal__popover">
+							<p v-if="singleAssignee" class="card-modal__assign-note" data-test="single-assignee-note">
+								{{ assigneesOverLimit
+									? t('kanso', 'Remove extra assignees before choosing someone new. Existing assignees are kept.')
+									: t('kanso', 'Choosing another person replaces the current assignee.') }}
+							</p>
 							<!-- The rows below are the FIRST PAGE of a payload the server caps, so on
 							     a board shared with more people than the cap they are not everyone.
 							     This box is how the rest are reached: it asks the server for the
@@ -1020,6 +1025,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								class="card-modal__assign-option"
 								:class="{ 'card-modal__assign-option--active': p.assigned }"
 								:aria-pressed="p.assigned"
+								:aria-disabled="assigneesOverLimit && !p.assigned ? 'true' : undefined"
 								:aria-busy="isAssigneeTogglePending(p.uid) ? 'true' : undefined"
 								@click="handleToggleAssignee(p.uid, !p.assigned)">
 								<NcAvatar
@@ -3340,6 +3346,8 @@ const discoveredParticipants = ref(new Map())
 let assigneeSearchTimer = null
 let assigneeSearchSeq = 0
 
+const singleAssignee = computed(() => boardData.value?.board?.singleAssignee === true)
+const assigneesOverLimit = computed(() => singleAssignee.value && cardAssigneeIds.value.length > 1)
 const cardAssigneeIds = computed(() =>
 	Array.isArray(cardData.value?.assigneeIds) ? cardData.value.assigneeIds : [],
 )
@@ -3536,6 +3544,10 @@ function isAssigneeTogglePending(uid) {
 // on Escape / a click outside, like every other attribute-bar popover.
 async function handleToggleAssignee(uid, assign) {
 	assigneeError.value = ''
+	if (assign && assigneesOverLimit.value && !cardAssigneeIds.value.includes(uid)) {
+		assigneeError.value = t('kanso', 'Remove extra assignees before choosing someone new. Existing assignees are kept.')
+		return
+	}
 	try {
 		const result = await enqueueToggle({
 			cardId: Number(props.cardId),

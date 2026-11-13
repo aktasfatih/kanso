@@ -169,8 +169,10 @@ class CsvImportServiceTest extends TestCase {
 	 * getPermissions() is deliberately left to the individual test: the label tests
 	 * pin one mask for the actor, the assignee test drives it per uid.
 	 */
-	private function primeTarget(int $mask = PermissionService::PERMISSION_ALL, string $actorUid = 'alice'): void {
-		$this->boardService->method('find')->with(self::BOARD_ID, $actorUid)->willReturn($this->board());
+	private function primeTarget(int $mask = PermissionService::PERMISSION_ALL, string $actorUid = 'alice', bool $singleAssignee = false): void {
+		$board = $this->board();
+		$board->setSingleAssignee($singleAssignee);
+		$this->boardService->method('find')->with(self::BOARD_ID, $actorUid)->willReturn($board);
 		$this->stackMapper->method('find')->with(self::STACK_ID)->willReturn($this->stack());
 		$this->permissionService->method('assertPermission')->willReturnCallback(
 			static function (Board $board, string $uid, int $permission) use ($mask): void {
@@ -493,7 +495,7 @@ class CsvImportServiceTest extends TestCase {
 	// ── assignees: match-or-drop, READ-filtered ─────────────────────────────────
 
 	public function testAssigneesMatchOrDropByReadPermission(): void {
-		$this->primeTarget();
+		$this->primeTarget(singleAssignee: true);
 		$this->db->method('beginTransaction');
 		$this->db->method('commit');
 		$this->labelMapper->method('findByBoard')->willReturn([]);
@@ -516,7 +518,7 @@ class CsvImportServiceTest extends TestCase {
 			return new CardAssignee();
 		});
 
-		$csv = "title,assignees\nTask,\"alice, bob, carol\"\n";
+		$csv = "title,assignees\nTask,\"alice, bob, carol, alice\"\n";
 		$this->service->import($csv, self::BOARD_ID, self::STACK_ID, ['title' => 0, 'assignees' => 1], true, 'alice');
 
 		// Only alice survives (bob missing, carol unreadable) - no leak.
@@ -714,4 +716,25 @@ class CsvImportServiceTest extends TestCase {
 		$this->expectException(\RuntimeException::class);
 		$this->service->import("title\nX\n", self::BOARD_ID, self::STACK_ID, ['title' => 0], true, 'alice');
 	}
+	public function testSingleAssigneeImportReloadsModeAndRollsBackMultipleReadablePeople(): void {
+		$before = $this->board();
+		$inside = $this->board();
+		$inside->setSingleAssignee(true);
+		$this->boardService->expects(self::exactly(2))->method('find')->willReturnOnConsecutiveCalls($before, $inside);
+		$this->stackMapper->method('find')->willReturn($this->stack());
+		$this->cardMapper->method('nextBoardSeq')->willReturn(1);
+		$this->cardMapper->method('insert')->willReturnCallback(static function (Card $card): Card {
+			$card->setId(100);
+			return $card;
+		});
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_READ);
+		$this->userManager->method('userExists')->willReturn(true);
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::never())->method('commit');
+		$this->cardAssigneeMapper->expects(self::never())->method('insertAssignment');
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+		$this->expectException(InvalidInputException::class);
+		$this->service->import("title,assignees\nTask,\"alice,bob\"\n", self::BOARD_ID, self::STACK_ID, ['title' => 0, 'assignees' => 1], true, 'alice');
+	}
+
 }

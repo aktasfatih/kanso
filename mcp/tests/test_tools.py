@@ -1492,3 +1492,25 @@ async def test_list_project_shares_rejects_a_non_list_body():
     async with client:
         with pytest.raises(KansoApiError):
             await tools["kanso_list_project_shares"](4)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_single_assignee_setting_is_optional_and_visible_through_tools():
+    from mcp.server.fastmcp import FastMCP
+
+    client = KansoClient(KansoConfig(host="http://nc.test", username="admin", password="pw"))
+    server = FastMCP("kanso-test")
+    register_tools(server, client)
+    async with client:
+        tool = next(t for t in await server.list_tools() if t.name == "kanso_update_board")
+    assert "single_assignee" in tool.inputSchema["properties"]
+    assert "single_assignee" not in tool.inputSchema.get("required", [])
+    route = respx.patch(f"{BASE}/boards/7").mock(
+        return_value=httpx.Response(200, json={"id": 7, "title": "Board", "singleAssignee": True})
+    )
+    tools, client = _tools()
+    async with client:
+        board = await tools["kanso_update_board"](7, single_assignee=True)
+    assert json.loads(route.calls.last.request.content) == {"singleAssignee": True}
+    assert board["singleAssignee"] is True

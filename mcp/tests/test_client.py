@@ -1601,3 +1601,16 @@ async def test_project_owner_gate_surfaces_as_kanso_api_error():
         with pytest.raises(KansoApiError) as excinfo:
             await c.list_project_cards(9)
     assert excinfo.value.status_code == 403
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("enabled", [True, False])
+async def test_update_board_sends_single_assignee_and_preserves_response(enabled):
+    route = respx.patch(f"{BASE}/boards/3").mock(
+        return_value=httpx.Response(200, json={"id": 3, "title": "B", "singleAssignee": enabled})
+    )
+    async with _client() as c:
+        board = await c.update_board(3, single_assignee=enabled)
+    assert json.loads(route.calls.last.request.content) == {"singleAssignee": enabled}
+    assert board.singleAssignee is enabled

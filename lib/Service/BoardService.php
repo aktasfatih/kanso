@@ -266,8 +266,8 @@ class BoardService {
 	 * @param bool|null $allowAiActors the AI-actor attribution gate (#352); null = leave unchanged
 	 * @param bool|null $autoCompleteParent the "all children done → parent done" gate (#198); null = leave unchanged
 	 */
-	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null, ?array $cardFeatures = null, ?string $description = null, ?array $estimateCustom = null, ?bool $allowAiActors = null, ?bool $autoCompleteParent = null): Board {
-		return $this->cardMutation->runForBoards([$id], function () use ($id, $title, $color, $archived, $uid, $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl, $cardFeatures, $description, $estimateCustom, $allowAiActors, $autoCompleteParent): Board {
+	public function update(int $id, ?string $title, ?string $color, ?bool $archived, string $uid, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null, ?array $cardFeatures = null, ?string $description = null, ?array $estimateCustom = null, ?bool $allowAiActors = null, ?bool $autoCompleteParent = null, ?bool $singleAssignee = null): Board {
+		return $this->cardMutation->runForBoards([$id], function () use ($id, $title, $color, $archived, $uid, $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl, $cardFeatures, $description, $estimateCustom, $allowAiActors, $autoCompleteParent, $singleAssignee): Board {
 			$board = $this->loadBoard($id);
 			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
@@ -316,6 +316,9 @@ class BoardService {
 			if ($autoCompleteParent !== null) {
 				// "All children done → parent done" gate (#198): a plain boolean, OFF by default.
 				$board->setAutoCompleteParent($autoCompleteParent);
+			}
+			if ($singleAssignee !== null) {
+				$board->setSingleAssignee($singleAssignee);
 			}
 			if ($prefix !== null) {
 				// Normalize to the stored shape (uppercased, alnum, capped). A value

@@ -108,9 +108,13 @@ export function useAssignees(boardId) {
 				queryClient.getQueryData(boardKey)?.cards?.find((c) => c.id === cardId),
 			)
 
-			const patchIds = (ids) => assign
-				? (ids.includes(userId) ? ids : [...ids, userId])
-				: ids.filter((id) => id !== userId)
+			const singleAssignee = queryClient.getQueryData(boardKey)?.board?.singleAssignee === true
+			const patchIds = (ids) => {
+				if (!assign) return ids.filter((id) => id !== userId)
+				if (ids.includes(userId)) return ids
+				if (singleAssignee) return ids.length <= 1 ? [userId] : ids
+				return [...ids, userId]
+			}
 
 			// Optimistically patch the card's assigneeIds in the board summary cache
 			queryClient.setQueryData(boardKey, (old) => {

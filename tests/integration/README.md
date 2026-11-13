@@ -245,3 +245,35 @@ external-role caps, private/internal card visibility, public shares and existing
 card trash, then verifies expiry before purge and removal afterward. Only owned
 fixture board IDs are purged; an attached neighboring board must survive.
 Fixture boards, users, group and upload are removed in `finally`.
+
+## Single-assignee concurrency
+
+After applying the checkout migrations, run this against an explicitly selected
+**disposable** installation. The data-directory argument must exactly match its
+Nextcloud configuration. Each race creates synthetic users and boards, then
+purges only those fixtures in `finally`.
+
+```sh
+python3 tests/integration/single-assignee-concurrency.py \
+  --container YOUR_DISPOSABLE_NEXTCLOUD_CONTAINER \
+  --config-dir /path/to/disposable/config \
+  --data-dir /path/to/disposable/data \
+  --driver postgres
+```
+
+Repeat with `--driver mariadb` or `--driver mysql`. PostgreSQL uses its own
+connections' activity; MariaDB needs `PROCESS` on the disposable server for
+InnoDB status. For Oracle MySQL, `--mysql-container YOUR_DISPOSABLE_MYSQL_CONTAINER`
+reads lock waits as that container's root user using its `MYSQL_ROOT_PASSWORD`
+environment variable, without changing application-user grants. No credentials
+are printed. This option must name only the disposable database container.
+
+The coordinator uses independent PHP workers and transaction barriers. It proves
+actual database lock waits before releasing the holder, checks both orders of
+mode changes versus assignment, CSV import, cross-board move and recurring clone,
+and checks concurrent single-person replacements. An unrelated card must remain
+writable while a replacement is held. Source hashes are checked in each worker;
+final assignment sets, rollback state and fixture cleanup are asserted. Use
+`--output /tmp/single-assignee-races.json` to retain the JSON results. SQLite is
+covered by the HTTP and service tests; its single-writer lock model does not
+establish the SQL-server concurrency guarantees tested here.

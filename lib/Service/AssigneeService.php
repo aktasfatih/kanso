@@ -75,15 +75,30 @@ class AssigneeService {
 				return;
 			}
 
+			$replaced = [];
+			if ($board->getSingleAssignee() === true) {
+				$replaced = $this->cardAssigneeMapper->findUserIdsByCard($cardId);
+				if (count($replaced) > 1) {
+					throw new InvalidInputException('Remove extra assignees before choosing a new person on this single-assignee board');
+				}
+				foreach ($replaced as $uid) {
+					$this->cardAssigneeMapper->deleteAssignment($cardId, $uid);
+				}
+			}
+
 			try {
 				$this->cardAssigneeMapper->insertAssignment($cardId, $participantUid, $actorName);
 			} catch (\OCP\DB\Exception $e) {
-				if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+				if ($replaced === [] && $e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 					// Concurrent PUT lost the check-then-insert race - the
 					// assignment exists, which is the idempotent success case.
 					return;
 				}
 				throw $e;
+			}
+
+			foreach ($replaced as $uid) {
+				$this->recordUnassignment($card, $uid, $actorUid);
 			}
 
 			$change = $this->changeNotifier->notify(
@@ -122,20 +137,24 @@ class AssigneeService {
 				return;
 			}
 
-			$change = $this->changeNotifier->notify(
-				$card->getBoardId(),
-				Change::ENTITY_CARD,
-				$cardId,
-				Change::ACTION_UPDATE,
-				$actorUid,
-				verb: Change::VERB_UNASSIGNED,
-			);
-			// Record the removed assignee's display name so the Activity feed can say WHO.
-			$this->changeDetailMapper->insertDetail($change->getId(), $this->capDetail($this->displayName($participantUid)), null);
-
-			// Clear any pending "assigned to you" bell notification for this card.
-			$this->notificationService->dismissCardAssigned($cardId, $participantUid);
+			$this->recordUnassignment($card, $participantUid, $actorUid);
 		});
+	}
+
+	private function recordUnassignment(Card $card, string $participantUid, string $actorUid): void {
+		$change = $this->changeNotifier->notify(
+			$card->getBoardId(),
+			Change::ENTITY_CARD,
+			$card->getId(),
+			Change::ACTION_UPDATE,
+			$actorUid,
+			verb: Change::VERB_UNASSIGNED,
+		);
+		// Record the removed assignee's display name so the Activity feed can say WHO.
+		$this->changeDetailMapper->insertDetail($change->getId(), $this->capDetail($this->displayName($participantUid)), null);
+
+		// Clear any pending "assigned to you" bell notification for this card.
+		$this->notificationService->dismissCardAssigned($card->getId(), $participantUid);
 	}
 
 	/**
