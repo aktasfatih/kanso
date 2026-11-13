@@ -58,11 +58,8 @@ html, body { height: 100%; }
 .public-card__desc { margin: 6px 0 0; font-size: 13px; color: var(--color-text-maxcontrast, #666); white-space: pre-wrap; word-break: break-word; }
 .public-card__meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--color-text-maxcontrast, #888); }
 .public-card__prio { color: var(--color-error-text, #c33); font-weight: 600; }
-/* Core's `#body-public footer` rule already pins this to the viewport bottom
-   (computed `position: fixed`), so it is out of flow and the flex shell above
-   neither sizes it nor has to reserve room for it — but declare flex:0 0 auto
-   anyway so it lands under the stack row, not on top of it, if that rule goes. */
-.public-board__footer { flex: 0 0 auto; margin-top: 16px; text-align: center; font-size: 12px; color: var(--color-text-maxcontrast, #999); }
+/* Keep the attribution in flow above the space reserved for the guest banner. */
+#kanso-public .public-board__footer { position: static; inset: auto; transform: none; width: auto; flex: 0 0 auto; margin-top: 16px; text-align: center; font-size: 12px; color: var(--color-text-maxcontrast, #999); }
 
 /* Phone viewports — same treatment as the authenticated board in
    src/styles/mobile.css (which the public bundle never loads: src/public.js
