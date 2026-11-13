@@ -80,6 +80,8 @@ return [
 		['name' => 'backupAdmin#delete', 'url' => '/api/admin/backup/files', 'verb' => 'DELETE'],
 
 		['name' => 'board#index', 'url' => '/api/boards', 'verb' => 'GET'],
+		['name' => 'board#deleted', 'url' => '/api/boards/deleted', 'verb' => 'GET'],
+		['name' => 'board#restore', 'url' => '/api/boards/{id}/restore', 'verb' => 'POST'],
 		['name' => 'board#create', 'url' => '/api/boards', 'verb' => 'POST'],
 
 		// Per-user board folders / groups in the nav (#3529). FLAT, one-level,

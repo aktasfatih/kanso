@@ -9,6 +9,7 @@ namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Access\ViewerContext;
+use OCA\Kanso\Cron\PurgeDeletedBoards;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardGroupMemberMapper;
 use OCA\Kanso\Db\BoardMapper;
@@ -20,6 +21,7 @@ use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\EstimateScale;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\AppFramework\Utility\ITimeFactory;
 
 /**
  * Board CRUD. Every mutation appends a row to the `kanso_changes` log in
@@ -49,6 +51,7 @@ class BoardService {
 		private BoardPinMapper $boardPinMapper,
 		private BoardAccess $boardAccess,
 		private CardMutationService $cardMutation,
+		private ITimeFactory $timeFactory,
 	) {
 	}
 
@@ -62,6 +65,31 @@ class BoardService {
 			$uid,
 			$this->permissionService->getUserGroupIds($uid)
 		);
+	}
+
+	/** @return list<array{id: int, title: ?string, color: ?string, archived: bool, deletedAt: int, restoreUntil: int}> */
+	public function findDeleted(string $uid): array {
+		$boards = $this->boardMapper->findDeletedForUser(
+			$uid,
+			$this->permissionService->getUserGroupIds($uid),
+			$this->timeFactory->getTime() - PurgeDeletedBoards::RETENTION_SECONDS,
+		);
+		$permissions = $this->permissionService->getPermissionsForBoards($boards, $uid);
+		$out = [];
+		foreach ($boards as $board) {
+			if ((($permissions[$board->getId()] ?? 0) & PermissionService::PERMISSION_MANAGE) === 0) {
+				continue;
+			}
+			$out[] = [
+				'id' => $board->getId(),
+				'title' => $board->getTitle(),
+				'color' => $board->getColor(),
+				'archived' => $board->getArchived() ?? false,
+				'deletedAt' => $board->getDeletedAt(),
+				'restoreUntil' => $board->getDeletedAt() + PurgeDeletedBoards::RETENTION_SECONDS,
+			];
+		}
+		return $out;
 	}
 
 	/**
@@ -379,16 +407,7 @@ class BoardService {
 	}
 
 	/**
-	 * Deletes the board. Writes a `deleted_at` tombstone, which takes the board
-	 * out of every read path at once - the delete is immediate and final from
-	 * the user's point of view (the reversible case is the separate `archived`
-	 * flag, and there is no restore).
-	 *
-	 * The tombstone is not the end of it: {@see BoardPurgeService} removes the
-	 * rows and the attachment bytes once the retention window has passed, driven
-	 * by {@see \OCA\Kanso\Cron\PurgeDeletedBoards}. The window is a safety margin
-	 * against a mistaken delete being irreversible the same second, not a trash
-	 * the user can browse.
+	 * Hides the board until restored or purged after the retention window.
 	 *
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the user may not manage the board
@@ -411,6 +430,22 @@ class BoardService {
 				$uid
 			);
 
+			return $board;
+		}, true);
+	}
+
+	public function restore(int $id, string $uid): Board {
+		return $this->cardMutation->runForBoards([$id], function () use ($id, $uid): Board {
+			$board = $this->boardMapper->find($id);
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+			$now = $this->timeFactory->getTime();
+			if ($board->getDeletedAt() <= 0 || $board->getDeletedAt() < $now - PurgeDeletedBoards::RETENTION_SECONDS) {
+				throw new DoesNotExistException('Board is not available for recovery');
+			}
+			$board->setDeletedAt(0);
+			$board->setLastModified($now);
+			$board = $this->boardMapper->update($board);
+			$this->changeNotifier->notify($id, Change::ENTITY_BOARD, $id, Change::ACTION_UPDATE, $uid);
 			return $board;
 		}, true);
 	}

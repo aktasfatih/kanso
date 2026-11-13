@@ -345,21 +345,21 @@ msgstr "%1$s heeft jouw review gevraagd op %2$s"
 msgid "%1$s shared %2$s with you"
 msgstr "%1$s heeft %2$s met je gedeeld"
 
-#: src/views/BoardList.vue:219
+#: src/views/BoardList.vue:225
 msgid "%n attachment"
 msgid_plural "%n attachments"
 msgstr[0] "%n bijlage"
 msgstr[1] "%n bijlagen"
 
-#: src/views/BoardList.vue:226
+#: src/views/BoardList.vue:232
 msgid "%n attachment could not be copied and is missing from the new board. Keep your Deck board until you have checked it."
 msgid_plural "%n attachments could not be copied and are missing from the new board. Keep your Deck board until you have checked them."
 msgstr[0] "%n bijlage kon niet worden gekopieerd en ontbreekt op het nieuwe bord. Bewaar je Deck-bord tot je hem hebt gecontroleerd."
 msgstr[1] "%n bijlagen konden niet worden gekopieerd en ontbreken op het nieuwe bord. Bewaar je Deck-bord tot je ze hebt gecontroleerd."
 
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:216
-#: src/views/BoardList.vue:259
+#: src/views/BoardList.vue:222
+#: src/views/BoardList.vue:265
 #: src/views/BoardStats.vue:444
 #: src/views/ProjectStats.vue:347
 msgid "%n card"
@@ -379,13 +379,13 @@ msgid_plural "%n cards created"
 msgstr[0] "%n kaart aangemaakt"
 msgstr[1] "%n kaarten aangemaakt"
 
-#: src/views/BoardList.vue:215
+#: src/views/BoardList.vue:221
 msgid "%n column"
 msgid_plural "%n columns"
 msgstr[0] "%n kolom"
 msgstr[1] "%n kolommen"
 
-#: src/views/BoardList.vue:218
+#: src/views/BoardList.vue:224
 msgid "%n comment"
 msgid_plural "%n comments"
 msgstr[0] "%n reactie"
@@ -402,6 +402,12 @@ msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dag geleden"
 msgstr[1] "%n dagen geleden"
+
+#: src/components/DeletedBoards.vue:32
+msgid "%n day left"
+msgid_plural "%n days left"
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/components/BoardAttachmentsModal.vue:14
 msgid "%n file"
@@ -421,7 +427,7 @@ msgid_plural "%n IDs copied."
 msgstr[0] "%n ID gekopieerd."
 msgstr[1] "%n ID's gekopieerd."
 
-#: src/views/BoardList.vue:217
+#: src/views/BoardList.vue:223
 msgid "%n label"
 msgid_plural "%n labels"
 msgstr[0] "%n label"
@@ -1102,6 +1108,14 @@ msgstr "Bordopties"
 #: src/views/BoardView.vue
 msgid "Board ordering needs a refresh."
 msgstr "De volgorde van het bord moet ververst worden."
+
+#: src/components/DeletedBoards.vue
+msgid "Board restored. Find it under Active."
+msgstr ""
+
+#: src/components/DeletedBoards.vue
+msgid "Board restored. Find it under Archived."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/BoardView.vue
@@ -1852,6 +1866,10 @@ msgstr "Kan dat bestand niet importeren."
 msgid "Could not import that Trello file."
 msgstr "Kan dat Trello-bestand niet importeren."
 
+#: src/components/DeletedBoards.vue
+msgid "Could not load deleted boards."
+msgstr ""
+
 #: src/components/BoardAttachmentsModal.vue
 msgid "Could not load more files. Try again."
 msgstr "Kan niet meer bestanden laden. Probeer het opnieuw."
@@ -1875,6 +1893,10 @@ msgstr "Kan je Deck-borden niet laden."
 #: src/components/BoardSettingsModal.vue
 msgid "Could not remove the mailbox."
 msgstr "Kan de mailbox niet verwijderen."
+
+#: src/components/DeletedBoards.vue
+msgid "Could not restore the board. Try again."
+msgstr ""
 
 #: src/admin-backup.js
 msgid "Could not save backup settings"
@@ -2093,8 +2115,8 @@ msgid "Delete \"{name}\"?"
 msgstr "\"{name}\" verwijderen?"
 
 #: src/views/BoardList.vue
-msgid "Delete \"{title}\" and all of its cards for everyone? This cannot be undone."
-msgstr "\"{title}\" en alle kaarten erin voor iedereen verwijderen? Dit kan niet ongedaan worden gemaakt."
+msgid "Delete \"{title}\" and remove it for everyone?"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Delete \"{title}\"?"
@@ -2184,8 +2206,8 @@ msgid "Delete these sample cards whenever you like"
 msgstr "Verwijder deze voorbeeldkaarten wanneer je maar wilt"
 
 #: src/components/BoardSettingsModal.vue
-msgid "Delete this board permanently?"
-msgstr "Dit bord definitief verwijderen?"
+msgid "Delete this board?"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Delete this rule?"
@@ -2202,6 +2224,11 @@ msgstr "Weergave \"{name}\" verwijderen?"
 #: src/views/TrashView.vue
 msgid "Deleted {when}"
 msgstr "Verwijderd {when}"
+
+#: src/components/DeletedBoards.vue
+#: src/views/BoardList.vue
+msgid "Deleted boards"
+msgstr ""
 
 #: src/views/BoardView.vue
 msgid "Deleted cards"
@@ -3499,8 +3526,8 @@ msgid "Hide the discussion panel"
 msgstr "Het discussiepaneel verbergen"
 
 #: src/components/BoardSettingsModal.vue
-msgid "Hide this board without deleting it. You can restore it later."
-msgstr "Verberg dit bord zonder het te verwijderen. Je kunt het later terughalen."
+msgid "Hide this board without deleting it. Unarchive it at any time; there is no deletion deadline."
+msgstr ""
 
 #: src/composables/usePriority.js
 msgid "High"
@@ -3909,6 +3936,10 @@ msgstr "Zet je schattingen op volgorde van klein naar groot. Het getal bepaalt h
 msgid "Load more files"
 msgstr "Meer bestanden laden"
 
+#: src/components/DeletedBoards.vue
+msgid "Loading deleted boards…"
+msgstr ""
+
 #: src/views/InboxView.vue
 msgid "Loading inbox…"
 msgstr "Postvak laden…"
@@ -4293,6 +4324,7 @@ msgstr "Geen borden in deze map"
 msgid "No boards in this folder yet."
 msgstr "Nog geen borden in deze map."
 
+#: src/components/DeletedBoards.vue
 #: src/views/BoardList.vue
 msgid "No boards match your search."
 msgstr "Er zijn geen borden die overeenkomen met je zoekopdracht."
@@ -4375,6 +4407,10 @@ msgstr "Geen gegevens"
 #: src/views/BoardList.vue
 msgid "No Deck boards found to import."
 msgstr "Geen Deck-borden gevonden om te importeren."
+
+#: src/components/DeletedBoards.vue
+msgid "No deleted boards to restore."
+msgstr ""
 
 #: src/views/TrashView.vue
 msgid "No deleted cards match “{query}”."
@@ -4787,6 +4823,14 @@ msgstr "Te laat"
 msgid "Owner"
 msgstr "Eigenaar"
 
+#: src/components/DeletedBoards.vue
+msgid "Owners and managers can restore deleted boards for 30 days. After that, the board and its contents are permanently removed. Archived boards have no deletion deadline."
+msgstr ""
+
+#: src/views/BoardList.vue
+msgid "Owners and managers can restore it from Deleted boards for 30 days. After that, the board and its contents are permanently removed. Archive instead to hide it without a deletion deadline."
+msgstr ""
+
 #: src/components/ProjectHealth.vue
 msgid "Pace"
 msgstr "Tempo"
@@ -4827,10 +4871,6 @@ msgstr "per mailbox"
 #: src/components/BoardSettingsModal.vue
 msgid "per sender"
 msgstr "per afzender"
-
-#: src/components/BoardSettingsModal.vue
-msgid "Permanently remove this board and all of its cards for everyone. This cannot be undone."
-msgstr "Verwijder dit bord en al zijn kaarten definitief, voor iedereen. Dit kan niet ongedaan worden gemaakt."
 
 #: src/components/CardDetail.vue
 msgid "Pick a card to link…"
@@ -5033,6 +5073,10 @@ msgstr "Alleen-lezen"
 msgid "Recently done"
 msgstr "Recent afgerond"
 
+#: src/components/DeletedBoards.vue
+msgid "Recovery window expired."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Recurring cards"
 msgstr "Terugkerende kaarten"
@@ -5173,6 +5217,10 @@ msgstr "Mailbox verwijderen"
 #: src/components/CardDetail.vue
 msgid "Remove relation"
 msgstr "Relatie verwijderen"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Remove this board for everyone. Owners and managers have 30 days to restore it before permanent removal."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Remove time entry"
@@ -5331,6 +5379,14 @@ msgstr "heeft een thread opgelost"
 msgid "Restore"
 msgstr "Herstellen"
 
+#: src/components/DeletedBoards.vue
+msgid "Restore before {date}"
+msgstr ""
+
+#: src/components/DeletedBoards.vue
+msgid "Restore board"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Restore panel size"
 msgstr "Paneelgrootte herstellen"
@@ -5339,6 +5395,10 @@ msgstr "Paneelgrootte herstellen"
 #: src/views/TrashView.vue
 msgid "Restore selected"
 msgstr "Selectie herstellen"
+
+#: src/components/DeletedBoards.vue
+msgid "Restores to Archived."
+msgstr ""
 
 #: src/components/CommandPalette.vue
 msgid "Results"
@@ -6067,6 +6127,10 @@ msgstr "De streefdatum is verstreken en er staat nog werk open."
 msgid "There is no other board you can move this card to."
 msgstr "Er is geen ander bord waar je deze kaart naartoe kunt verplaatsen."
 
+#: src/components/DeletedBoards.vue
+msgid "This board can no longer be restored. Its recovery window or your access may have ended."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "This board no longer exists or you no longer have access."
 msgstr "Dit bord bestaat niet meer of je hebt geen toegang meer."
@@ -6128,8 +6192,8 @@ msgid "This public board link is invalid or has been disabled."
 msgstr "Deze link naar een openbaar bord is ongeldig of is uitgeschakeld."
 
 #: src/components/BoardSettingsModal.vue
-msgid "This removes the board and all of its cards for everyone. This cannot be undone."
-msgstr "Hiermee verdwijnt het bord met al zijn kaarten voor iedereen. Dit kan niet ongedaan worden gemaakt."
+msgid "This removes the board for everyone. Owners and managers can restore it from Deleted boards for 30 days. After that, the board and its contents are permanently removed. Archive instead to hide it without a deletion deadline."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "This same card is brought back and reset each time"
@@ -6250,6 +6314,10 @@ msgstr "De prullenbak is leeg"
 #: src/views/BoardList.vue
 msgid "Trello (.json)"
 msgstr "Trello (.json)"
+
+#: src/components/DeletedBoards.vue
+msgid "Try again"
+msgstr ""
 
 #: src/views/MyCardsView.vue
 msgid "Try changing your filters or search."

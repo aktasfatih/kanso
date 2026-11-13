@@ -90,6 +90,16 @@ class BoardController extends Controller {
 	}
 
 	#[NoAdminRequired]
+	public function deleted(): JSONResponse {
+		return $this->respond(fn (): JSONResponse => new JSONResponse($this->boardService->findDeleted($this->currentUserId())));
+	}
+
+	#[NoAdminRequired]
+	public function restore(int $id): JSONResponse {
+		return $this->respond(fn (): JSONResponse => new JSONResponse($this->boardService->restore($id, $this->currentUserId())));
+	}
+
+	#[NoAdminRequired]
 	public function create(string $title = '', ?string $color = null): JSONResponse {
 		return $this->respond(function () use ($title, $color): JSONResponse {
 			return new JSONResponse(

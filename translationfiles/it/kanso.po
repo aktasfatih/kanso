@@ -345,21 +345,21 @@ msgstr "%1$s ha richiesto la tua revisione su %2$s"
 msgid "%1$s shared %2$s with you"
 msgstr "%1$s ha condiviso %2$s con te"
 
-#: src/views/BoardList.vue:219
+#: src/views/BoardList.vue:225
 msgid "%n attachment"
 msgid_plural "%n attachments"
 msgstr[0] "%n allegato"
 msgstr[1] "%n allegati"
 
-#: src/views/BoardList.vue:226
+#: src/views/BoardList.vue:232
 msgid "%n attachment could not be copied and is missing from the new board. Keep your Deck board until you have checked it."
 msgid_plural "%n attachments could not be copied and are missing from the new board. Keep your Deck board until you have checked them."
 msgstr[0] "%n allegato non è stato copiato e manca dalla nuova bacheca. Conserva la tua bacheca di Deck finché non l'hai controllato."
 msgstr[1] "%n allegati non sono stati copiati e mancano dalla nuova bacheca. Conserva la tua bacheca di Deck finché non li hai controllati."
 
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:216
-#: src/views/BoardList.vue:259
+#: src/views/BoardList.vue:222
+#: src/views/BoardList.vue:265
 #: src/views/BoardStats.vue:444
 #: src/views/ProjectStats.vue:347
 msgid "%n card"
@@ -379,13 +379,13 @@ msgid_plural "%n cards created"
 msgstr[0] "%n scheda creata"
 msgstr[1] "%n schede create"
 
-#: src/views/BoardList.vue:215
+#: src/views/BoardList.vue:221
 msgid "%n column"
 msgid_plural "%n columns"
 msgstr[0] "%n colonna"
 msgstr[1] "%n colonne"
 
-#: src/views/BoardList.vue:218
+#: src/views/BoardList.vue:224
 msgid "%n comment"
 msgid_plural "%n comments"
 msgstr[0] "%n commento"
@@ -402,6 +402,12 @@ msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n giorno fa"
 msgstr[1] "%n giorni fa"
+
+#: src/components/DeletedBoards.vue:32
+msgid "%n day left"
+msgid_plural "%n days left"
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/components/BoardAttachmentsModal.vue:14
 msgid "%n file"
@@ -421,7 +427,7 @@ msgid_plural "%n IDs copied."
 msgstr[0] "%n ID copiato."
 msgstr[1] "%n ID copiati."
 
-#: src/views/BoardList.vue:217
+#: src/views/BoardList.vue:223
 msgid "%n label"
 msgid_plural "%n labels"
 msgstr[0] "%n etichetta"
@@ -1102,6 +1108,14 @@ msgstr "Opzioni della bacheca"
 #: src/views/BoardView.vue
 msgid "Board ordering needs a refresh."
 msgstr "L'ordinamento della bacheca deve essere aggiornato."
+
+#: src/components/DeletedBoards.vue
+msgid "Board restored. Find it under Active."
+msgstr ""
+
+#: src/components/DeletedBoards.vue
+msgid "Board restored. Find it under Archived."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/BoardView.vue
@@ -1852,6 +1866,10 @@ msgstr "Impossibile importare quel file."
 msgid "Could not import that Trello file."
 msgstr "Impossibile importare quel file di Trello."
 
+#: src/components/DeletedBoards.vue
+msgid "Could not load deleted boards."
+msgstr ""
+
 #: src/components/BoardAttachmentsModal.vue
 msgid "Could not load more files. Try again."
 msgstr "Impossibile caricare altri file. Riprova."
@@ -1875,6 +1893,10 @@ msgstr "Impossibile caricare le bacheche di Deck."
 #: src/components/BoardSettingsModal.vue
 msgid "Could not remove the mailbox."
 msgstr "Impossibile rimuovere la casella di posta."
+
+#: src/components/DeletedBoards.vue
+msgid "Could not restore the board. Try again."
+msgstr ""
 
 #: src/admin-backup.js
 msgid "Could not save backup settings"
@@ -2093,8 +2115,8 @@ msgid "Delete \"{name}\"?"
 msgstr "Eliminare «{name}»?"
 
 #: src/views/BoardList.vue
-msgid "Delete \"{title}\" and all of its cards for everyone? This cannot be undone."
-msgstr "Eliminare «{title}» e tutte le sue schede per tutti? L'operazione non può essere annullata."
+msgid "Delete \"{title}\" and remove it for everyone?"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Delete \"{title}\"?"
@@ -2184,8 +2206,8 @@ msgid "Delete these sample cards whenever you like"
 msgstr "Queste schede di esempio si possono eliminare in qualsiasi momento"
 
 #: src/components/BoardSettingsModal.vue
-msgid "Delete this board permanently?"
-msgstr "Eliminare definitivamente questa bacheca?"
+msgid "Delete this board?"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Delete this rule?"
@@ -2202,6 +2224,11 @@ msgstr "Eliminare la vista «{name}»?"
 #: src/views/TrashView.vue
 msgid "Deleted {when}"
 msgstr "Eliminata {when}"
+
+#: src/components/DeletedBoards.vue
+#: src/views/BoardList.vue
+msgid "Deleted boards"
+msgstr ""
 
 #: src/views/BoardView.vue
 msgid "Deleted cards"
@@ -3499,8 +3526,8 @@ msgid "Hide the discussion panel"
 msgstr "Nascondi il pannello della discussione"
 
 #: src/components/BoardSettingsModal.vue
-msgid "Hide this board without deleting it. You can restore it later."
-msgstr "Nascondi questa bacheca senza eliminarla. Può essere ripristinata in seguito."
+msgid "Hide this board without deleting it. Unarchive it at any time; there is no deletion deadline."
+msgstr ""
 
 #: src/composables/usePriority.js
 msgid "High"
@@ -3909,6 +3936,10 @@ msgstr "Elenca le tue stime dalla più piccola alla più grande. Il numero indic
 msgid "Load more files"
 msgstr "Carica altri file"
 
+#: src/components/DeletedBoards.vue
+msgid "Loading deleted boards…"
+msgstr ""
+
 #: src/views/InboxView.vue
 msgid "Loading inbox…"
 msgstr "Caricamento della posta in arrivo…"
@@ -4293,6 +4324,7 @@ msgstr "Nessuna bacheca in questa cartella"
 msgid "No boards in this folder yet."
 msgstr "Ancora nessuna bacheca in questa cartella."
 
+#: src/components/DeletedBoards.vue
 #: src/views/BoardList.vue
 msgid "No boards match your search."
 msgstr "Nessuna bacheca corrisponde alla ricerca."
@@ -4375,6 +4407,10 @@ msgstr "Nessun dato"
 #: src/views/BoardList.vue
 msgid "No Deck boards found to import."
 msgstr "Nessuna bacheca di Deck da importare."
+
+#: src/components/DeletedBoards.vue
+msgid "No deleted boards to restore."
+msgstr ""
 
 #: src/views/TrashView.vue
 msgid "No deleted cards match “{query}”."
@@ -4787,6 +4823,14 @@ msgstr "In ritardo"
 msgid "Owner"
 msgstr "Proprietario"
 
+#: src/components/DeletedBoards.vue
+msgid "Owners and managers can restore deleted boards for 30 days. After that, the board and its contents are permanently removed. Archived boards have no deletion deadline."
+msgstr ""
+
+#: src/views/BoardList.vue
+msgid "Owners and managers can restore it from Deleted boards for 30 days. After that, the board and its contents are permanently removed. Archive instead to hide it without a deletion deadline."
+msgstr ""
+
 #: src/components/ProjectHealth.vue
 msgid "Pace"
 msgstr "Ritmo"
@@ -4827,10 +4871,6 @@ msgstr "per casella di posta"
 #: src/components/BoardSettingsModal.vue
 msgid "per sender"
 msgstr "per mittente"
-
-#: src/components/BoardSettingsModal.vue
-msgid "Permanently remove this board and all of its cards for everyone. This cannot be undone."
-msgstr "Rimuove definitivamente questa bacheca e tutte le sue schede per tutti. L'operazione non può essere annullata."
 
 #: src/components/CardDetail.vue
 msgid "Pick a card to link…"
@@ -5033,6 +5073,10 @@ msgstr "Sola lettura"
 msgid "Recently done"
 msgstr "Completate di recente"
 
+#: src/components/DeletedBoards.vue
+msgid "Recovery window expired."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Recurring cards"
 msgstr "Schede ricorrenti"
@@ -5173,6 +5217,10 @@ msgstr "Rimuovi la casella di posta"
 #: src/components/CardDetail.vue
 msgid "Remove relation"
 msgstr "Rimuovi la relazione"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Remove this board for everyone. Owners and managers have 30 days to restore it before permanent removal."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Remove time entry"
@@ -5331,6 +5379,14 @@ msgstr "ha risolto una discussione"
 msgid "Restore"
 msgstr "Ripristina"
 
+#: src/components/DeletedBoards.vue
+msgid "Restore before {date}"
+msgstr ""
+
+#: src/components/DeletedBoards.vue
+msgid "Restore board"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Restore panel size"
 msgstr "Ripristina la dimensione del pannello"
@@ -5339,6 +5395,10 @@ msgstr "Ripristina la dimensione del pannello"
 #: src/views/TrashView.vue
 msgid "Restore selected"
 msgstr "Ripristina le selezionate"
+
+#: src/components/DeletedBoards.vue
+msgid "Restores to Archived."
+msgstr ""
 
 #: src/components/CommandPalette.vue
 msgid "Results"
@@ -6067,6 +6127,10 @@ msgstr "La data obiettivo è passata e c'è ancora lavoro aperto."
 msgid "There is no other board you can move this card to."
 msgstr "Non c'è nessun'altra bacheca in cui spostare questa scheda."
 
+#: src/components/DeletedBoards.vue
+msgid "This board can no longer be restored. Its recovery window or your access may have ended."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "This board no longer exists or you no longer have access."
 msgstr "Questa bacheca non esiste più oppure non è più accessibile."
@@ -6128,8 +6192,8 @@ msgid "This public board link is invalid or has been disabled."
 msgstr "Questo collegamento pubblico alla bacheca non è valido oppure è stato disattivato."
 
 #: src/components/BoardSettingsModal.vue
-msgid "This removes the board and all of its cards for everyone. This cannot be undone."
-msgstr "Questa operazione rimuove la bacheca e tutte le sue schede per tutti. Non può essere annullata."
+msgid "This removes the board for everyone. Owners and managers can restore it from Deleted boards for 30 days. After that, the board and its contents are permanently removed. Archive instead to hide it without a deletion deadline."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "This same card is brought back and reset each time"
@@ -6250,6 +6314,10 @@ msgstr "Il cestino è vuoto"
 #: src/views/BoardList.vue
 msgid "Trello (.json)"
 msgstr "Trello (.json)"
+
+#: src/components/DeletedBoards.vue
+msgid "Try again"
+msgstr ""
 
 #: src/views/MyCardsView.vue
 msgid "Try changing your filters or search."

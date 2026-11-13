@@ -19,22 +19,29 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					:aria-label="t('kanso', 'Search boards')">
 			</div>
 
-			<!-- Active / Archived segmented toggle -->
+			<!-- Board lifecycle filter -->
 			<div class="board-list-segmented" role="group" :aria-label="t('kanso', 'Filter boards')">
 				<button
 					class="board-list-segmented__opt"
-					:class="{ 'board-list-segmented__opt--active': !showArchived }"
-					:aria-pressed="!showArchived"
-					@click="showArchived = false">
+					:class="{ 'board-list-segmented__opt--active': !showArchived && !showDeleted }"
+					:aria-pressed="!showArchived && !showDeleted"
+					@click="setBoardFilter('active')">
 					{{ t('kanso', 'Active') }}
 				</button>
 				<button
 					class="board-list-segmented__opt"
 					:class="{ 'board-list-segmented__opt--active': showArchived }"
 					:aria-pressed="showArchived"
-					@click="showArchived = true">
+					@click="setBoardFilter('archived')">
 					{{ t('kanso', 'Archived') }}
 					<span v-if="archivedBoards.length > 0" class="board-list-segmented__badge">{{ archivedBoards.length }}</span>
+				</button>
+				<button
+					class="board-list-segmented__opt"
+					:class="{ 'board-list-segmented__opt--active': showDeleted }"
+					:aria-pressed="showDeleted"
+					@click="setBoardFilter('deleted')">
+					{{ t('kanso', 'Deleted boards') }}
 				</button>
 			</div>
 
@@ -101,7 +108,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			</p>
 
 			<!-- New folder (#3529) -->
-			<NcButton v-if="!showArchived" @click="showCreateFolder = !showCreateFolder">
+			<NcButton v-if="!showArchived && !showDeleted" @click="showCreateFolder = !showCreateFolder">
 				<template #icon>
 					<FolderPlusOutlineIcon :size="20" />
 				</template>
@@ -118,7 +125,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		</div>
 
 		<!-- Inline create-folder form (#3529) -->
-		<form v-if="showCreateFolder && !showArchived" class="new-board-form" data-test="new-folder-form" @submit.prevent="submitNewFolder">
+		<form v-if="showCreateFolder && !showArchived && !showDeleted" class="new-board-form" data-test="new-folder-form" @submit.prevent="submitNewFolder">
 			<input
 				enterkeyhint="done"
 				ref="newFolderInput"
@@ -167,9 +174,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			@imported="onCsvImported"
 			@open-board="onCsvOpenBoard" />
 
-		<!-- Delete-board confirm (#3750). Same pattern as BoardSettingsModal's
-		     danger zone: an explicit confirm dialog, no undo toast (board delete
-		     is soft server-side, but the Trash page covers cards only). -->
+		<!-- Delete-board confirmation -->
 		<NcDialog
 			v-if="deleteTarget"
 			:open="true"
@@ -177,8 +182,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			data-test="tile-delete-confirm"
 			@closing="deleteTarget = null">
 			<p class="board-delete-confirm__hint">
-				{{ t('kanso', 'Delete "{title}" and all of its cards for everyone? This cannot be undone.', { title: deleteTarget.title }) }}
+				{{ t('kanso', 'Delete "{title}" and remove it for everyone?', { title: deleteTarget.title }) }}
 			</p>
+			<p>{{ t('kanso', 'Owners and managers can restore it from Deleted boards for 30 days. After that, the board and its contents are permanently removed. Archive instead to hide it without a deletion deadline.') }}</p>
 			<template #actions>
 				<NcButton
 					type="error"
@@ -271,7 +277,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		</NcModal>
 
 		<!-- ── Body ───────────────────────────────────────────────────────── -->
-		<div class="board-list-body">
+		<div v-if="showDeleted" class="board-list-body">
+			<DeletedBoards :search="search" />
+		</div>
+		<div v-else class="board-list-body">
 			<!-- A failed re-read over a list we already hold (#155). TanStack keeps
 			     `data` on error, and a Nextcloud that briefly stops routing
 			     /apps/kanso/api/* 404s this feed along with every other endpoint -
@@ -566,6 +575,7 @@ import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import DeleteOutlineIcon from 'vue-material-design-icons/DeleteOutline.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
+import DeletedBoards from '../components/DeletedBoards.vue'
 import BoardTileContent from '../components/BoardTileContent.vue'
 import BoardTileMenu from '../components/BoardTileMenu.vue'
 import CsvImportModal from '../components/CsvImportModal.vue'
@@ -593,6 +603,11 @@ const groups = computed(() => (Array.isArray(groupsData.value) ? groupsData.valu
 // ── Header controls ──────────────────────────────────────────────────────────
 const search = ref('')
 const showArchived = ref(false)
+const showDeleted = ref(false)
+function setBoardFilter(filter) {
+	showArchived.value = filter === 'archived'
+	showDeleted.value = filter === 'deleted'
+}
 const showCreate = ref(false)
 const newBoardInput = ref(null)
 

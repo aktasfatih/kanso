@@ -222,3 +222,26 @@ permission denial. Class source paths are checked and SHA-256 fingerprints
 printed so an installed App Store copy cannot silently replace the checkout.
 Fixture boards remain for inspection. This exercises middleware dispatch
 directly; the ordinary webhook e2e specs cover HTTP routing and body capture.
+
+## Deleted board recovery
+
+Run the recovery harness only against an explicitly authorized disposable
+installation with local attachment storage. Set the expected data directory
+exactly; the harness refuses another target. Alternate driver profiles also
+need `NEXTCLOUD_CONFIG_DIR` pointing to their disposable configuration.
+
+```sh
+docker exec -u www-data \
+  -e NEXTCLOUD_ROOT=/var/www/html \
+  -e KANSO_INTEGRATION_DISPOSABLE=1 \
+  -e KANSO_RECOVERY_EXPECTED_DATA_DIR=/path/to/disposable/data \
+  YOUR_DISPOSABLE_NEXTCLOUD_CONTAINER \
+  php /var/www/html/custom_apps/kanso/tests/integration/board-recovery.php
+```
+
+It compares complete retained-row snapshots discovered from the live schema
+and attachment bytes, checks owner/direct/group manager access, revocation,
+external-role caps, private/internal card visibility, public shares and existing
+card trash, then verifies expiry before purge and removal afterward. Only owned
+fixture board IDs are purged; an attached neighboring board must survive.
+Fixture boards, users, group and upload are removed in `finally`.

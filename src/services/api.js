@@ -53,6 +53,12 @@ axios.interceptors.response.use(undefined, (error) => {
 export const fetchBoards = () =>
 	axios.get(url('/api/boards')).then((r) => r.data)
 
+export const fetchDeletedBoards = () =>
+	axios.get(url('/api/boards/deleted')).then((r) => r.data)
+
+export const restoreBoard = (id) =>
+	axios.post(url(`/api/boards/${id}/restore`)).then((r) => r.data)
+
 /**
  * Read a board - conditionally when the caller already holds its payload.
  *

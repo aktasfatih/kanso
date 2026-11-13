@@ -218,6 +218,37 @@ class BoardMapper extends QBMapper {
 	}
 
 	/**
+	 * @param string[] $groupIds
+	 * @return Board[]
+	 */
+	public function findDeletedForUser(string $uid, array $groupIds, int $deletedSince): array {
+		$qb = $this->db->getQueryBuilder();
+		$participants = $qb->expr()->orX(
+			$qb->expr()->eq('b.owner', $qb->createNamedParameter($uid)),
+			$qb->expr()->andX(
+				$qb->expr()->eq('acl.participant_type', $qb->createNamedParameter(Acl::TYPE_USER, IQueryBuilder::PARAM_INT)),
+				$qb->expr()->eq('acl.participant', $qb->createNamedParameter($uid)),
+			),
+		);
+		if ($groupIds !== []) {
+			$participants->add($qb->expr()->andX(
+				$qb->expr()->eq('acl.participant_type', $qb->createNamedParameter(Acl::TYPE_GROUP, IQueryBuilder::PARAM_INT)),
+				$qb->expr()->in('acl.participant', $qb->createNamedParameter($groupIds, IQueryBuilder::PARAM_STR_ARRAY)),
+			));
+		}
+		$qb->selectDistinct('b.*')
+			->from($this->getTableName(), 'b')
+			->leftJoin('b', 'kanso_board_acl', 'acl', $qb->expr()->eq('acl.board_id', 'b.id'))
+			->where($qb->expr()->gt('b.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gte('b.deleted_at', $qb->createNamedParameter($deletedSince, IQueryBuilder::PARAM_INT)))
+			->andWhere($participants)
+			->orderBy('b.deleted_at', 'DESC')
+			->addOrderBy('b.id', 'DESC');
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * All non-deleted boards shared with the user directly or via one of
 	 * their groups. May contain a board twice-joined only once per row -
 	 * callers dedupe by id.

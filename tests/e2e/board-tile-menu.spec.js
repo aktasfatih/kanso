@@ -69,6 +69,9 @@ test.describe('Boards page — tile options menu board actions', () => {
 		// The confirm dialog opens; Cancel keeps the board.
 		const dialog = page.locator('[data-test="tile-delete-confirm"]')
 		await expect(dialog).toBeVisible()
+		await expect(dialog).toContainText('30 days')
+		await expect(dialog).toContainText('Archive instead')
+		await expect(dialog).not.toContainText('cannot be undone')
 		await dialog.getByRole('button', { name: 'Cancel' }).click()
 		await expect(dialog).toHaveCount(0, { timeout: 6_000 })
 		await expect(page.locator('.board-tile', { hasText: title }).first()).toBeVisible()

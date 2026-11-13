@@ -65,6 +65,9 @@ your work, on your own Nextcloud, laid out plainly.
   threads needs Edit, and deleting others’ discussion needs Manage. Only a
   manager can delete a thread that other people replied to. Sharers can grant
   only capabilities they hold.
+- **Deleted boards**: owners and managers can restore a board from the board list
+  for 30 days after deletion, with its contents and shares intact. Archive a
+  board to hide it without a deletion deadline.
 - **Public link**: publish a board **read-only** at a link that needs no
   Nextcloud account — optionally with its comments visible. Rotate or switch
   the link off at any time from board settings.

@@ -76,10 +76,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<!-- Delete-board confirm -->
 					<div v-if="showDeleteBoardConfirm" class="bs-delete-confirm" role="alertdialog">
 						<p class="bs-delete-confirm__title">
-							{{ t('kanso', 'Delete this board permanently?') }}
+							{{ t('kanso', 'Delete this board?') }}
 						</p>
 						<p class="bs-delete-confirm__hint">
-							{{ t('kanso', 'This removes the board and all of its cards for everyone. This cannot be undone.') }}
+							{{ t('kanso', 'This removes the board for everyone. Owners and managers can restore it from Deleted boards for 30 days. After that, the board and its contents are permanently removed. Archive instead to hide it without a deletion deadline.') }}
 						</p>
 						<div class="bs-delete-confirm__actions">
 							<NcButton type="error" :disabled="isDeletingBoard" @click="doDeleteBoard">
@@ -374,7 +374,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<div class="board-actions__row">
 									<div class="board-actions__text">
 										<span class="board-actions__label">{{ t('kanso', 'Archive board') }}</span>
-										<span class="board-actions__hint">{{ t('kanso', 'Hide this board without deleting it. You can restore it later.') }}</span>
+										<span class="board-actions__hint">{{ t('kanso', 'Hide this board without deleting it. Unarchive it at any time; there is no deletion deadline.') }}</span>
 									</div>
 									<NcButton :disabled="archiving" @click="archiveBoard">
 										<template #icon>
@@ -387,7 +387,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<div class="board-actions__row">
 									<div class="board-actions__text">
 										<span class="board-actions__label board-actions__label--delete">{{ t('kanso', 'Delete board') }}</span>
-										<span class="board-actions__hint">{{ t('kanso', 'Permanently remove this board and all of its cards for everyone. This cannot be undone.') }}</span>
+										<span class="board-actions__hint">{{ t('kanso', 'Remove this board for everyone. Owners and managers have 30 days to restore it before permanent removal.') }}</span>
 									</div>
 									<NcButton type="error" :disabled="isDeletingBoard" @click="onDeleteBoardClick">
 										<template #icon>
