@@ -8843,8 +8843,8 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	padding: 6px;
 }
 .card-modal__checklist-item {
-	position: relative; /* anchors the per-step assign/due popovers (#3745) */
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 10px;
 	padding: 8px;
@@ -8879,8 +8879,13 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	cursor: pointer;
 	flex-shrink: 0;
 }
+.card-modal__checklist-item-title,
+.card-modal__checklist-item-input {
+	flex: 1 1 8rem;
+	min-width: 0;
+	box-sizing: border-box;
+}
 .card-modal__checklist-item-title {
-	flex: 1;
 	font-size: 0.875rem;
 	color: var(--color-main-text);
 	cursor: text;
@@ -8894,7 +8899,6 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	text-decoration: line-through;
 }
 .card-modal__checklist-item-input {
-	flex: 1;
 	height: 30px;
 	font-size: 0.875rem;
 	border: 1px solid var(--color-primary-element);
@@ -8978,9 +8982,18 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	opacity: 0.5;
 }
 .card-modal__step-popover {
-	top: calc(100% - 4px);
-	right: 0;
-	left: auto;
+	position: static;
+	flex: 0 0 100%;
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+.card-modal__step-popover .card-modal__date-input {
+	min-width: 0;
+	width: 0;
+}
+.card-modal__step-popover .card-modal__field-clear {
+	flex-shrink: 0;
 }
 
 .card-modal__checklist-item-delete {
