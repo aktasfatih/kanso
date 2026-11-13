@@ -174,6 +174,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ t('kanso', 'Cards with a due date sync to your calendar and phone (via CalDAV/DAVx5) as tasks. Turn this off to keep this board out of your own calendar. Only affects you.') }}
 						</p>
 						<NcCheckboxRadioSwitch
+							:model-value="calendarAssignedOnly"
+							:disabled="calendarSyncBusy"
+							@update:model-value="setCalendarAssignedOnly">
+							{{ t('kanso', 'Only sync cards assigned to me') }}
+						</NcCheckboxRadioSwitch>
+						<p class="board-settings__general-hint">
+							{{ t('kanso', 'Only affects your calendar for this board. Public calendar feeds stay the same.') }}
+						</p>
+						<span v-if="calendarSyncError" class="label-settings__error" role="alert">{{ calendarSyncError }}</span>
+						<NcCheckboxRadioSwitch
 							v-if="canManage"
 							:model-value="newCardsOnTop"
 							:disabled="newCardsOnTopSaving"
@@ -3622,22 +3632,40 @@ async function setDefaultBoard(checked) {
 // ── General: per-user "show this board in my calendar" (CalDAV, issue #49) ────
 // Personal preference; boards sync to your calendar by default, this hides them.
 const inMyCalendar = ref(true)
-const calendarSyncBusy = ref(false)
+const calendarAssignedOnly = ref(false)
+const calendarSyncBusy = ref(true)
+const calendarSyncError = ref('')
+function applyCalendarPreferences(res) {
+	inMyCalendar.value = res.enabled !== false
+	calendarAssignedOnly.value = res.assignedOnly === true
+}
 onMounted(async () => {
 	try {
-		const res = await fetchCalendarSync(props.boardId)
-		inMyCalendar.value = res.enabled !== false
+		applyCalendarPreferences(await fetchCalendarSync(props.boardId))
 	} catch {
-		// Non-fatal: default to on (its server-side default).
+		calendarSyncError.value = t('kanso', 'Could not load calendar preferences')
+	} finally {
+		calendarSyncBusy.value = false
 	}
 })
 async function setInMyCalendar(checked) {
+	await saveCalendarPreferences(checked, undefined)
+}
+async function setCalendarAssignedOnly(checked) {
+	await saveCalendarPreferences(undefined, checked)
+}
+async function saveCalendarPreferences(enabled, assignedOnly) {
+	if (calendarSyncBusy.value) return
+	const previous = { enabled: inMyCalendar.value, assignedOnly: calendarAssignedOnly.value }
+	if (enabled !== undefined) inMyCalendar.value = enabled
+	if (assignedOnly !== undefined) calendarAssignedOnly.value = assignedOnly
 	calendarSyncBusy.value = true
+	calendarSyncError.value = ''
 	try {
-		const res = await setCalendarSync(props.boardId, checked)
-		inMyCalendar.value = res.enabled !== false
+		applyCalendarPreferences(await setCalendarSync(props.boardId, enabled, assignedOnly))
 	} catch {
-		inMyCalendar.value = !checked // revert on failure
+		applyCalendarPreferences(previous)
+		calendarSyncError.value = t('kanso', 'Could not save calendar preferences')
 	} finally {
 		calendarSyncBusy.value = false
 	}

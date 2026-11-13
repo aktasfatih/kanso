@@ -1083,6 +1083,24 @@ class CardMapperTest extends TestCase {
 		);
 	}
 
+	public function testAssignedCalendarStillAppliesBoardAndVisibilityFilters(): void {
+		$recorded = $this->recordQuery(fn (CardMapper $m) => $m->findDuedateSummariesByBoard(7, self::externalViewer(), true));
+		self::assertSame(['exty'], self::boundValues($recorded['predicates'], 'eq', 'participant'));
+		self::assertSame([0], self::boundValues($recorded['predicates'], 'eq', 'type'));
+		self::assertSame([7, 7], self::boundValues($recorded['predicates'], 'eq', 'board_id'));
+		self::assertSame([0], self::boundValues($recorded['predicates'], 'eq', 'deleted_at'));
+		self::assertSame([false], self::boundValues($recorded['predicates'], 'eq', 'archived'));
+		self::assertSame([false], self::boundValues($recorded['predicates'], 'eq', 'is_template'));
+		self::assertSame([ViewerContext::ROLE_EXTERNAL], self::boundValues($recorded['predicates'], 'eq', 'creator_role'));
+		self::assertSame(['exty'], self::boundValues($recorded['predicates'], 'eq', 'owner'));
+		self::assertNotEmpty(self::boundValues($recorded['predicates'], 'eq', 'visibility'));
+	}
+
+	public function testUnfilteredCalendarDoesNotRestrictAssignments(): void {
+		$recorded = $this->recordQuery(fn (CardMapper $m) => $m->findDuedateSummariesByBoard(7, self::externalViewer()));
+		self::assertSame([], self::boundValues($recorded['predicates'], 'eq', 'participant'));
+	}
+
 	/**
 	 * DENIAL: the per-priority distribution is a count, and a count is a leak
 	 * too - a hidden card must not raise any bar on the chart.

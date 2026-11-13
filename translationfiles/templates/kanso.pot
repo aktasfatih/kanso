@@ -14,7 +14,7 @@ msgstr ""
 msgid "— none —"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:4978
+#: src/components/BoardSettingsModal.vue:5006
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] ""
@@ -1887,6 +1887,10 @@ msgstr ""
 msgid "Could not import that Trello file."
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "Could not load calendar preferences"
+msgstr ""
+
 #: src/components/DeletedBoards.vue
 msgid "Could not load deleted boards."
 msgstr ""
@@ -1921,6 +1925,10 @@ msgstr ""
 
 #: src/admin-backup.js
 msgid "Could not save backup settings"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Could not save calendar preferences"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -2092,7 +2100,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2336
+#: src/components/BoardSettingsModal.vue:2346
 #: src/components/CardDetail.vue:5308
 msgid "day"
 msgid_plural "days"
@@ -2664,7 +2672,7 @@ msgstr ""
 msgid "Every card in this project is done."
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:4958
+#: src/components/BoardSettingsModal.vue:4986
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] ""
@@ -2674,19 +2682,19 @@ msgstr[1] ""
 msgid "Every estimate needs a label."
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:4968
+#: src/components/BoardSettingsModal.vue:4996
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:4960
+#: src/components/BoardSettingsModal.vue:4988
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:4970
+#: src/components/BoardSettingsModal.vue:4998
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] ""
@@ -4088,7 +4096,7 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2338
+#: src/components/BoardSettingsModal.vue:2348
 #: src/components/CardDetail.vue:5310
 msgid "month"
 msgid_plural "months"
@@ -4708,6 +4716,10 @@ msgstr ""
 msgid "Only administrators can download them, and they can never be shared by a link."
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "Only affects your calendar for this board. Public calendar feeds stay the same."
+msgstr ""
+
 #: src/composables/useBoardFilters.js
 msgid "Only archived"
 msgstr ""
@@ -4722,6 +4734,10 @@ msgstr ""
 
 #: src/views/MyCardsView.vue
 msgid "Only loaded tasks are shown."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Only sync cards assigned to me"
 msgstr ""
 
 #: src/views/MyCardsView.vue
@@ -6602,7 +6618,7 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2337
+#: src/components/BoardSettingsModal.vue:2347
 #: src/components/CardDetail.vue:5309
 msgid "week"
 msgid_plural "weeks"
@@ -6711,7 +6727,7 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2339
+#: src/components/BoardSettingsModal.vue:2349
 #: src/components/CardDetail.vue:5311
 msgid "year"
 msgid_plural "years"

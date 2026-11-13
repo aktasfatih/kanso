@@ -464,7 +464,7 @@ class CardMapper extends QBMapper {
 	 * @return Card[]
 	 * @throws Exception
 	 */
-	public function findDuedateSummariesByBoard(int $boardId, ViewerContext $viewer): array {
+	public function findDuedateSummariesByBoard(int $boardId, ViewerContext $viewer, bool $assignedOnly = false): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select(self::SUMMARY_COLUMNS)
 			->from($this->getTableName())
@@ -476,6 +476,14 @@ class CardMapper extends QBMapper {
 			->orderBy('duedate', 'ASC')
 			->addOrderBy('id', 'ASC');
 		$this->visibilityScope->applyForViewer($qb, '', $viewer);
+		if ($assignedOnly) {
+			$assigned = $this->db->getQueryBuilder();
+			$assigned->select('card_id')
+				->from('kanso_card_assignees')
+				->where($assigned->expr()->eq('participant', $qb->createNamedParameter($viewer->userId)))
+				->andWhere($assigned->expr()->eq('type', $qb->createNamedParameter(CardAssignee::TYPE_USER, IQueryBuilder::PARAM_INT)));
+			$qb->andWhere($qb->createFunction('id IN (' . $assigned->getSQL() . ')'));
+		}
 
 		return $this->findEntities($qb);
 	}

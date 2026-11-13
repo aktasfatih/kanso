@@ -625,8 +625,8 @@ export const disableCalendarFeed = (boardId) =>
 export const fetchCalendarSync = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/calendar-sync`)).then((r) => r.data)
 
-export const setCalendarSync = (boardId, enabled) =>
-	axios.put(url(`/api/boards/${boardId}/calendar-sync`), { enabled }).then((r) => r.data)
+export const setCalendarSync = (boardId, enabled, assignedOnly) =>
+	axios.put(url(`/api/boards/${boardId}/calendar-sync`), { enabled, assignedOnly }).then((r) => r.data)
 
 // Subscriptions (board watchers)
 export const subscribeBoard = (boardId) =>

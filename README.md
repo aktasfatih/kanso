@@ -123,7 +123,10 @@ your work, on your own Nextcloud, laid out plainly.
 - **Calendar**: every board you can read appears as a **read-only CalDAV
   calendar** of its due-dated cards, so they show up in Nextcloud Calendar and
   Tasks and on your phone — nothing to copy or paste, and you can hide a board
-  from your own calendar in board settings. A board can also publish a token
+  from your own calendar in board settings. Turn on **Only sync cards assigned
+  to me** there to filter that board's calendar for your account; your next
+  calendar refresh reflects assignment changes. This personal filter leaves
+  other members' calendars and public feeds unchanged. A board can also publish a token
   **`.ics` feed URL** for calendar apps that want one. Both are read-only:
   ticking the task off in your calendar does not close the card.
 - **Email intake**: point a board at an IMAP mailbox and mail arriving in a

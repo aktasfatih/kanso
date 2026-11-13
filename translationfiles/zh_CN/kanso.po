@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— 无 —"
 
-#: src/components/BoardSettingsModal.vue:4978
+#: src/components/BoardSettingsModal.vue:5006
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n 次"
@@ -1845,6 +1845,10 @@ msgstr "无法导入该文件。"
 msgid "Could not import that Trello file."
 msgstr "无法导入该 Trello 文件。"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Could not load calendar preferences"
+msgstr ""
+
 #: src/components/DeletedBoards.vue
 msgid "Could not load deleted boards."
 msgstr ""
@@ -1880,6 +1884,10 @@ msgstr ""
 #: src/admin-backup.js
 msgid "Could not save backup settings"
 msgstr "无法保存备份设置"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Could not save calendar preferences"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not save the email intake settings."
@@ -2050,7 +2058,7 @@ msgstr "危险区域"
 msgid "Date"
 msgstr "日期"
 
-#: src/components/BoardSettingsModal.vue:2336
+#: src/components/BoardSettingsModal.vue:2346
 #: src/components/CardDetail.vue:5308
 msgid "day"
 msgid_plural "days"
@@ -2621,7 +2629,7 @@ msgstr "每"
 msgid "Every card in this project is done."
 msgstr "此项目中的所有卡片均已完成。"
 
-#: src/components/BoardSettingsModal.vue:4958
+#: src/components/BoardSettingsModal.vue:4986
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "每 %n 天"
@@ -2630,17 +2638,17 @@ msgstr[0] "每 %n 天"
 msgid "Every estimate needs a label."
 msgstr "每个估算值都需要一个标签。"
 
-#: src/components/BoardSettingsModal.vue:4968
+#: src/components/BoardSettingsModal.vue:4996
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "每 %n 个月"
 
-#: src/components/BoardSettingsModal.vue:4960
+#: src/components/BoardSettingsModal.vue:4988
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "每 %n 周"
 
-#: src/components/BoardSettingsModal.vue:4970
+#: src/components/BoardSettingsModal.vue:4998
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "每 %n 年"
@@ -4039,7 +4047,7 @@ msgstr "模式"
 msgid "Mon"
 msgstr "周一"
 
-#: src/components/BoardSettingsModal.vue:2338
+#: src/components/BoardSettingsModal.vue:2348
 #: src/components/CardDetail.vue:5310
 msgid "month"
 msgid_plural "months"
@@ -4658,6 +4666,10 @@ msgstr ""
 msgid "Only administrators can download them, and they can never be shared by a link."
 msgstr "只有管理员可以下载它们，并且它们永远无法通过链接共享。"
 
+#: src/components/BoardSettingsModal.vue
+msgid "Only affects your calendar for this board. Public calendar feeds stay the same."
+msgstr ""
+
 #: src/composables/useBoardFilters.js
 msgid "Only archived"
 msgstr "仅已归档"
@@ -4673,6 +4685,10 @@ msgstr "仅带指定标签的 issue"
 #: src/views/MyCardsView.vue
 msgid "Only loaded tasks are shown."
 msgstr "仅显示已加载的任务。"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Only sync cards assigned to me"
+msgstr ""
 
 #: src/views/MyCardsView.vue
 msgid "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list."
@@ -6549,7 +6565,7 @@ msgstr "Webhook 已启用"
 msgid "Wed"
 msgstr "周三"
 
-#: src/components/BoardSettingsModal.vue:2337
+#: src/components/BoardSettingsModal.vue:2347
 #: src/components/CardDetail.vue:5309
 msgid "week"
 msgid_plural "weeks"
@@ -6657,7 +6673,7 @@ msgstr "写入时间"
 msgid "wrote"
 msgstr "写道"
 
-#: src/components/BoardSettingsModal.vue:2339
+#: src/components/BoardSettingsModal.vue:2349
 #: src/components/CardDetail.vue:5311
 msgid "year"
 msgid_plural "years"
