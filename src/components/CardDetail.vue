@@ -136,13 +136,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</template>
 							<ChevronRightIcon :size="14" class="card-modal__crumb-chevron" />
 							<span class="card-modal__attr card-modal__status-wrap">
-								<!-- Both halves of this switcher are writes: the column list calls
-								     CardService::move() and the status list CardService::update(),
-								     and BOTH assert PERMISSION_EDIT. The role model has no "may
-								     move but not edit" seat - the bits are READ/EDIT/SHARE/MANAGE
-								     and nothing else - so a member with READ only gets the chip as
-								     a plain label (#10732): the status still reads, the switcher
-								     goes. -->
+								<!-- Changing column or status requires card editing permission. -->
 								<button
 									v-if="canEdit"
 									class="card-modal__status-chip card-modal__status-chip--btn"
@@ -208,15 +202,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								class="card-modal__title-input"
 								type="text"
 								maxlength="100"
-								@keydown.enter.prevent="saveTitle"
+								@keydown.enter="submitOnEnter($event, saveTitle)"
 								@keydown.escape.stop="cancelTitleEdit"
 								@blur="saveTitle">
 							<h2
 								v-else
 								class="card-modal__title"
-								role="button"
-								tabindex="0"
-								:aria-label="t('kanso', 'Edit title')"
+								:class="{ 'card-modal__title--editable': canEdit }"
+								:role="canEdit ? 'button' : undefined"
+								:tabindex="canEdit ? 0 : undefined"
+								:aria-label="canEdit ? t('kanso', 'Edit title') : undefined"
 								@click="startTitleEdit"
 								@keydown.enter.prevent="startTitleEdit"
 								@keydown.space.prevent="startTitleEdit">
@@ -977,9 +972,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:aria-expanded="openPicker === 'assign'"
 							@click="toggleAssignPicker()">
 							<AccountPlusIcon :size="14" />
-							{{ cardAssigneeIds.length > 0 ? t('kanso', 'Add assignee') : t('kanso', 'Assign') }}
+							{{ cardAssigneeIds.length > 0 ? (singleAssignee ? t('kanso', 'Change assignee') : t('kanso', 'Add assignee')) : t('kanso', 'Assign') }}
 						</button>
 						<div v-if="openPicker === 'assign'" class="card-modal__popover">
+							<p v-if="singleAssignee" class="card-modal__assign-note" data-test="single-assignee-note">
+								{{ assigneesOverLimit
+									? t('kanso', 'Remove extra assignees before choosing someone new. Existing assignees are kept.')
+									: t('kanso', 'Choosing another person replaces the current assignee.') }}
+							</p>
 							<!-- The rows below are the FIRST PAGE of a payload the server caps, so on
 							     a board shared with more people than the cap they are not everyone.
 							     This box is how the rest are reached: it asks the server for the
@@ -1025,6 +1025,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								class="card-modal__assign-option"
 								:class="{ 'card-modal__assign-option--active': p.assigned }"
 								:aria-pressed="p.assigned"
+								:aria-disabled="assigneesOverLimit && !p.assigned ? 'true' : undefined"
 								:aria-busy="isAssigneeTogglePending(p.uid) ? 'true' : undefined"
 								@click="handleToggleAssignee(p.uid, !p.assigned)">
 								<NcAvatar
@@ -1230,7 +1231,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:placeholder="t('kanso', 'New label…')"
 									:disabled="isCreatingLabel"
 									:aria-label="t('kanso', 'New label name')"
-									@keydown.enter.prevent="submitCreateLabel" />
+									@keydown.enter="submitOnEnter($event, submitCreateLabel)" />
 								<button
 									class="card-modal__label-create-btn"
 									type="button"
@@ -1558,7 +1559,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										type="text"
 										maxlength="255"
 										enterkeyhint="done"
-										@keydown.enter.prevent="saveItemTitle(item)"
+										@keydown.enter="submitOnEnter($event, () => saveItemTitle(item))"
 										@keydown.escape.stop="cancelItemEdit"
 										@blur="saveItemTitle(item)">
 									<span
@@ -1686,7 +1687,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:placeholder="t('kanso', 'Add an item…')"
 									enterkeyhint="enter"
 									:disabled="addItem.isPending.value"
-									@keydown.enter.prevent="handleAddItem">
+									@keydown.enter="submitOnEnter($event, handleAddItem)">
 							</div>
 							<span v-if="checklistError" class="card-modal__save-error">{{ checklistError }}</span>
 						</section>
@@ -1717,7 +1718,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<div class="card-modal__section-inline">
 								<SitemapIcon :size="16" class="card-modal__eyebrow-icon" />
 								<span class="card-modal__eyebrow">{{ t('kanso', 'Sub-cards') }}</span>
-								<span v-if="children.length > 0" class="card-modal__section-count">{{ childrenDone }} / {{ children.length }}</span>
+								<span v-if="children.length > 0" class="card-modal__section-count" :title="t('kanso', 'Done or archived sub-cards')">{{ childrenDone }} / {{ children.length }}</span>
 								<input
 									v-if="canEdit"
 									ref="addChildInputRef"
@@ -1728,7 +1729,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:placeholder="t('kanso', 'Add a sub-card…')"
 									enterkeyhint="enter"
 									:disabled="addChildMutation.isPending.value"
-									@keydown.enter.prevent="handleAddChild">
+									@keydown.enter="submitOnEnter($event, handleAddChild)">
 							</div>
 							<div v-if="children.length > 0" class="card-modal__children-list">
 								<div
@@ -1748,7 +1749,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<!-- #122 — a sub-card's dates, so reading a case's steps no longer
 									     means opening each one. Display-only: children[] comes from
 									     jsonSerializeSummary(), which already carries both dates. -->
-									<span v-if="child.startDate || child.duedate" class="card-modal__child-dates">
+									<span v-if="child.archived || child.startDate || child.duedate" class="card-modal__child-dates">
+										<span v-if="child.archived" class="card-modal__child-date card-modal__child-archived">{{ t('kanso', 'Archived') }}</span>
 										<span
 											v-if="child.startDate"
 											class="card-modal__child-date card-modal__child-date--start"
@@ -2384,8 +2386,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 													v-model="editingCommentBody"
 													class="card-modal__comment-edit-textarea"
 													rows="3"
-													@keydown.ctrl.enter.prevent="saveCommentEdit(topComment)"
-													@keydown.meta.enter.prevent="saveCommentEdit(topComment)"
+													@keydown.ctrl.enter="submitOnEnter($event, () => saveCommentEdit(topComment))"
+													@keydown.meta.enter="submitOnEnter($event, () => saveCommentEdit(topComment))"
 													@keydown.escape.stop="cancelCommentEdit" />
 												<div class="card-modal__comment-edit-actions">
 													<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(topComment)">
@@ -2399,7 +2401,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 											<div class="card-modal__comment-controls">
 												<button
-													v-if="canEdit && editingCommentId !== topComment.id"
+													v-if="canComment && editingCommentId !== topComment.id"
 													class="card-modal__comment-link-btn"
 													@click="openReplyBox(topComment, topComment)">
 													{{ t('kanso', 'Reply') }}
@@ -2444,30 +2446,33 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 														{{ t('kanso', 'Remind me at a custom time…') }}
 													</NcActionButton>
 												</NcActions>
-												<template v-if="canEdit && currentUserId === topComment.author">
-													<button class="card-modal__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(topComment)">
-														<PencilIcon :size="14" />
-													</button>
-													<button
-														class="card-modal__comment-icon-btn card-modal__comment-icon-btn--danger"
-														:title="t('kanso', 'Delete comment')"
-														:disabled="deleteComment.isPending.value"
-														@click="handleDeleteComment(topComment)">
-														<TrashCanIcon :size="14" />
-													</button>
-												</template>
+												<button
+													v-if="canEditComment(topComment)"
+													class="card-modal__comment-icon-btn"
+													:title="t('kanso', 'Edit comment')"
+													@click="startCommentEdit(topComment)">
+													<PencilIcon :size="14" />
+												</button>
+												<button
+													v-if="canManage || canEditComment(topComment)"
+													class="card-modal__comment-icon-btn card-modal__comment-icon-btn--danger"
+													:title="canDeleteComment(topComment) ? t('kanso', 'Delete comment') : t('kanso', 'Only a board manager can delete a thread with replies from other people.')"
+													:disabled="deleteComment.isPending.value || !canDeleteComment(topComment)"
+													@click="handleDeleteComment(topComment)">
+													<TrashCanIcon :size="14" />
+												</button>
 												<button
 													v-for="summary in topComment.reactions"
 													:key="summary.emoji"
 													class="card-modal__reaction-chip"
 													:class="{ 'card-modal__reaction-chip--mine': summary.mine }"
 													:title="reactorTooltip(summary)"
-													:disabled="!canEdit || toggleReaction.isPending.value"
+													:disabled="!canComment || toggleReaction.isPending.value"
 													@click="onReactionClick(topComment, summary.emoji)">
 													<span class="card-modal__reaction-emoji">{{ summary.emoji }}</span>
 													<span class="card-modal__reaction-count">{{ summary.count }}</span>
 												</button>
-												<div v-if="canEdit" class="card-modal__reaction-add-wrap">
+												<div v-if="canComment" class="card-modal__reaction-add-wrap">
 													<button
 														class="card-modal__reaction-add"
 														:title="t('kanso', 'Add reaction')"
@@ -2520,8 +2525,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 														v-model="editingCommentBody"
 														class="card-modal__comment-edit-textarea"
 														rows="3"
-														@keydown.ctrl.enter.prevent="saveCommentEdit(reply)"
-														@keydown.meta.enter.prevent="saveCommentEdit(reply)"
+														@keydown.ctrl.enter="submitOnEnter($event, () => saveCommentEdit(reply))"
+														@keydown.meta.enter="submitOnEnter($event, () => saveCommentEdit(reply))"
 														@keydown.escape.stop="cancelCommentEdit" />
 													<div class="card-modal__comment-edit-actions">
 														<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(reply)">
@@ -2533,37 +2538,40 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
 												<div v-else class="card-modal__comment-body kanso-md" v-html="renderedComments.get(reply.id)" @click="handleRefClick" />
 
-												<div v-if="canEdit" class="card-modal__comment-controls">
+												<div class="card-modal__comment-controls">
 													<button
-														v-if="editingCommentId !== reply.id"
+														v-if="canComment && editingCommentId !== reply.id"
 														class="card-modal__comment-link-btn"
 														@click="openReplyBox(reply, topComment)">
 														{{ t('kanso', 'Reply') }}
 													</button>
-													<template v-if="currentUserId === reply.author">
-														<button class="card-modal__comment-icon-btn" :title="t('kanso', 'Edit comment')" @click="startCommentEdit(reply)">
-															<PencilIcon :size="14" />
-														</button>
-														<button
-															class="card-modal__comment-icon-btn card-modal__comment-icon-btn--danger"
-															:title="t('kanso', 'Delete comment')"
-															:disabled="deleteComment.isPending.value"
-															@click="handleDeleteComment(reply)">
-															<TrashCanIcon :size="14" />
-														</button>
-													</template>
+													<button
+														v-if="canEditComment(reply)"
+														class="card-modal__comment-icon-btn"
+														:title="t('kanso', 'Edit comment')"
+														@click="startCommentEdit(reply)">
+														<PencilIcon :size="14" />
+													</button>
+													<button
+														v-if="canManage || canEditComment(reply)"
+														class="card-modal__comment-icon-btn card-modal__comment-icon-btn--danger"
+														:title="canDeleteComment(reply) ? t('kanso', 'Delete comment') : t('kanso', 'Only a board manager can delete a thread with replies from other people.')"
+														:disabled="deleteComment.isPending.value || !canDeleteComment(reply)"
+														@click="handleDeleteComment(reply)">
+														<TrashCanIcon :size="14" />
+													</button>
 													<button
 														v-for="summary in reply.reactions"
 														:key="summary.emoji"
 														class="card-modal__reaction-chip"
 														:class="{ 'card-modal__reaction-chip--mine': summary.mine }"
 														:title="reactorTooltip(summary)"
-														:disabled="!canEdit || toggleReaction.isPending.value"
+														:disabled="!canComment || toggleReaction.isPending.value"
 														@click="onReactionClick(reply, summary.emoji)">
 															<span class="card-modal__reaction-emoji">{{ summary.emoji }}</span>
 															<span class="card-modal__reaction-count">{{ summary.count }}</span>
 													</button>
-													<div v-if="canEdit" class="card-modal__reaction-add-wrap">
+													<div v-if="canComment" class="card-modal__reaction-add-wrap">
 														<button
 															class="card-modal__reaction-add"
 															:title="t('kanso', 'Add reaction')"
@@ -2585,7 +2593,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											</div>
 										</div>
 									</div>
-									<div v-if="replyingToId === topComment.id && canEdit" class="card-modal__reply-compose">
+									<div v-if="replyingToId === topComment.id && canComment" class="card-modal__reply-compose">
 										<Suspense>
 											<MarkdownEditor
 												:ref="(el) => setReplyRef(topComment.id, el)"
@@ -2595,7 +2603,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												:autofocus="true"
 												min-height="60px"
 												:participants="participantList"
-												:upload-image="(file) => uploadAttachment.mutateAsync(file)"
+												:upload-image="canEdit ? (file) => uploadAttachment.mutateAsync(file) : null"
 												:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
 												:show-toolbar="!editorToolbarHidden"
 												@submit="submitReply(topComment.id)"
@@ -2622,7 +2630,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</div>
 						</div>
 
-						<div v-if="canEdit && discussionTab === 'discussion'" class="card-modal__composer">
+						<div
+							v-if="canComment && discussionTab === 'discussion'"
+							class="card-modal__composer"
+							:class="{ 'card-modal__composer--active': newCommentBody || addComment.isPending.value || uploadAttachment.isPending.value }">
 							<NcAvatar
 								:user="currentUserId"
 								:size="28"
@@ -2636,7 +2647,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										:disabled="addComment.isPending.value"
 										min-height="60px"
 										:participants="participantList"
-										:upload-image="(file) => uploadAttachment.mutateAsync(file)"
+										:upload-image="canEdit ? (file) => uploadAttachment.mutateAsync(file) : null"
 										:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
 										:show-toolbar="!editorToolbarHidden"
 										@submit="submitNewComment"
@@ -2766,12 +2777,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
+import { submitOnEnter } from '../utils/keyboard.js'
 import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useRouter, useRoute } from 'vue-router'
 import { getCurrentUser } from '@nextcloud/auth'
 import { generateUrl } from '@nextcloud/router'
-import { translate as t, translatePlural as n } from '@nextcloud/l10n'
+import { translate as t, translatePlural as n, getCanonicalLocale } from '@nextcloud/l10n'
 import { showUndo, showSuccess, showError, getFilePickerBuilder, FilePickerClosed } from '@nextcloud/dialogs'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
@@ -3089,9 +3101,25 @@ async function handleFieldChange(field, value) {
 }
 
 // ── Card lifecycle actions (archive / delete) ────────────────────────────────
-const { setArchived, deleteCard, restoreCard } = useCardActions(boardId, computed(() => props.cardId))
+const { captureTarget, setArchived, deleteCard, restoreCard } = useCardActions(boardId, computed(() => props.cardId))
 const actionError = ref('')
 const deleteWithRuleConfirm = ref(false)  // true = show the recurring-source delete guard
+let lifecycleDisplayGeneration = 0
+let lifecycleGestureGeneration = 0
+watch([() => props.cardId, () => props.boardId, () => route.fullPath], () => {
+	lifecycleDisplayGeneration++
+	actionError.value = ''
+}, { flush: 'sync' })
+onBeforeUnmount(() => { lifecycleDisplayGeneration++ })
+
+function lifecycleGesture() {
+	const display = lifecycleDisplayGeneration
+	const gesture = ++lifecycleGestureGeneration
+	return {
+		target: captureTarget(),
+		current: () => display === lifecycleDisplayGeneration && gesture === lifecycleGestureGeneration,
+	}
+}
 
 // Buttons for the recurring-source delete guard dialog (NcDialog renders them
 // right-aligned in array order; the two destructive choices carry the error type).
@@ -3109,19 +3137,18 @@ const deleteGuardButtons = [
  */
 async function handleArchiveToggle(next) {
 	actionError.value = ''
+	const gesture = lifecycleGesture()
 	const archived = typeof next === 'boolean' ? next : !cardData.value?.archived
 	try {
-		await setArchived.mutateAsync({ archived })
-		// On archive, close the modal so the card visually leaves the board columns.
-		// On unarchive, the modal can stay open; the card returns to its column.
-		if (archived) {
-			closeModal()
+		const receipt = await setArchived.mutateAsync({ target: gesture.target, archived })
+		if (archived && receipt.current()) {
+			if (gesture.current()) closeModal()
 			showUndo(t('kanso', 'Card archived'), () => {
-				setArchived.mutate({ archived: false })
+				setArchived.mutate({ target: receipt.target, undoOf: receipt.operationId, archived: false })
 			})
 		}
 	} catch (err) {
-		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to update card.')
+		if (gesture.current()) actionError.value = err?.response?.data?.error || t('kanso', 'Failed to update card.')
 	}
 }
 
@@ -3155,18 +3182,21 @@ async function handleTemplateToggle() {
 	}
 }
 
-async function handleDelete() {
+async function handleDelete(stopRecurrence = false) {
 	actionError.value = ''
+	const gesture = lifecycleGesture()
+	const ruleId = stopRecurrence ? cardRecurRule.value?.id : null
 	try {
-		await deleteCard.mutateAsync()
-		closeModal()
-		// Note: restore does NOT re-attach sub-cards that were detached on delete -
-		// this is documented self-healing behaviour acceptable for this MVP.
-		showUndo(t('kanso', 'Card deleted'), () => {
-			restoreCard.mutate()
-		})
+		if (ruleId) await deleteRecurRule.mutateAsync(ruleId)
+		const receipt = await deleteCard.mutateAsync({ target: gesture.target })
+		if (receipt.current()) {
+			if (gesture.current()) closeModal()
+			showUndo(t('kanso', 'Card deleted'), () => {
+				restoreCard.mutate({ target: receipt.target, undoOf: receipt.operationId })
+			})
+		}
 	} catch (err) {
-		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to delete card.')
+		if (gesture.current()) actionError.value = err?.response?.data?.error || t('kanso', 'Failed to delete card.')
 	}
 }
 
@@ -3186,19 +3216,7 @@ async function handleDeleteCardOnly() {
 
 async function handleDeleteCardAndRule() {
 	deleteWithRuleConfirm.value = false
-	actionError.value = ''
-	try {
-		if (cardRecurRule.value) {
-			await deleteRecurRule.mutateAsync(cardRecurRule.value.id)
-		}
-		await deleteCard.mutateAsync()
-		closeModal()
-		showUndo(t('kanso', 'Card deleted'), () => {
-			restoreCard.mutate()
-		})
-	} catch (err) {
-		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to delete card.')
-	}
+	await handleDelete(true)
 }
 
 // Current card's assigned label ids as a Set for O(1) .has() in the template
@@ -3331,6 +3349,8 @@ const discoveredParticipants = ref(new Map())
 let assigneeSearchTimer = null
 let assigneeSearchSeq = 0
 
+const singleAssignee = computed(() => boardData.value?.board?.singleAssignee === true)
+const assigneesOverLimit = computed(() => singleAssignee.value && cardAssigneeIds.value.length > 1)
 const cardAssigneeIds = computed(() =>
 	Array.isArray(cardData.value?.assigneeIds) ? cardData.value.assigneeIds : [],
 )
@@ -3527,6 +3547,10 @@ function isAssigneeTogglePending(uid) {
 // on Escape / a click outside, like every other attribute-bar popover.
 async function handleToggleAssignee(uid, assign) {
 	assigneeError.value = ''
+	if (assign && assigneesOverLimit.value && !cardAssigneeIds.value.includes(uid)) {
+		assigneeError.value = t('kanso', 'Remove extra assignees before choosing someone new. Existing assignees are kept.')
+		return
+	}
 	try {
 		const result = await enqueueToggle({
 			cardId: Number(props.cardId),
@@ -3908,36 +3932,33 @@ const reviewsBlockingDone = computed(() =>
 )
 
 /**
- * Explain a refused attempt to complete the card.
- *
- * The server's own sentence does not survive the trip: ApiErrorTrait flattens
- * every NotPermittedException to a bare "Access denied", which is true but says
- * nothing about what to do next. So when the refusal is a 403, the target was
- * the done state, and the card is in fact carrying unapproved reviews, we say so
- * in the review vocabulary the rest of this view already uses. The gate stays
- * entirely the server's call - this only translates its verdict.
- *
  * @param {unknown} err the rejected request
  * @param {boolean} targetsDone whether the attempt would have completed the card
  * @return {string} the message to show
  */
 function statusErrorMessage(err, targetsDone) {
-	const blocking = reviewsBlockingDone.value
-	if (targetsDone && apiAnswerStatus(err) === 403 && blocking.length > 0) {
-		// participantName() falls back to the bare uid, so this list is never empty
-		// when `blocking` is not - there is no nameless-reviewer case to handle.
-		const names = [...new Set(blocking.map((r) => participantName(r.reviewer)))]
-		// escape: false - this lands in a text interpolation, which escapes for
-		// itself; letting t() escape too would print "Ann &amp; Bo" for real names.
-		// t()'s DOMPurify pass still runs over the result, so a name carrying
-		// markup is stripped rather than inserted - and Vue escapes what is left.
-		return t(
-			'kanso',
-			'All requested reviews must be approved before this card can be marked done. Waiting on {names}.',
-			{ names: { value: names.join(', '), escape: false } },
-		)
+	const reason = err?.response?.data?.error
+	const reviewPrefix = 'Blocked by unapproved review(s): '
+	if (!targetsDone || apiAnswerStatus(err) !== 403
+		|| typeof reason !== 'string' || !reason.startsWith(reviewPrefix)) {
+		return reason || t('kanso', 'Failed to update status.')
 	}
-	return err?.response?.data?.error || t('kanso', 'Failed to update status.')
+	const blocking = reviewsBlockingDone.value
+	const cachedReason = reviewPrefix + blocking.map((r) => `${r.reviewer} (review #${r.id})`).join(', ')
+	if (blocking.length === 0 || reason !== cachedReason) {
+		return t('kanso', 'All requested reviews must be approved before this card can be marked done.')
+	}
+	const names = [...new Set(blocking.map((r) => r.reviewer))].map(participantName)
+	const preview = names.slice(0, 3)
+	if (names.length > preview.length) {
+		preview.push(n('kanso', '%n other reviewer', '%n other reviewers', names.length - preview.length))
+	}
+	const list = new Intl.ListFormat(getCanonicalLocale(), { type: 'conjunction' }).format(preview)
+	return t(
+		'kanso',
+		'All requested reviews must be approved before this card can be marked done. Waiting on {names}.',
+		{ names: { value: list, escape: false } },
+	)
 }
 
 /**
@@ -4302,6 +4323,7 @@ const draftTitle = ref('')
 const titleInputRef = ref(null)
 
 async function startTitleEdit() {
+	if (!canEdit.value) return
 	draftTitle.value = cardData.value?.title || ''
 	editingTitle.value = true
 	await nextTick()
@@ -5184,6 +5206,8 @@ const canEdit = computed(() => {
 	return (perms & 2) !== 0
 })
 
+const canComment = computed(() => canEdit.value || ((boardData.value?.permissions ?? 0) & 16) !== 0)
+
 // MANAGE permission bit (bit 3, value 8) - board management, e.g. creating labels
 const canManage = computed(() => {
 	const perms = boardData.value?.permissions ?? 0
@@ -5719,6 +5743,17 @@ async function saveCommentEdit(comment) {
 	} catch (err) {
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to edit comment.')
 	}
+}
+
+function canEditComment(comment) {
+	return canComment.value && currentUserId === comment.author
+}
+
+function canDeleteComment(comment) {
+	if (canManage.value) return true
+	return canEditComment(comment) && !flatComments.value.some((reply) =>
+		reply.parentCommentId === comment.id && reply.author !== currentUserId,
+	)
 }
 
 async function handleDeleteComment(comment) {
@@ -6275,7 +6310,7 @@ const children = computed(() =>
 )
 
 const childrenDone = computed(() =>
-	children.value.filter((c) => Number(c.doneAt) > 0).length,
+	children.value.filter((c) => Number(c.doneAt) > 0 || c.archived === true).length,
 )
 
 // ── Sub-card date chips (#122) ───────────────────────────────────────────────
@@ -6298,7 +6333,7 @@ function childDateFull(child, iso) {
 // chip - including their rule that a DONE sub-card shows its due date neutrally
 // rather than shouting red about work that is already finished.
 function childDueClass(child) {
-	if (!child.duedate || Number(child.doneAt) > 0) return ''
+	if (!child.duedate || Number(child.doneAt) > 0 || child.archived) return ''
 	const due = new Date(child.duedate)
 	const now = new Date()
 	if (due < now) return 'card-modal__child-date--overdue'
@@ -7353,14 +7388,19 @@ const allProjects = computed(() => projectsData.value ?? [])
 
 // The card detail now returns projectIds: number[]; fall back to [] if absent.
 const cardProjectIds = computed(() => {
-	const ids = Array.isArray(cardData.value?.projectIds) ? cardData.value.projectIds : []
-	return new Set(ids)
+	return projectIdsFor(props.cardId, cardData.value?.projectIds)
 })
 
 const projectToggleError = ref('')
+let projectNavigation = 0
+watch(() => props.cardId, () => {
+	projectNavigation++
+	projectToggleError.value = ''
+})
 const {
 	enqueueToggle: enqueueProjectToggle,
 	isTogglePending: isProjectMembershipPending,
+	projectIdsFor,
 // Deliberately no cardId argument: this component is REUSED across card→card
 // navigation, so every pick carries its own `cardId` in the mutation variables
 // instead (see useCardProjects' comment). A pick still waiting in the queue when
@@ -7379,12 +7419,15 @@ function isProjectTogglePending(projectId) {
 async function handleToggleProject({ id: projectId, canEdit }) {
 	if (!canEdit) return
 	projectToggleError.value = ''
+	const cardId = props.cardId
+	const navigation = projectNavigation
 	// Read membership at CLICK time, not when the write starts: the pick queued
 	// behind another one must still mean what the user saw when they made it.
 	const assign = !cardProjectIds.value.has(projectId)
 	try {
-		await enqueueProjectToggle({ cardId: props.cardId, projectId, assign })
+		await enqueueProjectToggle({ cardId, projectId, assign })
 	} catch (err) {
+		if (navigation !== projectNavigation) return
 		projectToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update project membership.')
 	}
 }
@@ -7706,12 +7749,15 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	line-height: 1.25;
 	font-weight: 700;
 	color: var(--color-main-text);
-	cursor: text;
+	cursor: default;
 	border-radius: 3px;
 	padding: 1px 4px;
 	word-break: break-word;
 }
-.card-modal__title:hover {
+.card-modal__title--editable {
+	cursor: text;
+}
+.card-modal__title--editable:hover {
 	background: var(--color-background-hover);
 }
 .card-modal__title-input {
@@ -8805,8 +8851,8 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	padding: 6px;
 }
 .card-modal__checklist-item {
-	position: relative; /* anchors the per-step assign/due popovers (#3745) */
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 10px;
 	padding: 8px;
@@ -8841,8 +8887,13 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	cursor: pointer;
 	flex-shrink: 0;
 }
+.card-modal__checklist-item-title,
+.card-modal__checklist-item-input {
+	flex: 1 1 8rem;
+	min-width: 0;
+	box-sizing: border-box;
+}
 .card-modal__checklist-item-title {
-	flex: 1;
 	font-size: 0.875rem;
 	color: var(--color-main-text);
 	cursor: text;
@@ -8856,7 +8907,6 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	text-decoration: line-through;
 }
 .card-modal__checklist-item-input {
-	flex: 1;
 	height: 30px;
 	font-size: 0.875rem;
 	border: 1px solid var(--color-primary-element);
@@ -8940,9 +8990,18 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	opacity: 0.5;
 }
 .card-modal__step-popover {
-	top: calc(100% - 4px);
-	right: 0;
-	left: auto;
+	position: static;
+	flex: 0 0 100%;
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+.card-modal__step-popover .card-modal__date-input {
+	min-width: 0;
+	width: 0;
+}
+.card-modal__step-popover .card-modal__field-clear {
+	flex-shrink: 0;
 }
 
 .card-modal__checklist-item-delete {
@@ -9959,6 +10018,25 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	display: flex;
 	align-items: center;
 	gap: 10px;
+}
+.card-modal__composer:not(.card-modal__composer--active):not(:focus-within) :deep(.kanso-md-editor__toolbar),
+.card-modal__composer:not(.card-modal__composer--active):not(:focus-within) .card-modal__composer-actions {
+	display: none;
+}
+.card-modal__composer:not(.card-modal__composer--active):not(:focus-within) :deep(.ProseMirror) {
+	min-height: 0;
+	padding: 6px 10px;
+}
+.card-modal__composer:not(.card-modal__composer--active):not(:focus-within) :deep(.ProseMirror [data-placeholder]::before) {
+	height: auto;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.card-modal__composer:not(.card-modal__composer--active):not(:focus-within) .card-modal__editor-loading {
+	min-height: 35px;
+	height: 35px;
 }
 
 /* ── Description save conflict (#9845) ───────────────────────────────────── */

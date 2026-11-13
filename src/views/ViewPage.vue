@@ -13,7 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				class="view-page__title-input"
 				maxlength="100"
 				:aria-label="t('kanso', 'View name')"
-				@keyup.enter="commitTitle"
+				@keydown.enter="submitOnEnter($event, commitTitle)"
 				@keyup.escape="cancelTitle"
 				@blur="commitTitle">
 			<h1
@@ -191,6 +191,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
+import { submitOnEnter } from '../utils/keyboard.js'
 import { ref, computed, watch, nextTick, provide } from 'vue'
 import { useRoute } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'

@@ -24,7 +24,8 @@ export async function resolveCardRoute(to, from, queryClient, resolveCardNavigat
 		&& hasFreshBoardCard(queryClient, to.params.id, to.params.cardId)) return
 	try {
 		const resolved = await resolveCardNavigation(Number(to.params.cardId))
-		if (String(resolved.cardId) === String(to.params.cardId)) return
+		if (String(resolved.cardId) === String(to.params.cardId)
+			&& (to.name !== 'card-modal' || String(resolved.boardId) === String(to.params.id))) return
 		return to.name === 'card-modal'
 			? { name: 'card-modal', params: { id: resolved.boardId, cardId: resolved.cardId }, query: to.query, hash: to.hash, replace: true }
 			: { name: 'card-page', params: { cardId: resolved.cardId }, query: to.query, hash: to.hash, replace: true }

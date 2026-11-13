@@ -15,6 +15,7 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardMoveAliasMapper;
 use OCA\Kanso\Db\Project;
 use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\ProjectCommentMapper;
@@ -60,6 +61,9 @@ class ProjectService {
 		private IUserManager $userManager,
 		private IDBConnection $db,
 		private IGroupManager $groupManager,
+		private ShareeSearchService $shareeSearch,
+		private CardMutationService $cardMutation,
+		private CardMoveAliasMapper $moveAliases,
 	) {
 	}
 
@@ -87,10 +91,11 @@ class ProjectService {
 
 	/**
 	 * @param ProjectShare[] $shares
-	 * @return array{isOwner: bool, canEdit: bool, canLeave: bool, shared: bool, ownerDisplayName: string}
+	 * @return array{isOwner: bool, canEdit: bool, canLeave: bool, shared: bool, ownerDisplayName: string, leadDisplayName: ?string}
 	 */
 	private function accessFields(Project $project, array $shares, string $uid): array {
 		$owner = (string)$project->getOwner();
+		$lead = $project->getLead();
 		$isOwner = $owner === $uid;
 		$permissions = $isOwner ? PermissionService::PERMISSION_ALL : $this->projectAccess->foldPermissions($shares, $uid);
 		$hasOwnRow = false;
@@ -105,6 +110,7 @@ class ProjectService {
 			'canLeave' => $hasOwnRow,
 			'shared' => $shares !== [],
 			'ownerDisplayName' => $this->userManager->getDisplayName($owner) ?? $owner,
+			'leadDisplayName' => $lead !== null ? ($this->userManager->getDisplayName($lead) ?? $lead) : null,
 		];
 	}
 
@@ -129,7 +135,7 @@ class ProjectService {
 	 *
 	 * @throws InvalidInputException on an empty or over-long title, an over-long description, or a malformed date
 	 */
-	public function create(string $uid, string $title, ?string $description, ?string $color, ?string $startDate = null, ?string $targetDate = null): Project {
+	public function create(string $uid, string $title, ?string $description, ?string $color, ?string $startDate = null, ?string $targetDate = null, ?string $lead = null, string $lifecycleStatus = 'planned'): Project {
 		$title = trim($title);
 		if ($title === '') {
 			throw new InvalidInputException('Project title must not be empty');
@@ -147,6 +153,8 @@ class ProjectService {
 		$project->setColor(ColorValidator::assertValid($color));
 		$project->setStartDate($this->parseDate($startDate));
 		$project->setTargetDate($this->parseDate($targetDate));
+		$project->setLead($this->resolveLead($lead, $uid));
+		$project->setLifecycleStatus($this->validateLifecycleStatus($lifecycleStatus));
 		$this->assertDateOrder($project);
 		$project->setOwner($uid);
 		$project->setCreatedAt(time());
@@ -162,7 +170,7 @@ class ProjectService {
 	 * @throws InvalidInputException on an empty or over-long title, a changed description
 	 *                               over the cap, or a malformed date
 	 */
-	public function update(int $id, string $uid, ?string $title, ?string $description, ?string $color, ?string $startDate = null, ?string $targetDate = null): Project {
+	public function update(int $id, string $uid, ?string $title, ?string $description, ?string $color, ?string $startDate = null, ?string $targetDate = null, ?string $lead = null, ?string $lifecycleStatus = null): Project {
 		$project = $this->loadProject($id, $uid, PermissionService::PERMISSION_EDIT);
 
 		if ($title !== null) {
@@ -191,9 +199,47 @@ class ProjectService {
 		if ($targetDate !== null) {
 			$project->setTargetDate($this->parseDate($targetDate));
 		}
+		if ($lead !== null && $lead !== $project->getLead()) {
+			$project->setLead($this->resolveLead($lead, $uid));
+		}
+		if ($lifecycleStatus !== null) {
+			$project->setLifecycleStatus($this->validateLifecycleStatus($lifecycleStatus));
+		}
 		$this->assertDateOrder($project);
 
 		return $this->projectMapper->update($project);
+	}
+
+	/** @return list<array{id: string, displayName: string, type: string}> */
+	public function leadCandidates(string $q, string $uid): array {
+		$users = array_values(array_filter(
+			$this->shareeSearch->search($q, $uid, [], []),
+			static fn (array $candidate): bool => $candidate['type'] === 'user' && $candidate['id'] !== $uid,
+		));
+		return array_merge([
+			['id' => $uid, 'displayName' => $this->userManager->getDisplayName($uid) ?? $uid, 'type' => 'user'],
+		], $users);
+	}
+
+	private function resolveLead(?string $lead, string $uid): ?string {
+		if ($lead === null || $lead === '') {
+			return null;
+		}
+		if ($lead === $uid) {
+			return $uid;
+		}
+		try {
+			return $this->shareeSearch->resolveParticipant(Acl::TYPE_USER, $lead, $uid);
+		} catch (InvalidInputException) {
+			throw new InvalidInputException('Lead must be an available Nextcloud user');
+		}
+	}
+
+	private function validateLifecycleStatus(string $status): string {
+		if (!in_array($status, ['planned', 'in_progress', 'done'], true)) {
+			throw new InvalidInputException('Lifecycle status must be planned, in_progress or done');
+		}
+		return $status;
 	}
 
 	/**
@@ -311,11 +357,14 @@ class ProjectService {
 	 * @throws NotPermittedException if the actor cannot edit the project or see the card
 	 */
 	public function addCard(int $projectId, int $cardId, string $uid): void {
-		$project = $this->loadProject($projectId, $uid, PermissionService::PERMISSION_EDIT);
-		$card = $this->loadCard($cardId);
-		$this->assertCardReadable($card, $uid);
+		$this->loadProject($projectId, $uid, PermissionService::PERMISSION_EDIT);
+		$this->cardMutation->run($cardId, function () use ($projectId, $cardId, $uid): void {
+			$project = $this->loadProject($projectId, $uid, PermissionService::PERMISSION_EDIT);
+			$card = $this->loadCard($cardId);
+			$this->assertCardReadable($card, $uid);
 
-		$this->projectCardMapper->add($project->getId(), $card->getId());
+			$this->projectCardMapper->add($project->getId(), $card->getId());
+		});
 	}
 
 	/**
@@ -327,10 +376,25 @@ class ProjectService {
 	 */
 	public function removeCard(int $projectId, int $cardId, string $uid): void {
 		$project = $this->loadProject($projectId, $uid, PermissionService::PERMISSION_EDIT);
-		if ($project->getOwner() !== $uid) {
-			$this->assertCardReadable($this->loadCard($cardId), $uid);
+		try {
+			$boardId = $this->cardMapper->find($cardId)->getBoardId();
+		} catch (DoesNotExistException $e) {
+			if ($project->getOwner() !== $uid) {
+				throw $e;
+			}
+			$this->projectCardMapper->remove($projectId, $cardId);
+			return;
 		}
-		$this->projectCardMapper->remove($project->getId(), $cardId);
+		$this->cardMutation->runForBoards([$boardId], function () use ($projectId, $cardId, $uid): void {
+			$project = $this->loadProject($projectId, $uid, PermissionService::PERMISSION_EDIT);
+			if ($this->moveAliases->findByOldId($cardId) !== null) {
+				throw new DoesNotExistException('Card has moved; reload before editing');
+			}
+			if ($project->getOwner() !== $uid) {
+				$this->assertCardReadable($this->loadCard($cardId), $uid);
+			}
+			$this->projectCardMapper->remove($projectId, $cardId);
+		});
 	}
 
 	/**

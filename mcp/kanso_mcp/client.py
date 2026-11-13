@@ -133,6 +133,7 @@ class KansoClient:
         description: Optional[str] = None,
         allow_ai_actors: Optional[bool] = None,
         auto_complete_parent: Optional[bool] = None,
+        single_assignee: Optional[bool] = None,
         estimate_scale: Optional[str] = None,
         estimate_custom: Optional[List[Dict[str, Any]]] = None,
         new_cards_on_top: Optional[bool] = None,
@@ -148,6 +149,7 @@ class KansoClient:
                 "description": description,
                 "allowAiActors": allow_ai_actors,
                 "autoCompleteParent": auto_complete_parent,
+                "singleAssignee": single_assignee,
                 "estimateScale": estimate_scale,
                 "estimateCustom": estimate_custom,
                 "newCardsOnTop": new_cards_on_top,
@@ -241,7 +243,7 @@ class KansoClient:
         type: Optional[str] = None,
         visibility: Optional[str] = None,
     ) -> Card:
-        data = await self._request(
+        await self._request(
             "PATCH",
             f"/cards/{card_id}",
             json={
@@ -261,7 +263,7 @@ class KansoClient:
                 "visibility": visibility,
             },
         )
-        return Card.model_validate(data)
+        return await self.get_card(card_id)
 
     async def delete_card(self, card_id: int) -> Any:
         return await self._request("DELETE", f"/cards/{card_id}")
@@ -574,6 +576,8 @@ class KansoClient:
         color: Optional[str] = None,
         start_date: Optional[str] = None,
         target_date: Optional[str] = None,
+        lead: Optional[str] = None,
+        lifecycle_status: Optional[str] = None,
     ) -> Project:
         data = await self._request(
             "POST",
@@ -584,6 +588,8 @@ class KansoClient:
                 "color": color,
                 "startDate": start_date,
                 "targetDate": target_date,
+                "lead": lead,
+                "lifecycleStatus": lifecycle_status,
             },
         )
         return Project.model_validate(data)
@@ -597,8 +603,10 @@ class KansoClient:
         color: Optional[str] = None,
         start_date: Optional[str] = None,
         target_date: Optional[str] = None,
+        lead: Optional[str] = None,
+        lifecycle_status: Optional[str] = None,
     ) -> Project:
-        # None fields are dropped => left unchanged. An empty color or date clears it.
+        # None fields are dropped; an empty color, date or lead clears it.
         data = await self._request(
             "PATCH",
             f"/projects/{project_id}",
@@ -608,6 +616,8 @@ class KansoClient:
                 "color": color,
                 "startDate": start_date,
                 "targetDate": target_date,
+                "lead": lead,
+                "lifecycleStatus": lifecycle_status,
             },
         )
         return Project.model_validate(data)

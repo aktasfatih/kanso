@@ -45,6 +45,7 @@ class BoardSummary(_Base):
     allowAiActors: bool = False
     # "All children done → parent done" gate (#198); OFF by default.
     autoCompleteParent: bool = False
+    singleAssignee: bool = False
     groupId: Optional[int] = None
     pinned: bool = False
     permissions: Optional[int] = None
@@ -78,6 +79,7 @@ class Board(_Base):
     allowAiActors: bool = False
     # "All children done → parent done" gate (#198); OFF by default.
     autoCompleteParent: bool = False
+    singleAssignee: bool = False
 
 
 class Stack(_Base):
@@ -302,12 +304,15 @@ class Project(_Base):
     createdAt: int = 0
     startDate: Optional[str] = None
     targetDate: Optional[str] = None
+    lead: Optional[str] = None
+    lifecycleStatus: str = "planned"
     # Only `GET /api/projects` carries these; None means "not reported here".
     isOwner: Optional[bool] = None
     canEdit: Optional[bool] = None
     canLeave: Optional[bool] = None
     shared: Optional[bool] = None
     ownerDisplayName: Optional[str] = None
+    leadDisplayName: Optional[str] = None
 
 
 class ProjectCard(_Base):

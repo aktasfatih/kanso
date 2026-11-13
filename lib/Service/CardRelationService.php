@@ -44,6 +44,7 @@ class CardRelationService {
 		private ChangeNotifier $changeNotifier,
 		private CardVisibilityGuard $visibilityGuard,
 		private CardVisibilityScope $visibilityScope,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -194,59 +195,61 @@ class CardRelationService {
 	 * @throws InvalidInputException on an unknown kind, self-relation, cross-board pair, or a blocks cycle
 	 */
 	public function addRelation(int $cardId, int $otherCardId, string $kind, string $uid): CardRelation {
-		if (!in_array($kind, self::KINDS, true)) {
-			throw new InvalidInputException('Unknown relation kind');
-		}
-		if ($cardId === $otherCardId) {
-			throw new InvalidInputException('A card cannot relate to itself');
-		}
+		return $this->cardMutation->run($cardId, function () use ($cardId, $otherCardId, $kind, $uid): CardRelation {
+			if (!in_array($kind, self::KINDS, true)) {
+				throw new InvalidInputException('Unknown relation kind');
+			}
+			if ($cardId === $otherCardId) {
+				throw new InvalidInputException('A card cannot relate to itself');
+			}
 
-		$card = $this->loadCard($cardId);
-		$other = $this->loadCard($otherCardId);
-		if ($card->getBoardId() !== $other->getBoardId()) {
-			throw new InvalidInputException('Related cards must be on the same board');
-		}
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		// Both endpoints must be visible to the actor (#3743): relating TO a
-		// hidden card would both confirm it exists and leak its title into
-		// this card's relations panel.
-		$this->visibilityGuard->assertVisible($board, $card, $uid);
-		$this->visibilityGuard->assertVisible($board, $other, $uid);
+			$card = $this->loadCard($cardId);
+			$other = $this->loadCard($otherCardId);
+			if ($card->getBoardId() !== $other->getBoardId()) {
+				throw new InvalidInputException('Related cards must be on the same board');
+			}
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			// Both endpoints must be visible to the actor (#3743): relating TO a
+			// hidden card would both confirm it exists and leak its title into
+			// this card's relations panel.
+			$this->visibilityGuard->assertVisible($board, $card, $uid);
+			$this->visibilityGuard->assertVisible($board, $other, $uid);
 
-		// Resolve the API kind to a stored (source, target, type) triple.
-		[$src, $dst, $type] = $this->resolveStorage($cardId, $otherCardId, $kind);
+			// Resolve the API kind to a stored (source, target, type) triple.
+			[$src, $dst, $type] = $this->resolveStorage($cardId, $otherCardId, $kind);
 
-		if ($type === CardRelation::TYPE_BLOCKS && $this->wouldCycle($card->getBoardId(), $src, $dst)) {
-			throw new InvalidInputException('That blocks relation would create a cycle');
-		}
+			if ($type === CardRelation::TYPE_BLOCKS && $this->wouldCycle($card->getBoardId(), $src, $dst)) {
+				throw new InvalidInputException('That blocks relation would create a cycle');
+			}
 
-		if ($this->relationMapper->exists($src, $dst, $type)) {
-			// Idempotent - return the existing row.
-			foreach ($this->relationMapper->findOutgoing($src) as $r) {
-				if ($r['otherCardId'] === $dst && $r['type'] === $type) {
-					return $this->relationMapper->find($r['id']);
+			if ($this->relationMapper->exists($src, $dst, $type)) {
+				// Idempotent - return the existing row.
+				foreach ($this->relationMapper->findOutgoing($src) as $r) {
+					if ($r['otherCardId'] === $dst && $r['type'] === $type) {
+						return $this->relationMapper->find($r['id']);
+					}
 				}
 			}
-		}
 
-		$relation = new CardRelation();
-		$relation->setCardId($src);
-		$relation->setOtherCardId($dst);
-		$relation->setType($type);
-		$relation->setBoardId($card->getBoardId());
-		$relation->setCreatedAt(time());
-		try {
-			$relation = $this->relationMapper->insert($relation);
-		} catch (\OCP\DB\Exception $e) {
-			if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
-				throw new InvalidInputException('That relation already exists');
+			$relation = new CardRelation();
+			$relation->setCardId($src);
+			$relation->setOtherCardId($dst);
+			$relation->setType($type);
+			$relation->setBoardId($card->getBoardId());
+			$relation->setCreatedAt(time());
+			try {
+				$relation = $this->relationMapper->insert($relation);
+			} catch (\OCP\DB\Exception $e) {
+				if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+					throw new InvalidInputException('That relation already exists');
+				}
+				throw $e;
 			}
-			throw $e;
-		}
 
-		$this->notifyBoth($card->getBoardId(), $cardId, $otherCardId, $uid);
-		return $relation;
+			$this->notifyBoth($card->getBoardId(), $cardId, $otherCardId, $uid);
+			return $relation;
+		});
 	}
 
 	/**
@@ -254,31 +257,34 @@ class CardRelationService {
 	 * @throws NotPermittedException if the user may not edit the board
 	 */
 	public function removeRelation(int $relationId, string $uid): void {
-		$relation = $this->relationMapper->find($relationId);
-		$board = $this->loadBoard($relation->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		// The actor must see at least ONE endpoint (#3743): the relation row
-		// is rendered (masked) on the visible side, so deleting from there is
-		// legitimate - but an id probed blind, where both endpoints are
-		// hidden, must read as not-found.
-		$endpointVisible = false;
-		foreach ([$relation->getCardId(), $relation->getOtherCardId()] as $endpointId) {
-			try {
-				$endpoint = $this->cardMapper->find($endpointId);
-			} catch (DoesNotExistException) {
-				continue;
+		$cardId = $this->relationMapper->find($relationId)->getCardId();
+		$this->cardMutation->run($cardId, function () use ($relationId, $uid): void {
+			$relation = $this->relationMapper->find($relationId);
+			$board = $this->loadBoard($relation->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			// The actor must see at least ONE endpoint (#3743): the relation row
+			// is rendered (masked) on the visible side, so deleting from there is
+			// legitimate - but an id probed blind, where both endpoints are
+			// hidden, must read as not-found.
+			$endpointVisible = false;
+			foreach ([$relation->getCardId(), $relation->getOtherCardId()] as $endpointId) {
+				try {
+					$endpoint = $this->cardMapper->find($endpointId);
+				} catch (DoesNotExistException) {
+					continue;
+				}
+				if ($this->visibilityGuard->isVisible($board, $endpoint, $uid)) {
+					$endpointVisible = true;
+					break;
+				}
 			}
-			if ($this->visibilityGuard->isVisible($board, $endpoint, $uid)) {
-				$endpointVisible = true;
-				break;
+			if (!$endpointVisible) {
+				throw new DoesNotExistException('Relation ' . $relationId . ' does not exist');
 			}
-		}
-		if (!$endpointVisible) {
-			throw new DoesNotExistException('Relation ' . $relationId . ' does not exist');
-		}
 
-		$this->relationMapper->delete($relation);
-		$this->notifyBoth($relation->getBoardId(), $relation->getCardId(), $relation->getOtherCardId(), $uid);
+			$this->relationMapper->delete($relation);
+			$this->notifyBoth($relation->getBoardId(), $relation->getCardId(), $relation->getOtherCardId(), $uid);
+		});
 	}
 
 	/**

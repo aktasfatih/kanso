@@ -183,7 +183,10 @@ test.describe('Trash', () => {
 		// Click "Yes, delete" to confirm purge.
 		const confirmBtn = cardItem.locator('button', { hasText: 'Yes, delete' })
 		await expect(confirmBtn).toBeVisible()
+		const purged = page.waitForResponse((response) => response.request().method() === 'DELETE'
+			&& response.url().endsWith(`/api/cards/${state.cardId}/purge`), { timeout: 15_000 })
 		await confirmBtn.click()
+		expect((await purged).ok()).toBe(true)
 
 		// The item should disappear from the trash list.
 		await expect(trashItem).not.toBeVisible({ timeout: 8000 })
@@ -192,6 +195,7 @@ test.describe('Trash', () => {
 		const trash = await api.get(`/boards/${state.boardId}/trash`)
 		const stillInTrash = Array.isArray(trash) && trash.some((c) => c.id === state.cardId)
 		expect(stillInTrash).toBe(false)
+		expect((await api.raw('POST', `/cards/${state.cardId}/restore`)).status).toBe(404)
 
 		// The card id is now gone; nullify so afterAll cleanup does not try to delete it.
 		state.cardId = 0

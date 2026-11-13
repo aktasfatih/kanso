@@ -57,6 +57,7 @@ class CommentServiceTest extends TestCase {
 			$this->subscriptionService,
 			$this->mentionService,
 			$this->visibilityGuard,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 
@@ -119,7 +120,7 @@ class CommentServiceTest extends TestCase {
 		$board = $this->expectCardLoaded();
 		$this->permissionService->expects(self::once())
 			->method('assertPermission')
-			->with($board, 'bob', PermissionService::PERMISSION_EDIT);
+			->with($board, 'bob', PermissionService::PERMISSION_COMMENT);
 		$this->commentMapper->expects(self::once())
 			->method('insert')
 			->willReturnCallback(function (Comment $c): Comment {
@@ -224,11 +225,11 @@ class CommentServiceTest extends TestCase {
 		$this->service->addComment(9, 'reply', 50, 'bob');
 	}
 
-	public function testAddCommentAssertsActorEditPermission(): void {
+	public function testAddCommentAssertsActorCommentPermission(): void {
 		$board = $this->expectCardLoaded();
 		$this->permissionService->expects(self::once())
 			->method('assertPermission')
-			->with($board, 'mallory', PermissionService::PERMISSION_EDIT)
+			->with($board, 'mallory', PermissionService::PERMISSION_COMMENT)
 			->willThrowException(new NotPermittedException());
 		$this->commentMapper->expects(self::never())->method('insert');
 
@@ -265,6 +266,8 @@ class CommentServiceTest extends TestCase {
 		$this->commentMapper->method('find')->with(50)->willReturn($comment);
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$this->permissionService->expects(self::once())->method('assertPermission')
+			->with(self::anything(), 'bob', PermissionService::PERMISSION_COMMENT);
 		$this->commentMapper->expects(self::once())
 			->method('update')
 			->willReturnCallback(function (Comment $c): Comment {
@@ -301,14 +304,16 @@ class CommentServiceTest extends TestCase {
 
 	// ---- deleteComment ----------------------------------------------------
 
-	public function testDeleteTopLevelCommentByAuthorCascadesToReplies(): void {
+	public function testDeleteTopLevelCommentByCommentOnlyAuthorCascadesToOwnReplies(): void {
 		$comment = $this->comment(50, 9, null, 'bob');
 		$this->commentMapper->method('find')->with(50)->willReturn($comment);
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
-		// Author holds EDIT but not MANAGE.
 		$this->permissionService->method('getPermissions')
-			->willReturn(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT);
+			->willReturn(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_COMMENT);
+		$this->permissionService->expects(self::once())->method('assertPermission')
+			->with(self::anything(), 'bob', PermissionService::PERMISSION_COMMENT);
+		$this->commentMapper->expects(self::once())->method('hasRepliesFromOthers')->with(50, 'bob')->willReturn(false);
 
 		// The replies are cascaded in one set-based UPDATE...
 		$this->commentMapper->expects(self::once())
@@ -327,6 +332,45 @@ class CommentServiceTest extends TestCase {
 		$this->service->deleteComment(50, 'bob');
 	}
 
+	public function testAuthorCannotDeleteAThreadWithOtherAuthorsReplies(): void {
+		$this->expectCardLoaded();
+		$this->commentMapper->method('find')->with(50)->willReturn($this->comment(50));
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_COMMENT);
+		$this->commentMapper->expects(self::once())->method('hasRepliesFromOthers')->with(50, 'bob')->willReturn(true);
+		$this->commentMapper->expects(self::never())->method('softDeleteRepliesOf');
+		$this->commentMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->deleteComment(50, 'bob');
+	}
+
+	public function testCommentOnlyAuthorCanDeleteOwnReply(): void {
+		$this->expectCardLoaded();
+		$this->commentMapper->method('find')->with(51)->willReturn($this->comment(51, 9, 50));
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_READ | PermissionService::PERMISSION_COMMENT);
+		$this->permissionService->expects(self::once())->method('assertPermission')
+			->with(self::anything(), 'bob', PermissionService::PERMISSION_COMMENT);
+		$this->commentMapper->expects(self::never())->method('hasRepliesFromOthers');
+		$this->commentMapper->expects(self::never())->method('softDeleteRepliesOf');
+		$this->commentMapper->expects(self::once())->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
+
+		$this->service->deleteComment(51, 'bob');
+	}
+
+	public function testAuthorLosingCommentPermissionCannotDeleteOwnComment(): void {
+		$this->expectCardLoaded();
+		$this->commentMapper->method('find')->with(50)->willReturn($this->comment(50));
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_READ);
+		$this->permissionService->method('assertPermission')->willThrowException(new NotPermittedException());
+		$this->commentMapper->expects(self::never())->method('softDeleteRepliesOf');
+		$this->commentMapper->expects(self::never())->method('update');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->deleteComment(50, 'bob');
+	}
+
 	public function testManagerCanDeleteAnotherUsersComment(): void {
 		$comment = $this->comment(50, 9, null, 'bob');
 		$this->commentMapper->method('find')->with(50)->willReturn($comment);
@@ -334,7 +378,8 @@ class CommentServiceTest extends TestCase {
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
 		$this->permissionService->method('getPermissions')
 			->willReturn(PermissionService::PERMISSION_ALL);
-		$this->commentMapper->method('findReplies')->with(50)->willReturn([]);
+		$this->commentMapper->expects(self::never())->method('hasRepliesFromOthers');
+		$this->commentMapper->expects(self::once())->method('softDeleteRepliesOf')->with(50, self::greaterThan(0));
 		$this->commentMapper->expects(self::once())->method('update')->willReturnArgument(0);
 		$this->changeNotifier->expects(self::once())->method('notify')->willReturn(new Change());
 

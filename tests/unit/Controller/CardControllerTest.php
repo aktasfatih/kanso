@@ -32,6 +32,7 @@ use OCA\Kanso\Service\ContactService;
 use OCA\Kanso\Service\DescriptionConflictException;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\LabelService;
+use OCA\Kanso\Service\MutationConflictException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\ReminderService;
 use OCA\Kanso\Service\ReviewService;
@@ -559,6 +560,21 @@ class CardControllerTest extends TestCase {
 		$response = $this->controller->assignUser(9, 'bob');
 		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
 		self::assertArrayHasKey('error', $response->getData());
+	}
+
+	public function testAssignUserReturnsSafeRetryableConflictAfterRollback(): void {
+		$this->assigneeService->method('assign')->willThrowException(new MutationConflictException(new \RuntimeException('private SQL and database path')));
+
+		$response = $this->controller->assignUser(9, 'bob');
+		self::assertSame(Http::STATUS_CONFLICT, $response->getStatus());
+		self::assertSame(['error' => 'Another change is being saved. Please try again.'], $response->getData());
+	}
+
+	public function testAssignUserDoesNotClaimUnconfirmedDatabaseFailureIsRetryable(): void {
+		$error = new \OCP\DB\Exception('unknown transaction outcome');
+		$this->assigneeService->method('assign')->willThrowException($error);
+		$this->expectExceptionObject($error);
+		$this->controller->assignUser(9, 'bob');
 	}
 
 	public function testAssignUserMapsNonMemberTo400(): void {

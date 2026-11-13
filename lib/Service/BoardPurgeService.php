@@ -21,8 +21,7 @@ use Psr\Log\LoggerInterface;
  * what a user asked for, but the rows and the attachment bytes stay. This
  * service is what eventually removes them, driven by
  * {@see \OCA\Kanso\Cron\PurgeDeletedBoards} once the retention window has
- * passed. There is no restore: boards already have a separate `archived` flag
- * for the reversible case, and the delete dialog promises permanence.
+ * passed. Expired boards cannot be restored, even if a failed purge left rows.
  *
  * Three phases, in this order, and the order is the whole design:
  *

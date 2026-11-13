@@ -176,6 +176,10 @@
             "%n da revisionare",
             "%n da revisionare"
         ],
+        "_%n other reviewer_::_%n other reviewers_": [
+            "%n altro revisore",
+            "%n altri revisori"
+        ],
         "_%n overdue_::_%n overdue_": [
             "%n in ritardo",
             "%n in ritardo"
@@ -257,6 +261,7 @@
         "All day (no time)": "Tutto il giorno (senza orario)",
         "All due dates": "Tutte le scadenze",
         "All issues": "Tutte le issue",
+        "All requested reviews must be approved before this card can be marked done.": "Tutte le revisioni richieste devono essere approvate prima di poter segnare questa scheda come completata.",
         "All requested reviews must be approved before this card can be marked done. Waiting on {names}.": "Tutte le revisioni richieste devono essere approvate prima di poter segnare questa scheda come completata. In attesa di {names}.",
         "All statuses": "Tutti gli stati",
         "Analytics": "Statistiche",
@@ -585,7 +590,6 @@
         "Delete": "Elimina",
         "Delete \"{name}\"": "Elimina «{name}»",
         "Delete \"{name}\"?": "Eliminare «{name}»?",
-        "Delete \"{title}\" and all of its cards for everyone? This cannot be undone.": "Eliminare «{title}» e tutte le sue schede per tutti? L'operazione non può essere annullata.",
         "Delete \"{title}\"?": "Eliminare «{title}»?",
         "Delete {name}? Kanso keeps no second copy of it.": "Eliminare {name}? Kanso non ne conserva una seconda copia.",
         "Delete {name}? The file goes to the backup account's trashbin — Kanso keeps no second copy of it.": "Eliminare {name}? Il file finisce nel cestino dell'account di backup: Kanso non ne conserva una seconda copia.",
@@ -607,7 +611,6 @@
         "Delete selected": "Elimina le selezionate",
         "Delete template": "Elimina modello",
         "Delete these sample cards whenever you like": "Queste schede di esempio si possono eliminare in qualsiasi momento",
-        "Delete this board permanently?": "Eliminare definitivamente questa bacheca?",
         "Delete this rule?": "Eliminare questa regola?",
         "Delete this template?": "Eliminare questo modello?",
         "Delete view \"{name}\"?": "Eliminare la vista «{name}»?",
@@ -929,7 +932,6 @@
         "Hide changes": "Nascondi le modifiche",
         "Hide the card sections this board does not use. Nothing is deleted — turning a section back on restores everything that was already there.": "Nascondi le sezioni della scheda che questa bacheca non usa. Non viene eliminato nulla: riattivando una sezione si ritrova tutto quello che c'era già.",
         "Hide the discussion panel": "Nascondi il pannello della discussione",
-        "Hide this board without deleting it. You can restore it later.": "Nascondi questa bacheca senza eliminarla. Può essere ripristinata in seguito.",
         "High": "Alta",
         "Hours": "Ore",
         "https://cloud.example.com/call/abc123": "https://cloud.example.com/call/abc123",
@@ -1239,7 +1241,6 @@
         "People you share with see this project’s details and its whole discussion, including earlier notes. They only see the cards they can already access on their boards.": "Le persone con cui condividi vedono i dettagli di questo progetto e l'intera discussione, comprese le note precedenti. Vedono solo le schede a cui hanno già accesso nelle loro bacheche.",
         "per mailbox": "per casella di posta",
         "per sender": "per mittente",
-        "Permanently remove this board and all of its cards for everyone. This cannot be undone.": "Rimuove definitivamente questa bacheca e tutte le sue schede per tutti. L'operazione non può essere annullata.",
         "Pick a card to link…": "Scegli una scheda da collegare…",
         "Pick a card…": "Scegli una scheda…",
         "Pick a color": "Scegli un colore",
@@ -1499,7 +1500,6 @@
         "Strikethrough": "Barrato",
         "Sub-card": "Sotto-scheda",
         "Sub-card progress": "Avanzamento delle sotto-schede",
-        "Sub-card progress {done} of {total}": "Avanzamento delle sotto-schede: {done} di {total}",
         "Sub-cards": "Sotto-schede",
         "Submit": "Invia",
         "Subscribe to this board's card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card.": "Iscriviti alle scadenze delle schede di questa bacheca da qualsiasi app di calendario (Nextcloud Calendar, Thunderbird, il telefono). Il feed è in sola lettura e mostra solo i titoli delle schede, le scadenze e un collegamento a ciascuna scheda.",
@@ -1553,7 +1553,6 @@
         "This project no longer exists, or you no longer have access to it.": "Questo progetto non esiste più o non hai più accesso.",
         "This public board link has expired. Ask whoever shared the board for a new link.": "Questo collegamento pubblico alla bacheca è scaduto. Chiedi un nuovo collegamento a chi ha condiviso la bacheca.",
         "This public board link is invalid or has been disabled.": "Questo collegamento pubblico alla bacheca non è valido oppure è stato disattivato.",
-        "This removes the board and all of its cards for everyone. This cannot be undone.": "Questa operazione rimuove la bacheca e tutte le sue schede per tutti. Non può essere annullata.",
         "This same card is brought back and reset each time": "Ogni volta viene riportata e reimpostata questa stessa scheda",
         "This saved view no longer exists.": "Questa vista salvata non esiste più.",
         "This week": "Questa settimana",

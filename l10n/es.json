@@ -176,6 +176,10 @@
             "%n pendiente de revisión",
             "%n pendientes de revisión"
         ],
+        "_%n other reviewer_::_%n other reviewers_": [
+            "%n revisor más",
+            "%n revisores más"
+        ],
         "_%n overdue_::_%n overdue_": [
             "%n vencida",
             "%n vencidas"
@@ -257,6 +261,7 @@
         "All day (no time)": "Todo el día (sin hora)",
         "All due dates": "Todas las fechas de vencimiento",
         "All issues": "Todas las incidencias",
+        "All requested reviews must be approved before this card can be marked done.": "Todas las revisiones solicitadas deben estar aprobadas antes de poder marcar esta tarjeta como terminada.",
         "All requested reviews must be approved before this card can be marked done. Waiting on {names}.": "Todas las revisiones solicitadas deben estar aprobadas antes de poder marcar esta tarjeta como terminada. En espera de {names}.",
         "All statuses": "Todos los estados",
         "Analytics": "Estadísticas",
@@ -585,7 +590,6 @@
         "Delete": "Eliminar",
         "Delete \"{name}\"": "Eliminar «{name}»",
         "Delete \"{name}\"?": "¿Eliminar «{name}»?",
-        "Delete \"{title}\" and all of its cards for everyone? This cannot be undone.": "¿Eliminar «{title}» y todas sus tarjetas para todo el mundo? Esta acción no se puede deshacer.",
         "Delete \"{title}\"?": "¿Eliminar «{title}»?",
         "Delete {name}? Kanso keeps no second copy of it.": "¿Eliminar {name}? Kanso no guarda ninguna otra copia.",
         "Delete {name}? The file goes to the backup account's trashbin — Kanso keeps no second copy of it.": "¿Eliminar {name}? El archivo va a la papelera de la cuenta de copias de seguridad: Kanso no guarda ninguna otra copia.",
@@ -607,7 +611,6 @@
         "Delete selected": "Eliminar la selección",
         "Delete template": "Eliminar la plantilla",
         "Delete these sample cards whenever you like": "Elimina estas tarjetas de ejemplo cuando quieras",
-        "Delete this board permanently?": "¿Eliminar definitivamente este tablero?",
         "Delete this rule?": "¿Eliminar esta regla?",
         "Delete this template?": "¿Eliminar esta plantilla?",
         "Delete view \"{name}\"?": "¿Eliminar la vista «{name}»?",
@@ -929,7 +932,6 @@
         "Hide changes": "Ocultar los cambios",
         "Hide the card sections this board does not use. Nothing is deleted — turning a section back on restores everything that was already there.": "Oculta las secciones de la tarjeta que este tablero no usa. No se elimina nada: al volver a activar una sección se restaura todo lo que ya había en ella.",
         "Hide the discussion panel": "Ocultar el panel de conversación",
-        "Hide this board without deleting it. You can restore it later.": "Oculta este tablero sin eliminarlo. Puedes restaurarlo más adelante.",
         "High": "Alta",
         "Hours": "Horas",
         "https://cloud.example.com/call/abc123": "https://cloud.example.com/call/abc123",
@@ -1239,7 +1241,6 @@
         "People you share with see this project’s details and its whole discussion, including earlier notes. They only see the cards they can already access on their boards.": "Las personas con las que compartes ven los detalles de este proyecto y toda su conversación, incluidas las notas anteriores. Solo ven las tarjetas a las que ya tienen acceso en sus tableros.",
         "per mailbox": "por buzón",
         "per sender": "por remitente",
-        "Permanently remove this board and all of its cards for everyone. This cannot be undone.": "Elimina definitivamente este tablero y todas sus tarjetas para todo el mundo. Esta acción no se puede deshacer.",
         "Pick a card to link…": "Elige una tarjeta para enlazar…",
         "Pick a card…": "Elige una tarjeta…",
         "Pick a color": "Elige un color",
@@ -1499,7 +1500,6 @@
         "Strikethrough": "Tachado",
         "Sub-card": "Subtarjeta",
         "Sub-card progress": "Progreso de las subtarjetas",
-        "Sub-card progress {done} of {total}": "Progreso de las subtarjetas: {done} de {total}",
         "Sub-cards": "Subtarjetas",
         "Submit": "Enviar",
         "Subscribe to this board's card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card.": "Suscríbete a las fechas de vencimiento de las tarjetas de este tablero desde cualquier aplicación de calendario (Nextcloud Calendar, Thunderbird, tu teléfono). La fuente es de solo lectura y solo muestra los títulos de las tarjetas, sus fechas de vencimiento y un enlace a cada una.",
@@ -1553,7 +1553,6 @@
         "This project no longer exists, or you no longer have access to it.": "Este proyecto ya no existe o ya no tienes acceso a él.",
         "This public board link has expired. Ask whoever shared the board for a new link.": "Este enlace público del tablero ha caducado. Pide un enlace nuevo a quien haya compartido el tablero.",
         "This public board link is invalid or has been disabled.": "Este enlace de tablero público no es válido o se ha desactivado.",
-        "This removes the board and all of its cards for everyone. This cannot be undone.": "Esto elimina el tablero y todas sus tarjetas para todo el mundo. Esta acción no se puede deshacer.",
         "This same card is brought back and reset each time": "Cada vez vuelve esta misma tarjeta y se reinicia",
         "This saved view no longer exists.": "Esta vista guardada ya no existe.",
         "This week": "Esta semana",

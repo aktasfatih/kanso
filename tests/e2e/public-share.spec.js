@@ -482,10 +482,43 @@ test.describe('Public board layout fills the window', () => {
 		if (boardId) await api('DELETE', `/boards/${boardId}`)
 	})
 
-	// Desktop, laptop and phone. The bug was viewport-INDEPENDENT (the same
-	// shrink-wrapped strip, and an outer overflow of a constant ~60-90px at every
-	// size), so one viewport would not have shown it was arithmetic.
-	for (const vp of [{ width: 1600, height: 900 }, { width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+	async function expectFooterLayout(page, { hasGuestBanner = true } = {}) {
+		const metrics = await page.evaluate(() => {
+			const footer = document.querySelector('.public-board__footer')
+			const guest = document.querySelector('footer.guest-box')
+			const visibleAtCenter = (element) => {
+				if (!element) return false
+				const rect = element.getBoundingClientRect()
+				const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+				return element === hit || element.contains(hit)
+			}
+			return {
+				footer: footer.getBoundingClientRect().toJSON(),
+				guest: guest?.getBoundingClientRect().toJSON() ?? null,
+				columnsBottom: document.querySelector('.public-board__columns').getBoundingClientRect().bottom,
+				footerVisible: visibleAtCenter(footer),
+				guestVisible: visibleAtCenter(guest),
+				width: window.innerWidth,
+				height: window.innerHeight,
+			}
+		})
+		expect(metrics.footer.top).toBeGreaterThanOrEqual(0)
+		expect(metrics.footer.left).toBeGreaterThanOrEqual(0)
+		expect(metrics.footer.right).toBeLessThanOrEqual(metrics.width + 1)
+		expect(metrics.footer.bottom).toBeLessThanOrEqual(metrics.height + 1)
+		expect(metrics.footer.top).toBeGreaterThanOrEqual(metrics.columnsBottom)
+		expect(metrics.footerVisible).toBe(true)
+		if (hasGuestBanner) {
+			expect(metrics.guest).not.toBeNull()
+			expect(metrics.footer.bottom).toBeLessThanOrEqual(metrics.guest.top)
+			expect(metrics.guest.bottom).toBeLessThanOrEqual(metrics.height + 1)
+			expect(metrics.guestVisible).toBe(true)
+		} else {
+			expect(metrics.guest).toBeNull()
+		}
+	}
+
+	for (const vp of [{ width: 1600, height: 900 }, { width: 1280, height: 800 }, { width: 390, height: 844 }, { width: 320, height: 568 }, { width: 390, height: 320 }, { width: 844, height: 390 }]) {
 		test(`fills #content and scrolls inside the column at ${vp.width}x${vp.height}`, async ({ page }) => {
 			await page.setViewportSize(vp)
 			await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
@@ -498,7 +531,6 @@ test.describe('Public board layout fills the window', () => {
 				const mount = q('#kanso-public')
 				const cols = q('.public-board__columns')
 				const list = q('.public-col__cards')
-				const footer = q('.public-board__footer')
 				return {
 					contentWidth: content.getBoundingClientRect().width,
 					boardWidth: q('.public-board').getBoundingClientRect().width,
@@ -506,8 +538,6 @@ test.describe('Public board layout fills the window', () => {
 					docOverflow: document.documentElement.scrollHeight - document.documentElement.clientHeight,
 					colsOverflowY: cols.scrollHeight - cols.clientHeight,
 					listOverflow: list.scrollHeight - list.clientHeight,
-					footerBottom: footer.getBoundingClientRect().bottom,
-					innerHeight: window.innerHeight,
 				}
 			})
 
@@ -526,14 +556,36 @@ test.describe('Public board layout fills the window', () => {
 			// The column's card list is what scrolls instead.
 			expect(m.listOverflow).toBeGreaterThan(0)
 
-			// And the footer is on screen without any outer scrolling. Honest note:
-			// core's `#body-public footer` rule pins it to the viewport bottom
-			// (computed `position: fixed`), so this holds by construction rather
-			// than by the flex shell — it is a tripwire for a future change that
-			// takes it out of that rule, not the discriminating assertion above.
-			expect(m.footerBottom).toBeLessThanOrEqual(m.innerHeight + 1)
+			await expectFooterLayout(page)
 		})
 	}
+
+	test('keeps attribution above a wrapping guest banner', async ({ page }) => {
+		await page.setViewportSize({ width: 320, height: 568 })
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		await expect(page.locator('.public-col')).toHaveCount(2)
+		const guest = page.locator('footer.guest-box')
+		const initialHeight = (await guest.boundingBox()).height
+		const initialReservedHeight = await page.locator('body').evaluate((el) => parseFloat(getComputedStyle(el).getPropertyValue('--footer-height')))
+		await guest.locator('.info').evaluate((el) => { el.textContent += ' A longer guest message that wraps across several lines on a narrow screen.' })
+		await expect.poll(async () => (await guest.boundingBox()).height).toBeGreaterThan(initialHeight)
+		await expect.poll(() => page.locator('body').evaluate((el) => parseFloat(getComputedStyle(el).getPropertyValue('--footer-height')))).toBeGreaterThan(initialReservedHeight)
+		await expectFooterLayout(page)
+	})
+
+	test('keeps attribution visible when the theme omits the guest banner', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 320 })
+		await page.route(`${BASE}/index.php/apps/kanso/p/${token}`, async (route) => {
+			const response = await route.fetch()
+			const html = await response.text()
+			const banner = /<footer class="guest-box">[\s\S]*?<\/footer>/
+			expect(html).toMatch(banner)
+			await route.fulfill({ response, body: html.replace(banner, '') })
+		})
+		await page.goto(`${BASE}/index.php/apps/kanso/p/${token}`)
+		await expect(page.locator('.public-col')).toHaveCount(2)
+		await expectFooterLayout(page, { hasGuestBanner: false })
+	})
 })
 
 // Opt-in exposure toggle (#3949): the public board is person-free by default,

@@ -40,6 +40,7 @@ class CardFieldService {
 		private PermissionService $permissionService,
 		private SortKeyService $sortKeyService,
 		private IDBConnection $db,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -51,28 +52,30 @@ class CardFieldService {
 	 * @throws InvalidInputException on invalid name / type / options
 	 */
 	public function create(int $boardId, string $name, string $type, ?array $options, string $uid): CardField {
-		$board = $this->loadBoard($boardId);
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+		return $this->cardMutation->runForBoards([$boardId], function () use ($boardId, $name, $type, $options, $uid): CardField {
+			$board = $this->loadBoard($boardId);
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
-		$type = $this->validateType($type);
+			$type = $this->validateType($type);
 
-		$field = new CardField();
-		$field->setBoardId($boardId);
-		$field->setName($this->validateName($name));
-		$field->setType($type);
-		$field->setOptions($this->encodeOptions($type, $options));
-		$field->setSortKey($this->nextSortKey($boardId));
-		$field = $this->cardFieldMapper->insert($field);
+			$field = new CardField();
+			$field->setBoardId($boardId);
+			$field->setName($this->validateName($name));
+			$field->setType($type);
+			$field->setOptions($this->encodeOptions($type, $options));
+			$field->setSortKey($this->nextSortKey($boardId));
+			$field = $this->cardFieldMapper->insert($field);
 
-		$this->changeNotifier->notify(
-			$boardId,
-			Change::ENTITY_CARD_FIELD,
-			$field->getId(),
-			Change::ACTION_CREATE,
-			$uid
-		);
+			$this->changeNotifier->notify(
+				$boardId,
+				Change::ENTITY_CARD_FIELD,
+				$field->getId(),
+				Change::ACTION_CREATE,
+				$uid
+			);
 
-		return $field;
+			return $field;
+		});
 	}
 
 	/**
@@ -87,32 +90,35 @@ class CardFieldService {
 	 * @throws InvalidInputException on invalid name / options / sort key
 	 */
 	public function update(int $id, ?string $name, ?array $options, ?string $sortKey, string $uid): CardField {
-		$field = $this->cardFieldMapper->find($id);
-		$board = $this->loadBoard($field->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+		$boardId = $this->cardFieldMapper->find($id)->getBoardId();
+		return $this->cardMutation->runForBoards([$boardId], function () use ($id, $name, $options, $sortKey, $uid): CardField {
+			$field = $this->cardFieldMapper->find($id);
+			$board = $this->loadBoard($field->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
-		if ($name !== null) {
-			$field->setName($this->validateName($name));
-		}
-		if ($options !== null) {
-			// Options only mean anything for a select field; reject on others.
-			$field->setOptions($this->encodeOptions($field->getType(), $options));
-		}
-		if ($sortKey !== null) {
-			$field->setSortKey($this->validateSortKey($sortKey));
-		}
+			if ($name !== null) {
+				$field->setName($this->validateName($name));
+			}
+			if ($options !== null) {
+				// Options only mean anything for a select field; reject on others.
+				$field->setOptions($this->encodeOptions($field->getType(), $options));
+			}
+			if ($sortKey !== null) {
+				$field->setSortKey($this->validateSortKey($sortKey));
+			}
 
-		$field = $this->cardFieldMapper->update($field);
+			$field = $this->cardFieldMapper->update($field);
 
-		$this->changeNotifier->notify(
-			$field->getBoardId(),
-			Change::ENTITY_CARD_FIELD,
-			$id,
-			Change::ACTION_UPDATE,
-			$uid
-		);
+			$this->changeNotifier->notify(
+				$field->getBoardId(),
+				Change::ENTITY_CARD_FIELD,
+				$id,
+				Change::ACTION_UPDATE,
+				$uid
+			);
 
-		return $field;
+			return $field;
+		});
 	}
 
 	/**
@@ -125,26 +131,29 @@ class CardFieldService {
 	 * @throws NotPermittedException if the user may not manage the board
 	 */
 	public function delete(int $id, string $uid): void {
-		$field = $this->cardFieldMapper->find($id);
-		$board = $this->loadBoard($field->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+		$boardId = $this->cardFieldMapper->find($id)->getBoardId();
+		$this->cardMutation->runForBoards([$boardId], function () use ($id, $uid): void {
+			$field = $this->cardFieldMapper->find($id);
+			$board = $this->loadBoard($field->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
-		$this->db->beginTransaction();
-		try {
-			$this->cardFieldValueMapper->deleteByField($id);
-			$this->cardFieldMapper->delete($field);
-			$this->changeNotifier->notify(
-				$field->getBoardId(),
-				Change::ENTITY_CARD_FIELD,
-				$id,
-				Change::ACTION_DELETE,
-				$uid
-			);
-			$this->db->commit();
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
-		}
+			$this->db->beginTransaction();
+			try {
+				$this->cardFieldValueMapper->deleteByField($id);
+				$this->cardFieldMapper->delete($field);
+				$this->changeNotifier->notify(
+					$field->getBoardId(),
+					Change::ENTITY_CARD_FIELD,
+					$id,
+					Change::ACTION_DELETE,
+					$uid
+				);
+				$this->db->commit();
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+		});
 	}
 
 	/**

@@ -73,6 +73,7 @@ class CardServiceTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->cardMapper = $this->createMock(CardMapper::class);
+		$this->cardMapper->method('findForMutation')->willReturnCallback(fn (int $id): Card => $this->cardMapper->find($id));
 		$this->stackMapper = $this->createMock(StackMapper::class);
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
@@ -155,7 +156,9 @@ class CardServiceTest extends TestCase {
 			$this->moveRecurrenceService,
 			$this->moveAliasService,
 			$this->moveCleanupService,
-			$container
+			$container,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService($this->db),
+			new \OCA\Kanso\Service\ParentCompletionService($this->cardMapper, $this->boardMapper, $this->checklistItemMapper, $this->cardReviewMapper, $this->changeNotifier),
 		);
 	}
 
@@ -745,6 +748,22 @@ class CardServiceTest extends TestCase {
 		$this->cardMapper->expects(self::never())->method('findByBoardAndSeq');
 
 		self::assertNull($this->service->findByRef(1, 'not a ref', 'alice'));
+	}
+
+	public function testFindByRefFallsBackToMoveTimePrefixInTheSourceBoard(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->boardWithPrefix('NEW'));
+		$this->cardMapper->expects(self::never())->method('findByBoardAndSeq');
+		$target = $this->card(42, 8, 2);
+		$this->moveAliasService->expects(self::once())->method('resolveRef')->with(1, 'OLD', 9, 'alice')->willReturn($target);
+		self::assertSame($target, $this->service->findByRef(1, 'OLD-9', 'alice'));
+	}
+
+	public function testFindByRefPrefersTheLiveReferenceOverAnAlias(): void {
+		$this->boardMapper->method('find')->with(1)->willReturn($this->boardWithPrefix('KAN'));
+		$card = $this->card();
+		$this->cardMapper->method('findByBoardAndSeq')->with(1, 9, self::isInstanceOf(ViewerContext::class))->willReturn($card);
+		$this->moveAliasService->expects(self::never())->method('resolveRef');
+		self::assertSame($card, $this->service->findByRef(1, 'KAN-9', 'alice'));
 	}
 
 	public function testFindByRefFallsBackToDefaultPrefixForUnprefixedBoard(): void {
@@ -2576,6 +2595,61 @@ class CardServiceTest extends TestCase {
 		self::assertSame(500, $parent->getDoneAt());
 	}
 
+	public function testArchivingLastOpenChildCompletesParentWithoutMarkingChildDone(): void {
+		$child = $this->card(9);
+		$child->setParentCardId(100);
+		$parent = $this->card(100);
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => $id === 100 ? $parent : $child);
+		$this->boardMapper->method('find')->willReturn($this->board());
+		$this->cardMapper->method('findChildren')->with(100)->willReturn([$child]);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$this->service->update(9, null, null, null, null, true, 'alice');
+		self::assertTrue($child->getArchived());
+		self::assertSame(0, $child->getDoneAt());
+		self::assertGreaterThan(0, $parent->getDoneAt());
+		$completedAt = $parent->getDoneAt();
+		$this->service->update(9, null, null, null, null, false, 'alice');
+		self::assertFalse($child->getArchived());
+		self::assertSame($completedAt, $parent->getDoneAt());
+	}
+
+	public function testSystemArchiveCompletionPreservesParentChecklistGate(): void {
+		$child = $this->card(9);
+		$child->setParentCardId(100);
+		$child->setArchived(true);
+		$parent = $this->card(100);
+		$this->cardMapper->method('find')->with(100)->willReturn($parent);
+		$this->boardMapper->method('find')->willReturn($this->board());
+		$this->cardMapper->method('findChildren')->with(100)->willReturn([$child]);
+		$this->checklistItemMapper->method('findByCard')->with(100)
+			->willReturn([$this->checklistItem(1, 100, 'Required work', false)]);
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->service->maybeCompleteParent($child, null, false);
+		self::assertSame(0, $parent->getDoneAt());
+	}
+
+	public function testSystemArchiveCompletionRecordsParentChangeWithoutSeparatePush(): void {
+		$child = $this->card(9);
+		$child->setParentCardId(100);
+		$child->setArchived(true);
+		$parent = $this->card(100);
+		$this->cardMapper->method('find')->with(100)->willReturn($parent);
+		$this->boardMapper->method('find')->willReturn($this->board());
+		$this->cardMapper->method('findChildren')->with(100)->willReturn([$child]);
+		$this->cardMapper->expects(self::once())->method('update')->with($parent)->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())->method('recordChange')
+			->with(1, Change::ENTITY_CARD, 100, Change::ACTION_UPDATE, null, Change::VERB_UPDATED)
+			->willReturn(new Change());
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+
+		$this->service->maybeCompleteParent($child, null, false);
+		self::assertGreaterThan(0, $parent->getDoneAt());
+	}
+
 	// ---- move done-automation --------------------------------------------
 
 	public function testMoveIntoDoneStackStampsDoneAtInsideTransaction(): void {
@@ -4161,4 +4235,20 @@ class CardServiceTest extends TestCase {
 		$result = $this->service->rebalanceBoard(1);
 		self::assertSame([5 => 2, 6 => 1], $result);
 	}
+	public function testMoveToSingleAssigneeBoardRejectsMultiplePeopleBeforeAnyShellOrStorageCopy(): void {
+		$source = $this->card(9, 5, 1);
+		$target = $this->board(2);
+		$target->setSingleAssignee(true);
+		$this->cardMapper->method('find')->with(9)->willReturn($source);
+		$this->boardMapper->method('find')->willReturnMap([[1, $this->board(1)], [2, $target]]);
+		$this->stackMapper->method('find')->with(7)->willReturn($this->stack(7, 2));
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->with(9)->willReturn(['alice', 'bob']);
+		$this->cardMapper->expects(self::never())->method('insert');
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->moveContentService->expects(self::never())->method('copyAttachments');
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('The destination board allows one assignee');
+		$this->service->moveToBoard(9, 7, 'alice');
+	}
+
 }

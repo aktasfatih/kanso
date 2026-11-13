@@ -214,6 +214,7 @@ class ExportService {
 				'estimateScale' => $board->getEstimateScale(),
 				'estimateCustom' => $board->customEstimates(),
 				'newCardsOnTop' => $board->getNewCardsOnTop() ?? false,
+				'singleAssignee' => $board->getSingleAssignee() ?? false,
 				'stacks' => $stacks,
 				'labels' => $labels,
 				'reviewTypes' => $reviewTypes,

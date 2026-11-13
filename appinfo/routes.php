@@ -80,6 +80,8 @@ return [
 		['name' => 'backupAdmin#delete', 'url' => '/api/admin/backup/files', 'verb' => 'DELETE'],
 
 		['name' => 'board#index', 'url' => '/api/boards', 'verb' => 'GET'],
+		['name' => 'board#deleted', 'url' => '/api/boards/deleted', 'verb' => 'GET'],
+		['name' => 'board#restore', 'url' => '/api/boards/{id}/restore', 'verb' => 'POST'],
 		['name' => 'board#create', 'url' => '/api/boards', 'verb' => 'POST'],
 
 		// Per-user board folders / groups in the nav (#3529). FLAT, one-level,
@@ -212,6 +214,7 @@ return [
 
 		['name' => 'project#index', 'url' => '/api/projects', 'verb' => 'GET'],
 		['name' => 'project#create', 'url' => '/api/projects', 'verb' => 'POST'],
+		['name' => 'project#leadCandidates', 'url' => '/api/projects/leads', 'verb' => 'GET'],
 		['name' => 'project#update', 'url' => '/api/projects/{id}', 'verb' => 'PATCH'],
 		['name' => 'project#destroy', 'url' => '/api/projects/{id}', 'verb' => 'DELETE'],
 		['name' => 'project#cards', 'url' => '/api/projects/{id}/cards', 'verb' => 'GET'],

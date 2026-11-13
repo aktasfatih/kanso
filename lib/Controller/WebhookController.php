@@ -15,7 +15,6 @@ use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
-use OCP\AppFramework\Http\Attribute\BruteForceProtection;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
@@ -50,21 +49,16 @@ class WebhookController extends Controller {
 		$this->rawBody = file_get_contents('php://input') ?: '';
 	}
 
+	// Shared-IP lockouts would also reject later valid signed deliveries.
 	#[PublicPage]
 	#[NoCSRFRequired]
-	#[BruteForceProtection(action: 'kansoWebhook')]
 	public function github(int $id): JSONResponse {
 		try {
 			$signature = $this->request->getHeader('X-Hub-Signature-256');
 			$result = $this->webhookService->handleWebhook($id, $signature, $this->rawBody);
 			return new JSONResponse($result);
 		} catch (NotPermittedException $e) {
-			// Missing/invalid signature or a disabled webhook - a throttled failure
-			// so repeated bad-signature deliveries to this public endpoint are
-			// rate-limited (valid deliveries above are never throttled).
-			$response = new JSONResponse(['error' => 'unauthorized'], Http::STATUS_UNAUTHORIZED);
-			$response->throttle(['action' => 'kansoWebhook']);
-			return $response;
+			return new JSONResponse(['error' => 'unauthorized'], Http::STATUS_UNAUTHORIZED);
 		} catch (NonJsonWebhookBodyException $e) {
 			// A correctly-signed delivery whose body is not JSON: the webhook was
 			// created with the form-encoded content type. That is a misconfigured
@@ -103,7 +97,6 @@ class WebhookController extends Controller {
 	 */
 	#[PublicPage]
 	#[NoCSRFRequired]
-	#[BruteForceProtection(action: 'kansoWebhook')]
 	public function forgejo(int $id): JSONResponse {
 		$signature = $this->request->getHeader('X-Forgejo-Signature');
 		if ($signature === '') {
@@ -117,9 +110,7 @@ class WebhookController extends Controller {
 			$result = $this->forgejoService->handleWebhook($id, $signature, $this->rawBody);
 			return new JSONResponse($result);
 		} catch (NotPermittedException $e) {
-			$response = new JSONResponse(['error' => 'unauthorized'], Http::STATUS_UNAUTHORIZED);
-			$response->throttle(['action' => 'kansoWebhook']);
-			return $response;
+			return new JSONResponse(['error' => 'unauthorized'], Http::STATUS_UNAUTHORIZED);
 		} catch (DoesNotExistException $e) {
 			return new JSONResponse(['error' => 'not_found'], Http::STATUS_NOT_FOUND);
 		}

@@ -113,6 +113,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 			<span v-if="actionError" class="project-view__action-error">{{ actionError }}</span>
 			<span v-if="projectsFailed" class="project-view__action-error" role="alert">{{ t('kanso', 'Failed to load projects. Please try again.') }}</span>
+			<div class="project-view__metadata">
+				<span data-test="project-lifecycle">{{ t('kanso', 'Lifecycle') }}: {{ projectLifecycleLabel(project?.lifecycleStatus) }}</span>
+				<span data-test="project-lead">{{ t('kanso', 'Lead') }}: {{ project?.leadDisplayName || project?.lead || t('kanso', 'No lead') }}</span>
+			</div>
 
 			<!-- Prominent, in-place editable description directly under the title.
 			     Reuses the shipped markdown editor (#3562): useMarkdownToolbar +
@@ -345,8 +349,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						rows="3"
 						:placeholder="t('kanso', 'Add a note to this project — markdown supported')"
 						:disabled="addComment.isPending.value"
-						@keydown.ctrl.enter.prevent="submitNewComment"
-						@keydown.meta.enter.prevent="submitNewComment" />
+						@keydown.ctrl.enter="submitOnEnter($event, submitNewComment)"
+						@keydown.meta.enter="submitOnEnter($event, submitNewComment)" />
 					<div class="project-view__comment-actions">
 						<NcButton type="primary" :disabled="addComment.isPending.value || !newCommentBody.trim()" @click="submitNewComment">
 							{{ t('kanso', 'Post') }}
@@ -384,8 +388,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										v-model="editingCommentBody"
 										class="project-view__comment-textarea"
 										rows="3"
-										@keydown.ctrl.enter.prevent="saveCommentEdit(topComment)"
-										@keydown.meta.enter.prevent="saveCommentEdit(topComment)"
+										@keydown.ctrl.enter="submitOnEnter($event, () => saveCommentEdit(topComment))"
+										@keydown.meta.enter="submitOnEnter($event, () => saveCommentEdit(topComment))"
 										@keydown.escape.stop="cancelCommentEdit" />
 									<div class="project-view__comment-edit-actions">
 										<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(topComment)">{{ t('kanso', 'Save') }}</NcButton>
@@ -427,8 +431,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								class="project-view__comment-textarea"
 								:placeholder="t('kanso', 'Write a reply…')"
 								rows="2"
-								@keydown.ctrl.enter.prevent="submitReply(topComment.id)"
-								@keydown.meta.enter.prevent="submitReply(topComment.id)"
+								@keydown.ctrl.enter="submitOnEnter($event, () => submitReply(topComment.id))"
+								@keydown.meta.enter="submitOnEnter($event, () => submitReply(topComment.id))"
 								@keydown.escape.stop="closeReplyBox" />
 							<div class="project-view__comment-edit-actions">
 								<NcButton type="primary" :disabled="addComment.isPending.value || !replyBody.trim()" @click="submitReply(topComment.id)">{{ t('kanso', 'Post reply') }}</NcButton>
@@ -450,8 +454,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 											v-model="editingCommentBody"
 											class="project-view__comment-textarea"
 											rows="3"
-											@keydown.ctrl.enter.prevent="saveCommentEdit(reply)"
-											@keydown.meta.enter.prevent="saveCommentEdit(reply)"
+											@keydown.ctrl.enter="submitOnEnter($event, () => saveCommentEdit(reply))"
+											@keydown.meta.enter="submitOnEnter($event, () => saveCommentEdit(reply))"
 											@keydown.escape.stop="cancelCommentEdit" />
 										<div class="project-view__comment-edit-actions">
 											<NcButton type="primary" :disabled="editComment.isPending.value" @click="saveCommentEdit(reply)">{{ t('kanso', 'Save') }}</NcButton>
@@ -511,7 +515,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					maxlength="255"
 					:placeholder="t('kanso', 'Project title')"
 					:disabled="updateMutation.isPending.value"
-					@keydown.enter.prevent="submitEdit">
+					@keydown.enter="submitOnEnter($event, submitEdit)">
 
 				<label class="project-view__form-label" for="edit-project-desc">
 					{{ t('kanso', 'Description') }}
@@ -549,6 +553,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
 					<div class="project-view__desc-rendered kanso-md" v-html="renderMarkdown(editDescription)" />
 				</div>
+
+				<label class="project-view__form-label" for="edit-project-lead">{{ t('kanso', 'Lead') }}</label>
+				<ProjectLeadPicker
+					v-model="editLead"
+					input-id="edit-project-lead"
+					:display-name="editLeadDisplayName"
+					:disabled="updateMutation.isPending.value" />
+				<label class="project-view__form-label" for="edit-project-lifecycle">{{ t('kanso', 'Lifecycle') }}</label>
+				<select id="edit-project-lifecycle" v-model="editLifecycleStatus" class="project-view__form-input" :disabled="updateMutation.isPending.value">
+					<option v-for="option in PROJECT_LIFECYCLE_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option>
+				</select>
 
 				<label class="project-view__form-label">{{ t('kanso', 'Color') }}</label>
 				<div class="project-view__color-grid">
@@ -602,6 +617,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
+import { submitOnEnter } from '../utils/keyboard.js'
 import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
@@ -648,6 +664,8 @@ import CardModal from '../components/CardModal.vue'
 import { relationPicker } from '../services/relationPicker.js'
 import ProjectHealth from '../components/ProjectHealth.vue'
 import ProjectShareDialog from '../components/ProjectShareDialog.vue'
+import ProjectLeadPicker from '../components/ProjectLeadPicker.vue'
+import { PROJECT_LIFECYCLE_OPTIONS, projectLifecycleLabel } from '../services/projectLifecycle.js'
 import { MY_WORK_POLL_INTERVAL } from '../composables/queryKeys.js'
 import { apiAnswerStatus } from '../services/apiErrors.js'
 import ProjectBurnup from '../components/ProjectBurnup.vue'
@@ -670,6 +688,9 @@ const props = defineProps({
 
 const router = useRouter()
 const queryClient = useQueryClient()
+let projectGeneration = 0
+
+watch(() => props.id, () => { projectGeneration++ }, { flush: 'sync' })
 
 // Resolve the project from the list query (already in cache)
 const {
@@ -812,9 +833,11 @@ const datesError = ref('')
 
 async function saveDates(dates) {
 	datesError.value = ''
+	const generation = projectGeneration
 	try {
 		await updateMutation.mutateAsync({ id: Number(props.id), ...dates })
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		datesError.value = err?.response?.data?.error || t('kanso', 'Failed to update dates.')
 	}
 }
@@ -876,18 +899,22 @@ function closePicker() {
 async function handlePickCard(result) {
 	if (cardIdsInProject.value.has(result.cardId)) return
 	addError.value = ''
+	const generation = projectGeneration
 	try {
 		await addCard.mutateAsync({ projectId: props.id, cardId: result.cardId })
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		addError.value = err?.response?.data?.error || t('kanso', 'Failed to add card.')
 	}
 }
 
 async function handleRemoveCard(cardId) {
 	actionError.value = ''
+	const generation = projectGeneration
 	try {
 		await removeCard.mutateAsync({ projectId: props.id, cardId })
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to remove card.')
 	}
 }
@@ -899,10 +926,12 @@ async function handleDelete() {
 	actionError.value = ''
 	leavingPage.value = true
 	const id = props.id
+	const generation = projectGeneration
 	try {
 		await removeMutation.mutateAsync(Number(id))
 		if (props.id === id) router.push({ name: 'projects' })
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		leavingPage.value = false
 		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to delete project.')
 	}
@@ -914,6 +943,7 @@ async function handleLeave() {
 	actionError.value = ''
 	leavingPage.value = true
 	const id = props.id
+	const generation = projectGeneration
 	try {
 		const stillHasAccess = await leaveMutation.mutateAsync(Number(id))
 		if (props.id !== id) return
@@ -924,6 +954,7 @@ async function handleLeave() {
 		}
 		router.push({ name: 'projects' })
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		leavingPage.value = false
 		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to leave project.')
 	}
@@ -997,14 +1028,17 @@ async function saveDescription() {
 		return
 	}
 	descError.value = ''
+	const generation = projectGeneration
 	try {
 		await updateMutation.mutateAsync({
 			id: Number(props.id),
 			// Send the empty string (not undefined) to clear an existing description.
 			description: next,
 		})
+		if (generation !== projectGeneration) return
 		editingDescription.value = false
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		descError.value = err?.response?.data?.error || t('kanso', 'Failed to update description.')
 	}
 }
@@ -1020,6 +1054,7 @@ function saveDescriptionOnBlur(event) {
 }
 
 function onInlineDescKeydown(event) {
+	if (event.isComposing) return
 	if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
 		event.preventDefault()
 		saveDescription()
@@ -1037,6 +1072,9 @@ const showEditDialog = ref(false)
 const editTitle = ref('')
 const editDescription = ref('')
 const editColor = ref('')
+const editLead = ref('')
+const editLeadDisplayName = ref('')
+const editLifecycleStatus = ref('planned')
 const editError = ref('')
 const editTitleInputRef = ref(null)
 const descTextareaRef = ref(null)
@@ -1052,13 +1090,16 @@ const mdToolbar = useMarkdownToolbar({
 
 // What the dialog opened with. Only fields changed from it are sent, so saving a
 // new title cannot overwrite a description a collaborator edited meanwhile.
-let editOriginal = { title: '', description: '', color: '' }
+let editOriginal = { title: '', description: '', color: '', lead: '', lifecycleStatus: 'planned' }
 
 function openEditDialog() {
 	editTitle.value = project.value?.title ?? ''
 	editDescription.value = project.value?.description ?? ''
 	editColor.value = project.value?.color ?? ''
-	editOriginal = { title: editTitle.value.trim(), description: editDescription.value.trim(), color: editColor.value }
+	editLead.value = project.value?.lead ?? ''
+	editLeadDisplayName.value = project.value?.leadDisplayName ?? ''
+	editLifecycleStatus.value = project.value?.lifecycleStatus ?? 'planned'
+	editOriginal = { title: editTitle.value.trim(), description: editDescription.value.trim(), color: editColor.value, lead: editLead.value, lifecycleStatus: editLifecycleStatus.value }
 	editError.value = ''
 	showDescPreview.value = false
 	showEditDialog.value = true
@@ -1073,16 +1114,19 @@ async function submitEdit() {
 	const title = editTitle.value.trim()
 	if (!title || updateMutation.isPending.value) return
 	editError.value = ''
-	const edited = { title, description: editDescription.value.trim(), color: editColor.value }
+	const edited = { title, description: editDescription.value.trim(), color: editColor.value, lead: editLead.value, lifecycleStatus: editLifecycleStatus.value }
 	const changes = Object.fromEntries(Object.entries(edited).filter(([field, value]) => value !== editOriginal[field]))
 	if (Object.keys(changes).length === 0) {
 		closeEditDialog()
 		return
 	}
+	const generation = projectGeneration
 	try {
 		await updateMutation.mutateAsync({ id: Number(props.id), ...changes })
+		if (generation !== projectGeneration) return
 		closeEditDialog()
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		editError.value = err?.response?.data?.error || t('kanso', 'Failed to update project.')
 	}
 }
@@ -1135,11 +1179,14 @@ async function submitNewComment() {
 	const body = newCommentBody.value.trim()
 	if (!body || addComment.isPending.value) return
 	commentError.value = ''
+	const generation = projectGeneration
 	try {
 		await addComment.mutateAsync({ projectId: props.id, body, parentCommentId: null })
+		if (generation !== projectGeneration) return
 		// Only clear after a successful post so a failed post keeps the text (#3510).
 		newCommentBody.value = ''
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to post note.')
 	}
 }
@@ -1162,10 +1209,13 @@ async function submitReply(parentId) {
 	const body = replyBody.value.trim()
 	if (!body || addComment.isPending.value) return
 	commentError.value = ''
+	const generation = projectGeneration
 	try {
 		await addComment.mutateAsync({ projectId: props.id, body, parentCommentId: parentId })
+		if (generation !== projectGeneration) return
 		closeReplyBox()
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to post reply.')
 	}
 }
@@ -1218,10 +1268,13 @@ async function saveCommentEdit(comment) {
 		return
 	}
 	commentError.value = ''
+	const generation = projectGeneration
 	try {
 		await editComment.mutateAsync({ projectId: props.id, comment, body })
+		if (generation !== projectGeneration) return
 		cancelCommentEdit()
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to update note.')
 	}
 }
@@ -1229,15 +1282,24 @@ async function saveCommentEdit(comment) {
 // ── Delete ───────────────────────────────────────────────────────────────────
 async function handleDeleteComment(comment) {
 	commentError.value = ''
+	const generation = projectGeneration
 	try {
 		await deleteComment.mutateAsync({ projectId: props.id, comment })
 	} catch (err) {
+		if (generation !== projectGeneration) return
 		commentError.value = err?.response?.data?.error || t('kanso', 'Failed to delete note.')
 	}
 }
 </script>
 
 <style scoped>
+.project-view__metadata {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 24px;
+	color: var(--color-text-maxcontrast);
+}
+
 .project-view__shared {
 	flex-shrink: 0;
 	color: var(--color-text-maxcontrast);

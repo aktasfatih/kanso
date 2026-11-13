@@ -279,6 +279,13 @@ test.describe('Card view: discussion panel placement (#10408)', () => {
 		// Scroll to the very end of the card, the worst case for the pinned composer.
 		await body.evaluate((el) => { el.scrollTop = el.scrollHeight })
 		await expect(composer).toBeVisible()
+		const posted = 'Posted from the bottom layout ' + Date.now()
+		const prose = composer.locator('.kanso-md-editor .ProseMirror').first()
+		await prose.click()
+		await page.keyboard.type(posted)
+		const post = composer.locator('.card-modal__composer-actions button').first()
+		await expect(post).toBeEnabled()
+		await body.evaluate((el) => { el.scrollTop = el.scrollHeight })
 
 		// `toBeVisible` is not enough: Playwright calls an element visible while an
 		// ancestor's overflow clips it off-screen. Walk every scrolling/clipping
@@ -307,16 +314,6 @@ test.describe('Card view: discussion panel placement (#10408)', () => {
 		})
 		expect(hitsPost).toBe(true)
 
-		// And it actually works: a comment posted from the bottom layout lands. The
-		// composer is a Tiptap editor, so drive the ProseMirror node (the pattern
-		// comments.spec.js uses).
-		const posted = 'Posted from the bottom layout ' + Date.now()
-		const prose = composer.locator('.kanso-md-editor .ProseMirror').first()
-		await expect(prose).toBeVisible()
-		await prose.click()
-		await page.keyboard.type(posted)
-		const post = composer.locator('.card-modal__composer-actions button').first()
-		await expect(post).toBeEnabled()
 		await post.click()
 		// Scope to the rendered comment: the composer still holds the same text
 		// until the mutation settles, so an unscoped text match hits both.

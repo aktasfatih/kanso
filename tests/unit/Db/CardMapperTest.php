@@ -446,7 +446,7 @@ class CardMapperTest extends TestCase {
 					'col' => $args[0] ?? null,
 					'value' => $args[1] ?? null,
 				];
-				return '';
+				return json_encode([$name, ...$args]) ?: '';
 			}
 		};
 	}
@@ -456,18 +456,32 @@ class CardMapperTest extends TestCase {
 	 * and every setMaxResults, and returns both.
 	 *
 	 * @param callable(CardMapper): mixed $call
-	 * @return array{predicates: list<array{op: string, col: mixed, value: mixed}>, maxResults: list<int>}
+	 * @return array{predicates: list<array{op: string, col: mixed, value: mixed}>, maxResults: list<int>, conditions: list<array{method: string, expressions: list<mixed>}>, ordering: list<array{column: string, direction: ?string}>}
 	 */
 	private function recordQuery(callable $call): array {
 		$predicates = [];
 		$maxResults = [];
+		$conditions = [];
+		$ordering = [];
 
 		$qb = $this->createMock(IQueryBuilder::class);
 		foreach ([
 			'select', 'selectAlias', 'addSelect', 'from', 'innerJoin', 'leftJoin',
-			'where', 'andWhere', 'groupBy', 'orderBy', 'addOrderBy',
+			'groupBy',
 		] as $method) {
 			$qb->method($method)->willReturnSelf();
+		}
+		foreach (['where', 'andWhere'] as $method) {
+			$qb->method($method)->willReturnCallback(function (...$expressions) use ($qb, $method, &$conditions): IQueryBuilder {
+				$conditions[] = ['method' => $method, 'expressions' => $expressions];
+				return $qb;
+			});
+		}
+		foreach (['orderBy', 'addOrderBy'] as $method) {
+			$qb->method($method)->willReturnCallback(function (string $column, ?string $direction = null) use ($qb, &$ordering): IQueryBuilder {
+				$ordering[] = ['column' => $column, 'direction' => $direction];
+				return $qb;
+			});
 		}
 		$qb->method('setMaxResults')->willReturnCallback(function (?int $limit) use ($qb, &$maxResults): IQueryBuilder {
 			$maxResults[] = (int)$limit;
@@ -487,7 +501,7 @@ class CardMapperTest extends TestCase {
 		$db->method('getQueryBuilder')->willReturn($qb);
 		$call(new CardMapper($db, new CardVisibilityScope()));
 
-		return ['predicates' => $predicates, 'maxResults' => $maxResults];
+		return ['predicates' => $predicates, 'maxResults' => $maxResults, 'conditions' => $conditions, 'ordering' => $ordering];
 	}
 
 	/**
@@ -587,6 +601,17 @@ class CardMapperTest extends TestCase {
 		$db->expects(self::never())->method('getQueryBuilder');
 		$mapper = new CardMapper($db, new CardVisibilityScope());
 		self::assertSame([], $mapper->childProgressByBoards([], 'alice', []));
+	}
+
+	public function testArchivedChildrenRemainInTotalsAndCountAsResolved(): void {
+		foreach ([
+			fn (CardMapper $mapper) => $mapper->childProgressByBoard(7, self::viewer()),
+			fn (CardMapper $mapper) => $mapper->childProgressByBoards([7], 'alice', self::roles([7])),
+		] as $count) {
+			$recorded = $this->recordQuery($count);
+			self::assertSame([true], self::boundValues($recorded['predicates'], 'eq', 'archived'));
+			self::assertSame([0], self::boundValues($recorded['predicates'], 'gt', 'done_at'));
+		}
 	}
 
 	public function testFindWithDuedateByBoardAppliesTheCallersRowCap(): void {
@@ -1070,6 +1095,45 @@ class CardMapperTest extends TestCase {
 		$this->assertBoardScopedDenial(
 			fn (CardMapper $m) => $m->findDuedateSummariesByBoard(7, self::externalViewer())
 		);
+	}
+
+	public function testAssignedCalendarStillAppliesBoardAndVisibilityFilters(): void {
+		$recorded = $this->recordQuery(fn (CardMapper $m) => $m->findDuedateSummariesByBoard(7, self::externalViewer(), true));
+		self::assertSame(['exty'], self::boundValues($recorded['predicates'], 'eq', 'participant'));
+		self::assertSame([0], self::boundValues($recorded['predicates'], 'eq', 'type'));
+		self::assertSame([7, 7], self::boundValues($recorded['predicates'], 'eq', 'board_id'));
+		self::assertSame([0], self::boundValues($recorded['predicates'], 'eq', 'deleted_at'));
+		self::assertSame([false], self::boundValues($recorded['predicates'], 'eq', 'archived'));
+		self::assertSame([false], self::boundValues($recorded['predicates'], 'eq', 'is_template'));
+		self::assertSame([ViewerContext::ROLE_EXTERNAL], self::boundValues($recorded['predicates'], 'eq', 'creator_role'));
+		self::assertSame(['exty'], self::boundValues($recorded['predicates'], 'eq', 'owner'));
+		self::assertNotEmpty(self::boundValues($recorded['predicates'], 'eq', 'visibility'));
+	}
+
+	public function testUnfilteredCalendarDoesNotRestrictAssignments(): void {
+		$recorded = $this->recordQuery(fn (CardMapper $m) => $m->findDuedateSummariesByBoard(7, self::externalViewer()));
+		self::assertSame([], self::boundValues($recorded['predicates'], 'eq', 'participant'));
+	}
+
+	public function testCalendarDatesAreGroupedUnderTheExistingFiltersAndOrdering(): void {
+		$dates = json_encode(['orX', json_encode(['isNotNull', 'duedate']), json_encode(['isNotNull', 'start_date'])]);
+		foreach ([false, true] as $assignedOnly) {
+			$recorded = $this->recordQuery(fn (CardMapper $m) => $m->findDuedateSummariesByBoard(7, self::externalViewer(), $assignedOnly));
+			self::assertContains(['method' => 'andWhere', 'expressions' => [$dates]], $recorded['conditions']);
+			self::assertSame([
+				['column' => 'duedate', 'direction' => 'ASC'],
+				['column' => 'id', 'direction' => 'ASC'],
+			], $recorded['ordering']);
+		}
+	}
+
+	public function testAnonymousCalendarStillRequiresADueDate(): void {
+		$recorded = $this->recordQuery(fn (CardMapper $m) => $m->findWithDuedateByBoard(7, 2000));
+		self::assertContains([
+			'method' => 'andWhere',
+			'expressions' => [json_encode(['isNotNull', 'duedate'])],
+		], $recorded['conditions']);
+		self::assertSame([], self::boundValues($recorded['predicates'], 'isNotNull', 'start_date'));
 	}
 
 	/**

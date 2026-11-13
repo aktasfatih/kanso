@@ -210,6 +210,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         description: Optional[str] = None,
         allow_ai_actors: Optional[bool] = None,
         auto_complete_parent: Optional[bool] = None,
+        single_assignee: Optional[bool] = None,
         estimate_scale: Optional[str] = None,
         estimate_custom: Optional[List[Dict[str, Any]]] = None,
         new_cards_on_top: Optional[bool] = None,
@@ -232,6 +233,10 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             auto_complete_parent: Whether a parent card is stamped done
                 automatically once all of its sub-issues are done/archived.
                 OFF by default (the parent stays open for a human to close).
+            single_assignee: Allow one assignee per card. Requires Manage.
+                Choosing a different person replaces the sole assignee. Existing
+                multi-assigned cards keep everyone and require manual removal
+                to at most one before a new person can be selected. Defaults off.
             estimate_scale: One of "none", "number", "custom", "fibonacci",
                 "fibonacci_mod", "powers2", "tshirt", "linear", "roman",
                 "hours" or "days". Changing the scale clears card estimates
@@ -253,6 +258,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
                 description=description,
                 allow_ai_actors=allow_ai_actors,
                 auto_complete_parent=auto_complete_parent,
+                single_assignee=single_assignee,
                 estimate_scale=estimate_scale,
                 estimate_custom=estimate_custom,
                 new_cards_on_top=new_cards_on_top,
@@ -395,6 +401,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
     ) -> dict:
         """Update a card. Only the fields you pass are changed.
 
+        Returns full card details read after the update. If that read fails,
+        the update has already succeeded.
+
         Args:
             card_id: The numeric card id.
             title: New title.
@@ -455,6 +464,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         card_id: int, target_stack_id: int, after_card_id: Optional[int] = None
     ) -> dict:
         """Move a card into a stack, optionally after a specific card.
+
+        The result is sparse: omitted detail fields are not empty values.
+        Use `kanso_get_card` to read labels, assignees and relations.
 
         Args:
             card_id: The card to move.
@@ -533,7 +545,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
     async def kanso_assign_user(
         card_id: int, user_id: str, actor_name: Optional[str] = None
     ) -> dict:
-        """Assign a Nextcloud user to a card. Idempotent.
+        """Assign a Nextcloud user to a card. Idempotent. On a single-assignee
+        board, a new person replaces the sole assignee. Cards with multiple
+        existing assignees require manual removals to at most one first.
 
         Args:
             card_id: The card id.
@@ -651,7 +665,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         actor_name: Optional[str] = None,
     ) -> dict:
         """Post a comment on a card. Pass `parent_comment_id` to reply to an
-        existing top-level comment (replies are one level deep).
+        existing top-level comment (replies are one level deep). Requires signed-in
+        board membership with Comment (bit 16) or Edit (bit 2) permission and
+        access to the card. Public links remain read-only.
 
         Args:
             card_id: The numeric card id.
@@ -1069,7 +1085,8 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         own, it points at cards that stay on their boards. Sharing a project
         never widens card access, so two members can see different cards. Each
         carries `id`, `title`, `description`, `color` (6-hex, no '#'), `owner`,
-        `createdAt`, the optional `startDate` / `targetDate` (YYYY-MM-DD), and
+        `createdAt`, the optional `startDate` / `targetDate` (YYYY-MM-DD),
+        `lead` (user id), `leadDisplayName`, `lifecycleStatus`, and
         the viewer's access: `isOwner`, `canEdit`, `canLeave`, `shared` and
         `ownerDisplayName`.
         """
@@ -1111,6 +1128,8 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         color: Optional[str] = None,
         start_date: Optional[str] = None,
         target_date: Optional[str] = None,
+        lead: Optional[str] = None,
+        lifecycle_status: Optional[Literal["planned", "in_progress", "done"]] = None,
     ) -> dict:
         """Create a project owned by you. Add cards to it afterwards with
         `kanso_add_card_to_project`.
@@ -1122,9 +1141,14 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             start_date: Optional start date, YYYY-MM-DD.
             target_date: Optional target (deadline) date, YYYY-MM-DD; must not
                 be before the start date.
+            lead: Optional Nextcloud user id. This does not grant project access.
+            lifecycle_status: planned (default), in_progress or done; separate
+                from the calculated forecast-health status.
         """
         return (
-            await client.create_project(title, description, color, start_date, target_date)
+            await client.create_project(
+                title, description, color, start_date, target_date, lead, lifecycle_status
+            )
         ).model_dump()
 
     @mcp.tool(title="Update a Kanso project")
@@ -1135,6 +1159,8 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         color: Optional[str] = None,
         start_date: Optional[str] = None,
         target_date: Optional[str] = None,
+        lead: Optional[str] = None,
+        lifecycle_status: Optional[Literal["planned", "in_progress", "done"]] = None,
     ) -> dict:
         """Update a project you own or can edit. Only the fields you pass are changed.
 
@@ -1148,6 +1174,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             color: New colour (6-hex, no '#'); "" clears it.
             start_date: New start date (YYYY-MM-DD); "" clears it.
             target_date: New target date (YYYY-MM-DD); "" clears it.
+            lead: New Nextcloud user id; "" clears it. Does not grant access.
+            lifecycle_status: planned, in_progress or done; separate from the
+                calculated forecast-health status.
         """
         return (
             await client.update_project(
@@ -1157,6 +1186,8 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
                 color=color,
                 start_date=start_date,
                 target_date=target_date,
+                lead=lead,
+                lifecycle_status=lifecycle_status,
             )
         ).model_dump()
 

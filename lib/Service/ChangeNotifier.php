@@ -48,6 +48,7 @@ class ChangeNotifier {
 		private LoggerInterface $logger,
 		private ActivityPublisher $activityPublisher,
 		private CardVisibilityGuard $visibilityGuard,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -122,24 +123,26 @@ class ChangeNotifier {
 	 * {@see \OCA\Kanso\Service\ArchiveService::sweep}) can emit it explicitly.
 	 */
 	public function pushBoardChanged(int $boardId): void {
-		try {
-			$queue = $this->getQueue();
-			if ($queue === null) {
-				return;
+		$this->cardMutation->afterCommit(function () use ($boardId): void {
+			try {
+				$queue = $this->getQueue();
+				if ($queue === null) {
+					return;
+				}
+				foreach ($this->resolveRecipients($boardId) as $uid) {
+					$queue->push('notify_custom', [
+						'user' => $uid,
+						'message' => self::PUSH_MESSAGE,
+						'body' => ['boardId' => $boardId],
+					]);
+				}
+			} catch (\Throwable $e) {
+				$this->logger->debug(
+					'kanso: failed to emit notify_push event for board ' . $boardId,
+					['exception' => $e]
+				);
 			}
-			foreach ($this->resolveRecipients($boardId) as $uid) {
-				$queue->push('notify_custom', [
-					'user' => $uid,
-					'message' => self::PUSH_MESSAGE,
-					'body' => ['boardId' => $boardId],
-				]);
-			}
-		} catch (\Throwable $e) {
-			$this->logger->debug(
-				'kanso: failed to emit notify_push event for board ' . $boardId,
-				['exception' => $e]
-			);
-		}
+		});
 	}
 
 	/**
@@ -165,30 +168,32 @@ class ChangeNotifier {
 	 * @param 'card_created'|'card_moved'|'card_done' $subject
 	 */
 	public function publishCardActivity(int $boardId, string $subject, Card $card, ?string $actor): void {
-		// System/cron-driven changes carry a null actor (auto-archive sweep,
-		// due reminders). Activity is only for user-initiated
-		// milestones, so skip those - it avoids the batch/cron activity spam.
-		if ($actor === null) {
-			return;
-		}
-		try {
-			$board = $this->boardMapper->find($boardId);
-			$recipients = $this->visibilityGuard->filterVisible(
-				$board,
-				$card,
-				$this->resolveRecipientsFor($board),
-			);
-			$cardId = $card->getId();
-			$cardTitle = (string)$card->getTitle();
-			match ($subject) {
-				'card_created' => $this->activityPublisher->cardCreated($boardId, $cardId, $cardTitle, $actor, $recipients),
-				'card_moved' => $this->activityPublisher->cardMoved($boardId, $cardId, $cardTitle, $actor, $recipients),
-				'card_done' => $this->activityPublisher->cardDone($boardId, $cardId, $cardTitle, $actor, $recipients),
-				default => null,
-			};
-		} catch (\Throwable $e) {
-			$this->logger->debug('kanso: failed to publish card activity for board ' . $boardId, ['exception' => $e]);
-		}
+		$this->cardMutation->afterCommit(function () use ($boardId, $subject, $card, $actor): void {
+			// System/cron-driven changes carry a null actor (auto-archive sweep,
+			// due reminders). Activity is only for user-initiated
+			// milestones, so skip those - it avoids the batch/cron activity spam.
+			if ($actor === null) {
+				return;
+			}
+			try {
+				$board = $this->boardMapper->find($boardId);
+				$recipients = $this->visibilityGuard->filterVisible(
+					$board,
+					$card,
+					$this->resolveRecipientsFor($board),
+				);
+				$cardId = $card->getId();
+				$cardTitle = (string)$card->getTitle();
+				match ($subject) {
+					'card_created' => $this->activityPublisher->cardCreated($boardId, $cardId, $cardTitle, $actor, $recipients),
+					'card_moved' => $this->activityPublisher->cardMoved($boardId, $cardId, $cardTitle, $actor, $recipients),
+					'card_done' => $this->activityPublisher->cardDone($boardId, $cardId, $cardTitle, $actor, $recipients),
+					default => null,
+				};
+			} catch (\Throwable $e) {
+				$this->logger->debug('kanso: failed to publish card activity for board ' . $boardId, ['exception' => $e]);
+			}
+		});
 	}
 
 	/**
@@ -196,14 +201,16 @@ class ChangeNotifier {
 	 * the board (the new participant included). Best-effort, never throws.
 	 */
 	public function publishBoardShared(int $boardId, string $boardTitle, ?string $actor): void {
-		if ($actor === null) {
-			return;
-		}
-		try {
-			$this->activityPublisher->boardShared($boardId, $boardTitle, $actor, $this->resolveRecipients($boardId));
-		} catch (\Throwable $e) {
-			$this->logger->debug('kanso: failed to publish board-shared activity for board ' . $boardId, ['exception' => $e]);
-		}
+		$this->cardMutation->afterCommit(function () use ($boardId, $boardTitle, $actor): void {
+			if ($actor === null) {
+				return;
+			}
+			try {
+				$this->activityPublisher->boardShared($boardId, $boardTitle, $actor, $this->resolveRecipients($boardId));
+			} catch (\Throwable $e) {
+				$this->logger->debug('kanso: failed to publish board-shared activity for board ' . $boardId, ['exception' => $e]);
+			}
+		});
 	}
 
 	/**

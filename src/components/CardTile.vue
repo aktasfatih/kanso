@@ -211,7 +211,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					v-if="card.childProgress && card.childProgress.total > 0"
 					class="card-tile__children"
 					:class="{ 'card-tile__children--complete': card.childProgress.done === card.childProgress.total }"
-					:aria-label="t('kanso', 'Sub-card progress')">
+					:aria-label="t('kanso', 'Sub-card progress')"
+					:title="t('kanso', 'Done or archived sub-cards')">
 					<SitemapIcon :size="12" />
 					{{ card.childProgress.done }}/{{ card.childProgress.total }}
 				</span>

@@ -84,6 +84,7 @@ test.describe('Card view: the discussion pane claims the modal height (#10657)',
 		await page.goto(url)
 		await page.waitForSelector('.card-modal__thread-scroll', { timeout: 20_000 })
 		await expect(page.locator('.card-modal__comment-body').first()).toBeVisible({ timeout: 15_000 })
+		await page.locator('.card-modal__composer .ProseMirror').click()
 	}
 
 	/**

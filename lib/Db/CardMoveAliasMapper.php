@@ -29,17 +29,37 @@ class CardMoveAliasMapper extends QBMapper {
 		}
 	}
 
-	public function record(int $oldId, int $targetId): void {
+	public function findByRef(int $boardId, string $prefix, int $seq): ?CardMoveAlias {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('prefix', $qb->createNamedParameter($prefix)))
+			->andWhere($qb->expr()->eq('board_seq', $qb->createNamedParameter($seq, IQueryBuilder::PARAM_INT)));
+		try {
+			return $this->findEntity($qb);
+		} catch (DoesNotExistException) {
+			return null;
+		}
+	}
+
+	public function record(int $oldId, int $targetId, int $boardId, string $prefix, ?int $seq, int $targetBoardId, int $targetSeq): void {
 		$alias = $this->findByOldId($oldId);
+		$new = $alias === null;
 		if ($alias === null) {
 			$alias = new CardMoveAlias();
 			$alias->setOldCardId($oldId);
-			$alias->setTargetCardId($targetId);
-			$this->insert($alias);
-			return;
 		}
 		$alias->setTargetCardId($targetId);
-		$this->update($alias);
+		$alias->setBoardId($boardId);
+		$alias->setPrefix($prefix);
+		$alias->setBoardSeq($seq);
+		$alias->setTargetBoardId($targetBoardId);
+		$alias->setTargetBoardSeq($targetSeq);
+		if ($new) {
+			$this->insert($alias);
+		} else {
+			$this->update($alias);
+		}
 	}
 
 	public function deleteByOldId(int $id): void {

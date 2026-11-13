@@ -15,6 +15,7 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Service\CardCalendarService;
+use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\PermissionService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IConfig;
@@ -155,7 +156,7 @@ class CardCalendarServiceTest extends TestCase {
 		$this->config->expects(self::once())->method('setUserValue')
 			->with('alice', 'kanso', 'calendar_hidden_boards', '[7]');
 
-		$this->service->setEnabledForUser('alice', 7, false);
+		$this->service->setPreferencesForUser('alice', 7, false);
 	}
 
 	public function testSetEnabledForUserRejectsNonMember(): void {
@@ -165,7 +166,72 @@ class CardCalendarServiceTest extends TestCase {
 		$this->config->expects(self::never())->method('setUserValue');
 
 		$this->expectException(NotAMemberException::class);
-		$this->service->setEnabledForUser('alice', 7, false);
+		$this->service->setPreferencesForUser('alice', 7, false);
+	}
+
+	public function testPreferencesArePersonalPerBoardAndOmittedFieldsArePreserved(): void {
+		$stored = [];
+		$this->boardMapper->method('find')->willReturnCallback(fn (int $id): Board => $this->board($id));
+		$this->boardAccess->method('contextFor')->willReturn($this->member());
+		$this->config->method('setUserValue')->willReturnCallback(
+			static function (string $uid, string $app, string $key, string $value) use (&$stored): void {
+				$stored[$uid][$key] = $value;
+			},
+		);
+		$this->config->method('getUserValue')->willReturnCallback(
+			static function (string $uid, string $app, string $key, string $default) use (&$stored): string {
+				return $stored[$uid][$key] ?? $default;
+			},
+		);
+
+		self::assertSame(['enabled' => true, 'assignedOnly' => false], $this->service->preferencesForUser('alice', 7));
+		$this->service->setPreferencesForUser('alice', 7, assignedOnly: true);
+		self::assertSame(['enabled' => true, 'assignedOnly' => true], $this->service->preferencesForUser('alice', 7));
+		self::assertSame(['enabled' => true, 'assignedOnly' => false], $this->service->preferencesForUser('bob', 7));
+		self::assertSame(['enabled' => true, 'assignedOnly' => false], $this->service->preferencesForUser('alice', 8));
+		$this->service->setPreferencesForUser('alice', 7, false);
+		$this->service->setPreferencesForUser('alice', 7);
+		self::assertSame(['enabled' => false, 'assignedOnly' => true], $this->service->preferencesForUser('alice', 7));
+		$this->service->setPreferencesForUser('alice', 7, assignedOnly: false);
+		self::assertSame(['enabled' => false, 'assignedOnly' => false], $this->service->preferencesForUser('alice', 7));
+		$this->service->setPreferencesForUser('alice', 7, true);
+		self::assertSame(['enabled' => true, 'assignedOnly' => false], $this->service->preferencesForUser('alice', 7));
+	}
+
+	public function testReadingPreferencesRejectsNonMember(): void {
+		$this->boardMapper->method('find')->willReturn($this->board());
+		$this->boardAccess->method('contextFor')->willThrowException(new NotAMemberException('nope'));
+		$this->config->expects(self::never())->method('getUserValue');
+		$this->expectException(NotAMemberException::class);
+		$this->service->preferencesForUser('outsider', 7);
+	}
+
+	public function testDeletedBoardRejectsAssignmentPreferenceBeforeWriting(): void {
+		$this->boardMapper->method('find')->willReturn($this->board(deletedAt: 123));
+		$this->config->expects(self::never())->method('setUserValue');
+		$this->expectException(DoesNotExistException::class);
+		$this->service->setPreferencesForUser('alice', 7, assignedOnly: true);
+	}
+
+	public function testPreferenceCapRejectsBeforeChangingEitherPreference(): void {
+		$this->boardMapper->method('find')->willReturn($this->board());
+		$this->boardAccess->method('contextFor')->willReturn($this->member());
+		$this->config->method('getUserValue')->willReturnCallback(
+			static fn (string $uid, string $app, string $key): string => $key === 'calendar_assigned_only_boards' ? json_encode(range(100, 2099)) : '',
+		);
+		$this->config->expects(self::never())->method('setUserValue');
+		$this->expectException(InvalidInputException::class);
+		$this->service->setPreferencesForUser('alice', 7, false, true);
+	}
+
+	public function testExistingPreferenceAtCapIsIdempotentAndCanBeRemoved(): void {
+		$this->boardMapper->method('find')->willReturn($this->board());
+		$this->boardAccess->method('contextFor')->willReturn($this->member());
+		$this->config->method('getUserValue')->willReturn(json_encode(range(1, 2000)));
+		$this->config->expects(self::once())->method('setUserValue')
+			->with('alice', 'kanso', 'calendar_assigned_only_boards', json_encode(array_values(array_diff(range(1, 2000), [7]))));
+		$this->service->setPreferencesForUser('alice', 7, assignedOnly: true);
+		$this->service->setPreferencesForUser('alice', 7, assignedOnly: false);
 	}
 
 	public function testBoardForPrincipalReturnsBoardForMember(): void {
@@ -207,9 +273,25 @@ class CardCalendarServiceTest extends TestCase {
 		$cards = [$this->card(1, 'a', new \DateTime('2026-08-15T09:30:00+00:00'))];
 		$this->boardAccess->method('contextFor')->with($board, 'alice')->willReturn($viewer);
 		$this->cardMapper->expects(self::once())->method('findDuedateSummariesByBoard')
-			->with(7, $viewer)->willReturn($cards);
+			->with(7, $viewer, false)->willReturn($cards);
 
 		self::assertSame($cards, $this->service->dueCards($board, 'alice'));
+	}
+
+	public function testDueCardsUsesTheCurrentPrincipalsAssignmentPreference(): void {
+		$board = $this->board();
+		$viewer = $this->member();
+		$this->boardAccess->method('contextFor')->with($board, 'alice')->willReturn($viewer);
+		$this->config->method('getUserValue')->with('alice', 'kanso', 'calendar_assigned_only_boards', '')->willReturn('[7]');
+		$this->cardMapper->expects(self::once())->method('findDuedateSummariesByBoard')->with(7, $viewer, true)->willReturn([]);
+		self::assertSame([], $this->service->dueCards($board, 'alice'));
+	}
+
+	public function testDueCardsRejectsNonMemberBeforeReadingCards(): void {
+		$this->boardAccess->method('contextFor')->willThrowException(new NotAMemberException('nope'));
+		$this->cardMapper->expects(self::never())->method('findDuedateSummariesByBoard');
+		$this->expectException(NotAMemberException::class);
+		$this->service->dueCards($this->board(), 'outsider');
 	}
 
 	// ── VTODO serialisation ────────────────────────────────────────────────
@@ -237,6 +319,28 @@ class CardCalendarServiceTest extends TestCase {
 		$ics = $this->service->serializeCard($board, $card);
 		self::assertStringContainsString('DUE;VALUE=DATE:20260815', $ics);
 		self::assertStringNotContainsString('DUE:20260815T', $ics);
+	}
+
+	public function testSerializeStartOnlyCardEmitsUtcStartWithoutInventedEnd(): void {
+		$board = $this->board();
+		$card = $this->card(8, 'Start only', null);
+		$card->setStartDate(new \DateTime('2026-08-15T09:30:00-04:00'));
+
+		$ics = $this->service->serializeCard($board, $card);
+		self::assertStringContainsString('DTSTART:20260815T133000Z', $ics);
+		self::assertStringNotContainsString('DUE', $ics);
+		self::assertStringNotContainsString('DURATION', $ics);
+		self::assertStringNotContainsString('DTEND', $ics);
+		self::assertSame($ics, $this->service->serializeCard($board, $card));
+	}
+
+	public function testSerializeAllDayStartOnlyCardEmitsDateWithoutDue(): void {
+		$card = $this->card(9, 'All-day start only', null, allDay: true);
+		$card->setStartDate(new \DateTime('2026-08-15T00:00:00+00:00'));
+
+		$ics = $this->service->serializeCard($this->board(), $card);
+		self::assertStringContainsString('DTSTART;VALUE=DATE:20260815', $ics);
+		self::assertStringNotContainsString('DUE', $ics);
 	}
 
 	public function testSerializeDoneCardMarksCompleted(): void {

@@ -39,26 +39,24 @@ class CalendarSyncController extends Controller {
 	}
 
 	/**
-	 * Whether this board currently syncs to the calling user's calendar.
+	 * The calling user's calendar preferences for this board.
 	 */
 	#[NoAdminRequired]
 	public function show(int $id): JSONResponse {
 		return $this->respond(function () use ($id): JSONResponse {
-			return new JSONResponse([
-				'enabled' => $this->cardCalendarService->isEnabledForUser($this->currentUserId(), $id),
-			]);
+			return new JSONResponse($this->cardCalendarService->preferencesForUser($this->currentUserId(), $id));
 		});
 	}
 
 	/**
-	 * Show (enabled=true) or hide (enabled=false) this board in the calling user's
-	 * calendar. Requires board membership; returns the resulting state.
+	 * Update personal calendar preferences and return their resulting state.
 	 */
 	#[NoAdminRequired]
-	public function update(int $id, bool $enabled = true): JSONResponse {
-		return $this->respond(function () use ($id, $enabled): JSONResponse {
-			$this->cardCalendarService->setEnabledForUser($this->currentUserId(), $id, $enabled);
-			return new JSONResponse(['enabled' => $enabled]);
+	public function update(int $id, ?bool $enabled = null, ?bool $assignedOnly = null): JSONResponse {
+		return $this->respond(function () use ($id, $enabled, $assignedOnly): JSONResponse {
+			$uid = $this->currentUserId();
+			$this->cardCalendarService->setPreferencesForUser($uid, $id, $enabled, $assignedOnly);
+			return new JSONResponse($this->cardCalendarService->preferencesForUser($uid, $id));
 		});
 	}
 

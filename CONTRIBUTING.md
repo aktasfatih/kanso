@@ -46,6 +46,55 @@ every PR but are not in the required list, so a red one will not block a merge.
 Treat them as required anyway: don't merge on a red `unit-php (8.4)` or
 `unit-php (8.5)`.
 
+## PHP verification
+
+From the root of your checkout or worktree, build the minimum-PHP tooling image
+and run the locked dependencies, PHPUnit, Psalm and style checks:
+
+```sh
+docker build --tag kanso-php ./dev/php
+docker run --rm --user "$(id -u):$(id -g)" \
+  -e COMPOSER_HOME=/tmp/composer -e XDG_CACHE_HOME=/tmp/cache \
+  -v "$PWD:/app" kanso-php sh -ec '
+    test ! -L vendor
+    composer install --no-interaction --no-progress --prefer-dist
+    composer check-platform-reqs --lock
+    composer test:unit
+    composer psalm -- --threads=1 --no-cache
+    composer cs:check -- --using-cache=no
+  '
+```
+
+The image uses PHP 8.2 (the locked Psalm requires 64-bit PHP 8.2.27 or newer).
+It asserts every extension required by `composer.json` and `composer.lock`, plus
+PDO for the mapper code, matching the explicit set in CI. The base supplies the
+XML, multibyte and PDO extensions; the image adds zip. GD is not needed. The build
+context is only `dev/php`, with an allowlist that excludes app source and local
+environment files.
+These checks do not need a running Nextcloud or database.
+
+Each worktree needs its own real `vendor/` directory. A symlink to another
+checkout can make Composer's autoloader resolve app classes there. For offline
+reuse, first compare both `composer.lock` files and require
+`test ! -e vendor && test ! -L vendor` to pass. Then copy with
+`command cp -Rf /path/to/checkout/vendor .` and require
+`diff -qr /path/to/checkout/vendor vendor` to pass. `command cp -f` bypasses
+interactive `cp -i` aliases; verify the copy instead of assuming it succeeded.
+
+## Mobile Enter shortcuts
+
+Text inputs that save on `@keydown.enter` or `@keyup.enter` need a static
+`enterkeyhint` such as `enter` or `done`. This also applies to `NcTextField` and
+`NcInputField`: mobile keyboards can otherwise show Next and move focus without
+sending Enter. Run `npm run test:enterkeyhint` and `npm run lint:enterkeyhint`;
+the existing frontend CI job runs both.
+
+The guard parses Vue templates, including IME-helper and arrow callbacks. It
+accepts HTML hint keywords and bound string literals; unknown dynamic hints or
+spreads require an explanation. Unknown dynamic input types remain checked.
+For an intentional exception, place `<!-- enterkeyhint-ok: concrete reason -->`
+immediately before that input as a sibling comment. It exempts that input only.
+
 ## Writing a migration
 
 Every other CI job installs the branch's own tree onto an empty Nextcloud, so a

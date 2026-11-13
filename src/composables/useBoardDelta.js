@@ -4,6 +4,8 @@
 import { fetchBoardChanges } from '../services/api.js'
 import { isBoardMovePending } from './useCardMove.js'
 import { boardQueryKey } from './queryKeys.js'
+import { beginLifecycleRead, finishLifecycleRead, projectLifecycleBoard } from './cardLifecycle.js'
+import { beginHierarchyRead, finishHierarchyRead, projectHierarchyBoard } from './cardHierarchy.js'
 
 /**
  * Board delta-sync (#3675). A single change no longer re-downloads the whole
@@ -258,6 +260,17 @@ function applyDelta(list, delta) {
  * @return {Promise<void>}
  */
 export async function syncBoardDelta(queryClient, boardId) {
+	const ticket = beginLifecycleRead(queryClient, { boardId })
+	const hierarchyTicket = beginHierarchyRead(queryClient)
+	try {
+		return await syncBoardDeltaRead(queryClient, boardId, ticket, hierarchyTicket)
+	} finally {
+		finishLifecycleRead(queryClient, ticket)
+		finishHierarchyRead(queryClient, hierarchyTicket)
+	}
+}
+
+async function syncBoardDeltaRead(queryClient, boardId, ticket, hierarchyTicket) {
 	// Retry any detail invalidation a previous tick deferred (mutation was in
 	// flight). Runs even when the delta below turns out empty or unfetchable -
 	// the queue must drain, not depend on new changes arriving.
@@ -364,7 +377,7 @@ export async function syncBoardDelta(queryClient, boardId) {
 	if (hasChanges) {
 		queryClient.setQueryData(boardKey, (old) => {
 			if (!old) return old
-			return {
+			return projectLifecycleBoard(queryClient, key, projectHierarchyBoard(queryClient, key, {
 				...old,
 				cards: applyDelta(old.cards, delta.cards),
 				stacks: applyDelta(old.stacks, delta.stacks),
@@ -379,7 +392,7 @@ export async function syncBoardDelta(queryClient, boardId) {
 				// reference, so a full replacement would drop the projects other
 				// cards still resolve their colour from.
 				...(Array.isArray(delta.projects) ? { projects: upsertById(old.projects, delta.projects) } : {}),
-			}
+			}, hierarchyTicket, touchedCardIds), ticket, touchedCardIds)
 		})
 	}
 
@@ -387,8 +400,8 @@ export async function syncBoardDelta(queryClient, boardId) {
 	// data may have changed too - refetch the open modal's queries.
 	invalidateCardDetailQueries(queryClient, touchedCardIds)
 
-	// Advance the cursor only after a successful patch.
-	cursorByBoard.set(key, delta.cursor)
+	// Keep declined changes in the next delta window.
+	if (!ticket.lifecycleDeclined && !hierarchyTicket.hierarchyDeclined) cursorByBoard.set(key, delta.cursor)
 	if (hasChanges) {
 		emitBoardChangesApplied({ boardId: key, cardIds: touchedCardIds, resync: false })
 	}

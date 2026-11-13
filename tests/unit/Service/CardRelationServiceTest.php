@@ -53,6 +53,7 @@ class CardRelationServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->visibilityGuard,
 			new CardVisibilityScope(),
+			$this->cardMutation(),
 		);
 	}
 
@@ -384,4 +385,12 @@ class CardRelationServiceTest extends TestCase {
 		$viewer = ViewerContext::forMember('erin', 1, ViewerContext::ROLE_EXTERNAL, false);
 		self::assertSame([71], $this->service->blocksNeighbourIdsFor([42, 60, 70], $viewer));
 	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('run')->willReturnCallback(static fn (int $cardId, callable $write): mixed => $write());
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
 }

@@ -314,8 +314,8 @@ services:
         condition: service_started
       # Wait for whichever DB profile is active to be *healthy* (accepting
       # connections), not merely started — the NC first-boot installer races the
-      # DB otherwise. required:false so the sqlite profile (no db service) is
-      # unaffected; only the active profile's db is waited on.
+      # DB otherwise.
+      # Keep required: false: the sqlite profile has no db service.
       db:
         condition: service_healthy
         required: false

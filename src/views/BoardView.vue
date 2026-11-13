@@ -466,7 +466,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							maxlength="100"
 							:placeholder="t('kanso', 'Add column…')"
 							:disabled="createStack.isPending.value"
-							@keydown.enter.prevent="submitNewStack"
+							@keydown.enter="submitOnEnter($event, submitNewStack)"
 							@keydown.esc.prevent="collapseAddColumn"
 							@blur="onAddColumnBlur" />
 						<p v-if="stackError" class="add-stack__error">{{ stackError }}</p>
@@ -677,6 +677,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
+import { submitOnEnter } from '../utils/keyboard.js'
 import { ref, computed, inject, provide, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'

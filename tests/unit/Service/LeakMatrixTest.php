@@ -341,7 +341,7 @@ class LeakMatrixTest extends TestCase {
 				$reviewTypeMapper = $this->createMock(ReviewTypeMapper::class);
 				$reviewTypeMapper->method('stageMapForBoard')->with(self::BOARD_ID)->willReturn([1 => 0, 2 => 1]);
 				$cardReviewMapper = $this->createMock(CardReviewMapper::class);
-				$cardReviewMapper->method('findById')->with(1)->willReturn($blocker);
+				$cardReviewMapper->method('findById')->willReturnMap([[1, $blocker], [2, $deferred]]);
 				$cardReviewMapper->method('findByCard')->with(9)->willReturn([$blocker, $deferred]);
 
 				$notificationService = $this->createMock(NotificationService::class);
@@ -361,6 +361,7 @@ class LeakMatrixTest extends TestCase {
 					$this->createMock(CommentService::class),
 					$this->boardAccessResolvingFixtureContexts(),
 					new CardVisibilityGuard($this->boardAccessResolvingFixtureContexts(), $this->scope),
+					new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 				);
 
 				$service->setState(9, 1, CardReview::STATE_APPROVED, $actor);

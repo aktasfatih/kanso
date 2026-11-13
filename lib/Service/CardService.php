@@ -135,6 +135,8 @@ class CardService {
 		// card's repeat when its Start/due date is edited - same pattern as
 		// ChangeNotifier. Only touched on the rare date-edit-of-a-template path.
 		private ContainerInterface $container,
+		private CardMutationService $cardMutation,
+		private ParentCompletionService $parentCompletion,
 	) {
 	}
 
@@ -176,13 +178,8 @@ class CardService {
 
 	/**
 	 * Board-scoped resolution of a `PREFIX-<board_seq>` human reference (e.g.
-	 * "KAN-123") to a card on the given board (#3611). Per-board prefixes make a
-	 * reference unambiguous only WITHIN a board, so this is deliberately scoped to
-	 * a single board (cross-board references are a follow-up). The reference's
-	 * prefix half is validated against the board's own prefix - a reference whose
-	 * prefix does not match the board resolves to null rather than silently
-	 * matching on the number alone. Only the numeric sequence is looked up (the
-	 * (board_id, board_seq) unique index); a trashed card resolves to null.
+	 * "KAN-123"). Live cards use the board's current prefix. Moved cards retain
+	 * their move-time prefix in this board's context and require destination access.
 	 *
 	 * Returns null (not an exception) for a malformed/mismatched/unknown reference
 	 * so the caller can fall back to plain text; only a genuinely missing/deleted
@@ -206,22 +203,16 @@ class CardService {
 			return null;
 		}
 
-		// The board's prefix must match the reference's prefix (a reference to a
-		// different board's prefix is not resolvable here). Fall back to the shared
-		// default for boards created before the prefix backfill, mirroring the
-		// board payload's default (Board::jsonSerialize / BoardPrefix::DEFAULT).
 		$boardPrefix = $board->getPrefix() ?? BoardPrefix::DEFAULT;
-		if ($prefix !== $boardPrefix) {
-			return null;
+		if ($prefix === $boardPrefix) {
+			$card = $this->cardMapper->findByBoardAndSeq(
+				$boardId, $seq, $this->boardAccess->contextFor($board, $uid),
+			);
+			if ($card !== null) {
+				return $card;
+			}
 		}
-
-		// Viewer-scoped (#3743): a reference to a hidden card resolves to null,
-		// indistinguishable from a reference that never matched.
-		return $this->cardMapper->findByBoardAndSeq(
-			$boardId,
-			$seq,
-			$this->boardAccess->contextFor($board, $uid),
-		);
+		return $this->moveAliasService->resolveRef($boardId, $prefix, $seq, $uid);
 	}
 
 	/**
@@ -250,159 +241,150 @@ class CardService {
 	 *                            or a concurrent create keeps colliding after one retry
 	 */
 	public function create(int $stackId, string $title, string $uid, ?string $duedate = null, ?bool $allDay = null, ?string $visibility = null, ?string $creatorRole = null): Card {
-		$stack = $this->loadStack($stackId);
-		$board = $this->loadBoard($stack->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+		return $this->cardMutation->runForBoards([$this->loadStack($stackId)->getBoardId()], function () use ($stackId, $title, $uid, $duedate, $allDay, $visibility, $creatorRole): Card {
+			$stack = $this->loadStack($stackId);
+			$board = $this->loadBoard($stack->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
 
-		if ($visibility !== null && !in_array($visibility, CardVisibilityScope::VISIBILITIES, true)) {
-			throw new InvalidInputException('Unknown card visibility: ' . $visibility);
-		}
-		if ($creatorRole !== null && !in_array($creatorRole, ViewerContext::ROLES, true)) {
-			throw new InvalidInputException('Unknown creator role: ' . $creatorRole);
-		}
-
-		$title = $this->validateTitle($title);
-		// Parse the optional due date up-front so an invalid value fails the create
-		// cleanly (a 400 via InvalidInputException) before any INSERT is attempted,
-		// matching update()'s validation. '' is treated as "no due date" too.
-		$parsedDue = $duedate === null ? null : $this->parseDuedate($duedate);
-		// The creator's board side, FROZEN at create (#3741) - never recomputed
-		// later, so an 'internal' card keeps its side when the creator changes
-		// role or leaves the board. Resolved once, outside the retry loop (the
-		// EDIT assertion above guarantees a membership to resolve).
-		$creatorSide = $this->boardAccess->contextFor($board, $uid)->role;
-		$now = time();
-
-		// Default: append to the bottom of the stack. When the board opts in,
-		// place the new card at the TOP instead (before the current head). A
-		// concurrent create into the same stack can derive the same key; the
-		// (stack_id, sort_key, deleted_at) unique index rejects the loser, so
-		// re-read the now-current neighbour and re-derive once before giving up
-		// with a retryable 409. The same retry also covers a per-board sequence
-		// collision (two creates on one board deriving the same board_seq): the
-		// (board_id, board_seq) unique index rejects the loser and we recompute.
-		$onTop = $board->getNewCardsOnTop() === true;
-		for ($attempt = 0; ; $attempt++) {
-			if ($onTop) {
-				$firstCard = $this->cardMapper->findFirstInStack($stackId);
-				$sortKey = $firstCard === null
-					? $this->sortKeyService->initial()
-					: $this->sortKeyService->before($firstCard->getSortKey());
-			} else {
-				$lastCard = $this->cardMapper->findLastInStack($stackId);
-				$sortKey = $lastCard === null
-					? $this->sortKeyService->initial()
-					: $this->sortKeyService->after($lastCard->getSortKey());
+			if ($visibility !== null && !in_array($visibility, CardVisibilityScope::VISIBILITIES, true)) {
+				throw new InvalidInputException('Unknown card visibility: ' . $visibility);
+			}
+			if ($creatorRole !== null && !in_array($creatorRole, ViewerContext::ROLES, true)) {
+				throw new InvalidInputException('Unknown creator role: ' . $creatorRole);
 			}
 
-			// Assign the next per-board number atomically-ish: MAX+1 guarded by the
-			// (board_id, board_seq) unique index. Recomputed each attempt so a retry
-			// after a collision picks up the winner's number.
-			$boardSeq = $this->cardMapper->nextBoardSeq($stack->getBoardId());
+			$title = $this->validateTitle($title);
+			// Parse the optional due date up-front so an invalid value fails the create
+			// cleanly (a 400 via InvalidInputException) before any INSERT is attempted,
+			// matching update()'s validation. '' is treated as "no due date" too.
+			$parsedDue = $duedate === null ? null : $this->parseDuedate($duedate);
+			// The creator's board side, FROZEN at create (#3741) - never recomputed
+			// later, so an 'internal' card keeps its side when the creator changes
+			// role or leaves the board. Resolved once, outside the retry loop (the
+			// EDIT assertion above guarantees a membership to resolve).
+			$creatorSide = $this->boardAccess->contextFor($board, $uid)->role;
+			$now = time();
 
-			$card = new Card();
-			$card->setBoardId($stack->getBoardId());
-			$card->setStackId($stackId);
-			$card->setTitle($title);
-			$card->setSortKey($sortKey);
-			$card->setBoardSeq($boardSeq);
-			// Creating a card directly in a role-bearing stack adopts that
-			// column's status - matching move()'s status-automation for a
-			// dragged-in card. Done-role → done; in-progress/review-role →
-			// started; backlog/to-do/none → not started (both left at 0).
-			$card->setDoneAt($stack->getRole() === Stack::ROLE_DONE ? $now : 0);
-			$card->setStartedAt(
-				in_array($stack->getRole(), [Stack::ROLE_IN_PROGRESS, Stack::ROLE_REVIEW], true) ? $now : 0,
-			);
-			$card->setArchived(false);
-			$card->setOwner($uid);
-			$card->setCreatedAt($now);
-			$card->setLastModified($now);
-			$card->setDeletedAt(0);
-			// Optional due date from the composer's natural-date tokens (#3416).
-			// Set on the same INSERT; $allDay flags a date-only token so the pill
-			// hides the (midnight) time, mirroring update()'s duedate/allDay pair.
-			if ($parsedDue !== null) {
-				$card->setDuedate($parsedDue);
-				if ($allDay !== null) {
-					$card->setAllDay($allDay);
+			// Reserve before reading neighbours so concurrent creators see the committed tail.
+			$onTop = $board->getNewCardsOnTop() === true;
+			for ($attempt = 0; ; $attempt++) {
+				$boardSeq = $this->cardMapper->nextBoardSeq($stack->getBoardId());
+				if ($onTop) {
+					$firstCard = $this->cardMapper->findFirstInStack($stackId);
+					$sortKey = $firstCard === null
+						? $this->sortKeyService->initial()
+						: $this->sortKeyService->before($firstCard->getSortKey());
+				} else {
+					$lastCard = $this->cardMapper->findLastInStack($stackId);
+					$sortKey = $lastCard === null
+						? $this->sortKeyService->initial()
+						: $this->sortKeyService->after($lastCard->getSortKey());
 				}
-			}
-			// New cards are always ordinary live cards, never templates (#3409) -
-			// a card is only flagged a template later via setTemplate(). Explicit so
-			// the column is set on INSERT (the DB default backs pre-migration rows).
-			$card->setIsTemplate(false);
-			// Visibility (#3741): every card starts 'public' (whoever decides
-			// nothing works in the open; a narrower visibility is a later,
-			// explicit choice) with the creator's side frozen alongside it.
-			// Explicit on INSERT, same rationale as is_template above. The
-			// recurrence-inheritance overrides (#3760) replace both on the
-			// INSERT itself, so no fan-out ever sees a wider interim class.
-			$card->setVisibility($visibility ?? CardVisibilityScope::VISIBILITY_PUBLIC);
-			$card->setCreatorRole($creatorRole ?? $creatorSide);
 
-			// Insert the card AND its CREATE change row atomically (#3579): a
-			// failed change-row write must roll the card INSERT back, never leave
-			// a card without its delta-sync row. The realtime push is deferred to
-			// after commit - a pre-commit push could surface a card the retry then
-			// rolls back. A unique violation (sort-key or board_seq collision)
-			// rolls the transaction back and drives the re-derive/retry.
-			$this->db->beginTransaction();
-			try {
-				$card = $this->cardMapper->insert($card);
-				$this->changeNotifier->recordChange(
-					$stack->getBoardId(),
-					Change::ENTITY_CARD,
-					$card->getId(),
-					Change::ACTION_CREATE,
-					$uid,
-					Change::VERB_CREATED,
+				$card = new Card();
+				$card->setBoardId($stack->getBoardId());
+				$card->setStackId($stackId);
+				$card->setTitle($title);
+				$card->setSortKey($sortKey);
+				$card->setBoardSeq($boardSeq);
+				// Creating a card directly in a role-bearing stack adopts that
+				// column's status - matching move()'s status-automation for a
+				// dragged-in card. Done-role → done; in-progress/review-role →
+				// started; backlog/to-do/none → not started (both left at 0).
+				$card->setDoneAt($stack->getRole() === Stack::ROLE_DONE ? $now : 0);
+				$card->setStartedAt(
+					in_array($stack->getRole(), [Stack::ROLE_IN_PROGRESS, Stack::ROLE_REVIEW], true) ? $now : 0,
 				);
-				$this->db->commit();
+				$card->setArchived(false);
+				$card->setOwner($uid);
+				$card->setCreatedAt($now);
+				$card->setLastModified($now);
+				$card->setDeletedAt(0);
+				// Optional due date from the composer's natural-date tokens (#3416).
+				// Set on the same INSERT; $allDay flags a date-only token so the pill
+				// hides the (midnight) time, mirroring update()'s duedate/allDay pair.
+				if ($parsedDue !== null) {
+					$card->setDuedate($parsedDue);
+					if ($allDay !== null) {
+						$card->setAllDay($allDay);
+					}
+				}
+				// New cards are always ordinary live cards, never templates (#3409) -
+				// a card is only flagged a template later via setTemplate(). Explicit so
+				// the column is set on INSERT (the DB default backs pre-migration rows).
+				$card->setIsTemplate(false);
+				// Visibility (#3741): every card starts 'public' (whoever decides
+				// nothing works in the open; a narrower visibility is a later,
+				// explicit choice) with the creator's side frozen alongside it.
+				// Explicit on INSERT, same rationale as is_template above. The
+				// recurrence-inheritance overrides (#3760) replace both on the
+				// INSERT itself, so no fan-out ever sees a wider interim class.
+				$card->setVisibility($visibility ?? CardVisibilityScope::VISIBILITY_PUBLIC);
+				$card->setCreatorRole($creatorRole ?? $creatorSide);
 
-				// Commit succeeded - now it is safe to broadcast the create.
-				$this->changeNotifier->pushBoardChanged($stack->getBoardId());
-
-				// Surface the create in the Nextcloud Activity stream (best-effort,
-				// never fatal to the create). User-initiated only - $uid is the actor.
-				$this->changeNotifier->publishCardActivity(
-					$stack->getBoardId(),
-					'card_created',
-					$card,
-					$uid,
-				);
-
-				// Fan a "new card on a board you watch" notification out to board
-				// watchers. Best-effort - a notification hiccup must never fail the
-				// create (the card + its change row are already committed).
+				// Insert the card AND its CREATE change row atomically (#3579): a
+				// failed change-row write must roll the card INSERT back, never leave
+				// a card without its delta-sync row. The realtime push is deferred to
+				// after commit - a pre-commit push could surface a card the retry then
+				// rolls back. A unique violation (sort-key or board_seq collision)
+				// rolls the transaction back and drives the re-derive/retry.
+				$this->db->beginTransaction();
 				try {
-					$this->subscriptionService->notifyBoardCardCreated($stack->getBoardId(), $card, $uid);
-				} catch (\Throwable) {
-					// Ignore - board-activity fan-out is a non-critical side effect.
-				}
+					$card = $this->cardMapper->insert($card);
+					$this->changeNotifier->recordChange(
+						$stack->getBoardId(),
+						Change::ENTITY_CARD,
+						$card->getId(),
+						Change::ACTION_CREATE,
+						$uid,
+						Change::VERB_CREATED,
+					);
+					$this->db->commit();
 
-				return $card;
-			} catch (\OCP\DB\Exception $e) {
-				$this->db->rollBack();
-				if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+					// Commit succeeded - now it is safe to broadcast the create.
+					$this->changeNotifier->pushBoardChanged($stack->getBoardId());
+
+					// Surface the create in the Nextcloud Activity stream (best-effort,
+					// never fatal to the create). User-initiated only - $uid is the actor.
+					$this->changeNotifier->publishCardActivity(
+						$stack->getBoardId(),
+						'card_created',
+						$card,
+						$uid,
+					);
+
+					// Fan a "new card on a board you watch" notification out to board
+					// watchers. Best-effort - a notification hiccup must never fail the
+					// create (the card + its change row are already committed).
+					try {
+						$this->subscriptionService->notifyBoardCardCreated($stack->getBoardId(), $card, $uid);
+					} catch (\Throwable) {
+						// Ignore - board-activity fan-out is a non-critical side effect.
+					}
+
+					return $card;
+				} catch (\OCP\DB\Exception $e) {
+					$this->db->rollBack();
+					if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+						throw $e;
+					}
+					// A unique violation here is either a sort-key collision (≤2 writers
+					// on the same stack head/tail) or a board_seq collision. The latter
+					// contends board-wide (every concurrent create derives the same
+					// MAX+1), so allow a few more re-derives before surfacing a
+					// retryable 409 - each retry re-reads the now-current neighbour and
+					// the now-current max.
+					if ($attempt >= self::MAX_CREATE_ATTEMPTS - 1) {
+						throw new \OverflowException('card create key conflict (sort key or board_seq) after retries', 0, $e);
+					}
+				} catch (\Throwable $e) {
+					// Any other failure (e.g. the change-row insert throwing) also rolls
+					// back the card INSERT so no orphan card lands without a delta row.
+					$this->db->rollBack();
 					throw $e;
 				}
-				// A unique violation here is either a sort-key collision (≤2 writers
-				// on the same stack head/tail) or a board_seq collision. The latter
-				// contends board-wide (every concurrent create derives the same
-				// MAX+1), so allow a few more re-derives before surfacing a
-				// retryable 409 - each retry re-reads the now-current neighbour and
-				// the now-current max.
-				if ($attempt >= self::MAX_CREATE_ATTEMPTS - 1) {
-					throw new \OverflowException('card create key conflict (sort key or board_seq) after retries', 0, $e);
-				}
-			} catch (\Throwable $e) {
-				// Any other failure (e.g. the change-row insert throwing) also rolls
-				// back the card INSERT so no orphan card lands without a delta row.
-				$this->db->rollBack();
-				throw $e;
 			}
-		}
+		});
 	}
 
 	/**
@@ -430,40 +412,42 @@ class CardService {
 	 * @throws \OverflowException if the appended sort key would overflow (target stack needs a rebalance)
 	 */
 	public function copy(int $id, int $targetStackId, string $uid): Card {
-		// Load the source with its description and assert EDIT on its board (read
-		// access to clone the content is gated at EDIT per the card's rule, not
-		// the weaker READ that find() would use).
-		$source = $this->loadCard($id);
-		$sourceBoard = $this->loadBoard($source->getBoardId());
-		$this->permissionService->assertPermission($sourceBoard, $uid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($sourceBoard, $source, $uid);
+		return $this->cardMutation->runForBoards([$this->loadCard($id)->getBoardId(), $this->loadStack($targetStackId)->getBoardId()], function () use ($id, $targetStackId, $uid): Card {
+			// Load the source with its description and assert EDIT on its board (read
+			// access to clone the content is gated at EDIT per the card's rule, not
+			// the weaker READ that find() would use).
+			$source = $this->loadCard($id);
+			$sourceBoard = $this->loadBoard($source->getBoardId());
+			$this->permissionService->assertPermission($sourceBoard, $uid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($sourceBoard, $source, $uid);
 
-		$targetStack = $this->loadStack($targetStackId);
-		$targetBoard = $this->loadBoard($targetStack->getBoardId());
-		// create() also asserts EDIT on the target board, but assert it up-front
-		// so a permission failure never leaves a half-copied card behind.
-		$this->permissionService->assertPermission($targetBoard, $uid, PermissionService::PERMISSION_EDIT);
+			$targetStack = $this->loadStack($targetStackId);
+			$targetBoard = $this->loadBoard($targetStack->getBoardId());
+			// create() also asserts EDIT on the target board, but assert it up-front
+			// so a permission failure never leaves a half-copied card behind.
+			$this->permissionService->assertPermission($targetBoard, $uid, PermissionService::PERMISSION_EDIT);
 
-		// 1. Create the shell at the bottom of the target stack (fresh id + key +
-		//    change row + board-watcher fan-out - all reused from create()). The
-		//    source's visibility LEVEL rides the INSERT itself (#3760): the
-		//    create-time fan-outs (activity, board watchers) carry the source's
-		//    title, so they must already be filtered by the copy's final class -
-		//    a post-hoc narrowing would leak the title of a hidden source.
-		$copy = $this->create(
-			$targetStackId,
-			$this->copyTitle($source->getTitle()),
-			$uid,
-			null,
-			null,
-			$source->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC,
-		);
+			// 1. Create the shell at the bottom of the target stack (fresh id + key +
+			//    change row + board-watcher fan-out - all reused from create()). The
+			//    source's visibility LEVEL rides the INSERT itself (#3760): the
+			//    create-time fan-outs (activity, board watchers) carry the source's
+			//    title, so they must already be filtered by the copy's final class -
+			//    a post-hoc narrowing would leak the title of a hidden source.
+			$copy = $this->create(
+				$targetStackId,
+				$this->copyTitle($source->getTitle()),
+				$uid,
+				null,
+				null,
+				$source->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC,
+			);
 
-		// 2. Clone the content (description / priority / type / status / estimate /
-		//    labels / checklist) into the shell - shared with createFromTemplate().
-		$this->cloneContentInto($source, $copy, $sourceBoard, $targetBoard, $uid);
+			// 2. Clone the content (description / priority / type / status / estimate /
+			//    labels / checklist) into the shell - shared with createFromTemplate().
+			$this->cloneContentInto($source, $copy, $sourceBoard, $targetBoard, $uid);
 
-		return $copy;
+			return $copy;
+		});
 	}
 
 	/**
@@ -478,187 +462,171 @@ class CardService {
 	 * @throws \OverflowException if the appended sort key or the board sequence keeps colliding after retries
 	 */
 	public function moveToBoard(int $id, int $targetStackId, string $uid): Card {
-		$source = $this->loadCard($id);
-		$sourceBoard = $this->loadBoard($source->getBoardId());
-		$this->permissionService->assertPermission($sourceBoard, $uid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($sourceBoard, $source, $uid);
-		$targetStack = $this->loadStack($targetStackId);
-		$targetBoard = $this->loadBoard($targetStack->getBoardId());
-		$this->permissionService->assertPermission($targetBoard, $uid, PermissionService::PERMISSION_EDIT);
-		if ($targetBoard->getId() === $sourceBoard->getId()) {
-			throw new InvalidInputException('Use the in-board move for a card staying on the same board');
-		}
-
-		$graph = $this->moveGraphService->discover($source, $sourceBoard, $uid);
-		$snapshots = [];
-		foreach ($graph['cards'] as $card) {
-			$cardId = $card->getId();
-			$labels = $this->cardLabelMapper->findLabelIdsByCard($cardId);
-			$labelMap = $this->targetLabelIndex($labels, $targetBoard);
-			if (count($labelMap) !== count($labels)) {
-				throw new InvalidInputException('The destination board needs matching labels for every moved card');
-			}
-			$estimate = $card->getEstimate();
-			if ($estimate !== null && !EstimateScale::allows($targetBoard->getEstimateScale(), $estimate, $targetBoard->customEstimates())) {
-				throw new InvalidInputException('The destination board does not support the estimate on a moved card');
-			}
-			$actorNames = [];
-			foreach ($this->cardAssigneeMapper->findAssigneesByCard($cardId) as $assignee) {
-				if ($assignee['actorName'] !== null) {
-					if ($targetBoard->getAllowAiActors() !== true) {
-						throw new InvalidInputException('The destination board does not allow AI-attributed assignments');
-					}
-					$actorNames[$assignee['uid']] = $assignee['actorName'];
-				}
-			}
-			$snapshots[$cardId] = [
-				'labels' => $labels,
-				'labelMap' => $labelMap,
-				'items' => $this->checklistItemMapper->findByCard($cardId),
-				'assignees' => array_values(array_unique($this->cardAssigneeMapper->findUserIdsByCard($cardId))),
-				'watchers' => array_values(array_unique($this->subscriptionMapper->findCardSubscriberUids($cardId))),
-				'actorNames' => $actorNames,
-			];
-		}
-
+		$sourceBoardId = $this->loadCard($id)->getBoardId();
+		$targetBoardId = $this->loadStack($targetStackId)->getBoardId();
 		for ($attempt = 0; ; $attempt++) {
-			$movedCards = [];
-			$copiedObjects = [];
-			$committed = false;
-			$commitStarted = false;
-			$this->db->beginTransaction();
+			$readyToCommit = false;
 			try {
-				$now = time();
-				foreach ($graph['cards'] as $card) {
-					$lastCard = $this->cardMapper->findLastInStack($targetStackId);
-					$sortKey = $lastCard === null
-						? $this->sortKeyService->initial()
-						: $this->sortKeyService->after($lastCard->getSortKey());
-					$boardSeq = $this->cardMapper->nextBoardSeq($targetBoard->getId());
-					$moved = $this->buildMovedCard($card, $targetBoard, $targetStackId, $sortKey, $boardSeq, $now, $uid);
-					$movedCards[$card->getId()] = $this->cardMapper->insert($moved);
-				}
-
-				$attachmentIdsByCard = [];
-				$cardIds = [];
-				foreach ($graph['cards'] as $card) {
-					$moved = $movedCards[$card->getId()];
-					$cardIds[$card->getId()] = $moved->getId();
-					$attachmentIdsByCard[$card->getId()] = $this->moveContentService->copyAttachments(
-						$card, $moved, $targetBoard,
-						static function (int $cardId, string $key) use (&$copiedObjects): void {
-							$copiedObjects[] = ['cardId' => $cardId, 'key' => $key];
-						},
-					);
-				}
-
-				foreach ($graph['cards'] as $card) {
-					$oldId = $card->getId();
-					$moved = $movedCards[$oldId];
-					$newId = $moved->getId();
-					$data = $snapshots[$oldId];
-					$commentIds = $this->moveContentService->copy($card, $moved, $targetBoard, $attachmentIdsByCard, $cardIds);
-					$this->moveMetadataService->copy($oldId, $newId, $targetBoard->getId());
-					$this->moveFieldsService->copy($oldId, $newId, $sourceBoard->getId(), $targetBoard->getId());
-					$this->movePersonalService->transfer($card, $sourceBoard, $moved, $targetBoard, $commentIds);
-					$this->moveReviewService->transfer($oldId, $sourceBoard->getId(), $moved, $targetBoard);
-					$this->moveHistoryService->copy($oldId, $newId, $sourceBoard->getId());
-
-					foreach ($data['labels'] as $labelId) {
-						$this->cardLabelMapper->insertAssignment($newId, $data['labelMap'][$labelId]);
+				return $this->cardMutation->runForBoards([$sourceBoardId, $targetBoardId], function () use ($id, $targetStackId, $uid, &$readyToCommit): Card {
+					$source = $this->loadCard($id);
+					$sourceBoard = $this->loadBoard($source->getBoardId());
+					$this->permissionService->assertPermission($sourceBoard, $uid, PermissionService::PERMISSION_EDIT);
+					$this->visibilityGuard->assertVisible($sourceBoard, $source, $uid);
+					$targetStack = $this->loadStack($targetStackId);
+					$targetBoard = $this->loadBoard($targetStack->getBoardId());
+					$this->permissionService->assertPermission($targetBoard, $uid, PermissionService::PERMISSION_EDIT);
+					if ($targetBoard->getId() === $sourceBoard->getId()) {
+						throw new InvalidInputException('Use the in-board move for a card staying on the same board');
 					}
-					$itemKey = $this->sortKeyService->initial();
-					foreach ($data['items'] as $index => $item) {
-						if ($index > 0) {
-							$itemKey = $this->sortKeyService->after($itemKey);
+
+					$graph = $this->moveGraphService->discover($source, $sourceBoard, $uid);
+					$snapshots = [];
+					foreach ($graph['cards'] as $card) {
+						$cardId = $card->getId();
+						$labels = $this->cardLabelMapper->findLabelIdsByCard($cardId);
+						$labelMap = $this->targetLabelIndex($labels, $targetBoard);
+						if (count($labelMap) !== count($labels)) {
+							throw new InvalidInputException('The destination board needs matching labels for every moved card');
 						}
-						$clone = new ChecklistItem();
-						$clone->setCardId($newId);
-						$clone->setTitle($item->getTitle());
-						$clone->setDone($item->getDone());
-						$clone->setSortKey($itemKey);
-						$clone->setCreatedAt($item->getCreatedAt() ?? $now);
-						$clone->setDueDate($item->getDueDate());
-						$clone->setDoneAt($item->getDoneAt());
-						$stepAssignee = $item->getAssignedUser();
-						if ($stepAssignee !== null) {
-							$this->assertMoveParticipantAccess($targetBoard, $moved, $stepAssignee);
-							$clone->setAssignedUser($stepAssignee);
-							$clone->setAssignedRole($this->boardAccess->contextFor($targetBoard, $stepAssignee)->role);
-							$clone->setAssignedAt($item->getAssignedAt());
+						$estimate = $card->getEstimate();
+						if ($estimate !== null && !EstimateScale::allows($targetBoard->getEstimateScale(), $estimate, $targetBoard->customEstimates())) {
+							throw new InvalidInputException('The destination board does not support the estimate on a moved card');
 						}
-						$this->checklistItemMapper->insert($clone);
+						$actorNames = [];
+						foreach ($this->cardAssigneeMapper->findAssigneesByCard($cardId) as $assignee) {
+							if ($assignee['actorName'] !== null) {
+								if ($targetBoard->getAllowAiActors() !== true) {
+									throw new InvalidInputException('The destination board does not allow AI-attributed assignments');
+								}
+								$actorNames[$assignee['uid']] = $assignee['actorName'];
+							}
+						}
+						$assignees = array_values(array_unique($this->cardAssigneeMapper->findUserIdsByCard($cardId)));
+						if ($targetBoard->getSingleAssignee() === true && count($assignees) > 1) {
+							throw new InvalidInputException('The destination board allows one assignee per card; remove extra assignees before moving');
+						}
+						$snapshots[$cardId] = [
+							'labels' => $labels,
+							'labelMap' => $labelMap,
+							'items' => $this->checklistItemMapper->findByCard($cardId),
+							'assignees' => $assignees,
+							'watchers' => array_values(array_unique($this->subscriptionMapper->findCardSubscriberUids($cardId))),
+							'actorNames' => $actorNames,
+						];
 					}
-					foreach ($data['assignees'] as $assigneeUid) {
-						$this->assertMoveParticipantAccess($targetBoard, $moved, $assigneeUid);
-						$this->cardAssigneeMapper->insertAssignment($newId, $assigneeUid, $data['actorNames'][$assigneeUid] ?? null);
-					}
-					foreach ($data['watchers'] as $watcherUid) {
-						$this->assertMoveParticipantAccess($targetBoard, $moved, $watcherUid);
-						$sub = new Subscription();
-						$sub->setSubscriber($watcherUid);
-						$sub->setCardId($newId);
-						$sub->setCommentThreadId(SubscriptionMapper::THREAD_CARD);
-						$sub->setState(Subscription::STATE_SUBSCRIBED);
-						$sub->setCreatedAt($now);
-						$this->subscriptionMapper->insert($sub);
-					}
-				}
 
-				$this->moveGraphService->recreate($graph['cards'], $graph['relations'], $movedCards, $targetBoard->getId());
-				$this->moveRecurrenceService->transfer($graph['cards'], $movedCards, $sourceBoard, $targetBoard, $targetStackId, $uid);
-				$this->moveAliasService->record($movedCards);
-				foreach ($graph['cards'] as $card) {
-					$oldId = $card->getId();
-					$trashed = clone $card;
-					$trashed->setParentCardId(null);
-					$trashed->setDeletedAt($now);
-					$trashed->setLastModified($now);
-					$this->cardMapper->update($trashed);
-					$this->changeNotifier->recordChange($targetBoard->getId(), Change::ENTITY_CARD, $movedCards[$oldId]->getId(), Change::ACTION_CREATE, $uid, Change::VERB_CREATED);
-					$this->changeNotifier->recordChange($sourceBoard->getId(), Change::ENTITY_CARD, $oldId, Change::ACTION_DELETE, $uid, Change::VERB_DELETED);
-				}
-				$commitStarted = true;
-				$this->db->commit();
-				$committed = true;
-				$this->changeNotifier->pushBoardChanged($targetBoard->getId());
-				$this->changeNotifier->pushBoardChanged($sourceBoard->getId());
-				$this->changeNotifier->publishCardActivity($targetBoard->getId(), 'card_moved', $movedCards[$id], $uid);
-				return $movedCards[$id];
+					$movedCards = [];
+					$copiedObjects = [];
+					$this->cardMutation->afterRollback(function () use (&$copiedObjects): void {
+						$this->moveCleanupService->schedule($copiedObjects);
+						$this->moveCleanupService->cleanup($copiedObjects);
+					});
+					$now = time();
+					foreach ($graph['cards'] as $card) {
+						$lastCard = $this->cardMapper->findLastInStack($targetStackId);
+						$sortKey = $lastCard === null
+							? $this->sortKeyService->initial()
+							: $this->sortKeyService->after($lastCard->getSortKey());
+						$boardSeq = $this->cardMapper->nextBoardSeq($targetBoard->getId());
+						$moved = $this->buildMovedCard($card, $targetBoard, $targetStackId, $sortKey, $boardSeq, $now, $uid);
+						$movedCards[$card->getId()] = $this->cardMapper->insert($moved);
+					}
+
+					$attachmentIdsByCard = [];
+					$cardIds = [];
+					foreach ($graph['cards'] as $card) {
+						$moved = $movedCards[$card->getId()];
+						$cardIds[$card->getId()] = $moved->getId();
+						$attachmentIdsByCard[$card->getId()] = $this->moveContentService->copyAttachments(
+							$card, $moved, $targetBoard,
+							static function (int $cardId, string $key) use (&$copiedObjects): void {
+								$copiedObjects[] = ['cardId' => $cardId, 'key' => $key];
+							},
+						);
+					}
+
+					foreach ($graph['cards'] as $card) {
+						$oldId = $card->getId();
+						$moved = $movedCards[$oldId];
+						$newId = $moved->getId();
+						$data = $snapshots[$oldId];
+						$commentIds = $this->moveContentService->copy($card, $moved, $targetBoard, $attachmentIdsByCard, $cardIds);
+						$this->moveMetadataService->copy($oldId, $newId, $targetBoard->getId());
+						$this->moveFieldsService->copy($oldId, $newId, $sourceBoard->getId(), $targetBoard->getId());
+						$this->movePersonalService->transfer($card, $sourceBoard, $moved, $targetBoard, $commentIds);
+						$this->moveReviewService->transfer($oldId, $sourceBoard->getId(), $moved, $targetBoard);
+						$this->moveHistoryService->copy($oldId, $newId, $sourceBoard->getId());
+
+						foreach ($data['labels'] as $labelId) {
+							$this->cardLabelMapper->insertAssignment($newId, $data['labelMap'][$labelId]);
+						}
+						$itemKey = $this->sortKeyService->initial();
+						foreach ($data['items'] as $index => $item) {
+							if ($index > 0) {
+								$itemKey = $this->sortKeyService->after($itemKey);
+							}
+							$clone = new ChecklistItem();
+							$clone->setCardId($newId);
+							$clone->setTitle($item->getTitle());
+							$clone->setDone($item->getDone());
+							$clone->setSortKey($itemKey);
+							$clone->setCreatedAt($item->getCreatedAt() ?? $now);
+							$clone->setDueDate($item->getDueDate());
+							$clone->setDoneAt($item->getDoneAt());
+							$stepAssignee = $item->getAssignedUser();
+							if ($stepAssignee !== null) {
+								$this->assertMoveParticipantAccess($targetBoard, $moved, $stepAssignee);
+								$clone->setAssignedUser($stepAssignee);
+								$clone->setAssignedRole($this->boardAccess->contextFor($targetBoard, $stepAssignee)->role);
+								$clone->setAssignedAt($item->getAssignedAt());
+							}
+							$this->checklistItemMapper->insert($clone);
+						}
+						foreach ($data['assignees'] as $assigneeUid) {
+							$this->assertMoveParticipantAccess($targetBoard, $moved, $assigneeUid);
+							$this->cardAssigneeMapper->insertAssignment($newId, $assigneeUid, $data['actorNames'][$assigneeUid] ?? null);
+						}
+						foreach ($data['watchers'] as $watcherUid) {
+							$this->assertMoveParticipantAccess($targetBoard, $moved, $watcherUid);
+							$sub = new Subscription();
+							$sub->setSubscriber($watcherUid);
+							$sub->setCardId($newId);
+							$sub->setCommentThreadId(SubscriptionMapper::THREAD_CARD);
+							$sub->setState(Subscription::STATE_SUBSCRIBED);
+							$sub->setCreatedAt($now);
+							$this->subscriptionMapper->insert($sub);
+						}
+					}
+
+					$this->moveGraphService->recreate($graph['cards'], $graph['relations'], $movedCards, $targetBoard->getId());
+					$this->moveRecurrenceService->transfer($graph['cards'], $movedCards, $sourceBoard, $targetBoard, $targetStackId, $uid);
+					$this->moveAliasService->record($movedCards, $graph['cards'], $sourceBoard);
+					foreach ($graph['cards'] as $card) {
+						$oldId = $card->getId();
+						$trashed = clone $card;
+						$trashed->setParentCardId(null);
+						$trashed->setDeletedAt($now);
+						$trashed->setLastModified($now);
+						$this->cardMapper->update($trashed);
+						$this->changeNotifier->recordChange($targetBoard->getId(), Change::ENTITY_CARD, $movedCards[$oldId]->getId(), Change::ACTION_CREATE, $uid, Change::VERB_CREATED);
+						$this->changeNotifier->recordChange($sourceBoard->getId(), Change::ENTITY_CARD, $oldId, Change::ACTION_DELETE, $uid, Change::VERB_DELETED);
+					}
+					$this->cardMutation->afterCommit(function () use ($sourceBoard, $targetBoard, $movedCards, $id, $uid): void {
+						$this->changeNotifier->pushBoardChanged($targetBoard->getId());
+						$this->changeNotifier->pushBoardChanged($sourceBoard->getId());
+						$this->changeNotifier->publishCardActivity($targetBoard->getId(), 'card_moved', $movedCards[$id], $uid);
+					});
+					$readyToCommit = true;
+					return $movedCards[$id];
+				}, exclusive: true);
 			} catch (\OCP\DB\Exception $e) {
-				if ($committed) {
-					throw $e;
-				}
-				if ($commitStarted) {
-					$this->rollbackUncertainCommit();
-					throw $e;
-				}
-				$this->rollbackMove($copiedObjects);
-				if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+				if ($readyToCommit || $e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 					throw $e;
 				}
 				if ($attempt >= self::MAX_CREATE_ATTEMPTS - 1) {
 					throw new \OverflowException('card move key conflict (sort key or board_seq) after retries', 0, $e);
 				}
-			} catch (\Throwable $e) {
-				if (!$committed) {
-					if ($commitStarted) {
-						$this->rollbackUncertainCommit();
-					} else {
-						$this->rollbackMove($copiedObjects);
-					}
-				}
-				throw $e;
 			}
-		}
-	}
-
-	private function rollbackUncertainCommit(): void {
-		// A lost commit response can mean the database committed; retain the files.
-		try {
-			$this->db->rollBack();
-		} catch (\Throwable) {
-			// The connection may already be closed or the transaction committed.
 		}
 	}
 
@@ -667,13 +635,6 @@ class CardService {
 			|| !$this->visibilityGuard->isVisible($board, $card, $uid)) {
 			throw new InvalidInputException('A card participant cannot access the destination card');
 		}
-	}
-
-	/** @param list<array{cardId: int, key: string}> $copiedObjects */
-	private function rollbackMove(array $copiedObjects): void {
-		$this->db->rollBack();
-		$this->moveCleanupService->schedule($copiedObjects);
-		$this->moveCleanupService->cleanup($copiedObjects);
 	}
 
 	/**
@@ -772,36 +733,38 @@ class CardService {
 	 * @throws \OverflowException if the appended sort key would overflow (target stack needs a rebalance)
 	 */
 	public function createFromTemplate(int $templateId, int $targetStackId, string $uid): Card {
-		$template = $this->loadCard($templateId);
-		$board = $this->loadBoard($template->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $template, $uid);
+		return $this->cardMutation->runForBoards([$this->loadCard($templateId)->getBoardId(), $this->loadStack($targetStackId)->getBoardId()], function () use ($templateId, $targetStackId, $uid): Card {
+			$template = $this->loadCard($templateId);
+			$board = $this->loadBoard($template->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $template, $uid);
 
-		if (!$template->getIsTemplate()) {
-			throw new InvalidInputException('Card ' . $templateId . ' is not a template');
-		}
+			if (!$template->getIsTemplate()) {
+				throw new InvalidInputException('Card ' . $templateId . ' is not a template');
+			}
 
-		$targetStack = $this->loadStack($targetStackId);
-		if ($targetStack->getBoardId() !== $template->getBoardId()) {
-			throw new InvalidInputException('A template can only create a card on its own board');
-		}
+			$targetStack = $this->loadStack($targetStackId);
+			if ($targetStack->getBoardId() !== $template->getBoardId()) {
+				throw new InvalidInputException('A template can only create a card on its own board');
+			}
 
-		// Fresh live card at the bottom of the target stack (fresh id + key + change
-		// row + watcher fan-out). Same-board, so the content clone re-assigns labels
-		// by id and keeps the estimate as-is. The template's visibility level rides
-		// the INSERT (#3760) so the create-time fan-outs are filtered by the final
-		// class, never an interim 'public' bearing a hidden template's title.
-		$card = $this->create(
-			$targetStackId,
-			$this->validateTitle($template->getTitle()),
-			$uid,
-			null,
-			null,
-			$template->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC,
-		);
-		$this->cloneContentInto($template, $card, $board, $board, $uid);
+			// Fresh live card at the bottom of the target stack (fresh id + key + change
+			// row + watcher fan-out). Same-board, so the content clone re-assigns labels
+			// by id and keeps the estimate as-is. The template's visibility level rides
+			// the INSERT (#3760) so the create-time fan-outs are filtered by the final
+			// class, never an interim 'public' bearing a hidden template's title.
+			$card = $this->create(
+				$targetStackId,
+				$this->validateTitle($template->getTitle()),
+				$uid,
+				null,
+				null,
+				$template->getVisibility() ?? CardVisibilityScope::VISIBILITY_PUBLIC,
+			);
+			$this->cloneContentInto($template, $card, $board, $board, $uid);
 
-		return $card;
+			return $card;
+		});
 	}
 
 	/**
@@ -866,25 +829,27 @@ class CardService {
 	 * @throws NotPermittedException if the user may not edit the board
 	 */
 	public function setTemplate(int $id, bool $isTemplate, string $uid): Card {
-		$card = $this->loadCard($id);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $uid);
+		return $this->cardMutation->run($id, function () use ($id, $isTemplate, $uid): Card {
+			$card = $this->loadCard($id);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $uid);
 
-		$card->setIsTemplate($isTemplate);
-		$card->setLastModified(time());
+			$card->setIsTemplate($isTemplate);
+			$card->setLastModified(time());
 
-		// Atomic entity-write + change-row (#3579); push after commit.
-		$card = $this->writeCardChange(
-			$card->getBoardId(),
-			$id,
-			Change::ACTION_UPDATE,
-			$uid,
-			Change::VERB_UPDATED,
-			fn (): Card => $this->cardMapper->update($card),
-		);
+			// Atomic entity-write + change-row (#3579); push after commit.
+			$card = $this->writeCardChange(
+				$card->getBoardId(),
+				$id,
+				Change::ACTION_UPDATE,
+				$uid,
+				Change::VERB_UPDATED,
+				fn (): Card => $this->cardMapper->update($card),
+			);
 
-		return $card;
+			return $card;
+		});
 	}
 
 	/**
@@ -1012,328 +977,330 @@ class CardService {
 		?int $baseDescriptionRevision = null,
 		bool $notifyMentions = true,
 	): Card {
-		$card = $this->loadCard($id);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $uid);
+		return $this->cardMutation->run($id, function () use ($id, $title, $description, $duedate, $done, $archived, $uid, $priority, $startDate, $status, $estimate, $allDay, $dueReminderDayBefore, $coverColor, $type, $visibility, $baseLastModified, $baseDescriptionRevision, $notifyMentions): Card {
+			$card = $this->loadCard($id);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $uid);
 
-		// LEGACY optimistic concurrency for the description (#9845), for clients
-		// written against `baseLastModified` before the revision token existed.
-		// Superseded by $baseDescriptionRevision below, so it only applies when
-		// no revision was sent. Checked BEFORE any setter runs, so a rejected
-		// write leaves the card completely untouched. Three conditions, all
-		// required:
-		//  - the caller opted in by sending the version its editor started from
-		//    (omitted → the historical last-writer-wins behaviour, unchanged);
-		//  - this write actually carries a description (a title/date/priority save
-		//    from the same open card must never be blocked by a foreign edit);
-		//  - the stored text really differs from what is being written - a re-save
-		//    of identical text loses nothing, so it is never a conflict.
-		// `lastModified` is a coarse token, so this stays a best-effort safety net
-		// rather than a guarantee: it also moves for edits that never touched the
-		// description (over-reporting), it has SECOND resolution, and the check is
-		// read-then-write. Those are exactly the gaps the revision token closes.
-		if ($baseDescriptionRevision === null
-			&& $baseLastModified !== null
-			&& $description !== null
-			&& $card->getLastModified() > $baseLastModified
-			&& $card->getDescription() !== $description) {
-			throw new DescriptionConflictException(
-				(string)$card->getDescription(),
-				$card->getLastModified(),
-				$card->getDescriptionRevision() ?? 0,
-			);
-		}
-
-		// Snapshot the tracked fields BEFORE any setter runs, so the change row can
-		// be stamped with a field-specific verb (#70) when exactly one of them moves.
-		// Dates compare by unix instant (null stays null); status is timestamp-only.
-		$origTitle = $card->getTitle();
-		$origDescription = $card->getDescription();
-		$origDue = $card->getDuedate()?->getTimestamp();
-		$origStart = $card->getStartDate()?->getTimestamp();
-		$origPriority = $card->getPriority();
-		$origEstimate = $card->getEstimate();
-		$origType = $card->getType();
-		// Derived status (done/in_progress/not_started) BEFORE any timestamp setter,
-		// so a timestamp-only status change can record its from/to labels.
-		$origStatus = $this->deriveStatus($card);
-
-		if ($title !== null) {
-			$card->setTitle($this->validateTitle($title));
-		}
-		if ($estimate !== null) {
-			// '' clears the estimate; any other value must belong to the board's
-			// scale (which rejects everything when the scale is 'none').
-			if ($estimate === '') {
-				$card->setEstimate(null);
-			} elseif (EstimateScale::allows($board->getEstimateScale(), $estimate, $board->customEstimates())) {
-				$card->setEstimate($board->getEstimateScale() === EstimateScale::NUMBER ? EstimateScale::normalizeNumber($estimate) : $estimate);
-			} else {
-				throw new InvalidInputException('Estimate is not valid for this board\'s scale');
-			}
-		}
-		if ($priority !== null) {
-			if ($priority < Card::PRIORITY_NONE || $priority > Card::PRIORITY_URGENT) {
-				throw new InvalidInputException('Priority must be between 0 and 4');
-			}
-			$card->setPriority($priority);
-		}
-		if ($coverColor !== null) {
-			// Shared colour validation ('' clears the cover; a non-empty value must
-			// be a bare 6-hex string, same as label/stack/board colours).
-			$card->setCoverColor(ColorValidator::assertValid($coverColor));
-		}
-		if ($type !== null) {
-			// '' clears the type (none); any other value must be a built-in type.
-			// The built-in set is fixed (no custom-type editor - #3402's trap).
-			if ($type !== Card::TYPE_NONE && !in_array($type, Card::TYPES, true)) {
-				throw new InvalidInputException('Unknown card type: ' . $type);
-			}
-			$card->setType($type);
-		}
-		$descriptionChanged = false;
-		if ($description !== null && $description !== $card->getDescription()) {
-			// Deliberately checked only when the text actually CHANGES, not on
-			// every write that carries a description: a card stored before this
-			// cap existed stays readable, an unrelated title/date/priority save on
-			// it never trips the limit, and its author can still edit it - as long
-			// as the new text is within the cap, so an over-long row can be edited
-			// DOWN but never re-saved as-is or grown further.
-			if (mb_strlen($description) > self::MAX_DESCRIPTION_LENGTH) {
-				// The message names the number, like every other length validator
-				// here: it is surfaced verbatim by ApiErrorTrait and rendered by the
-				// card editor, and since this ships no character counter it is the
-				// only way a user learns what the limit is.
-				throw new InvalidInputException(
-					'Description must not exceed ' . self::MAX_DESCRIPTION_LENGTH . ' characters'
+			// LEGACY optimistic concurrency for the description (#9845), for clients
+			// written against `baseLastModified` before the revision token existed.
+			// Superseded by $baseDescriptionRevision below, so it only applies when
+			// no revision was sent. Checked BEFORE any setter runs, so a rejected
+			// write leaves the card completely untouched. Three conditions, all
+			// required:
+			//  - the caller opted in by sending the version its editor started from
+			//    (omitted → the historical last-writer-wins behaviour, unchanged);
+			//  - this write actually carries a description (a title/date/priority save
+			//    from the same open card must never be blocked by a foreign edit);
+			//  - the stored text really differs from what is being written - a re-save
+			//    of identical text loses nothing, so it is never a conflict.
+			// `lastModified` is a coarse token, so this stays a best-effort safety net
+			// rather than a guarantee: it also moves for edits that never touched the
+			// description (over-reporting), it has SECOND resolution, and the check is
+			// read-then-write. Those are exactly the gaps the revision token closes.
+			if ($baseDescriptionRevision === null
+				&& $baseLastModified !== null
+				&& $description !== null
+				&& $card->getLastModified() > $baseLastModified
+				&& $card->getDescription() !== $description) {
+				throw new DescriptionConflictException(
+					(string)$card->getDescription(),
+					$card->getLastModified(),
+					$card->getDescriptionRevision() ?? 0,
 				);
 			}
-			$card->setDescription($description);
-			$descriptionChanged = true;
-		}
-		if ($duedate !== null) {
-			$parsedDue = $this->parseDuedate($duedate);
-			$oldDue = $card->getDuedate();
-			$card->setDuedate($parsedDue);
-			// Clearing the due date also clears the all-day flag (no date to qualify).
-			if ($parsedDue === null) {
-				$card->setAllDay(false);
+
+			// Snapshot the tracked fields BEFORE any setter runs, so the change row can
+			// be stamped with a field-specific verb (#70) when exactly one of them moves.
+			// Dates compare by unix instant (null stays null); status is timestamp-only.
+			$origTitle = $card->getTitle();
+			$origDescription = $card->getDescription();
+			$origDue = $card->getDuedate()?->getTimestamp();
+			$origStart = $card->getStartDate()?->getTimestamp();
+			$origPriority = $card->getPriority();
+			$origEstimate = $card->getEstimate();
+			$origType = $card->getType();
+			// Derived status (done/in_progress/not_started) BEFORE any timestamp setter,
+			// so a timestamp-only status change can record its from/to labels.
+			$origStatus = $this->deriveStatus($card);
+
+			if ($title !== null) {
+				$card->setTitle($this->validateTitle($title));
 			}
-			// Re-arm the due-date reminders (#3545) whenever the due date actually
-			// moves: clear both "already sent" markers so the reminder cron fires
-			// again for the new date. Compared by unix instant (how due dates are
-			// stored/compared elsewhere); a no-op set of the same date leaves the
-			// markers alone so it does not re-spam.
-			if ($oldDue?->getTimestamp() !== $parsedDue?->getTimestamp()) {
-				$card->setDueReminderSent(0);
-				$card->setDayBeforeReminderSent(0);
-			}
-		}
-		if ($dueReminderDayBefore !== null) {
-			$card->setDueReminderDayBefore($dueReminderDayBefore);
-		}
-		if ($allDay !== null) {
-			$card->setAllDay($allDay);
-		}
-		if ($startDate !== null) {
-			// Same wire format + parsing as duedate; '' clears it.
-			$card->setStartDate($this->parseDuedate($startDate));
-		}
-		// An inverted window is invalid: the due date must not fall before the Start
-		// date. Only enforced when this update actually sets a date, so editing an
-		// unrelated field on a card that already carries legacy/imported inverted
-		// dates is never blocked. Equal instants (a zero-length window) are allowed.
-		$windowStart = $card->getStartDate();
-		$windowEnd = $card->getDuedate();
-		if (($startDate !== null || $duedate !== null)
-			&& $windowStart !== null
-			&& $windowEnd !== null
-			&& $windowEnd->getTimestamp() < $windowStart->getTimestamp()) {
-			throw new InvalidInputException('The due date cannot be before the start date');
-		}
-		// `done` is an INPUT ALIAS for `status`, resolved before anything reads
-		// either (#10070). There is no done column - "done" is just the done_at
-		// timestamp, i.e. a status like any other - so a second, parallel write
-		// path for it bought nothing but a hole: `done: true` used to stamp
-		// done_at inline here and reach the done state without ever passing the
-		// review gate or the workflow column mapping, while the identical intent
-		// expressed as `status: 'done'` did both. Collapsing them puts the bulk
-		// action bar, the `d` shortcut and every API client on the single gated,
-		// column-aware path. An explicit $status wins when a caller sends both.
-		if ($done !== null && $status === null) {
-			$status = $done ? 'done' : 'not_started';
-		}
-		if ($archived !== null) {
-			$card->setArchived($archived);
-		}
-		// A status change maps to a workflow column: resolve the target stack up
-		// front so the card can be MOVED there (#54), keeping its board position and
-		// status in lock-step. When no matching column exists (the board doesn't use
-		// that role) the status is applied timestamp-only, exactly as before.
-		$statusMoveTarget = null;
-		$statusAppliedTimestampOnly = false;
-		if ($status !== null) {
-			$statusMoveTarget = $this->resolveStatusMoveTarget($card, $status);
-			if ($statusMoveTarget === null) {
-				$this->applyStatus($card, $status);
-				$statusAppliedTimestampOnly = true;
-			}
-		}
-		if ($visibility !== null) {
-			$this->applyVisibility($card, $board, $visibility, $uid);
-		}
-
-		// Status was the ONLY thing supplied and it maps to a workflow column: hand
-		// straight off to move(), which stamps the status from the target column's
-		// role and writes a single MOVE row - no redundant status-only UPDATE row.
-		// $done is deliberately absent: it was folded into $status above, so a
-		// `done`-only save is a status-only save and takes the move() fast path.
-		$otherFieldSupplied = $title !== null || $description !== null || $duedate !== null
-			|| $archived !== null || $priority !== null || $startDate !== null
-			|| $estimate !== null || $allDay !== null || $dueReminderDayBefore !== null
-			|| $coverColor !== null || $type !== null || $visibility !== null;
-		if ($statusMoveTarget !== null && !$otherFieldSupplied) {
-			return $this->move($id, $statusMoveTarget->getId(), null, $uid);
-		}
-
-		$now = time();
-		$card->setLastModified($now);
-
-		// Field-specific activity verb (#70): collect the tracked fields that
-		// ACTUALLY changed (current value vs the pre-setter snapshot; a set of the
-		// same value counts as unchanged, so a no-op save is not mislabelled). When
-		// exactly ONE tracked field changed we stamp its specific verb; zero or more
-		// than one fall back to the generic VERB_UPDATED. No from/to values (verb
-		// only) - deferred, and no schema change. The status→workflow-column path is
-		// untouched: it becomes a move() (VERB_MOVED) below.
-		$changedVerbs = [];
-		if ($card->getTitle() !== $origTitle) {
-			$changedVerbs[] = Change::VERB_RENAMED;
-		}
-		if ($descriptionChanged || $card->getDescription() !== $origDescription) {
-			$changedVerbs[] = Change::VERB_DESCRIPTION_UPDATED;
-		}
-		if ($card->getDuedate()?->getTimestamp() !== $origDue) {
-			$changedVerbs[] = Change::VERB_DUE_CHANGED;
-		}
-		if ($card->getStartDate()?->getTimestamp() !== $origStart) {
-			$changedVerbs[] = Change::VERB_START_CHANGED;
-		}
-		if ($card->getPriority() !== $origPriority) {
-			$changedVerbs[] = Change::VERB_PRIORITY_CHANGED;
-		}
-		if ($card->getEstimate() !== $origEstimate) {
-			$changedVerbs[] = Change::VERB_ESTIMATE_CHANGED;
-		}
-		if ($card->getType() !== $origType) {
-			$changedVerbs[] = Change::VERB_TYPE_CHANGED;
-		}
-		if ($statusAppliedTimestampOnly) {
-			$changedVerbs[] = Change::VERB_STATUS_CHANGED;
-		}
-		$verb = count($changedVerbs) === 1 ? $changedVerbs[0] : Change::VERB_UPDATED;
-
-		// A single-field save carries a before/after payload so the Activity feed can
-		// show WHAT changed (the description diff, the renamed title, the new due /
-		// start date, the priority/status/estimate/type value). Each side is capped
-		// (multibyte-safe) so the side table can't be bloated by a pathologically long
-		// value; a multi-field save keeps the generic VERB_UPDATED and NO detail.
-		$detail = $this->buildUpdateDetail($verb, $card, [
-			'title' => $origTitle,
-			'description' => $origDescription,
-			'due' => $origDue,
-			'start' => $origStart,
-			'priority' => $origPriority,
-			'estimate' => $origEstimate,
-			'type' => $origType,
-			'status' => $origStatus,
-		]);
-
-		// The description write, INSIDE the transaction that also writes the change
-		// row. Two jobs, both of which have to happen here or not at all:
-		//  - a guarded caller (#9848) claims the revision first, with a single
-		//    conditional UPDATE. 0 rows means another author's description write
-		//    landed in between: bail out, which rolls the whole transaction back
-		//    (no card row, no change row, no realtime push) and surfaces as 409.
-		//    Claiming it OUTSIDE this callback would write the description with no
-		//    change row - delta sync and the board ETag would go quietly wrong.
-		//  - an unguarded caller (existing API clients, the MCP server) keeps
-		//    last-writer-wins, but STILL advances the counter - otherwise its write
-		//    would leave the revision stale and a guarded editor that seeded before
-		//    it would silently overwrite it on its next save. That bump is computed
-		//    in SQL, not from the value this request read before the transaction
-		//    opened, so two overlapping writers cannot stall it or walk it back.
-		// Either way the resulting revision is mirrored onto the entity, so the
-		// response re-seeds the editor with the version this write created.
-		$write = function () use ($card, $id, $descriptionChanged, $baseDescriptionRevision): Card {
-			if ($descriptionChanged) {
-				if ($baseDescriptionRevision === null) {
-					$card->setDescriptionRevision($this->cardMapper->bumpDescriptionRevision($id));
-				} elseif ($this->cardMapper->claimDescriptionRevision($id, $baseDescriptionRevision) === 0) {
-					throw new StaleDescriptionRevisionException();
+			if ($estimate !== null) {
+				// '' clears the estimate; any other value must belong to the board's
+				// scale (which rejects everything when the scale is 'none').
+				if ($estimate === '') {
+					$card->setEstimate(null);
+				} elseif (EstimateScale::allows($board->getEstimateScale(), $estimate, $board->customEstimates())) {
+					$card->setEstimate($board->getEstimateScale() === EstimateScale::NUMBER ? EstimateScale::normalizeNumber($estimate) : $estimate);
 				} else {
-					$card->setDescriptionRevision($baseDescriptionRevision + 1);
+					throw new InvalidInputException('Estimate is not valid for this board\'s scale');
 				}
 			}
-			return $this->cardMapper->update($card);
-		};
+			if ($priority !== null) {
+				if ($priority < Card::PRIORITY_NONE || $priority > Card::PRIORITY_URGENT) {
+					throw new InvalidInputException('Priority must be between 0 and 4');
+				}
+				$card->setPriority($priority);
+			}
+			if ($coverColor !== null) {
+				// Shared colour validation ('' clears the cover; a non-empty value must
+				// be a bare 6-hex string, same as label/stack/board colours).
+				$card->setCoverColor(ColorValidator::assertValid($coverColor));
+			}
+			if ($type !== null) {
+				// '' clears the type (none); any other value must be a built-in type.
+				// The built-in set is fixed (no custom-type editor - #3402's trap).
+				if ($type !== Card::TYPE_NONE && !in_array($type, Card::TYPES, true)) {
+					throw new InvalidInputException('Unknown card type: ' . $type);
+				}
+				$card->setType($type);
+			}
+			$descriptionChanged = false;
+			if ($description !== null && $description !== $card->getDescription()) {
+				// Deliberately checked only when the text actually CHANGES, not on
+				// every write that carries a description: a card stored before this
+				// cap existed stays readable, an unrelated title/date/priority save on
+				// it never trips the limit, and its author can still edit it - as long
+				// as the new text is within the cap, so an over-long row can be edited
+				// DOWN but never re-saved as-is or grown further.
+				if (mb_strlen($description) > self::MAX_DESCRIPTION_LENGTH) {
+					// The message names the number, like every other length validator
+					// here: it is surfaced verbatim by ApiErrorTrait and rendered by the
+					// card editor, and since this ships no character counter it is the
+					// only way a user learns what the limit is.
+					throw new InvalidInputException(
+						'Description must not exceed ' . self::MAX_DESCRIPTION_LENGTH . ' characters'
+					);
+				}
+				$card->setDescription($description);
+				$descriptionChanged = true;
+			}
+			if ($duedate !== null) {
+				$parsedDue = $this->parseDuedate($duedate);
+				$oldDue = $card->getDuedate();
+				$card->setDuedate($parsedDue);
+				// Clearing the due date also clears the all-day flag (no date to qualify).
+				if ($parsedDue === null) {
+					$card->setAllDay(false);
+				}
+				// Re-arm the due-date reminders (#3545) whenever the due date actually
+				// moves: clear both "already sent" markers so the reminder cron fires
+				// again for the new date. Compared by unix instant (how due dates are
+				// stored/compared elsewhere); a no-op set of the same date leaves the
+				// markers alone so it does not re-spam.
+				if ($oldDue?->getTimestamp() !== $parsedDue?->getTimestamp()) {
+					$card->setDueReminderSent(0);
+					$card->setDayBeforeReminderSent(0);
+				}
+			}
+			if ($dueReminderDayBefore !== null) {
+				$card->setDueReminderDayBefore($dueReminderDayBefore);
+			}
+			if ($allDay !== null) {
+				$card->setAllDay($allDay);
+			}
+			if ($startDate !== null) {
+				// Same wire format + parsing as duedate; '' clears it.
+				$card->setStartDate($this->parseDuedate($startDate));
+			}
+			// An inverted window is invalid: the due date must not fall before the Start
+			// date. Only enforced when this update actually sets a date, so editing an
+			// unrelated field on a card that already carries legacy/imported inverted
+			// dates is never blocked. Equal instants (a zero-length window) are allowed.
+			$windowStart = $card->getStartDate();
+			$windowEnd = $card->getDuedate();
+			if (($startDate !== null || $duedate !== null)
+				&& $windowStart !== null
+				&& $windowEnd !== null
+				&& $windowEnd->getTimestamp() < $windowStart->getTimestamp()) {
+				throw new InvalidInputException('The due date cannot be before the start date');
+			}
+			// `done` is an INPUT ALIAS for `status`, resolved before anything reads
+			// either (#10070). There is no done column - "done" is just the done_at
+			// timestamp, i.e. a status like any other - so a second, parallel write
+			// path for it bought nothing but a hole: `done: true` used to stamp
+			// done_at inline here and reach the done state without ever passing the
+			// review gate or the workflow column mapping, while the identical intent
+			// expressed as `status: 'done'` did both. Collapsing them puts the bulk
+			// action bar, the `d` shortcut and every API client on the single gated,
+			// column-aware path. An explicit $status wins when a caller sends both.
+			if ($done !== null && $status === null) {
+				$status = $done ? 'done' : 'not_started';
+			}
+			if ($archived !== null) {
+				$card->setArchived($archived);
+			}
+			// A status change maps to a workflow column: resolve the target stack up
+			// front so the card can be MOVED there (#54), keeping its board position and
+			// status in lock-step. When no matching column exists (the board doesn't use
+			// that role) the status is applied timestamp-only, exactly as before.
+			$statusMoveTarget = null;
+			$statusAppliedTimestampOnly = false;
+			if ($status !== null) {
+				$statusMoveTarget = $this->resolveStatusMoveTarget($card, $status);
+				if ($statusMoveTarget === null) {
+					$this->applyStatus($card, $status);
+					$statusAppliedTimestampOnly = true;
+				}
+			}
+			if ($visibility !== null) {
+				$this->applyVisibility($card, $board, $visibility, $uid);
+			}
 
-		// Atomic entity-write + change-row (#3579): the UPDATE and its delta-sync
-		// row commit together (or roll back together); the realtime push fires only
-		// after commit. Side effects below (mentions, parent auto-complete) run
-		// after the card + its change row have landed.
-		try {
-			$card = $this->writeCardChange(
-				$card->getBoardId(),
-				$id,
-				Change::ACTION_UPDATE,
-				$uid,
-				$verb,
-				$write,
-				$detail,
-			);
-		} catch (StaleDescriptionRevisionException) {
-			// writeCardChange has already rolled back. Re-read OUTSIDE the doomed
-			// transaction (no isolation-level assumptions) so the 409 carries the
-			// winner's text and the revision a retry must be based on. A raw
-			// mapper read is safe here: this is the same card whose permission and
-			// visibility were asserted at the top of this method.
-			$current = $this->cardMapper->find($id);
-			throw new DescriptionConflictException(
-				(string)$current->getDescription(),
-				$current->getLastModified(),
-				$current->getDescriptionRevision() ?? 0,
-			);
-		}
+			// Status was the ONLY thing supplied and it maps to a workflow column: hand
+			// straight off to move(), which stamps the status from the target column's
+			// role and writes a single MOVE row - no redundant status-only UPDATE row.
+			// $done is deliberately absent: it was folded into $status above, so a
+			// `done`-only save is a status-only save and takes the move() fast path.
+			$otherFieldSupplied = $title !== null || $description !== null || $duedate !== null
+				|| $archived !== null || $priority !== null || $startDate !== null
+				|| $estimate !== null || $allDay !== null || $dueReminderDayBefore !== null
+				|| $coverColor !== null || $type !== null || $visibility !== null;
+			if ($statusMoveTarget !== null && !$otherFieldSupplied) {
+				return $this->move($id, $statusMoveTarget->getId(), null, $uid);
+			}
 
-		// If this card drives a repeat and its schedule anchor (Start/due date) just
-		// moved, re-point the series so future occurrences follow the new dates -
-		// what a user naturally expects when they reschedule a repeating card. A
-		// non-template card has no rules, so this is a cheap no-op. Resolved lazily
-		// to avoid the RecurrenceService↔CardService constructor cycle.
-		if ($card->getStartDate()?->getTimestamp() !== $origStart
-			|| $card->getDuedate()?->getTimestamp() !== $origDue) {
-			$this->container->get(RecurrenceService::class)->rearmForTemplateCard($card);
-		}
+			$now = time();
+			$card->setLastModified($now);
 
-		// A new @mention in the description pings + auto-subscribes readable-board
-		// participants (only when the description actually changed). Suppressed
-		// when the text did not come from $uid - see $notifyMentions above.
-		if ($descriptionChanged && $notifyMentions) {
-			$this->mentionService->handleMentions($card, $board, (string)$description, $uid);
-		}
+			// Field-specific activity verb (#70): collect the tracked fields that
+			// ACTUALLY changed (current value vs the pre-setter snapshot; a set of the
+			// same value counts as unchanged, so a no-op save is not mislabelled). When
+			// exactly ONE tracked field changed we stamp its specific verb; zero or more
+			// than one fall back to the generic VERB_UPDATED. No from/to values (verb
+			// only) - deferred, and no schema change. The status→workflow-column path is
+			// untouched: it becomes a move() (VERB_MOVED) below.
+			$changedVerbs = [];
+			if ($card->getTitle() !== $origTitle) {
+				$changedVerbs[] = Change::VERB_RENAMED;
+			}
+			if ($descriptionChanged || $card->getDescription() !== $origDescription) {
+				$changedVerbs[] = Change::VERB_DESCRIPTION_UPDATED;
+			}
+			if ($card->getDuedate()?->getTimestamp() !== $origDue) {
+				$changedVerbs[] = Change::VERB_DUE_CHANGED;
+			}
+			if ($card->getStartDate()?->getTimestamp() !== $origStart) {
+				$changedVerbs[] = Change::VERB_START_CHANGED;
+			}
+			if ($card->getPriority() !== $origPriority) {
+				$changedVerbs[] = Change::VERB_PRIORITY_CHANGED;
+			}
+			if ($card->getEstimate() !== $origEstimate) {
+				$changedVerbs[] = Change::VERB_ESTIMATE_CHANGED;
+			}
+			if ($card->getType() !== $origType) {
+				$changedVerbs[] = Change::VERB_TYPE_CHANGED;
+			}
+			if ($statusAppliedTimestampOnly) {
+				$changedVerbs[] = Change::VERB_STATUS_CHANGED;
+			}
+			$verb = count($changedVerbs) === 1 ? $changedVerbs[0] : Change::VERB_UPDATED;
 
-		// Completing (or archiving) the last open child auto-completes the parent.
-		$this->maybeCompleteParent($card, $uid);
+			// A single-field save carries a before/after payload so the Activity feed can
+			// show WHAT changed (the description diff, the renamed title, the new due /
+			// start date, the priority/status/estimate/type value). Each side is capped
+			// (multibyte-safe) so the side table can't be bloated by a pathologically long
+			// value; a multi-field save keeps the generic VERB_UPDATED and NO detail.
+			$detail = $this->buildUpdateDetail($verb, $card, [
+				'title' => $origTitle,
+				'description' => $origDescription,
+				'due' => $origDue,
+				'start' => $origStart,
+				'priority' => $origPriority,
+				'estimate' => $origEstimate,
+				'type' => $origType,
+				'status' => $origStatus,
+			]);
 
-		// Other fields changed alongside the status: they are persisted now, so move
-		// the card into the column mapped to its new status (#54).
-		if ($statusMoveTarget !== null) {
-			return $this->move($id, $statusMoveTarget->getId(), null, $uid);
-		}
+			// The description write, INSIDE the transaction that also writes the change
+			// row. Two jobs, both of which have to happen here or not at all:
+			//  - a guarded caller (#9848) claims the revision first, with a single
+			//    conditional UPDATE. 0 rows means another author's description write
+			//    landed in between: bail out, which rolls the whole transaction back
+			//    (no card row, no change row, no realtime push) and surfaces as 409.
+			//    Claiming it OUTSIDE this callback would write the description with no
+			//    change row - delta sync and the board ETag would go quietly wrong.
+			//  - an unguarded caller (existing API clients, the MCP server) keeps
+			//    last-writer-wins, but STILL advances the counter - otherwise its write
+			//    would leave the revision stale and a guarded editor that seeded before
+			//    it would silently overwrite it on its next save. That bump is computed
+			//    in SQL, not from the value this request read before the transaction
+			//    opened, so two overlapping writers cannot stall it or walk it back.
+			// Either way the resulting revision is mirrored onto the entity, so the
+			// response re-seeds the editor with the version this write created.
+			$write = function () use ($card, $id, $descriptionChanged, $baseDescriptionRevision): Card {
+				if ($descriptionChanged) {
+					if ($baseDescriptionRevision === null) {
+						$card->setDescriptionRevision($this->cardMapper->bumpDescriptionRevision($id));
+					} elseif ($this->cardMapper->claimDescriptionRevision($id, $baseDescriptionRevision) === 0) {
+						throw new StaleDescriptionRevisionException();
+					} else {
+						$card->setDescriptionRevision($baseDescriptionRevision + 1);
+					}
+				}
+				return $this->cardMapper->update($card);
+			};
 
-		return $card;
+			// Atomic entity-write + change-row (#3579): the UPDATE and its delta-sync
+			// row commit together (or roll back together); the realtime push fires only
+			// after commit. Side effects below (mentions, parent auto-complete) run
+			// after the card + its change row have landed.
+			try {
+				$card = $this->writeCardChange(
+					$card->getBoardId(),
+					$id,
+					Change::ACTION_UPDATE,
+					$uid,
+					$verb,
+					$write,
+					$detail,
+				);
+			} catch (StaleDescriptionRevisionException) {
+				// writeCardChange has already rolled back. Re-read OUTSIDE the doomed
+				// transaction (no isolation-level assumptions) so the 409 carries the
+				// winner's text and the revision a retry must be based on. A raw
+				// mapper read is safe here: this is the same card whose permission and
+				// visibility were asserted at the top of this method.
+				$current = $this->cardMapper->find($id);
+				throw new DescriptionConflictException(
+					(string)$current->getDescription(),
+					$current->getLastModified(),
+					$current->getDescriptionRevision() ?? 0,
+				);
+			}
+
+			// If this card drives a repeat and its schedule anchor (Start/due date) just
+			// moved, re-point the series so future occurrences follow the new dates -
+			// what a user naturally expects when they reschedule a repeating card. A
+			// non-template card has no rules, so this is a cheap no-op. Resolved lazily
+			// to avoid the RecurrenceService↔CardService constructor cycle.
+			if ($card->getStartDate()?->getTimestamp() !== $origStart
+				|| $card->getDuedate()?->getTimestamp() !== $origDue) {
+				$this->container->get(RecurrenceService::class)->rearmForTemplateCard($card);
+			}
+
+			// A new @mention in the description pings + auto-subscribes readable-board
+			// participants (only when the description actually changed). Suppressed
+			// when the text did not come from $uid - see $notifyMentions above.
+			if ($descriptionChanged && $notifyMentions) {
+				$this->mentionService->handleMentions($card, $board, (string)$description, $uid);
+			}
+
+			// Completing (or archiving) the last open child auto-completes the parent.
+			$this->maybeCompleteParent($card, $uid);
+
+			// Other fields changed alongside the status: they are persisted now, so move
+			// the card into the column mapped to its new status (#54).
+			if ($statusMoveTarget !== null) {
+				return $this->move($id, $statusMoveTarget->getId(), null, $uid);
+			}
+
+			return $card;
+		});
 	}
 
 	/**
@@ -1347,34 +1314,36 @@ class CardService {
 	 * @throws NotPermittedException if the user may not edit the board
 	 */
 	public function delete(int $id, string $uid): void {
-		$card = $this->loadCard($id);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $uid);
+		$this->cardMutation->run($id, function () use ($id, $uid): void {
+			$card = $this->loadCard($id);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $uid);
 
-		$now = time();
+			$now = time();
 
-		// Detach children, soft-delete the card and append the DELETE change row
-		// atomically (#3579): the child clears, the delete and its delta-sync row
-		// commit together, so a client never sees a detached child without the
-		// parent's DELETE row (or vice versa). Push after commit.
-		$this->writeCardChange(
-			$card->getBoardId(),
-			$id,
-			Change::ACTION_DELETE,
-			$uid,
-			Change::VERB_DELETED,
-			function () use ($id, $card, $now): Card {
-				foreach ($this->cardMapper->findChildren($id) as $child) {
-					$child->setParentCardId(null);
-					$child->setLastModified($now);
-					$this->cardMapper->update($child);
-				}
-				$card->setDeletedAt($now);
-				$card->setLastModified($now);
-				return $this->cardMapper->update($card);
-			},
-		);
+			// Detach children, soft-delete the card and append the DELETE change row
+			// atomically (#3579): the child clears, the delete and its delta-sync row
+			// commit together, so a client never sees a detached child without the
+			// parent's DELETE row (or vice versa). Push after commit.
+			$this->writeCardChange(
+				$card->getBoardId(),
+				$id,
+				Change::ACTION_DELETE,
+				$uid,
+				Change::VERB_DELETED,
+				function () use ($id, $card, $now): Card {
+					foreach ($this->cardMapper->findChildren($id) as $child) {
+						$child->setParentCardId(null);
+						$child->setLastModified($now);
+						$this->cardMapper->update($child);
+					}
+					$card->setDeletedAt($now);
+					$card->setLastModified($now);
+					return $this->cardMapper->update($card);
+				},
+			);
+		});
 	}
 
 	/**
@@ -1396,64 +1365,66 @@ class CardService {
 	 * @throws \OverflowException if the new sort key would overflow (stack needs a rebalance) or keeps colliding after one retry
 	 */
 	public function move(int $id, int $targetStackId, ?int $afterCardId, string $uid): Card {
-		$card = $this->loadCard($id);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $uid);
+		return $this->cardMutation->run($id, function () use ($id, $targetStackId, $afterCardId, $uid): Card {
+			$card = $this->loadCard($id);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $uid);
 
-		$targetStack = $this->loadStack($targetStackId);
-		if ($targetStack->getBoardId() !== $card->getBoardId()) {
-			throw new InvalidInputException('Cannot move a card to a stack on another board');
-		}
-
-		// Source stack role for the done-automation. A move within the same
-		// stack keeps the target's role - done state then stays put.
-		$sourceStack = $targetStackId === $card->getStackId()
-			? $targetStack
-			: $this->stackMapper->find($card->getStackId());
-
-		// Review gate: a card may not be stamped done while any requested review is
-		// still unapproved. The condition is the CARD's review state plus the
-		// target's role - deliberately NOT the source role (#10070). Keying it on a
-		// review→done role PAIR made the gate launderable by an extra hop: Review →
-		// any role-less column → Done, two ordinary drags, defeated it because the
-		// second hop's source carries ROLE_NONE. Role-less columns are the default
-		// on every fresh and imported board, so such a column is nearly always at
-		// hand. An already-done card is exempt: this move does not complete it, it
-		// only relocates a card that already passed the gate. Reviews are opt-in per
-		// card, so a card nobody requested a review on never trips this and a board
-		// that does not use reviews is untouched. Pure precondition, checked once
-		// before the write/retry loop so it fails fast without a DB write.
-		if ($targetStack->getRole() === Stack::ROLE_DONE && ($card->getDoneAt() ?? 0) === 0) {
-			$this->assertReviewsApproved($id);
-		}
-
-		for ($attempt = 0; ; $attempt++) {
-			$afterCard = $afterCardId === null
-				? null
-				: $this->loadAfterCard($afterCardId, $targetStackId, $id, $board, $uid);
-			try {
-				$moved = $this->persistMove($card, $targetStackId, $afterCard, $sourceStack, $targetStack, $uid);
-				// Moving the last open child into a done-role stack (which stamps
-				// it done) auto-completes the parent.
-				$this->maybeCompleteParent($moved, $uid);
-				// A move into a DIFFERENT stack fires the board's card_entered_role
-				// automation rules (best-effort; runs after the move is committed).
-				if ($targetStackId !== $sourceStack->getId()) {
-					$this->automationService->runCardEnteredRole($moved, $targetStack->getRole(), $uid);
-				}
-				return $moved;
-			} catch (\OCP\DB\Exception $e) {
-				if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
-					throw $e;
-				}
-				if ($attempt >= 1) {
-					throw new \OverflowException('sort key conflict on move after retry', 0, $e);
-				}
-				// Discard the mutations from the rolled-back attempt before retrying.
-				$card = $this->loadCard($id);
+			$targetStack = $this->loadStack($targetStackId);
+			if ($targetStack->getBoardId() !== $card->getBoardId()) {
+				throw new InvalidInputException('Cannot move a card to a stack on another board');
 			}
-		}
+
+			// Source stack role for the done-automation. A move within the same
+			// stack keeps the target's role - done state then stays put.
+			$sourceStack = $targetStackId === $card->getStackId()
+				? $targetStack
+				: $this->stackMapper->find($card->getStackId());
+
+			// Review gate: a card may not be stamped done while any requested review is
+			// still unapproved. The condition is the CARD's review state plus the
+			// target's role - deliberately NOT the source role (#10070). Keying it on a
+			// review→done role PAIR made the gate launderable by an extra hop: Review →
+			// any role-less column → Done, two ordinary drags, defeated it because the
+			// second hop's source carries ROLE_NONE. Role-less columns are the default
+			// on every fresh and imported board, so such a column is nearly always at
+			// hand. An already-done card is exempt: this move does not complete it, it
+			// only relocates a card that already passed the gate. Reviews are opt-in per
+			// card, so a card nobody requested a review on never trips this and a board
+			// that does not use reviews is untouched. Pure precondition, checked once
+			// before the write/retry loop so it fails fast without a DB write.
+			if ($targetStack->getRole() === Stack::ROLE_DONE && ($card->getDoneAt() ?? 0) === 0) {
+				$this->assertReviewsApproved($id);
+			}
+
+			for ($attempt = 0; ; $attempt++) {
+				$afterCard = $afterCardId === null
+					? null
+					: $this->loadAfterCard($afterCardId, $targetStackId, $id, $board, $uid);
+				try {
+					$moved = $this->persistMove($card, $targetStackId, $afterCard, $sourceStack, $targetStack, $uid);
+					// Moving the last open child into a done-role stack (which stamps
+					// it done) auto-completes the parent.
+					$this->maybeCompleteParent($moved, $uid);
+					// A move into a DIFFERENT stack fires the board's card_entered_role
+					// automation rules (best-effort; runs after the move is committed).
+					if ($targetStackId !== $sourceStack->getId()) {
+						$this->automationService->runCardEnteredRole($moved, $targetStack->getRole(), $uid);
+					}
+					return $moved;
+				} catch (\OCP\DB\Exception $e) {
+					if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+						throw $e;
+					}
+					if ($attempt >= 1) {
+						throw new \OverflowException('sort key conflict on move after retry', 0, $e);
+					}
+					// Discard the mutations from the rolled-back attempt before retrying.
+					$card = $this->loadCard($id);
+				}
+			}
+		});
 	}
 
 	/**
@@ -1554,54 +1525,56 @@ class CardService {
 	 * @throws InvalidInputException if the parent is invalid (self, other board, deleted, or the one-level rule is violated)
 	 */
 	public function setParent(int $id, ?int $parentCardId, string $uid): Card {
-		$card = $this->loadCard($id);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $uid);
+		return $this->cardMutation->run($id, function () use ($id, $parentCardId, $uid): Card {
+			$card = $this->loadCard($id);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $uid);
 
-		if ($parentCardId === null) {
-			if ($card->getParentCardId() === null) {
-				return $card;
+			if ($parentCardId === null) {
+				if ($card->getParentCardId() === null) {
+					return $card;
+				}
+				$card->setParentCardId(null);
+			} else {
+				if ($parentCardId === $id) {
+					throw new InvalidInputException('A card cannot be its own parent');
+				}
+				$parent = $this->loadParentCard($parentCardId);
+				// A parent the actor cannot SEE reads as missing (#3743) - same
+				// masking as loadParentCard's absence case, no existence oracle.
+				if (!$this->visibilityGuard->isVisible($board, $parent, $uid)) {
+					throw new InvalidInputException('Parent card ' . $parentCardId . ' does not exist');
+				}
+				if ($parent->getBoardId() !== $card->getBoardId()) {
+					throw new InvalidInputException('Parent card must be on the same board');
+				}
+				if ($parent->getParentCardId() !== null) {
+					throw new InvalidInputException('Cards can only be nested one level deep');
+				}
+				if ($this->cardMapper->hasChildren($id)) {
+					throw new InvalidInputException('A card that has children cannot become a child');
+				}
+				if ($card->getParentCardId() === $parentCardId) {
+					return $card;
+				}
+				$card->setParentCardId($parentCardId);
 			}
-			$card->setParentCardId(null);
-		} else {
-			if ($parentCardId === $id) {
-				throw new InvalidInputException('A card cannot be its own parent');
-			}
-			$parent = $this->loadParentCard($parentCardId);
-			// A parent the actor cannot SEE reads as missing (#3743) - same
-			// masking as loadParentCard's absence case, no existence oracle.
-			if (!$this->visibilityGuard->isVisible($board, $parent, $uid)) {
-				throw new InvalidInputException('Parent card ' . $parentCardId . ' does not exist');
-			}
-			if ($parent->getBoardId() !== $card->getBoardId()) {
-				throw new InvalidInputException('Parent card must be on the same board');
-			}
-			if ($parent->getParentCardId() !== null) {
-				throw new InvalidInputException('Cards can only be nested one level deep');
-			}
-			if ($this->cardMapper->hasChildren($id)) {
-				throw new InvalidInputException('A card that has children cannot become a child');
-			}
-			if ($card->getParentCardId() === $parentCardId) {
-				return $card;
-			}
-			$card->setParentCardId($parentCardId);
-		}
 
-		$card->setLastModified(time());
+			$card->setLastModified(time());
 
-		// Atomic entity-write + change-row (#3579); push after commit.
-		$card = $this->writeCardChange(
-			$card->getBoardId(),
-			$id,
-			Change::ACTION_UPDATE,
-			$uid,
-			Change::VERB_UPDATED,
-			fn (): Card => $this->cardMapper->update($card),
-		);
+			// Atomic entity-write + change-row (#3579); push after commit.
+			$card = $this->writeCardChange(
+				$card->getBoardId(),
+				$id,
+				Change::ACTION_UPDATE,
+				$uid,
+				Change::VERB_UPDATED,
+				fn (): Card => $this->cardMapper->update($card),
+			);
 
-		return $card;
+			return $card;
+		});
 	}
 
 	/**
@@ -1823,84 +1796,16 @@ class CardService {
 	}
 
 	/**
-	 * Auto-completes a parent card once ALL of its children are resolved (done
-	 * or archived) AND its own checklist is fully done - the "all children done
-	 * → parent done" workflow. Gated by the board's `autoCompleteParent` setting
-	 * (#198), which is OFF by default: a parent is only stamped done this way
-	 * when the board owner has opted in. Called from a CHILD's update()/move()
-	 * after it persists; a card with no parent is a fast no-op (the common case).
-	 * Forward-only for v1: it never RE-OPENS a parent (a parent a human marked
-	 * done is left alone), and since the hierarchy is one level (a parent has no
-	 * parent) stamping it done cannot cascade - no loop guard needed.
+	 * @internal Call after persisting the child under its mutation fence.
+	 * Archived children count as resolved; completed parents never reopen.
+	 * Batch callers suppress the push and emit one after their writes commit.
 	 */
-	private function maybeCompleteParent(Card $child, string $uid): void {
+	public function maybeCompleteParent(Card $child, ?string $uid, bool $push = true): void {
 		$parentId = $child->getParentCardId();
-		if ($parentId === null) {
+		if ($parentId === null || $child->getDeletedAt() > 0 || ($child->getDoneAt() === 0 && !$child->getArchived())) {
 			return;
 		}
-		try {
-			$parent = $this->cardMapper->find($parentId);
-		} catch (DoesNotExistException) {
-			return;
-		}
-		if ($parent->getDeletedAt() > 0 || $parent->getDoneAt() > 0) {
-			return;
-		}
-
-		// This automation is OPT-IN per board (#198): OFF by default, so a parent
-		// is never stamped done just because its subcards are resolved unless the
-		// board owner has explicitly enabled it. A NULL column reads as OFF, so
-		// boards that predate the column keep the manual "mark the parent done"
-		// behaviour. Checked first so the common (off) case skips the children and
-		// review queries entirely.
-		try {
-			$board = $this->boardMapper->find($parent->getBoardId());
-		} catch (DoesNotExistException) {
-			return;
-		}
-		if ($board->getAutoCompleteParent() !== true) {
-			return;
-		}
-
-		foreach ($this->cardMapper->findChildren($parentId) as $sibling) {
-			if ($sibling->getDoneAt() === 0 && !$sibling->getArchived()) {
-				return; // an unresolved child remains
-			}
-		}
-
-		// A parent that still has open checklist steps of its own must not be stamped
-		// done just because its subcards are resolved (#198): the checklist is part of
-		// the parent's own work, so it is a precondition for auto-completion too. An
-		// itemless parent (or one whose steps are all done) passes.
-		foreach ($this->checklistItemMapper->findByCard($parentId) as $item) {
-			if (!$item->getDone()) {
-				return; // an open checklist step remains
-			}
-		}
-
-		// The parent is about to be stamped done, so it passes the same review gate
-		// as every explicit route (#10070) - finishing the last subtask must not
-		// quietly complete a parent whose own reviews are still unapproved. This one
-		// is an automation triggered by a DIFFERENT card's write, so it declines
-		// SILENTLY rather than throwing: the child's completion stands and the
-		// parent simply stays open until its reviews are approved.
-		if ($this->cardReviewMapper->hasUnapprovedReviews($parentId)) {
-			return;
-		}
-
-		$now = time();
-		$parent->setDoneAt($now);
-		$parent->setLastModified($now);
-
-		// Atomic entity-write + change-row (#3579); push after commit.
-		$this->writeCardChange(
-			$parent->getBoardId(),
-			$parentId,
-			Change::ACTION_UPDATE,
-			$uid,
-			Change::VERB_UPDATED,
-			fn (): Card => $this->cardMapper->update($parent),
-		);
+		$this->parentCompletion->maybeComplete($parentId, $child->getBoardId(), $uid, $push);
 	}
 
 	/**
@@ -1923,7 +1828,7 @@ class CardService {
 	 * @param array{from: ?string, to: ?string}|null $detail before/after payload
 	 * @throws \Throwable rethrows whatever the write or the change-row insert throws
 	 */
-	private function writeCardChange(int $boardId, int $entityId, int $action, ?string $uid, ?int $verb, callable $write, ?array $detail = null): Card {
+	private function writeCardChange(int $boardId, int $entityId, int $action, ?string $uid, ?int $verb, callable $write, ?array $detail = null, bool $push = true): Card {
 		$this->db->beginTransaction();
 		try {
 			$card = $write();
@@ -1947,7 +1852,9 @@ class CardService {
 		}
 
 		// Commit succeeded - now it is safe to broadcast.
-		$this->changeNotifier->pushBoardChanged($boardId);
+		if ($push) {
+			$this->changeNotifier->pushBoardChanged($boardId);
+		}
 
 		return $card;
 	}

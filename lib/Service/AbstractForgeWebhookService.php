@@ -210,6 +210,7 @@ abstract class AbstractForgeWebhookService {
 		protected IURLGenerator $urlGenerator,
 		protected LabelService $labelService,
 		protected LabelMapper $labelMapper,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -364,31 +365,33 @@ abstract class AbstractForgeWebhookService {
 	 * @throws NotPermittedException if the signature is missing or invalid
 	 */
 	public function handleWebhook(int $boardId, string $signatureHeader, string $rawBody): array {
-		$board = $this->loadBoard($boardId);
-		$this->verifySignature($board, $signatureHeader, $rawBody);
+		return $this->cardMutation->runForBoards([$boardId], function () use ($boardId, $signatureHeader, $rawBody): array {
+			$board = $this->loadBoard($boardId);
+			$this->verifySignature($board, $signatureHeader, $rawBody);
 
-		$payload = json_decode($rawBody, true);
-		if (json_last_error() !== JSON_ERROR_NONE) {
-			// Not JSON at all - in practice the webhook was created with the forge's
-			// `application/x-www-form-urlencoded` content type, which sends the JSON
-			// wrapped as `payload=<urlencoded>`. The forge signs whatever it sends,
-			// so that body PASSES the HMAC check above and would otherwise be
-			// recorded as a green 200 while nothing happens on the board -
-			// undiagnosable from the delivery log. Say so instead: the controller
-			// maps this to a 400.
-			throw new NonJsonWebhookBodyException('Webhook body is not JSON - set the webhook Content type to application/json');
-		}
-		if (!is_array($payload)) {
-			// Valid JSON that is a bare scalar / null - accepted, nothing to do (#3477).
-			return $this->noop(self::REASON_MALFORMED_PAYLOAD);
-		}
+			$payload = json_decode($rawBody, true);
+			if (json_last_error() !== JSON_ERROR_NONE) {
+				// Not JSON at all - in practice the webhook was created with the forge's
+				// `application/x-www-form-urlencoded` content type, which sends the JSON
+				// wrapped as `payload=<urlencoded>`. The forge signs whatever it sends,
+				// so that body PASSES the HMAC check above and would otherwise be
+				// recorded as a green 200 while nothing happens on the board -
+				// undiagnosable from the delivery log. Say so instead: the controller
+				// maps this to a 400.
+				throw new NonJsonWebhookBodyException('Webhook body is not JSON - set the webhook Content type to application/json');
+			}
+			if (!is_array($payload)) {
+				// Valid JSON that is a bare scalar / null - accepted, nothing to do (#3477).
+				return $this->noop(self::REASON_MALFORMED_PAYLOAD);
+			}
 
-		$event = $this->normalize($payload);
-		return match ($event->kind) {
-			ForgeEvent::KIND_PR => $this->handlePullRequestEvent($board, $event),
-			ForgeEvent::KIND_ISSUE => $this->handleIssueEvent($board, $event),
-			default => $this->noop(self::REASON_UNSUPPORTED_EVENT),
-		};
+			$event = $this->normalize($payload);
+			return match ($event->kind) {
+				ForgeEvent::KIND_PR => $this->handlePullRequestEvent($board, $event),
+				ForgeEvent::KIND_ISSUE => $this->handleIssueEvent($board, $event),
+				default => $this->noop(self::REASON_UNSUPPORTED_EVENT),
+			};
+		});
 	}
 
 	/**

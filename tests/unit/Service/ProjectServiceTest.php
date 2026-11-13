@@ -15,6 +15,8 @@ use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardAssigneeMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardMoveAlias;
+use OCA\Kanso\Db\CardMoveAliasMapper;
 use OCA\Kanso\Db\Project;
 use OCA\Kanso\Db\ProjectCardMapper;
 use OCA\Kanso\Db\ProjectCommentMapper;
@@ -29,6 +31,7 @@ use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\ProjectForecast;
 use OCA\Kanso\Service\ProjectService;
+use OCA\Kanso\Service\ShareeSearchService;
 use OCA\Kanso\Service\StatsService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IDBConnection;
@@ -47,6 +50,7 @@ class ProjectServiceTest extends TestCase {
 	private BoardService&MockObject $boardService;
 	private PermissionService&MockObject $permissionService;
 	private CardMapper&MockObject $cardMapper;
+	private CardMoveAliasMapper&MockObject $moveAliases;
 	private BoardMapper&MockObject $boardMapper;
 	private StatsService&MockObject $statsService;
 	private BoardAccess&MockObject $boardAccess;
@@ -58,6 +62,8 @@ class ProjectServiceTest extends TestCase {
 	private IDBConnection&MockObject $db;
 	private IGroupManager&MockObject $groupManager;
 	private IUserManager&MockObject $userManager;
+	private ShareeSearchService&MockObject $shareeSearch;
+	private \OCA\Kanso\Service\CardMutationService&MockObject $mutation;
 	private ProjectService $service;
 
 	protected function setUp(): void {
@@ -67,6 +73,7 @@ class ProjectServiceTest extends TestCase {
 		$this->boardService = $this->createMock(BoardService::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
+		$this->moveAliases = $this->createMock(CardMoveAliasMapper::class);
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->statsService = $this->createMock(StatsService::class);
 		$this->boardAccess = $this->createMock(BoardAccess::class);
@@ -79,6 +86,8 @@ class ProjectServiceTest extends TestCase {
 		$this->db = $this->createMock(IDBConnection::class);
 		$this->groupManager = $this->createMock(IGroupManager::class);
 		$this->userManager = $this->createMock(IUserManager::class);
+		$this->shareeSearch = $this->createMock(ShareeSearchService::class);
+		$this->mutation = $this->cardMutation();
 		$this->service = new ProjectService(
 			$this->projectMapper,
 			$this->projectCardMapper,
@@ -98,6 +107,9 @@ class ProjectServiceTest extends TestCase {
 			$this->userManager,
 			$this->db,
 			$this->groupManager,
+			$this->shareeSearch,
+			$this->mutation,
+			$this->moveAliases,
 		);
 	}
 
@@ -290,7 +302,8 @@ class ProjectServiceTest extends TestCase {
 
 	public function testOwnerCanRemoveACardTheyLostAccessTo(): void {
 		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
-		$this->cardMapper->expects(self::never())->method('find');
+		$this->cardMapper->method('find')->with(9)->willReturn($this->card(1));
+		$this->permissionService->expects(self::never())->method('assertPermission');
 		$this->projectCardMapper->expects(self::once())->method('remove')->with(5, 9);
 		$this->service->removeCard(5, 9, 'alice');
 	}
@@ -334,6 +347,149 @@ class ProjectServiceTest extends TestCase {
 			->with(self::callback(fn (Project $p): bool => $p->getStartDate() === '2026-10-01' && $p->getTargetDate() === '2026-11-15'))
 			->willReturnArgument(0);
 		$this->service->create('alice', 'Dated', null, null, '2026-10-01', '2026-11-15');
+	}
+
+	public function testCreateDefaultsToPlannedWithoutALeadOrSharing(): void {
+		$this->projectMapper->method('insert')->willReturnArgument(0);
+		$this->shareMapper->expects(self::never())->method('insert');
+		$this->shareeSearch->expects(self::never())->method('resolveParticipant');
+
+		$project = $this->service->create('alice', 'New', null, null)->jsonSerialize();
+
+		self::assertNull($project['lead']);
+		self::assertSame('planned', $project['lifecycleStatus']);
+	}
+
+	public function testCreateStoresACanonicalLeadWithoutGrantingAccess(): void {
+		$this->shareeSearch->expects(self::once())->method('resolveParticipant')->with(Acl::TYPE_USER, 'Bob', 'alice')->willReturn('bob');
+		$this->shareMapper->expects(self::never())->method('insert');
+		$this->projectMapper->method('insert')->willReturnArgument(0);
+
+		$project = $this->service->create('alice', 'New', null, null, lead: 'Bob', lifecycleStatus: 'in_progress')->jsonSerialize();
+
+		self::assertSame('bob', $project['lead']);
+		self::assertSame('in_progress', $project['lifecycleStatus']);
+		self::assertSame('alice', $project['owner']);
+	}
+
+	public function testCreateCanSelectSelfWithoutSharingEnabled(): void {
+		$this->shareeSearch->expects(self::never())->method('resolveParticipant');
+		$this->projectMapper->method('insert')->willReturnArgument(0);
+
+		self::assertSame('alice', $this->service->create('alice', 'New', null, null, lead: 'alice')->getLead());
+	}
+
+	public function testCreateRejectsAForbiddenOrUnknownLead(): void {
+		$this->shareeSearch->method('resolveParticipant')->willThrowException(new InvalidInputException('Cannot share with this participant'));
+		$this->projectMapper->expects(self::never())->method('insert');
+		$this->expectException(InvalidInputException::class);
+
+		$this->service->create('alice', 'New', null, null, lead: 'unknown');
+	}
+
+	public function testCreateRejectsForecastHealthAsLifecycle(): void {
+		$this->projectMapper->expects(self::never())->method('insert');
+		$this->expectException(InvalidInputException::class);
+
+		$this->service->create('alice', 'New', null, null, lifecycleStatus: 'on_track');
+	}
+
+	public function testEditorCanChangeLeadAndLifecycle(): void {
+		$this->sharedWithBob(self::EDIT);
+		$this->shareeSearch->expects(self::once())->method('resolveParticipant')->with(Acl::TYPE_USER, 'carol', 'bob')->willReturn('carol');
+		$this->projectMapper->method('update')->willReturnArgument(0);
+		$this->shareMapper->expects(self::never())->method('insert');
+
+		$project = $this->service->update(5, 'bob', null, null, null, lead: 'carol', lifecycleStatus: 'done');
+
+		self::assertSame('carol', $project->getLead());
+		self::assertSame('done', $project->getLifecycleStatus());
+		self::assertSame('alice', $project->getOwner());
+	}
+
+	public function testUpdateKeepsOmittedMetadataWithoutResolvingTheLead(): void {
+		$project = $this->project();
+		$project->setLead('former-user');
+		$project->setLifecycleStatus('in_progress');
+		$this->projectMapper->method('find')->willReturn($project);
+		$this->projectMapper->method('update')->willReturnArgument(0);
+		$this->shareeSearch->expects(self::never())->method('resolveParticipant');
+
+		$updated = $this->service->update(5, 'alice', 'Renamed', null, null);
+
+		self::assertSame('former-user', $updated->getLead());
+		self::assertSame('in_progress', $updated->getLifecycleStatus());
+	}
+
+	public function testUpdateClearsLeadWithAnEmptyString(): void {
+		$project = $this->project();
+		$project->setLead('bob');
+		$this->projectMapper->method('find')->willReturn($project);
+		$this->projectMapper->method('update')->willReturnArgument(0);
+		$this->shareeSearch->expects(self::never())->method('resolveParticipant');
+
+		self::assertNull($this->service->update(5, 'alice', null, null, null, lead: '')->getLead());
+	}
+
+	public function testUpdateRejectsAnEmptyLifecycle(): void {
+		$this->projectMapper->method('find')->willReturn($this->project());
+		$this->projectMapper->expects(self::never())->method('update');
+		$this->expectException(InvalidInputException::class);
+
+		$this->service->update(5, 'alice', null, null, null, lifecycleStatus: '');
+	}
+
+	public function testViewerCannotChangeMetadataOrProbeALead(): void {
+		$this->sharedWithBob(PermissionService::PERMISSION_READ);
+		$this->projectMapper->expects(self::never())->method('update');
+		$this->shareeSearch->expects(self::never())->method('resolveParticipant');
+		$this->expectException(NotPermittedException::class);
+
+		$this->service->update(5, 'bob', null, null, null, lead: 'unknown', lifecycleStatus: 'invalid');
+	}
+
+	public function testStrangerCannotChangeMetadataOrProbeALead(): void {
+		$this->projectMapper->method('find')->willReturn($this->project());
+		$this->projectMapper->expects(self::never())->method('update');
+		$this->shareeSearch->expects(self::never())->method('resolveParticipant');
+		$this->expectException(DoesNotExistException::class);
+
+		$this->service->update(5, 'mallory', null, null, null, lead: 'unknown', lifecycleStatus: 'invalid');
+	}
+
+	public function testLeadCandidatesUseSharingPolicyAndExcludeGroups(): void {
+		$this->shareeSearch->expects(self::once())->method('search')->with('bob', 'alice', [], [])->willReturn([
+			['id' => 'bob', 'displayName' => 'Bob', 'type' => 'user'],
+			['id' => 'devs', 'displayName' => 'Developers', 'type' => 'group'],
+		]);
+		$this->userManager->method('getDisplayName')->with('alice')->willReturn('Alice');
+
+		self::assertSame([
+			['id' => 'alice', 'displayName' => 'Alice', 'type' => 'user'],
+			['id' => 'bob', 'displayName' => 'Bob', 'type' => 'user'],
+		], $this->service->leadCandidates('bob', 'alice'));
+	}
+
+	public function testLeadCandidatesKeepSelfWhenSharingIsDisabled(): void {
+		$this->shareeSearch->method('search')->willReturn([]);
+
+		self::assertSame([
+			['id' => 'alice', 'displayName' => 'alice', 'type' => 'user'],
+		], $this->service->leadCandidates('', 'alice'));
+	}
+
+	public function testFindMineIncludesLeadDisplayNameAndLifecycle(): void {
+		$project = $this->project();
+		$project->setLead('bob');
+		$project->setLifecycleStatus('done');
+		$this->projectMapper->method('findAccessible')->willReturn([$project]);
+		$this->userManager->method('getDisplayName')->willReturnMap([['alice', 'Alice'], ['bob', 'Bob']]);
+
+		$record = $this->service->findMine('alice')[0];
+
+		self::assertSame('bob', $record['lead']);
+		self::assertSame('Bob', $record['leadDisplayName']);
+		self::assertSame('done', $record['lifecycleStatus']);
 	}
 
 	public function testCreateRejectsImpossibleDate(): void {
@@ -697,6 +853,7 @@ class ProjectServiceTest extends TestCase {
 	}
 
 	public function testAddCardRejectsNonOwnerBeforeTouchingCard(): void {
+		$this->mutation->expects(self::never())->method('run');
 		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
 		$this->cardMapper->expects(self::never())->method('find');
 		$this->projectCardMapper->expects(self::never())->method('add');
@@ -888,4 +1045,46 @@ class ProjectServiceTest extends TestCase {
 		$result = $this->service->stats(5, 'alice');
 		self::assertSame(1, $result['cardCount']);
 	}
+
+	public function testOwnerCanRemoveAPurgedCard(): void {
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$this->cardMapper->method('find')->with(9)->willThrowException(new DoesNotExistException('gone'));
+		$this->projectCardMapper->expects(self::once())->method('remove')->with(5, 9);
+
+		$this->service->removeCard(5, 9, 'alice');
+	}
+
+	public function testOwnerCanRemoveATrashedCard(): void {
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$card = $this->card(1);
+		$card->setDeletedAt(123);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$this->projectCardMapper->expects(self::once())->method('remove')->with(5, 9);
+
+		$this->service->removeCard(5, 9, 'alice');
+	}
+
+	public function testOwnerMustReloadBeforeRemovingAMovedCard(): void {
+		$this->projectMapper->method('find')->with(5)->willReturn($this->project('alice'));
+		$card = $this->card(1);
+		$card->setDeletedAt(123);
+		$this->cardMapper->method('find')->with(9)->willReturn($card);
+		$alias = new CardMoveAlias();
+		$alias->setOldCardId(9);
+		$alias->setTargetCardId(19);
+		$this->moveAliases->method('findByOldId')->with(9)->willReturn($alias);
+		$this->projectCardMapper->expects(self::never())->method('remove');
+
+		$this->expectException(DoesNotExistException::class);
+		$this->expectExceptionMessage('Card has moved');
+		$this->service->removeCard(5, 9, 'alice');
+	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('run')->willReturnCallback(static fn (int $cardId, callable $write): mixed => $write());
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
 }

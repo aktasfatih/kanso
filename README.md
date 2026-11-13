@@ -40,7 +40,8 @@ your work, on your own Nextcloud, laid out plainly.
 - Markdown descriptions (sanitized) with a scrolling formatting toolbar, searchable **labels**, due dates, **assignees**, and
   priorities.
 - **Checklists / sub-tasks**, **parent ↔ child cards**, and **threaded
-  comments**.
+  comments**. The new comment composer expands on focus, leaving more room for
+  discussion.
 - **Card relations**: link related, duplicate or blocking cards from a list or
   pick the target directly on the board.
 - **Attachments**: upload files to a card (up to 100 MiB each). They live in
@@ -59,13 +60,35 @@ your work, on your own Nextcloud, laid out plainly.
 <img src="docs/kanso-card.png" alt="A Kanso card with a markdown description, a checklist, priority, due date, an assignee and a threaded discussion" width="900">
 
 ### 👥 Collaboration
-- **Board sharing** with per-user and per-group access control.
+- **Board sharing** with per-user and per-group access control. Give signed-in
+  members **Comment** access to post, reply, react and edit or delete their own
+  comments without editing cards. Editors retain commenting access; resolving
+  threads needs Edit, and deleting others’ discussion needs Manage. Only a
+  manager can delete a thread that other people replied to. Sharers can grant
+  only capabilities they hold.
+- **Single-assignee boards**: owners and managers can enable **One assignee per
+  card** in board settings. Choosing a different person replaces the current
+  assignee. Existing cards with multiple assignees keep everyone; remove extra
+  people before choosing someone new. Multiple assignees remain the default.
+  CSV imports and cross-board moves into a single-assignee board must fit the
+  setting. Recurring clones pause until their template has at most one assignee.
+  Board exports, restores and duplicates preserve the setting and
+  existing assignments; individual card copies start unassigned.
+- **Deleted boards**: owners and managers can restore a board from the board list
+  for 30 days after deletion, with its contents and shares intact. Archive a
+  board to hide it without a deletion deadline.
 - **Public link**: publish a board **read-only** at a link that needs no
   Nextcloud account — optionally with its comments visible. Rotate or switch
   the link off at any time from board settings.
 - **Watchers**: subscribe to cards, comment threads, or a **whole board** and
   get notified of new activity.
-- **Parent/child cards**: a parent auto-completes when all its children are done.
+- **Parent/child cards**: progress counts done or archived children as resolved.
+  Parent auto-completion is **off by default**. Enable it in board settings to
+  complete a parent after a child changes or its final checklist item is completed,
+  once all children are done or archived, its own checklist is complete, and
+  its reviews are approved. Manual and
+  rule-driven archives use the same completion rule. Reopening or unarchiving a
+  child never reopens the parent.
 
 ### ✅ Review workflow
 - Request a review, then **Approve** / **Request changes**.
@@ -98,10 +121,14 @@ your work, on your own Nextcloud, laid out plainly.
   Nextcloud folder you can browse and mount off-site. Off until an admin turns it
   on in Nextcloud's admin settings.
 - **Calendar**: every board you can read appears as a **read-only CalDAV
-  calendar** of its due-dated cards, so they show up in Nextcloud Calendar and
-  Tasks and on your phone — nothing to copy or paste, and you can hide a board
-  from your own calendar in board settings. A board can also publish a token
-  **`.ics` feed URL** for calendar apps that want one. Both are read-only:
+  calendar** of cards with a start or due date, so they show up in Nextcloud
+  Calendar and Tasks and on your phone — nothing to copy or paste, and you can hide a board
+  from your own calendar in board settings. Turn on **Only sync cards assigned
+  to me** there to filter that board's calendar for your account; your next
+  calendar refresh reflects assignment changes. This personal filter leaves
+  other members' calendars and public feeds unchanged. Start-only cards appear
+  without a due date. A board can also publish a token **`.ics` feed URL** of
+  its due-dated cards for calendar apps that want one. Both are read-only:
   ticking the task off in your calendar does not close the card.
 - **Email intake**: point a board at an IMAP mailbox and mail arriving in a
   chosen folder becomes a card in a chosen column, with an optional sender
@@ -123,7 +150,13 @@ your work, on your own Nextcloud, laid out plainly.
   board. No credentials, no OAuth. A board can run both webhooks at once; Gitea
   webhooks work with the Forgejo endpoint. For self-hosted forges Kanso is
   **receive-only** — it never calls your instance, so link badges come from the
-  deliveries themselves.
+  deliveries themselves. Invalid or missing signatures return `401`; failures
+  do not lock out later valid deliveries from the same IP, board or provider.
+  Configure request size, request rate and concurrency limits at your ingress
+  to bound flood resources: Kanso reads each body and verifies each signature.
+  Ingress limits or Nextcloud rate-limit overrides may still reject deliveries.
+  Check the forge's delivery log for `401` responses when diagnosing a wrong
+  secret; rotate and update the secret on both sides if needed.
 - **MCP server (AI access)**: an optional
   [Model Context Protocol](https://modelcontextprotocol.io) server (under
   [`mcp/`](mcp/README.md)) lets Claude and other MCP clients read and manage
@@ -155,10 +188,12 @@ your work, on your own Nextcloud, laid out plainly.
   under your Nextcloud sharing settings (members only see the cards they can
   already access; if the owner's account is deleted, an editor takes over, direct
   shares first, and with no editor the project and its discussion are deleted;
-  view-only members are never promoted), with a start and target date, a
+  view-only members are never promoted), with an optional lead and an explicit
+  Planned / In progress / Done lifecycle, plus a start and target date, a
   forecast finish date from your recent pace, an on-track / at-risk / late
   status, a burn-up chart, estimates normalized across boards, blocked and
-  overdue work grouped up top, and the project's cards on a timeline.
+  overdue work grouped up top, and the project's cards on a timeline. Lifecycle
+  is separate from forecast health; choosing a lead does not share the project.
 
 ### 📈 Analytics
 - **Estimates** on any scale, chosen per board: Fibonacci, planning poker,
@@ -448,23 +483,15 @@ migration**: `setup.sh` only re-enables the app, and Nextcloud re-runs an app's
 migrations only when `info.xml`'s `<version>` grows, which feature branches never
 do. `./seed.sh` refills a reset stack; `./smoke.sh` reports a schema left behind.
 
-PHP tooling runs via Docker (no host PHP needed):
-
-```sh
-docker run --rm -u "$(id -u):$(id -g)" -e COMPOSER_HOME=/tmp/composer \
-  -v "$PWD":/app -w /app composer:2 composer install
-docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/app -w /app \
-  php:8.2-cli-alpine php vendor/bin/php-cs-fixer fix --dry-run
-docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/app -w /app \
-  php:8.2-cli-alpine php vendor/bin/psalm
-```
+PHP tooling runs via Docker (no host PHP needed). Follow the
+[PHP verification commands](CONTRIBUTING.md#php-verification) to build the
+PHP 8.2 image with CI's explicit extensions and run PHPUnit, Psalm and style
+checks in your checkout or worktree.
 
 Tests: PHPUnit for the API/services, Playwright for board interactions.
 
 ```sh
 npm run test:e2e                           # Playwright e2e (needs the dev stack up)
-docker run --rm -v "$PWD":/app -w /app php:8.2-cli-alpine \
-  php vendor/bin/phpunit -c phpunit.xml    # PHP unit tests
 ```
 
 ## Tech

@@ -19,8 +19,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
 /**
  * Board sharing (ACL) management. SHARE lets a user hand out or adjust
  * sharing rules, but never with more permission bits than they hold
- * themselves - only MANAGE may grant beyond the actor's own bits (the
- * escalation cap). Revoking needs MANAGE, except for self-removal (leaving
+ * themselves. Revoking needs MANAGE, except for self-removal (leaving
  * a board). Every mutation appends an ENTITY_ACL row to the `kanso_changes`
  * log so shared boards delta-sync their member lists like any other entity.
  */
@@ -32,6 +31,7 @@ class AclService {
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private ShareeSearchService $shareeSearch,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -48,72 +48,74 @@ class AclService {
 	 * @param string $role one of the ViewerContext::ROLE_* values
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws NotPermittedException if the actor may not share the board,
-	 *                               lacks MANAGE and tries to grant bits beyond their own,
+	 *                               tries to grant effective permissions beyond their own,
 	 *                               or lacks MANAGE and sets a non-default role
 	 * @throws InvalidInputException on unknown permission bits, an invalid
 	 *                               participant type or role, the board owner or a nonexistent
 	 *                               participant, or a participant the board is already shared with
 	 */
 	public function create(int $boardId, string $participant, string $participantType, int $permission, string $actorUid, string $role = ViewerContext::ROLE_INTERNAL): Acl {
-		$board = $this->loadBoard($boardId);
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_SHARE);
+		return $this->cardMutation->runForBoards([$boardId], function () use ($boardId, $participant, $participantType, $permission, $actorUid, $role): Acl {
+			$board = $this->loadBoard($boardId);
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_SHARE);
 
-		$permission = $this->validateMask($permission);
-		$type = $this->parseParticipantType($participantType);
-		$role = $this->parseRole($role);
-		if ($role !== ViewerContext::ROLE_INTERNAL) {
-			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
-		}
+			$permission = $this->validateMask($permission);
+			$type = $this->parseParticipantType($participantType);
+			$role = $this->parseRole($role);
+			if ($role !== ViewerContext::ROLE_INTERNAL) {
+				$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
+			}
 
-		$participant = $this->shareeSearch->resolveParticipant($type, $participant, $actorUid);
-		if ($type === Acl::TYPE_USER && $participant === $board->getOwner()) {
-			throw new InvalidInputException('Cannot share a board with its owner');
-		}
+			$participant = $this->shareeSearch->resolveParticipant($type, $participant, $actorUid);
+			if ($type === Acl::TYPE_USER && $participant === $board->getOwner()) {
+				throw new InvalidInputException('Cannot share a board with its owner');
+			}
 
-		$this->assertNoEscalation($board, $actorUid, $permission);
+			$this->assertNoEscalation($board, $actorUid, PermissionService::withImpliedPermissions($permission));
 
-		if ($this->aclMapper->findByParticipant($boardId, $type, $participant) !== null) {
-			throw new InvalidInputException('Already shared with this participant');
-		}
-
-		$acl = new Acl();
-		$acl->setBoardId($boardId);
-		$acl->setParticipantType($type);
-		$acl->setParticipant($participant);
-		$acl->setPermission($permission);
-		$acl->setRole($role);
-
-		try {
-			$acl = $this->aclMapper->insert($acl);
-		} catch (\OCP\DB\Exception $e) {
-			if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
-				// Concurrent POST lost the check-then-insert race - unlike the
-				// idempotent assignment PUTs, POST reports the duplicate.
+			if ($this->aclMapper->findByParticipant($boardId, $type, $participant) !== null) {
 				throw new InvalidInputException('Already shared with this participant');
 			}
-			throw $e;
-		}
 
-		$this->changeNotifier->notify(
-			$boardId,
-			Change::ENTITY_ACL,
-			$acl->getId(),
-			Change::ACTION_CREATE,
-			$actorUid
-		);
+			$acl = new Acl();
+			$acl->setBoardId($boardId);
+			$acl->setParticipantType($type);
+			$acl->setParticipant($participant);
+			$acl->setPermission($permission);
+			$acl->setRole($role);
 
-		// Surface the new share in the Nextcloud Activity stream (best-effort). Only
-		// a fresh share is an activity - a permission-mask update or a revoke is not.
-		$this->changeNotifier->publishBoardShared($boardId, (string)$board->getTitle(), $actorUid);
+			try {
+				$acl = $this->aclMapper->insert($acl);
+			} catch (\OCP\DB\Exception $e) {
+				if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+					// Concurrent POST lost the check-then-insert race - unlike the
+					// idempotent assignment PUTs, POST reports the duplicate.
+					throw new InvalidInputException('Already shared with this participant');
+				}
+				throw $e;
+			}
 
-		return $acl;
+			$this->changeNotifier->notify(
+				$boardId,
+				Change::ENTITY_ACL,
+				$acl->getId(),
+				Change::ACTION_CREATE,
+				$actorUid
+			);
+
+			// Surface the new share in the Nextcloud Activity stream (best-effort). Only
+			// a fresh share is an activity - a permission-mask update or a revoke is not.
+			$this->changeNotifier->publishBoardShared($boardId, (string)$board->getTitle(), $actorUid);
+
+			return $acl;
+		});
 	}
 
 	/**
 	 * Replaces the permission mask of a sharing rule. The escalation cap
-	 * applies to the CHANGED bits only, so an actor without MANAGE may
-	 * re-submit an existing mask untouched even when it contains bits they
-	 * do not hold - they just cannot flip such bits.
+	 * includes Edit's implied Comment permission and applies to changed grants
+	 * only. An actor may re-submit an existing mask untouched even when it
+	 * contains bits they do not hold - they just cannot flip such bits.
 	 *
 	 * A non-null $role additionally re-assigns the member's board side
 	 * (#3742); FLIPPING the role is MANAGE-gated (re-submitting the current
@@ -126,46 +128,53 @@ class AclService {
 	 *                          null to leave the stored role untouched
 	 * @throws DoesNotExistException if the board or the sharing rule does not exist
 	 * @throws NotPermittedException if the actor may not share the board, or
-	 *                               lacks MANAGE and flips bits beyond their own or the role
+	 *                               flips capabilities beyond their own or lacks MANAGE to change the role
 	 * @throws InvalidInputException on unknown permission bits, an unknown
 	 *                               role, a rule of another board, or added bits or
 	 *                               an internal role for a target the actor may no
 	 *                               longer share with
 	 */
 	public function update(int $boardId, int $aclId, int $permission, string $actorUid, ?string $role = null): Acl {
-		$board = $this->loadBoard($boardId);
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_SHARE);
+		return $this->cardMutation->runForBoards([$boardId], function () use ($boardId, $aclId, $permission, $actorUid, $role): Acl {
+			$board = $this->loadBoard($boardId);
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_SHARE);
 
-		$acl = $this->loadAcl($boardId, $aclId);
-		$permission = $this->validateMask($permission);
-		$this->assertNoEscalation($board, $actorUid, $permission ^ $acl->getPermission());
-		$storedRole = $acl->getRole() ?? ViewerContext::ROLE_INTERNAL;
-		$role = $role === null ? null : $this->parseRole($role);
-		// An external member's stored bits only take full effect once internal.
-		$becomesInternal = $role === ViewerContext::ROLE_INTERNAL && $storedRole !== ViewerContext::ROLE_INTERNAL;
-		if (($permission & ~$acl->getPermission()) !== 0 || $becomesInternal) {
-			$this->shareeSearch->resolveParticipant($acl->getParticipantType(), (string)$acl->getParticipant(), $actorUid);
-		}
-
-		if ($role !== null) {
-			if ($role !== $storedRole) {
-				$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
-				$acl->setRole($role);
+			$acl = $this->loadAcl($boardId, $aclId);
+			$permission = $this->validateMask($permission);
+			$storedRole = $acl->getRole() ?? ViewerContext::ROLE_INTERNAL;
+			$role = $role === null ? null : $this->parseRole($role);
+			$this->assertNoEscalation(
+				$board,
+				$actorUid,
+				PermissionService::withImpliedPermissions($permission)
+					^ PermissionService::withImpliedPermissions($acl->getPermission()),
+			);
+			// An external member's stored bits only take full effect once internal.
+			$becomesInternal = $role === ViewerContext::ROLE_INTERNAL && $storedRole !== ViewerContext::ROLE_INTERNAL;
+			if (($permission & ~$acl->getPermission()) !== 0 || $becomesInternal) {
+				$this->shareeSearch->resolveParticipant($acl->getParticipantType(), (string)$acl->getParticipant(), $actorUid);
 			}
-		}
 
-		$acl->setPermission($permission);
-		$acl = $this->aclMapper->update($acl);
+			if ($role !== null) {
+				if ($role !== $storedRole) {
+					$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
+					$acl->setRole($role);
+				}
+			}
 
-		$this->changeNotifier->notify(
-			$boardId,
-			Change::ENTITY_ACL,
-			$aclId,
-			Change::ACTION_UPDATE,
-			$actorUid
-		);
+			$acl->setPermission($permission);
+			$acl = $this->aclMapper->update($acl);
 
-		return $acl;
+			$this->changeNotifier->notify(
+				$boardId,
+				Change::ENTITY_ACL,
+				$aclId,
+				Change::ACTION_UPDATE,
+				$actorUid
+			);
+
+			return $acl;
+		});
 	}
 
 	/**
@@ -180,37 +189,39 @@ class AclService {
 	 * @throws InvalidInputException on a rule of another board
 	 */
 	public function delete(int $boardId, int $aclId, string $actorUid): void {
-		$board = $this->loadBoard($boardId);
-		$acl = $this->loadAcl($boardId, $aclId);
+		$this->cardMutation->runForBoards([$boardId], function () use ($boardId, $aclId, $actorUid): void {
+			$board = $this->loadBoard($boardId);
+			$acl = $this->loadAcl($boardId, $aclId);
 
-		$selfRemoval = $acl->getParticipantType() === Acl::TYPE_USER
-			&& $acl->getParticipant() === $actorUid;
-		if (!$selfRemoval) {
-			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
-		}
-
-		$this->aclMapper->delete($acl);
-
-		$this->changeNotifier->notify(
-			$boardId,
-			Change::ENTITY_ACL,
-			$aclId,
-			Change::ACTION_DELETE,
-			$actorUid
-		);
-
-		if ($acl->getParticipantType() === Acl::TYPE_USER) {
-			// Recompute AFTER the delete: the user may retain READ through a
-			// group rule, in which case their assignments stay valid.
-			$remaining = $this->permissionService->getPermissions($board, $acl->getParticipant());
-			if (($remaining & PermissionService::PERMISSION_READ) === 0) {
-				$this->cardAssigneeMapper->deleteByBoardAndUser($boardId, $acl->getParticipant());
+			$selfRemoval = $acl->getParticipantType() === Acl::TYPE_USER
+				&& $acl->getParticipant() === $actorUid;
+			if (!$selfRemoval) {
+				$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_MANAGE);
 			}
-		}
-		// Group rules skip the cleanup: expanding the membership and
-		// recomputing every member's access here is unbounded work, and
-		// members may retain access through other paths. Stale assignees
-		// from group unshares are deferred - Backlog #3393.
+
+			$this->aclMapper->delete($acl);
+
+			$this->changeNotifier->notify(
+				$boardId,
+				Change::ENTITY_ACL,
+				$aclId,
+				Change::ACTION_DELETE,
+				$actorUid
+			);
+
+			if ($acl->getParticipantType() === Acl::TYPE_USER) {
+				// Recompute AFTER the delete: the user may retain READ through a
+				// group rule, in which case their assignments stay valid.
+				$remaining = $this->permissionService->getPermissions($board, $acl->getParticipant());
+				if (($remaining & PermissionService::PERMISSION_READ) === 0) {
+					$this->cardAssigneeMapper->deleteByBoardAndUser($boardId, $acl->getParticipant());
+				}
+			}
+			// Group rules skip the cleanup: expanding the membership and
+			// recomputing every member's access here is unbounded work, and
+			// members may retain access through other paths. Stale assignees
+			// from group unshares are deferred - Backlog #3393.
+		});
 	}
 
 	/**
@@ -278,18 +289,11 @@ class AclService {
 		};
 	}
 
-	/**
-	 * The escalation cap: an actor without MANAGE may only hand out (or
-	 * flip, for updates - pass the XOR of old and new mask) bits they hold
-	 * themselves.
-	 *
-	 * @param int $bits the granted bits (create) or the changed bits (update)
-	 * @throws NotPermittedException
-	 */
+	/** @throws NotPermittedException */
 	private function assertNoEscalation(Board $board, string $actorUid, int $bits): void {
-		$actorBits = $this->permissionService->getPermissions($board, $actorUid);
-		if (($actorBits & PermissionService::PERMISSION_MANAGE) === 0
-			&& ($bits & ~$actorBits) !== 0) {
+		// Another matching ACL can make an external row's stored internal-only bits effective.
+		$actorBits = PermissionService::withImpliedPermissions($this->permissionService->getPermissions($board, $actorUid));
+		if (($bits & ~$actorBits) !== 0) {
 			throw new NotPermittedException('Cannot grant permissions beyond your own');
 		}
 	}

@@ -55,6 +55,7 @@ class CardLinkService {
 		private ChangeNotifier $changeNotifier,
 		private IClientService $clientService,
 		private CardVisibilityGuard $visibilityGuard,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -93,63 +94,57 @@ class CardLinkService {
 	 * @throws InvalidInputException if the URL is not acceptable for this board, or the card is already at its link cap
 	 */
 	public function addLink(int $cardId, string $url, string $actorUid): CardLink {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		return $this->cardMutation->run($cardId, function () use ($cardId, $url, $actorUid): CardLink {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		[$kind, $provider] = $this->resolveLink($url, $board);
-
-		// Cap the links per card BEFORE inserting. Reading a card refreshes each
-		// of its stale links with a blocking outbound GET, so an uncapped card
-		// would let one editor make every later reader of that card wait.
-		if ($this->cardLinkMapper->countByCard($cardId) >= CardLinkMapper::MAX_PER_CARD) {
-			throw new InvalidInputException(
-				'A card may have at most ' . CardLinkMapper::MAX_PER_CARD . ' links'
-			);
-		}
-
-		$now = time();
-		$link = new CardLink();
-		$link->setCardId($cardId);
-		$link->setProvider($provider);
-		$link->setUrl($url);
-		$link->setKind($kind);
-		$link->setState(CardLink::STATE_UNKNOWN);
-		$link->setTitle(null);
-		$link->setLastPolled(0);
-		$link->setCreatedAt($now);
-
-		try {
-			$link = $this->cardLinkMapper->insert($link);
-		} catch (\OCP\DB\Exception $e) {
-			if ($e->getReason() !== \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
-				throw $e;
-			}
-			// Same URL already attached - return the existing row (idempotent).
+			[$kind, $provider] = $this->resolveLink($url, $board);
 			foreach ($this->cardLinkMapper->findByCard($cardId) as $existing) {
 				if ($existing->getUrl() === $url) {
 					return $existing;
 				}
 			}
-			throw $e;
-		}
 
-		// Best-effort immediate poll so the chip shows a real state right away.
-		// Only github.com is ever polled - see shouldPoll().
-		if ($this->shouldPoll($link, $now, true)) {
-			$this->refreshState($link, $now);
-		}
+			// Cap the links per card BEFORE inserting. Reading a card refreshes each
+			// of its stale links with a blocking outbound GET, so an uncapped card
+			// would let one editor make every later reader of that card wait.
+			if ($this->cardLinkMapper->countByCard($cardId) >= CardLinkMapper::MAX_PER_CARD) {
+				throw new InvalidInputException(
+					'A card may have at most ' . CardLinkMapper::MAX_PER_CARD . ' links'
+				);
+			}
 
-		$this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_UPDATE,
-			$actorUid
-		);
+			$now = time();
+			$link = new CardLink();
+			$link->setCardId($cardId);
+			$link->setProvider($provider);
+			$link->setUrl($url);
+			$link->setKind($kind);
+			$link->setState(CardLink::STATE_UNKNOWN);
+			$link->setTitle(null);
+			$link->setLastPolled(0);
+			$link->setCreatedAt($now);
 
-		return $link;
+			$link = $this->cardLinkMapper->insert($link);
+
+			// Best-effort immediate poll so the chip shows a real state right away.
+			// Only github.com is ever polled - see shouldPoll().
+			if ($this->shouldPoll($link, $now, true)) {
+				$this->cardMutation->afterCommit(fn () => $this->refreshState($link, $now));
+			}
+
+			$this->changeNotifier->notify(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$cardId,
+				Change::ACTION_UPDATE,
+				$actorUid
+			);
+
+			return $link;
+		});
 	}
 
 	/**
@@ -159,24 +154,26 @@ class CardLinkService {
 	 * @throws NotPermittedException if the actor may not edit the board
 	 */
 	public function deleteLink(int $cardId, int $linkId, string $actorUid): void {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$this->cardMutation->run($cardId, function () use ($cardId, $linkId, $actorUid): void {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		$link = $this->cardLinkMapper->find($linkId);
-		if ($link->getCardId() !== $cardId) {
-			throw new DoesNotExistException('Link ' . $linkId . ' is not on card ' . $cardId);
-		}
-		$this->cardLinkMapper->delete($link);
+			$link = $this->cardLinkMapper->find($linkId);
+			if ($link->getCardId() !== $cardId) {
+				throw new DoesNotExistException('Link ' . $linkId . ' is not on card ' . $cardId);
+			}
+			$this->cardLinkMapper->delete($link);
 
-		$this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_UPDATE,
-			$actorUid
-		);
+			$this->changeNotifier->notify(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$cardId,
+				Change::ACTION_UPDATE,
+				$actorUid
+			);
+		});
 	}
 
 	/**
@@ -299,7 +296,7 @@ class CardLinkService {
 		try {
 			[$kind, $owner, $repo, $number] = self::parseGitHubUrl($link->getUrl());
 			if ($kind === CardLink::KIND_OTHER) {
-				$this->cardLinkMapper->update($link);
+				$this->persistRefreshedLink($link);
 				return;
 			}
 			$endpoint = $kind === CardLink::KIND_PR ? 'pulls' : 'issues';
@@ -330,7 +327,17 @@ class CardLinkService {
 				$link->setState(CardLink::STATE_UNKNOWN);
 			}
 		}
-		$this->cardLinkMapper->update($link);
+		$this->persistRefreshedLink($link);
+	}
+
+	private function persistRefreshedLink(CardLink $link): void {
+		try {
+			$this->cardMutation->run($link->getCardId(), function () use ($link): void {
+				$this->cardLinkMapper->update($link);
+			});
+		} catch (DoesNotExistException) {
+			// A move or removal can finish while the remote request is in flight.
+		}
 	}
 
 	/**

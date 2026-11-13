@@ -21,9 +21,9 @@ use OCP\DB\Exception as DbException;
 
 /**
  * Emoji reactions on card comments (#3550). A reaction reaches its board only
- * through comment -> card -> board (resolved + EDIT-checked here, mirroring
+ * through comment -> card -> board (resolved + COMMENT-checked here, mirroring
  * {@see CommentService}): READ lets you see reactions in the comment payload,
- * EDIT lets you toggle one. The emoji must be one of a FIXED allowed set -
+ * COMMENT lets you toggle one. The emoji must be one of a FIXED allowed set -
  * this is deliberately NOT an arbitrary-emoji store.
  *
  * A react is idempotent (already-reacted is a no-op, guaranteed by the
@@ -49,76 +49,81 @@ class CommentReactionService {
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private CardVisibilityGuard $visibilityGuard,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
 	/**
-	 * Adds the actor's reaction to a comment. Requires EDIT. Idempotent: if the
+	 * Adds the actor's reaction to a comment. Requires COMMENT. Idempotent: if the
 	 * actor has already reacted with this emoji nothing changes and no change row
 	 * is written.
 	 *
 	 * @throws DoesNotExistException if the comment, card or board is missing/deleted
-	 * @throws NotPermittedException if the actor may not edit the board
+	 * @throws NotPermittedException if the actor may not comment on the board
 	 * @throws InvalidInputException if the emoji is not in the allowed set
 	 */
 	public function react(int $commentId, string $emoji, string $actorUid): void {
 		$emoji = $this->assertAllowedEmoji($emoji);
-		[$comment, $card] = $this->resolveEditable($commentId, $actorUid);
+		$this->cardMutation->run($this->commentMapper->find($commentId)->getCardId(), function () use ($commentId, $emoji, $actorUid): void {
+			[$comment, $card] = $this->resolveCommentable($commentId, $actorUid);
 
-		if ($this->reactionMapper->exists($commentId, $actorUid, $emoji)) {
-			return;
-		}
-
-		$reaction = new CommentReaction();
-		$reaction->setCommentId($commentId);
-		$reaction->setUid($actorUid);
-		$reaction->setEmoji($emoji);
-		$reaction->setCreatedAt(time());
-		try {
-			$this->reactionMapper->insert($reaction);
-		} catch (DbException $e) {
-			// A concurrent identical react won the unique-index race; the desired
-			// end state (the reaction exists) already holds - stay idempotent.
-			if ($e->getReason() === DbException::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+			if ($this->reactionMapper->exists($commentId, $actorUid, $emoji)) {
 				return;
 			}
-			throw $e;
-		}
 
-		$this->notifyCard($card, $actorUid);
+			$reaction = new CommentReaction();
+			$reaction->setCommentId($commentId);
+			$reaction->setUid($actorUid);
+			$reaction->setEmoji($emoji);
+			$reaction->setCreatedAt(time());
+			try {
+				$this->reactionMapper->insert($reaction);
+			} catch (DbException $e) {
+				// A concurrent identical react won the unique-index race; the desired
+				// end state (the reaction exists) already holds - stay idempotent.
+				if ($e->getReason() === DbException::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+					return;
+				}
+				throw $e;
+			}
+
+			$this->notifyCard($card, $actorUid);
+		});
 	}
 
 	/**
-	 * Removes the actor's reaction from a comment. Requires EDIT. Idempotent: if
+	 * Removes the actor's reaction from a comment. Requires COMMENT. Idempotent: if
 	 * the actor had not reacted with this emoji nothing changes and no change row
 	 * is written.
 	 *
 	 * @throws DoesNotExistException if the comment, card or board is missing/deleted
-	 * @throws NotPermittedException if the actor may not edit the board
+	 * @throws NotPermittedException if the actor may not comment on the board
 	 * @throws InvalidInputException if the emoji is not in the allowed set
 	 */
 	public function unreact(int $commentId, string $emoji, string $actorUid): void {
 		$emoji = $this->assertAllowedEmoji($emoji);
-		[$comment, $card] = $this->resolveEditable($commentId, $actorUid);
+		$this->cardMutation->run($this->commentMapper->find($commentId)->getCardId(), function () use ($commentId, $emoji, $actorUid): void {
+			[$comment, $card] = $this->resolveCommentable($commentId, $actorUid);
 
-		$removed = $this->reactionMapper->deleteReaction($commentId, $actorUid, $emoji);
-		if ($removed > 0) {
-			$this->notifyCard($card, $actorUid);
-		}
+			$removed = $this->reactionMapper->deleteReaction($commentId, $actorUid, $emoji);
+			if ($removed > 0) {
+				$this->notifyCard($card, $actorUid);
+			}
+		});
 	}
 
 	/**
-	 * Resolves comment -> card -> board and asserts EDIT on the board.
+	 * Resolves comment -> card -> board and asserts COMMENT on the board.
 	 *
 	 * @return array{0: Comment, 1: Card}
 	 * @throws DoesNotExistException if the comment, card or board is missing/deleted
-	 * @throws NotPermittedException if the actor may not edit the board
+	 * @throws NotPermittedException if the actor may not comment on the board
 	 */
-	private function resolveEditable(int $commentId, string $actorUid): array {
+	private function resolveCommentable(int $commentId, string $actorUid): array {
 		$comment = $this->loadComment($commentId);
 		$card = $this->loadCard($comment->getCardId());
 		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_COMMENT);
 		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 		return [$comment, $card];
 	}

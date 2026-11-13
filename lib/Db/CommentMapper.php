@@ -194,6 +194,21 @@ class CommentMapper extends QBMapper {
 		$qb->executeStatement();
 	}
 
+	public function hasRepliesFromOthers(int $parentCommentId, string $author): bool {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('parent_comment_id', $qb->createNamedParameter($parentCommentId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->neq('author', $qb->createNamedParameter($author)))
+			->setMaxResults(1);
+
+		$result = $qb->executeQuery();
+		$found = $result->fetch() !== false;
+		$result->closeCursor();
+		return $found;
+	}
+
 	/**
 	 * Non-deleted comment count for a single card. Precondition: the caller has
 	 * already loaded a LIVE card (this does not re-check the card's deleted_at);
@@ -247,6 +262,7 @@ class CommentMapper extends QBMapper {
 			->innerJoin('cm', 'kanso_cards', 'c', $qb->expr()->eq('cm.card_id', 'c.id'))
 			->where($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('cm.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->iLike('cm.body', $qb->createNamedParameter($likePattern)))
 			->orderBy('cm.id', 'DESC')

@@ -135,7 +135,7 @@ class ImportServiceTest extends TestCase {
 			$this->automationRuleMapper,
 			$this->cardAttachmentMapper,
 			$this->userManager,
-			$this->db,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService($this->db, true),
 			$this->boardAccess,
 			$this->realRecurrenceService(),
 			$this->appData,
@@ -260,6 +260,7 @@ class ImportServiceTest extends TestCase {
 			$this->createMock(\OCP\IDBConnection::class),
 			$this->createMock(\OCP\IConfig::class),
 			$this->createMock(LoggerInterface::class),
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 
@@ -1300,7 +1301,7 @@ class ImportServiceTest extends TestCase {
 			$this->automationRuleMapper,
 			$this->cardAttachmentMapper,
 			$this->userManager,
-			$this->db,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService($this->db, true),
 			$this->boardAccess,
 			$this->realRecurrenceService(),
 			$this->appData,

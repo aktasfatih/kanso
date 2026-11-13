@@ -26,7 +26,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				@keydown.escape.prevent="onEscape"
 				@keydown.arrow-down.prevent="moveActive(1)"
 				@keydown.arrow-up.prevent="moveActive(-1)"
-				@keydown.enter.prevent="selectActive"
+				@keydown.enter="submitOnEnter($event, selectActive)"
 				@blur="handleBlur" />
 			<!-- Spinner -->
 			<span v-if="isFetching" class="search-box__spinner" aria-hidden="true" />
@@ -131,6 +131,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
+import { submitOnEnter } from '../utils/keyboard.js'
 import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
