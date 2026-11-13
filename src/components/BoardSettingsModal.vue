@@ -2568,7 +2568,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</ul>
 
 					<!-- Add card rule form (MANAGE only) -->
-					<form v-if="canManage" class="automation__create-form" @submit.prevent="submitCreateAutoRule">
+					<form v-if="canManage" class="automation__create-form automation__create-form--card-rules" @submit.prevent="submitCreateAutoRule">
 						<h4 class="label-settings__create-heading">{{ t('kanso', 'Add rule') }}</h4>
 
 						<!-- Trigger role -->
@@ -6451,6 +6451,23 @@ async function doDeleteAutoRule(rule) {
 .automation__form-select {
 	flex: 1;
 	min-width: 0;
+}
+
+.automation__create-form--card-rules .automation__form-row {
+	flex-wrap: wrap;
+}
+
+.automation__create-form--card-rules .automation__form-label {
+	width: auto;
+	max-width: 100%;
+	flex: 0 1 10rem;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
+.automation__create-form--card-rules .automation__form-select {
+	flex: 1 1 10rem;
+	max-width: 100%;
 }
 
 .automation__create-btn {
