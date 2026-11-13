@@ -1344,7 +1344,6 @@ OC.L10N.register(
     "Strikethrough" : "删除线",
     "Sub-card" : "子卡片",
     "Sub-card progress" : "子卡片进度",
-    "Sub-card progress {done} of {total}" : "子卡片进度 {total} 中的 {done}",
     "Sub-cards" : "子卡片",
     "Submit" : "提交",
     "Subscribe to this board's card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card." : "在任意日历应用（Nextcloud 日历、Thunderbird、你的手机）中订阅此看板的卡片截止日期。该订阅为只读，只包含卡片标题、截止日期和返回各张卡片的链接。",

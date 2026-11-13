@@ -1499,7 +1499,6 @@
         "Strikethrough": "Barré",
         "Sub-card": "Sous-carte",
         "Sub-card progress": "Progression des sous-cartes",
-        "Sub-card progress {done} of {total}": "Progression des sous-cartes : {done} sur {total}",
         "Sub-cards": "Sous-cartes",
         "Submit": "Envoyer",
         "Subscribe to this board's card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card.": "Abonnez-vous aux échéances des cartes de ce tableau dans n'importe quelle application de calendrier (Nextcloud Calendar, Thunderbird, votre téléphone). Le flux est en lecture seule et n'affiche que les titres des cartes, leurs dates d'échéance et un lien vers chaque carte.",

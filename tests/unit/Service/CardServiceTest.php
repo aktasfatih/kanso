@@ -2593,6 +2593,61 @@ class CardServiceTest extends TestCase {
 		self::assertSame(500, $parent->getDoneAt());
 	}
 
+	public function testArchivingLastOpenChildCompletesParentWithoutMarkingChildDone(): void {
+		$child = $this->card(9);
+		$child->setParentCardId(100);
+		$parent = $this->card(100);
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => $id === 100 ? $parent : $child);
+		$this->boardMapper->method('find')->willReturn($this->board());
+		$this->cardMapper->method('findChildren')->with(100)->willReturn([$child]);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$this->service->update(9, null, null, null, null, true, 'alice');
+		self::assertTrue($child->getArchived());
+		self::assertSame(0, $child->getDoneAt());
+		self::assertGreaterThan(0, $parent->getDoneAt());
+		$completedAt = $parent->getDoneAt();
+		$this->service->update(9, null, null, null, null, false, 'alice');
+		self::assertFalse($child->getArchived());
+		self::assertSame($completedAt, $parent->getDoneAt());
+	}
+
+	public function testSystemArchiveCompletionPreservesParentChecklistGate(): void {
+		$child = $this->card(9);
+		$child->setParentCardId(100);
+		$child->setArchived(true);
+		$parent = $this->card(100);
+		$this->cardMapper->method('find')->with(100)->willReturn($parent);
+		$this->boardMapper->method('find')->willReturn($this->board());
+		$this->cardMapper->method('findChildren')->with(100)->willReturn([$child]);
+		$this->checklistItemMapper->method('findByCard')->with(100)
+			->willReturn([$this->checklistItem(1, 100, 'Required work', false)]);
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('recordChange');
+
+		$this->service->maybeCompleteParent($child, null, false);
+		self::assertSame(0, $parent->getDoneAt());
+	}
+
+	public function testSystemArchiveCompletionRecordsParentChangeWithoutSeparatePush(): void {
+		$child = $this->card(9);
+		$child->setParentCardId(100);
+		$child->setArchived(true);
+		$parent = $this->card(100);
+		$this->cardMapper->method('find')->with(100)->willReturn($parent);
+		$this->boardMapper->method('find')->willReturn($this->board());
+		$this->cardMapper->method('findChildren')->with(100)->willReturn([$child]);
+		$this->cardMapper->expects(self::once())->method('update')->with($parent)->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())->method('recordChange')
+			->with(1, Change::ENTITY_CARD, 100, Change::ACTION_UPDATE, null, Change::VERB_UPDATED)
+			->willReturn(new Change());
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+
+		$this->service->maybeCompleteParent($child, null, false);
+		self::assertGreaterThan(0, $parent->getDoneAt());
+	}
+
 	// ---- move done-automation --------------------------------------------
 
 	public function testMoveIntoDoneStackStampsDoneAtInsideTransaction(): void {

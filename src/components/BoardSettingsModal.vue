@@ -213,7 +213,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ t('kanso', 'Mark parent as done when sub-issues are done') }}
 						</NcCheckboxRadioSwitch>
 						<p v-if="canManage" class="board-settings__general-hint">
-							{{ t('kanso', 'When on, a parent card is completed automatically once all of its sub-issues are done or archived. Off by default — the parent stays open for a human to close.') }}
+							{{ t('kanso', 'When on, a parent card is completed automatically once all of its sub-issues are done or archived, its checklist is complete and its reviews are approved. Off by default. Reopening or restoring a sub-issue never reopens the parent.') }}
 						</p>
 						<span v-if="autoCompleteParentError" class="label-settings__error">{{ autoCompleteParentError }}</span>
 

@@ -1551,7 +1551,6 @@
         "Strikethrough": "Przekreślenie",
         "Sub-card": "Podkarta",
         "Sub-card progress": "Postęp podkart",
-        "Sub-card progress {done} of {total}": "Postęp podkart: {done} z {total}",
         "Sub-cards": "Podkarty",
         "Submit": "Wyślij",
         "Subscribe to this board's card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card.": "Subskrybuj terminy kart z tej tablicy w dowolnej aplikacji kalendarza (Nextcloud Calendar, Thunderbird, telefon). Kanał jest tylko do odczytu i pokazuje wyłącznie tytuły kart, terminy oraz odnośnik z powrotem do każdej karty.",

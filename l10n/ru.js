@@ -1344,7 +1344,6 @@ OC.L10N.register(
     "Strikethrough" : "Зачеркнутый",
     "Sub-card" : "Подкарточка",
     "Sub-card progress" : "Прогресс подкарточек",
-    "Sub-card progress {done} of {total}" : "Прогресс подкарточек: {done} из {total}",
     "Sub-cards" : "Подкарточки",
     "Submit" : "Отправить",
     "Subscribe to this board's card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card." : "Подпишитесь на сроки выполнения карточек этой доски в любом календарном приложении (Календарь Nextcloud, Thunderbird, ваш телефон). Лента доступна только для чтения и содержит только названия карточек, сроки выполнения и ссылку на каждую карточку.",

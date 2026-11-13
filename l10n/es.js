@@ -1344,7 +1344,6 @@ OC.L10N.register(
     "Strikethrough" : "Tachado",
     "Sub-card" : "Subtarjeta",
     "Sub-card progress" : "Progreso de las subtarjetas",
-    "Sub-card progress {done} of {total}" : "Progreso de las subtarjetas: {done} de {total}",
     "Sub-cards" : "Subtarjetas",
     "Submit" : "Enviar",
     "Subscribe to this board's card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card." : "Suscríbete a las fechas de vencimiento de las tarjetas de este tablero desde cualquier aplicación de calendario (Nextcloud Calendar, Thunderbird, tu teléfono). La fuente es de solo lectura y solo muestra los títulos de las tarjetas, sus fechas de vencimiento y un enlace a cada una.",

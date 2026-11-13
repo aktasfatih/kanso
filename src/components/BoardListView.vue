@@ -1080,7 +1080,7 @@ function progressBadge(card) {
 	} else {
 		label = fromChecklist
 			? t('kanso', 'Checklist progress {done} of {total}', counts)
-			: t('kanso', 'Sub-card progress {done} of {total}', counts)
+			: t('kanso', 'Sub-card progress {done} of {total} (done or archived)', counts)
 	}
 
 	return { done: progress.done, total: progress.total, overdue, label }

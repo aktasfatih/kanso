@@ -589,6 +589,17 @@ class CardMapperTest extends TestCase {
 		self::assertSame([], $mapper->childProgressByBoards([], 'alice', []));
 	}
 
+	public function testArchivedChildrenRemainInTotalsAndCountAsResolved(): void {
+		foreach ([
+			fn (CardMapper $mapper) => $mapper->childProgressByBoard(7, self::viewer()),
+			fn (CardMapper $mapper) => $mapper->childProgressByBoards([7], 'alice', self::roles([7])),
+		] as $count) {
+			$recorded = $this->recordQuery($count);
+			self::assertSame([true], self::boundValues($recorded['predicates'], 'eq', 'archived'));
+			self::assertSame([0], self::boundValues($recorded['predicates'], 'gt', 'done_at'));
+		}
+	}
+
 	public function testFindWithDuedateByBoardAppliesTheCallersRowCap(): void {
 		// The ICS feed is the app's only ANONYMOUS card read and its caller
 		// serialises every row it gets, so the cap has to reach the SQL - not just

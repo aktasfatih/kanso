@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n linha de dados detectada"
 msgstr[1] "%n linhas de dados detectadas"
 
-#: src/components/CardDetail.vue:5104
+#: src/components/CardDetail.vue:5105
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "há %n dia"
@@ -409,7 +409,7 @@ msgid_plural "%n files"
 msgstr[0] "%n arquivo"
 msgstr[1] "%n arquivos"
 
-#: src/components/CardDetail.vue:5102
+#: src/components/CardDetail.vue:5103
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "há %n hora"
@@ -439,7 +439,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etiqueta não foi criada e está faltando nos cartões importados: só quem gerencia o quadro pode adicionar novas etiquetas. Peça a essa pessoa para adicioná-la e depois defina-a nos cartões."
 msgstr[1] "%n etiquetas não foram criadas e estão faltando nos cartões importados: só quem gerencia o quadro pode adicionar novas etiquetas. Peça a essa pessoa para adicioná-las e depois defina-as nos cartões."
 
-#: src/components/CardDetail.vue:5100
+#: src/components/CardDetail.vue:5101
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "há %n minuto"
@@ -469,7 +469,7 @@ msgid_plural "%n projects"
 msgstr[0] "%n projeto"
 msgstr[1] "%n projetos"
 
-#: src/components/CardDetail.vue:2343
+#: src/components/CardDetail.vue:2344
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n resposta"
@@ -1489,7 +1489,7 @@ msgstr "Progresso do checklist: {done} de {total}"
 
 #: src/components/BoardListView.vue:1079
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:520
+#: src/components/CardTile.vue:521
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Progresso do checklist: {done} de {total}, %n etapa atrasada"
@@ -2050,7 +2050,7 @@ msgid "Date"
 msgstr "Data"
 
 #: src/components/BoardSettingsModal.vue:2323
-#: src/components/CardDetail.vue:5295
+#: src/components/CardDetail.vue:5296
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dia"
@@ -2331,6 +2331,11 @@ msgstr "Concluídos E criados há ≥ N dias"
 #: src/components/BoardSettingsModal.vue
 msgid "Done for ≥ N days"
 msgstr "Concluídos há ≥ N dias"
+
+#: src/components/CardDetail.vue
+#: src/components/CardTile.vue
+msgid "Done or archived sub-cards"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Done-gated columns block Done until every review is approved."
@@ -3640,7 +3645,7 @@ msgstr "Seu propósito, escopo ou regras. Todos os membros do quadro podem lê-l
 msgid "Jump to the discussion"
 msgstr "Ir para a discussão"
 
-#: src/components/CardDetail.vue:7181
+#: src/components/CardDetail.vue:7182
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Ir para a discussão (%n comentário)"
@@ -4032,7 +4037,7 @@ msgid "Mon"
 msgstr "Seg"
 
 #: src/components/BoardSettingsModal.vue:2325
-#: src/components/CardDetail.vue:5297
+#: src/components/CardDetail.vue:5298
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mês"
@@ -5694,7 +5699,7 @@ msgstr "Mostrar a discussão abaixo do cartão"
 msgid "Show the discussion panel"
 msgstr "Mostrar o painel de discussão"
 
-#: src/components/CardDetail.vue:7187
+#: src/components/CardDetail.vue:7188
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostrar o painel de discussão (%n comentário)"
@@ -5899,8 +5904,8 @@ msgid "Sub-card progress"
 msgstr "Progresso dos subcartões"
 
 #: src/components/BoardListView.vue
-msgid "Sub-card progress {done} of {total}"
-msgstr "Progresso dos subcartões: {done} de {total}"
+msgid "Sub-card progress {done} of {total} (done or archived)"
+msgstr ""
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
@@ -6501,7 +6506,7 @@ msgid "Wed"
 msgstr "Qua"
 
 #: src/components/BoardSettingsModal.vue:2324
-#: src/components/CardDetail.vue:5296
+#: src/components/CardDetail.vue:5297
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "semana"
@@ -6540,7 +6545,7 @@ msgid "When a card enters role"
 msgstr "Quando um cartão entra no papel"
 
 #: src/components/BoardSettingsModal.vue
-msgid "When on, a parent card is completed automatically once all of its sub-issues are done or archived. Off by default — the parent stays open for a human to close."
+msgid "When on, a parent card is completed automatically once all of its sub-issues are done or archived, its checklist is complete and its reviews are approved. Off by default. Reopening or restoring a sub-issue never reopens the parent."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -6610,7 +6615,7 @@ msgid "wrote"
 msgstr "escreveu"
 
 #: src/components/BoardSettingsModal.vue:2326
-#: src/components/CardDetail.vue:5298
+#: src/components/CardDetail.vue:5299
 msgid "year"
 msgid_plural "years"
 msgstr[0] "ano"

@@ -1344,7 +1344,6 @@ OC.L10N.register(
     "Strikethrough" : "Durchgestrichen",
     "Sub-card" : "Unterkarte",
     "Sub-card progress" : "Fortschritt der Unterkarten",
-    "Sub-card progress {done} of {total}" : "Fortschritt der Unterkarten {done} von {total}",
     "Sub-cards" : "Unterkarten",
     "Submit" : "Absenden",
     "Subscribe to this board's card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card." : "Abonniere die Fälligkeitsdaten der Karten dieses Boards in einer beliebigen Kalender-App (Nextcloud Calendar, Thunderbird, dein Smartphone). Der Feed ist schreibgeschützt und zeigt nur Kartentitel, Fälligkeitsdaten und einen Link zur jeweiligen Karte.",

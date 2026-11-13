@@ -992,7 +992,7 @@ class CardMapper extends QBMapper {
 	/**
 	 * Per-parent child progress for every non-deleted card on a board that has
 	 * children, as a fixed two-query self-scan - the board payload stays a
-	 * constant number of queries. "done" counts children whose `done_at > 0`.
+	 * constant number of queries. "done" counts children that are done or archived.
 	 * Parents with no children are absent from the map (callers default to 0/0).
 	 *
 	 * Visibility (#3743): only children the VIEWER can see are counted, so a
@@ -1048,8 +1048,8 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
-	 * Child counts grouped by parent for a board, optionally restricted to done
-	 * children (`done_at > 0`). Only non-deleted children with a parent are
+	 * Child counts grouped by parent for a board, optionally restricted to resolved
+	 * children (done or archived). Only non-deleted children with a parent are
 	 * counted.
 	 *
 	 * @return array<int, int> map of parentCardId => count
@@ -1067,7 +1067,10 @@ class CardMapper extends QBMapper {
 		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		if ($doneOnly) {
-			$qb->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+			$qb->andWhere($qb->expr()->orX(
+				$qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)),
+				$qb->expr()->eq('archived', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)),
+			));
 		}
 
 		$result = $qb->executeQuery();
@@ -1105,7 +1108,10 @@ class CardMapper extends QBMapper {
 		$this->visibilityScope->apply($qb, '', $uid, null, $rolesByBoard);
 
 		if ($doneOnly) {
-			$qb->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+			$qb->andWhere($qb->expr()->orX(
+				$qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)),
+				$qb->expr()->eq('archived', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)),
+			));
 		}
 
 		$result = $qb->executeQuery();

@@ -1499,7 +1499,6 @@
         "Strikethrough": "Doorhalen",
         "Sub-card": "Subkaart",
         "Sub-card progress": "Voortgang van de subkaarten",
-        "Sub-card progress {done} of {total}": "Voortgang van de subkaarten {done} van {total}",
         "Sub-cards": "Subkaarten",
         "Submit": "Indienen",
         "Subscribe to this board's card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card.": "Abonneer je in elke agenda-app (Nextcloud Agenda, Thunderbird, je telefoon) op de einddata van de kaarten op dit bord. De feed is alleen-lezen en toont alleen kaarttitels, einddata en een link terug naar elke kaart.",

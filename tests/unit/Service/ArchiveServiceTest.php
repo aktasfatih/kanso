@@ -17,6 +17,7 @@ use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Db\StackMapper;
 use OCA\Kanso\Service\ArchiveService;
+use OCA\Kanso\Service\CardService;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -38,6 +39,8 @@ class ArchiveServiceTest extends TestCase {
 	private PermissionService&MockObject $permissionService;
 	private ITimeFactory&MockObject $time;
 	private IDBConnection&MockObject $db;
+	private CardService&MockObject $cardService;
+	private \OCA\Kanso\Tests\Stubs\CardMutationService $cardMutation;
 	private ArchiveService $service;
 
 	protected function setUp(): void {
@@ -51,6 +54,8 @@ class ArchiveServiceTest extends TestCase {
 		$this->time = $this->createMock(ITimeFactory::class);
 		$this->time->method('getTime')->willReturn(self::NOW);
 		$this->db = $this->createMock(IDBConnection::class);
+		$this->cardService = $this->createMock(CardService::class);
+		$this->cardMutation = new \OCA\Kanso\Tests\Stubs\CardMutationService($this->db, true);
 		$this->service = new ArchiveService(
 			$this->ruleMapper,
 			$this->cardMapper,
@@ -60,7 +65,8 @@ class ArchiveServiceTest extends TestCase {
 			$this->permissionService,
 			$this->time,
 			$this->db,
-			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
+			$this->cardMutation,
+			$this->cardService,
 		);
 	}
 
@@ -105,6 +111,7 @@ class ArchiveServiceTest extends TestCase {
 		$card->setStackId(5);
 		$card->setDoneAt($doneAt);
 		$card->setArchived(false);
+		$card->setDeletedAt(0);
 		return $card;
 	}
 
@@ -365,8 +372,8 @@ class ArchiveServiceTest extends TestCase {
 		// Exactly ONE coalesced push for the whole batch, not one per card.
 		$this->changeNotifier->expects(self::once())->method('pushBoardChanged')->with(1);
 		// Each card is committed in its own transaction.
-		$this->db->expects(self::exactly(2))->method('beginTransaction');
-		$this->db->expects(self::exactly(2))->method('commit');
+		$this->db->expects(self::exactly(3))->method('beginTransaction');
+		$this->db->expects(self::exactly(3))->method('commit');
 		$this->db->expects(self::never())->method('rollBack');
 
 		$count = $this->service->sweep($rule);
@@ -382,9 +389,97 @@ class ArchiveServiceTest extends TestCase {
 		$this->changeNotifier->expects(self::never())->method('recordChange');
 		// An empty sweep emits no push at all.
 		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
-		$this->db->expects(self::never())->method('beginTransaction');
+		$this->db->expects(self::once())->method('beginTransaction');
 
 		self::assertSame(0, $this->service->sweep($rule));
+	}
+
+	public function testSweepChecksParentCompletionWithSystemAttributionBeforeCommit(): void {
+		$child = $this->card(10);
+		$child->setParentCardId(20);
+		$this->cardMapper->method('findEligibleForArchive')->willReturn([$child]);
+		$this->cardMapper->method('findForMutation')->with(10)->willReturn($child);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$order = [];
+		$this->changeNotifier->method('recordChange')->willReturnCallback(static function () use (&$order): Change {
+			$order[] = 'change';
+			return new Change();
+		});
+		$this->cardService->expects(self::once())->method('maybeCompleteParent')
+			->with($child, null, false)
+			->willReturnCallback(static function (Card $card) use (&$order): void {
+				self::assertTrue($card->getArchived());
+				$order[] = 'parent';
+			});
+		$this->db->expects(self::exactly(2))->method('commit')->willReturnCallback(static function () use (&$order): void {
+			$order[] = 'commit';
+		});
+		$this->changeNotifier->expects(self::once())->method('pushBoardChanged')->with(1)
+			->willReturnCallback(function () use (&$order): void {
+				$this->cardMutation->afterCommit(static function () use (&$order): void {
+					$order[] = 'push';
+				});
+			});
+
+		self::assertSame(1, $this->service->sweep($this->rule()));
+		self::assertSame(['change', 'commit', 'parent', 'commit', 'push'], $order);
+	}
+
+	public function testSweepCompletesTheCurrentParentWhenASelectedChildWasReparented(): void {
+		$selected = $this->card(10);
+		$selected->setParentCardId(20);
+		$current = $this->card(10);
+		$current->setParentCardId(30);
+		$current->setArchived(true);
+		$this->cardMapper->method('findEligibleForArchive')->willReturn([$selected]);
+		$this->cardMapper->method('update')->with($selected)->willReturnArgument(0);
+		$this->cardMapper->expects(self::once())->method('findForMutation')->with(10)->willReturn($current);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+		$this->cardService->expects(self::once())->method('maybeCompleteParent')->with($current, null, false);
+
+		self::assertSame(1, $this->service->sweep($this->rule()));
+	}
+
+	public function testSweepRollsBackWhenParentCompletionFails(): void {
+		$child = $this->card(10);
+		$child->setParentCardId(20);
+		$this->cardMapper->method('findEligibleForArchive')->willReturn([$child]);
+		$this->cardMapper->method('findForMutation')->willReturn($child);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+		$this->cardService->method('maybeCompleteParent')->willThrowException(new \RuntimeException('parent change failed'));
+		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::once())->method('commit');
+		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');
+
+		$this->expectException(\RuntimeException::class);
+		$this->service->sweep($this->rule());
+	}
+
+	public function testSweepCompletesEachParentOnceInNumericOrderAfterAllChildWrites(): void {
+		$cards = [$this->card(10), $this->card(11), $this->card(12)];
+		foreach ([20, 3, 20] as $index => $parentId) {
+			$cards[$index]->setParentCardId($parentId);
+		}
+		$this->cardMapper->method('findEligibleForArchive')->willReturn($cards);
+		$this->cardMapper->method('findForMutation')->willReturnCallback(static fn (int $id): Card => $cards[$id - 10]);
+		$writes = [];
+		$this->cardMapper->method('update')->willReturnCallback(static function (Card $card) use (&$writes): Card {
+			$writes[] = $card->getId();
+			return $card;
+		});
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+		$parents = [];
+		$this->cardService->expects(self::exactly(2))->method('maybeCompleteParent')
+			->willReturnCallback(static function (Card $card, ?string $actor, bool $push) use (&$parents, &$writes): void {
+				self::assertSame([10, 11, 12], $writes);
+				self::assertNull($actor);
+				self::assertFalse($push);
+				$parents[] = $card->getParentCardId();
+			});
+
+		self::assertSame(3, $this->service->sweep($this->rule()));
+		self::assertSame([3, 20], $parents);
 	}
 
 	/**
@@ -400,8 +495,8 @@ class ArchiveServiceTest extends TestCase {
 			->method('recordChange')
 			->willThrowException(new \RuntimeException('change row insert failed'));
 
-		$this->db->expects(self::once())->method('beginTransaction');
-		$this->db->expects(self::once())->method('rollBack');
+		$this->db->expects(self::exactly(2))->method('beginTransaction');
+		$this->db->expects(self::exactly(2))->method('rollBack');
 		$this->db->expects(self::never())->method('commit');
 		// A failed item aborts the sweep before the coalesced push.
 		$this->changeNotifier->expects(self::never())->method('pushBoardChanged');

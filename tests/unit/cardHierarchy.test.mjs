@@ -21,7 +21,7 @@ function deferred() {
 	return { promise, resolve }
 }
 
-function harness(t, initialParent = 10) {
+function harness(t, initialParent = 10, { archived = false, template = false } = {}) {
 	const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: Infinity }, mutations: { retry: false, gcTime: 0 } } })
 	const app = createApp({})
 	app.use(VueQueryPlugin, { queryClient: client })
@@ -32,13 +32,13 @@ function harness(t, initialParent = 10) {
 		[10, { id: 10, title: 'Parent A', parentCardId: null }],
 		[20, { id: 20, title: 'Parent B', parentCardId: null }],
 		[30, { id: 30, title: 'Parent C', parentCardId: null }],
-		[101, { id: 101, title: 'Child', parentCardId: initialParent, doneAt: 1 }],
+		[101, { id: 101, title: 'Child', parentCardId: initialParent, doneAt: archived ? 0 : 1, archived, isTemplate: template }],
 		[102, { id: 102, title: 'Sibling', parentCardId: 10, doneAt: 0 }],
 	].map(([id, record]) => [id, { boardId: 41, stackId: 411, doneAt: 0, archived: false, priority: 0, ...record }]))
 	let cursor = 20
 	const changes = []
 	const children = (id) => [...records.values()].filter((card) => !card.deletedAt && card.parentCardId === Number(id))
-	const progress = (id) => ({ total: children(id).length, done: children(id).filter((card) => card.doneAt > 0).length })
+	const progress = (id) => ({ total: children(id).length, done: children(id).filter((card) => card.doneAt > 0 || card.archived).length })
 	const detail = (id) => ({ ...records.get(Number(id)), description: 'Description', children: children(id).map((card) => ({ ...card })) })
 	const board = (id = 41) => ({ board: { id: Number(id), title: 'Hierarchy' }, stacks: [], labels: [], cursor, etag: `${cursor}-15-internal`, cards: [...records.values()].filter((card) => !card.deletedAt && !card.isTemplate && card.boardId === Number(id)).map((card) => ({ ...card, childProgress: progress(card.id) })) })
 	client.setQueryData(['board', '41'], board())
@@ -297,6 +297,57 @@ test('template children absent from the board retain their contribution to paren
 	write.release()
 	await result
 	assert.deepEqual(h.summary(10).childProgress, { total: 4, done: 2 })
+})
+
+for (const template of [false, true]) {
+	test(`archived children stay resolved through a pending reparent and failed recovery (template ${template})`, async (t) => {
+		const h = harness(t, 10, { archived: true, template })
+		const write = h.hold('PUT', '/cards/101/parent', { fail: true })
+		const result = assert.rejects(h.actions.setParent(101, 20, 10), /403/)
+		await write.started
+		assert.deepEqual(h.summary(10).childProgress, { total: 1, done: 0 })
+		assert.deepEqual(h.summary(20).childProgress, { total: 1, done: 1 })
+		assert.deepEqual(h.cached(20).childProgress, { total: 1, done: 1 })
+		assert.equal(h.cached(20).children[0].archived, true)
+		h.offline()
+		write.release()
+		await result
+		assert.deepEqual(h.summary(10).childProgress, { total: 2, done: 1 })
+		assert.deepEqual(h.summary(20).childProgress, { total: 0, done: 0 })
+		assert.deepEqual(h.cached(10).childProgress, { total: 2, done: 1 })
+	})
+}
+
+test('two archived template children transfer their resolved residual exactly once', async (t) => {
+	const h = harness(t, 10, { archived: true, template: true })
+	h.remote(102, { isTemplate: true, archived: true })
+	h.client.setQueryData(['board', '41'], h.board())
+	for (const id of [10, 20, 101, 102]) h.client.setQueryData(['card', String(id)], h.detail(id))
+	const first = h.hold('PUT', '/cards/101/parent')
+	const second = h.hold('PUT', '/cards/102/parent')
+	const movingFirst = h.actions.setParent(101, 20, 10)
+	await first.started
+	assert.deepEqual(h.summary(10).childProgress, { total: 1, done: 1 })
+	const movingSecond = h.actions.setParent(102, 20, 10)
+	await second.started
+	assert.deepEqual(h.summary(10).childProgress, { total: 0, done: 0 })
+	assert.deepEqual(h.summary(20).childProgress, { total: 2, done: 2 })
+	first.release()
+	second.release()
+	await Promise.all([movingFirst, movingSecond])
+	assert.deepEqual(h.summary(20).childProgress, { total: 2, done: 2 })
+})
+
+test('restoring an archived child refreshes its cached parent when reopened', async (t) => {
+	const h = harness(t, 10, { archived: true })
+	const lifecycle = h.within(() => useCardActions(h.boardId, ref('101')))
+	await lifecycle.setArchived.mutateAsync({ archived: false })
+	assert.equal(h.client.getQueryState(['card', '10']).isInvalidated, true)
+	assert.equal(h.client.getQueryState(['card', '20']).isInvalidated, false)
+	h.within(() => useCard(ref('10'), true))
+	await new Promise((done) => setImmediate(done))
+	assert.equal(h.cached(10).children.find((card) => card.id === 101).archived, false)
+	assert.ok(h.requests.some((request) => request.method === 'GET' && request.path === '/cards/10'))
 })
 
 test('repeating the current parent does not duplicate children or increment progress', async (t) => {

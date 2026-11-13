@@ -51,6 +51,7 @@ class ArchiveService {
 		private ITimeFactory $time,
 		private IDBConnection $db,
 		private CardMutationService $cardMutation,
+		private CardService $cardService,
 	) {
 	}
 
@@ -211,35 +212,22 @@ class ArchiveService {
 	}
 
 	/**
-	 * Archives every eligible card in the rule's scope (capped at
-	 * MAX_PER_SWEEP), recording a per-card change row so open clients refetch.
-	 * Idempotent: cards already archived are excluded by the eligibility
-	 * query, so re-running the sweep is a no-op for them.
-	 *
-	 * Realtime pushes are COALESCED (#3418): each card's UPDATE + its change row
-	 * is written per-item, but the notify_push fan-out (per-recipient, board-wide)
-	 * fires ONCE for the board at the end of the batch instead of once per card.
-	 * The push body is only {boardId}, so a single push is enough - clients delta/
-	 * refetch and collapse the N change rows regardless. A 100-card sweep with M
-	 * recipients thus emits M pushes, not 100xM.
-	 *
-	 * Each card's archive write and its change row are committed atomically (#3579):
-	 * a failed change-row write rolls that card's archive flag back, so no card is
-	 * left archived without a delta-sync row (and no delta row points at a write
-	 * that never landed). A single card that throws aborts this rule's sweep but is
-	 * isolated by {@see self::runEnabledRules()} so the other rules still run; the
-	 * sweep is idempotent, so a retry picks up whatever committed.
+	 * Archives an eligible batch and completes its parents under the board fence.
+	 * Card writes and change rows commit together, followed by one realtime push.
 	 *
 	 * @return int number of cards archived
 	 */
 	public function sweep(ArchiveRule $rule): int {
 		return $this->cardMutation->runForBoards([$rule->getBoardId()], function () use ($rule): int {
 			$count = 0;
-			foreach ($this->findEligibleCards($rule) as $card) {
+			$archivedCards = [];
+			$cards = $this->findEligibleCards($rule);
+			foreach ($cards as $card) {
 				$this->db->beginTransaction();
 				try {
 					$card->setArchived(true);
 					$this->cardMapper->update($card);
+					$archivedCards[] = $this->cardMapper->findForMutation($card->getId());
 					// System actor (null) - the sweep is not attributed to a user.
 					// Record the row only; the coalesced push fires once after the loop.
 					$this->changeNotifier->recordChange(
@@ -255,6 +243,18 @@ class ArchiveService {
 					throw $e;
 				}
 				$count++;
+			}
+			// Persist children first, then complete each parent in a consistent lock order.
+			$parents = [];
+			foreach ($archivedCards as $card) {
+				$parentId = $card->getParentCardId();
+				if ($parentId !== null && $card->getDeletedAt() === 0) {
+					$parents[$parentId] = $card;
+				}
+			}
+			ksort($parents, SORT_NUMERIC);
+			foreach ($parents as $card) {
+				$this->cardService->maybeCompleteParent($card, null, false);
 			}
 
 			// One coalesced realtime push for the whole batch (#3418): only broadcast

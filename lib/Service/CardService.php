@@ -1791,19 +1791,13 @@ class CardService {
 	}
 
 	/**
-	 * Auto-completes a parent card once ALL of its children are resolved (done
-	 * or archived) AND its own checklist is fully done - the "all children done
-	 * → parent done" workflow. Gated by the board's `autoCompleteParent` setting
-	 * (#198), which is OFF by default: a parent is only stamped done this way
-	 * when the board owner has opted in. Called from a CHILD's update()/move()
-	 * after it persists; a card with no parent is a fast no-op (the common case).
-	 * Forward-only for v1: it never RE-OPENS a parent (a parent a human marked
-	 * done is left alone), and since the hierarchy is one level (a parent has no
-	 * parent) stamping it done cannot cascade - no loop guard needed.
+	 * @internal Call after persisting the child under its mutation fence.
+	 * Archived children count as resolved; completed parents never reopen.
+	 * Batch callers suppress the push and emit one after their writes commit.
 	 */
-	private function maybeCompleteParent(Card $child, string $uid): void {
+	public function maybeCompleteParent(Card $child, ?string $uid, bool $push = true): void {
 		$parentId = $child->getParentCardId();
-		if ($parentId === null) {
+		if ($parentId === null || $child->getDeletedAt() > 0) {
 			return;
 		}
 		try {
@@ -1811,16 +1805,9 @@ class CardService {
 		} catch (DoesNotExistException) {
 			return;
 		}
-		if ($parent->getDeletedAt() > 0 || $parent->getDoneAt() > 0) {
+		if ($parent->getDeletedAt() > 0 || $parent->getDoneAt() > 0 || $parent->getBoardId() !== $child->getBoardId()) {
 			return;
 		}
-
-		// This automation is OPT-IN per board (#198): OFF by default, so a parent
-		// is never stamped done just because its subcards are resolved unless the
-		// board owner has explicitly enabled it. A NULL column reads as OFF, so
-		// boards that predate the column keep the manual "mark the parent done"
-		// behaviour. Checked first so the common (off) case skips the children and
-		// review queries entirely.
 		try {
 			$board = $this->boardMapper->find($parent->getBoardId());
 		} catch (DoesNotExistException) {
@@ -1829,29 +1816,16 @@ class CardService {
 		if ($board->getAutoCompleteParent() !== true) {
 			return;
 		}
-
 		foreach ($this->cardMapper->findChildren($parentId) as $sibling) {
 			if ($sibling->getDoneAt() === 0 && !$sibling->getArchived()) {
-				return; // an unresolved child remains
+				return;
 			}
 		}
-
-		// A parent that still has open checklist steps of its own must not be stamped
-		// done just because its subcards are resolved (#198): the checklist is part of
-		// the parent's own work, so it is a precondition for auto-completion too. An
-		// itemless parent (or one whose steps are all done) passes.
 		foreach ($this->checklistItemMapper->findByCard($parentId) as $item) {
 			if (!$item->getDone()) {
-				return; // an open checklist step remains
+				return;
 			}
 		}
-
-		// The parent is about to be stamped done, so it passes the same review gate
-		// as every explicit route (#10070) - finishing the last subtask must not
-		// quietly complete a parent whose own reviews are still unapproved. This one
-		// is an automation triggered by a DIFFERENT card's write, so it declines
-		// SILENTLY rather than throwing: the child's completion stands and the
-		// parent simply stays open until its reviews are approved.
 		if ($this->cardReviewMapper->hasUnapprovedReviews($parentId)) {
 			return;
 		}
@@ -1859,8 +1833,6 @@ class CardService {
 		$now = time();
 		$parent->setDoneAt($now);
 		$parent->setLastModified($now);
-
-		// Atomic entity-write + change-row (#3579); push after commit.
 		$this->writeCardChange(
 			$parent->getBoardId(),
 			$parentId,
@@ -1868,6 +1840,7 @@ class CardService {
 			$uid,
 			Change::VERB_UPDATED,
 			fn (): Card => $this->cardMapper->update($parent),
+			push: $push,
 		);
 	}
 
@@ -1891,7 +1864,7 @@ class CardService {
 	 * @param array{from: ?string, to: ?string}|null $detail before/after payload
 	 * @throws \Throwable rethrows whatever the write or the change-row insert throws
 	 */
-	private function writeCardChange(int $boardId, int $entityId, int $action, ?string $uid, ?int $verb, callable $write, ?array $detail = null): Card {
+	private function writeCardChange(int $boardId, int $entityId, int $action, ?string $uid, ?int $verb, callable $write, ?array $detail = null, bool $push = true): Card {
 		$this->db->beginTransaction();
 		try {
 			$card = $write();
@@ -1915,7 +1888,9 @@ class CardService {
 		}
 
 		// Commit succeeded - now it is safe to broadcast.
-		$this->changeNotifier->pushBoardChanged($boardId);
+		if ($push) {
+			$this->changeNotifier->pushBoardChanged($boardId);
+		}
 
 		return $card;
 	}

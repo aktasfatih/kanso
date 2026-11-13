@@ -8,9 +8,10 @@ const clients = new WeakMap()
 const parentId = (id) => id == null ? null : Number(id)
 const summaryFields = ['id', 'title', 'stackId', 'doneAt', 'archived', 'duedate', 'startDate', 'allDay']
 const summary = (card) => Object.fromEntries(summaryFields.filter((key) => key in (card ?? {})).map((key) => [key, card[key]]))
+const resolved = (card) => Number(card.doneAt) > 0 || card.archived === true
 const progress = (cards, id) => {
 	const children = cards.filter((card) => parentId(card.parentCardId) === Number(id))
-	return { total: children.length, done: children.filter((card) => Number(card.doneAt) > 0).length }
+	return { total: children.length, done: children.filter(resolved).length }
 }
 
 function registryFor(client) {
@@ -33,7 +34,7 @@ function effective(state) {
 
 function templateProgress(board, id, optimistic = false) {
 	const children = [...board.children.values()].filter((state) => state.template && state.present && (optimistic ? effective(state) : state.parentCardId) === id)
-	return { total: children.length, done: children.filter((state) => Number(state.summary.doneAt) > 0).length }
+	return { total: children.length, done: children.filter((state) => resolved(state.summary)).length }
 }
 
 function rememberParent(board, id, data) {
@@ -87,7 +88,7 @@ function projectCard(client, board, id, data) {
 				children.splice(index < 0 ? children.length : index, 0, childSummary(client, board, child, existing))
 			}
 		}
-		result = { ...result, children, childProgress: { total: children.length, done: children.filter((card) => Number(card.doneAt) > 0).length } }
+		result = { ...result, children, childProgress: { total: children.length, done: children.filter(resolved).length } }
 	}
 	return result
 }
@@ -120,7 +121,7 @@ export function beginHierarchyChange(client, target) {
 		if (state.template && residual) {
 			board.parents.set(state.parentCardId, {
 				total: Math.max(0, residual.total - 1),
-				done: Math.max(0, residual.done - (Number(state.summary.doneAt) > 0 ? 1 : 0)),
+				done: Math.max(0, residual.done - (resolved(state.summary) ? 1 : 0)),
 			})
 		}
 	}

@@ -1712,7 +1712,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<div class="card-modal__section-inline">
 								<SitemapIcon :size="16" class="card-modal__eyebrow-icon" />
 								<span class="card-modal__eyebrow">{{ t('kanso', 'Sub-cards') }}</span>
-								<span v-if="children.length > 0" class="card-modal__section-count">{{ childrenDone }} / {{ children.length }}</span>
+								<span v-if="children.length > 0" class="card-modal__section-count" :title="t('kanso', 'Done or archived sub-cards')">{{ childrenDone }} / {{ children.length }}</span>
 								<input
 									v-if="canEdit"
 									ref="addChildInputRef"
@@ -1743,7 +1743,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									<!-- #122 — a sub-card's dates, so reading a case's steps no longer
 									     means opening each one. Display-only: children[] comes from
 									     jsonSerializeSummary(), which already carries both dates. -->
-									<span v-if="child.startDate || child.duedate" class="card-modal__child-dates">
+									<span v-if="child.archived || child.startDate || child.duedate" class="card-modal__child-dates">
+										<span v-if="child.archived" class="card-modal__child-date card-modal__child-archived">{{ t('kanso', 'Archived') }}</span>
 										<span
 											v-if="child.startDate"
 											class="card-modal__child-date card-modal__child-date--start"
@@ -6297,7 +6298,7 @@ const children = computed(() =>
 )
 
 const childrenDone = computed(() =>
-	children.value.filter((c) => Number(c.doneAt) > 0).length,
+	children.value.filter((c) => Number(c.doneAt) > 0 || c.archived === true).length,
 )
 
 // ── Sub-card date chips (#122) ───────────────────────────────────────────────
@@ -6320,7 +6321,7 @@ function childDateFull(child, iso) {
 // chip - including their rule that a DONE sub-card shows its due date neutrally
 // rather than shouting red about work that is already finished.
 function childDueClass(child) {
-	if (!child.duedate || Number(child.doneAt) > 0) return ''
+	if (!child.duedate || Number(child.doneAt) > 0 || child.archived) return ''
 	const due = new Date(child.duedate)
 	const now = new Date()
 	if (due < now) return 'card-modal__child-date--overdue'

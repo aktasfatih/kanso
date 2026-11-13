@@ -17,6 +17,10 @@ export function useCardActions(boardId, cardId) {
 			onSettled: (_data, _error, operation) => {
 				queryClient.invalidateQueries({ queryKey: operation.target.boardKey })
 				queryClient.invalidateQueries({ queryKey: operation.target.cardKey })
+				queryClient.invalidateQueries({
+					queryKey: ['card'],
+					predicate: (query) => query.state.data?.children?.some((child) => Number(child.id) === operation.target.cardId),
+				})
 				invalidateCrossBoardFeeds(queryClient)
 			},
 		})

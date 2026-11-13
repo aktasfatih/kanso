@@ -1499,7 +1499,6 @@
         "Strikethrough": "Üstü çizili",
         "Sub-card": "Alt kart",
         "Sub-card progress": "Alt kart ilerlemesi",
-        "Sub-card progress {done} of {total}": "Alt kart ilerlemesi: {total} karttan {done} tanesi",
         "Sub-cards": "Alt kartlar",
         "Submit": "Gönder",
         "Subscribe to this board's card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card.": "Bu panonun kart bitiş tarihlerine herhangi bir takvim uygulamasından (Nextcloud Takvim, Thunderbird, telefonun) abone ol. Akış salt okunurdur ve yalnızca kart başlıklarını, bitiş tarihlerini ve her karta dönen bir bağlantıyı gösterir.",
