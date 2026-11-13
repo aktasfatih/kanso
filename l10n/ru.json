@@ -205,6 +205,11 @@
             "%n ждут проверки",
             "%n ждут проверки"
         ],
+        "_%n other reviewer_::_%n other reviewers_": [
+            "%n другой рецензент",
+            "%n других рецензента",
+            "%n других рецензентов"
+        ],
         "_%n overdue_::_%n overdue_": [
             "%n просрочена",
             "%n просрочены",
@@ -293,6 +298,7 @@
         "All day (no time)": "Весь день (без времени)",
         "All due dates": "Все сроки",
         "All issues": "Все issue",
+        "All requested reviews must be approved before this card can be marked done.": "Все запрошенные проверки должны быть одобрены, прежде чем эту карточку можно отметить готовой.",
         "All requested reviews must be approved before this card can be marked done. Waiting on {names}.": "Все запрошенные проверки должны быть одобрены, прежде чем эту карточку можно отметить готовой. Ожидаемые проверяющие: {names}.",
         "All statuses": "Все статусы",
         "Analytics": "Аналитика",

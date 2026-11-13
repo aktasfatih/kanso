@@ -176,6 +176,10 @@
             "%n en attente de revue",
             "%n en attente de revue"
         ],
+        "_%n other reviewer_::_%n other reviewers_": [
+            "%n autre évaluateur",
+            "%n autres évaluateurs"
+        ],
         "_%n overdue_::_%n overdue_": [
             "%n en retard",
             "%n en retard"
@@ -257,6 +261,7 @@
         "All day (no time)": "Journée entière (sans heure)",
         "All due dates": "Toutes les échéances",
         "All issues": "Tous les tickets",
+        "All requested reviews must be approved before this card can be marked done.": "Toutes les revues demandées doivent être approuvées avant de pouvoir marquer cette carte comme terminée.",
         "All requested reviews must be approved before this card can be marked done. Waiting on {names}.": "Toutes les revues demandées doivent être approuvées avant de pouvoir marquer cette carte comme terminée. En attente de {names}.",
         "All statuses": "Tous les statuts",
         "Analytics": "Statistiques",

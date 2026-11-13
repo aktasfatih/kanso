@@ -176,6 +176,10 @@
             "%n heeft review nodig",
             "%n hebben review nodig"
         ],
+        "_%n other reviewer_::_%n other reviewers_": [
+            "%n andere beoordelaar",
+            "%n andere beoordelaars"
+        ],
         "_%n overdue_::_%n overdue_": [
             "%n te laat",
             "%n te laat"
@@ -257,6 +261,7 @@
         "All day (no time)": "Hele dag (geen tijd)",
         "All due dates": "Alle vervaldatums",
         "All issues": "Alle issues",
+        "All requested reviews must be approved before this card can be marked done.": "Alle aangevraagde reviews moeten goedgekeurd zijn voordat deze kaart als klaar kan worden gemarkeerd.",
         "All requested reviews must be approved before this card can be marked done. Waiting on {names}.": "Alle aangevraagde reviews moeten goedgekeurd zijn voordat deze kaart als klaar kan worden gemarkeerd. Wacht op {names}.",
         "All statuses": "Alle statussen",
         "Analytics": "Statistieken",

@@ -147,6 +147,9 @@
         "_%n need review_::_%n need review_": [
             "%n 张待评审"
         ],
+        "_%n other reviewer_::_%n other reviewers_": [
+            "%n 位其他评审者"
+        ],
         "_%n overdue_::_%n overdue_": [
             "%n 张已逾期"
         ],
@@ -221,6 +224,7 @@
         "All day (no time)": "全天（不含时间）",
         "All due dates": "所有截止日期",
         "All issues": "全部 issue",
+        "All requested reviews must be approved before this card can be marked done.": "所有已请求的评审通过后才能将此卡片标记为已完成。",
         "All requested reviews must be approved before this card can be marked done. Waiting on {names}.": "所有已请求的评审通过后才能将此卡片标记为已完成。等待 {names}。",
         "All statuses": "所有状态",
         "Analytics": "分析",

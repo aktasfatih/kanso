@@ -2783,7 +2783,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useRouter, useRoute } from 'vue-router'
 import { getCurrentUser } from '@nextcloud/auth'
 import { generateUrl } from '@nextcloud/router'
-import { translate as t, translatePlural as n } from '@nextcloud/l10n'
+import { translate as t, translatePlural as n, getCanonicalLocale } from '@nextcloud/l10n'
 import { showUndo, showSuccess, showError, getFilePickerBuilder, FilePickerClosed } from '@nextcloud/dialogs'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
@@ -3932,36 +3932,33 @@ const reviewsBlockingDone = computed(() =>
 )
 
 /**
- * Explain a refused attempt to complete the card.
- *
- * The server's own sentence does not survive the trip: ApiErrorTrait flattens
- * every NotPermittedException to a bare "Access denied", which is true but says
- * nothing about what to do next. So when the refusal is a 403, the target was
- * the done state, and the card is in fact carrying unapproved reviews, we say so
- * in the review vocabulary the rest of this view already uses. The gate stays
- * entirely the server's call - this only translates its verdict.
- *
  * @param {unknown} err the rejected request
  * @param {boolean} targetsDone whether the attempt would have completed the card
  * @return {string} the message to show
  */
 function statusErrorMessage(err, targetsDone) {
-	const blocking = reviewsBlockingDone.value
-	if (targetsDone && apiAnswerStatus(err) === 403 && blocking.length > 0) {
-		// participantName() falls back to the bare uid, so this list is never empty
-		// when `blocking` is not - there is no nameless-reviewer case to handle.
-		const names = [...new Set(blocking.map((r) => participantName(r.reviewer)))]
-		// escape: false - this lands in a text interpolation, which escapes for
-		// itself; letting t() escape too would print "Ann &amp; Bo" for real names.
-		// t()'s DOMPurify pass still runs over the result, so a name carrying
-		// markup is stripped rather than inserted - and Vue escapes what is left.
-		return t(
-			'kanso',
-			'All requested reviews must be approved before this card can be marked done. Waiting on {names}.',
-			{ names: { value: names.join(', '), escape: false } },
-		)
+	const reason = err?.response?.data?.error
+	const reviewPrefix = 'Blocked by unapproved review(s): '
+	if (!targetsDone || apiAnswerStatus(err) !== 403
+		|| typeof reason !== 'string' || !reason.startsWith(reviewPrefix)) {
+		return reason || t('kanso', 'Failed to update status.')
 	}
-	return err?.response?.data?.error || t('kanso', 'Failed to update status.')
+	const blocking = reviewsBlockingDone.value
+	const cachedReason = reviewPrefix + blocking.map((r) => `${r.reviewer} (review #${r.id})`).join(', ')
+	if (blocking.length === 0 || reason !== cachedReason) {
+		return t('kanso', 'All requested reviews must be approved before this card can be marked done.')
+	}
+	const names = [...new Set(blocking.map((r) => r.reviewer))].map(participantName)
+	const preview = names.slice(0, 3)
+	if (names.length > preview.length) {
+		preview.push(n('kanso', '%n other reviewer', '%n other reviewers', names.length - preview.length))
+	}
+	const list = new Intl.ListFormat(getCanonicalLocale(), { type: 'conjunction' }).format(preview)
+	return t(
+		'kanso',
+		'All requested reviews must be approved before this card can be marked done. Waiting on {names}.',
+		{ names: { value: list, escape: false } },
+	)
 }
 
 /**

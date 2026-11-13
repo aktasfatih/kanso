@@ -176,6 +176,10 @@
             "%n benötigt Review",
             "%n benötigen Review"
         ],
+        "_%n other reviewer_::_%n other reviewers_": [
+            "%n weitere prüfende Person",
+            "%n weitere prüfende Personen"
+        ],
         "_%n overdue_::_%n overdue_": [
             "%n überfällig",
             "%n überfällig"
@@ -257,6 +261,7 @@
         "All day (no time)": "Ganztägig (keine Uhrzeit)",
         "All due dates": "Alle Fälligkeitstermine",
         "All issues": "Alle Issues",
+        "All requested reviews must be approved before this card can be marked done.": "Alle angeforderten Reviews müssen genehmigt sein, bevor diese Karte als erledigt markiert werden kann.",
         "All requested reviews must be approved before this card can be marked done. Waiting on {names}.": "Alle angeforderten Reviews müssen genehmigt sein, bevor diese Karte als erledigt markiert werden kann. Wartet auf {names}.",
         "All statuses": "Alle Status",
         "Analytics": "Analysen",

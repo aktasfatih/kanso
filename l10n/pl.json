@@ -205,6 +205,11 @@
             "%n do recenzji",
             "%n do recenzji"
         ],
+        "_%n other reviewer_::_%n other reviewers_": [
+            "%n inny recenzent",
+            "%n innych recenzentów",
+            "%n innych recenzentów"
+        ],
         "_%n overdue_::_%n overdue_": [
             "%n po terminie",
             "%n po terminie",
@@ -293,6 +298,7 @@
         "All day (no time)": "Cały dzień (bez godziny)",
         "All due dates": "Wszystkie terminy",
         "All issues": "Wszystkie zgłoszenia",
+        "All requested reviews must be approved before this card can be marked done.": "Wszystkie recenzje, o które poproszono, muszą być zatwierdzone, aby można było oznaczyć tę kartę jako ukończoną.",
         "All requested reviews must be approved before this card can be marked done. Waiting on {names}.": "Wszystkie recenzje, o które poproszono, muszą być zatwierdzone, aby można było oznaczyć tę kartę jako ukończoną. Oczekujący recenzenci: {names}.",
         "All statuses": "Wszystkie statusy",
         "Analytics": "Statystyki",

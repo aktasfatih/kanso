@@ -176,6 +176,10 @@
             "%n pendiente de revisión",
             "%n pendientes de revisión"
         ],
+        "_%n other reviewer_::_%n other reviewers_": [
+            "%n revisor más",
+            "%n revisores más"
+        ],
         "_%n overdue_::_%n overdue_": [
             "%n vencida",
             "%n vencidas"
@@ -257,6 +261,7 @@
         "All day (no time)": "Todo el día (sin hora)",
         "All due dates": "Todas las fechas de vencimiento",
         "All issues": "Todas las incidencias",
+        "All requested reviews must be approved before this card can be marked done.": "Todas las revisiones solicitadas deben estar aprobadas antes de poder marcar esta tarjeta como terminada.",
         "All requested reviews must be approved before this card can be marked done. Waiting on {names}.": "Todas las revisiones solicitadas deben estar aprobadas antes de poder marcar esta tarjeta como terminada. En espera de {names}.",
         "All statuses": "Todos los estados",
         "Analytics": "Estadísticas",

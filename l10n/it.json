@@ -176,6 +176,10 @@
             "%n da revisionare",
             "%n da revisionare"
         ],
+        "_%n other reviewer_::_%n other reviewers_": [
+            "%n altro revisore",
+            "%n altri revisori"
+        ],
         "_%n overdue_::_%n overdue_": [
             "%n in ritardo",
             "%n in ritardo"
@@ -257,6 +261,7 @@
         "All day (no time)": "Tutto il giorno (senza orario)",
         "All due dates": "Tutte le scadenze",
         "All issues": "Tutte le issue",
+        "All requested reviews must be approved before this card can be marked done.": "Tutte le revisioni richieste devono essere approvate prima di poter segnare questa scheda come completata.",
         "All requested reviews must be approved before this card can be marked done. Waiting on {names}.": "Tutte le revisioni richieste devono essere approvate prima di poter segnare questa scheda come completata. In attesa di {names}.",
         "All statuses": "Tutti gli stati",
         "Analytics": "Statistiche",

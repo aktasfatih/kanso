@@ -176,6 +176,10 @@
             "%n inceleme bekliyor",
             "%n inceleme bekliyor"
         ],
+        "_%n other reviewer_::_%n other reviewers_": [
+            "%n diğer inceleyen",
+            "%n diğer inceleyen"
+        ],
         "_%n overdue_::_%n overdue_": [
             "%n gecikmiş",
             "%n gecikmiş"
@@ -257,6 +261,7 @@
         "All day (no time)": "Tüm gün (saatsiz)",
         "All due dates": "Tüm son tarihler",
         "All issues": "Tüm sorunlar",
+        "All requested reviews must be approved before this card can be marked done.": "Bu kartın tamamlandı olarak işaretlenebilmesi için istenen tüm incelemelerin onaylanması gerekir.",
         "All requested reviews must be approved before this card can be marked done. Waiting on {names}.": "Bu kartın tamamlandı olarak işaretlenebilmesi için istenen tüm incelemelerin onaylanması gerekir. {names} bekleniyor.",
         "All statuses": "Tüm durumlar",
         "Analytics": "Analitik",
