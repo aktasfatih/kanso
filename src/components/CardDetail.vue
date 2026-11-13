@@ -7388,14 +7388,19 @@ const allProjects = computed(() => projectsData.value ?? [])
 
 // The card detail now returns projectIds: number[]; fall back to [] if absent.
 const cardProjectIds = computed(() => {
-	const ids = Array.isArray(cardData.value?.projectIds) ? cardData.value.projectIds : []
-	return new Set(ids)
+	return projectIdsFor(props.cardId, cardData.value?.projectIds)
 })
 
 const projectToggleError = ref('')
+let projectNavigation = 0
+watch(() => props.cardId, () => {
+	projectNavigation++
+	projectToggleError.value = ''
+})
 const {
 	enqueueToggle: enqueueProjectToggle,
 	isTogglePending: isProjectMembershipPending,
+	projectIdsFor,
 // Deliberately no cardId argument: this component is REUSED across card→card
 // navigation, so every pick carries its own `cardId` in the mutation variables
 // instead (see useCardProjects' comment). A pick still waiting in the queue when
@@ -7414,12 +7419,15 @@ function isProjectTogglePending(projectId) {
 async function handleToggleProject({ id: projectId, canEdit }) {
 	if (!canEdit) return
 	projectToggleError.value = ''
+	const cardId = props.cardId
+	const navigation = projectNavigation
 	// Read membership at CLICK time, not when the write starts: the pick queued
 	// behind another one must still mean what the user saw when they made it.
 	const assign = !cardProjectIds.value.has(projectId)
 	try {
-		await enqueueProjectToggle({ cardId: props.cardId, projectId, assign })
+		await enqueueProjectToggle({ cardId, projectId, assign })
 	} catch (err) {
+		if (navigation !== projectNavigation) return
 		projectToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update project membership.')
 	}
 }

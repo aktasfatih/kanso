@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import { ref } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import {
 	getProjects as apiGetProjects,
@@ -150,35 +151,48 @@ export function useProjects({ refetchInterval = false } = {}) {
  * The queue's own `keyOf` already keyed off `vars.cardId`, so the two disagreed.
  *
  * @return {{enqueueToggle: (vars: {cardId: number|string, projectId: number, assign: boolean}) => Promise<*>,
- *   isTogglePending: (cardId: number|string, projectId: number) => boolean}}
+ *   isTogglePending: (cardId: number|string, projectId: number) => boolean,
+ *   projectIdsFor: (cardId: number|string, projectIds: number[]|undefined) => Set<number>}}
  */
 export function useCardProjects() {
 	const queryClient = useQueryClient()
+	const pendingMemberships = ref(new Map())
+	const keyOf = ({ cardId, projectId }) => `${cardId}:${projectId}`
 
 	const toggleMembership = useMutation({
 		mutationFn: ({ cardId, projectId, assign }) => assign
 			? apiAddCardToProject(projectId, Number(cardId))
 			: apiRemoveCardFromProject(projectId, Number(cardId)),
-		// No optimistic patch, deliberately: the card detail carries `projectIds`
-		// and the project page carries its own card list, and what each viewer
-		// sees of a project depends on their own boards. The settle
-		// invalidation below is the only writer, so there is no snapshot to roll
-		// back and no window in which a rollback could resurrect a stale id.
+		onSuccess: async (_data, { cardId, projectId, assign }) => {
+			const cardKey = ['card', String(cardId)]
+			await queryClient.cancelQueries({ queryKey: cardKey })
+			queryClient.setQueryData(cardKey, (old) => {
+				if (!old) return old
+				const ids = new Set(Array.isArray(old.projectIds) ? old.projectIds : [])
+				if (assign) ids.add(projectId)
+				else ids.delete(projectId)
+				return { ...old, projectIds: [...ids] }
+			})
+		},
+		onError: (_error, vars) => {
+			pendingMemberships.value.delete(keyOf(vars))
+		},
 		onSettled: (_data, _err, { cardId, projectId }) => {
 			// Refreshes the card's `projectIds` (the picker's ticks and the pill's
 			// count both read it) — the card this pick was MADE for, which is not
 			// necessarily the one open now.
-			queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })
+			const reconciled = queryClient.invalidateQueries({ queryKey: ['card', String(cardId)] })
 			// ...the project's own card feed...
 			queryClient.invalidateQueries({ queryKey: ['project', String(projectId)] })
 			// ...and the projects list, whose rows show a card count.
 			queryClient.invalidateQueries({ queryKey: ['projects'] })
+			return reconciled
 		},
 	})
 
 	const { enqueue, isPending } = createToggleQueue({
 		mutate: (vars) => toggleMembership.mutateAsync(vars),
-		keyOf: ({ cardId: card, projectId }) => `${card}:${projectId}`,
+		keyOf,
 	})
 
 	/**
@@ -190,7 +204,21 @@ export function useCardProjects() {
 	 *   double-submit, or rejects with this pick's error.
 	 */
 	function enqueueToggle({ cardId: card, projectId, assign }) {
-		return enqueue({ cardId: card, projectId, assign })
+		const vars = { cardId: card, projectId, assign }
+		if (isPending(vars)) return enqueue(vars)
+		pendingMemberships.value.set(keyOf(vars), vars)
+		return enqueue(vars).finally(() => pendingMemberships.value.delete(keyOf(vars)))
+	}
+
+	// Project feeds stay authoritative; only this picker's queued intentions are overlaid.
+	function projectIdsFor(card, projectIds) {
+		const ids = new Set(Array.isArray(projectIds) ? projectIds : [])
+		for (const vars of pendingMemberships.value.values()) {
+			if (String(vars.cardId) !== String(card)) continue
+			if (vars.assign) ids.add(vars.projectId)
+			else ids.delete(vars.projectId)
+		}
+		return ids
 	}
 
 	/**
@@ -213,5 +241,6 @@ export function useCardProjects() {
 	return {
 		enqueueToggle,
 		isTogglePending,
+		projectIdsFor,
 	}
 }
