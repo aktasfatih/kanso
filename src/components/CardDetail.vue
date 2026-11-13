@@ -2630,7 +2630,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							</div>
 						</div>
 
-						<div v-if="canComment && discussionTab === 'discussion'" class="card-modal__composer">
+						<div
+							v-if="canComment && discussionTab === 'discussion'"
+							class="card-modal__composer"
+							:class="{ 'card-modal__composer--active': newCommentBody || addComment.isPending.value || uploadAttachment.isPending.value }">
 							<NcAvatar
 								:user="currentUserId"
 								:size="28"
@@ -9997,6 +10000,25 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	display: flex;
 	align-items: center;
 	gap: 10px;
+}
+.card-modal__composer:not(.card-modal__composer--active):not(:focus-within) :deep(.kanso-md-editor__toolbar),
+.card-modal__composer:not(.card-modal__composer--active):not(:focus-within) .card-modal__composer-actions {
+	display: none;
+}
+.card-modal__composer:not(.card-modal__composer--active):not(:focus-within) :deep(.ProseMirror) {
+	min-height: 0;
+	padding: 6px 10px;
+}
+.card-modal__composer:not(.card-modal__composer--active):not(:focus-within) :deep(.ProseMirror [data-placeholder]::before) {
+	height: auto;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.card-modal__composer:not(.card-modal__composer--active):not(:focus-within) .card-modal__editor-loading {
+	min-height: 35px;
+	height: 35px;
 }
 
 /* ── Description save conflict (#9845) ───────────────────────────────────── */

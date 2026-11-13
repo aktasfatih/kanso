@@ -40,7 +40,8 @@ your work, on your own Nextcloud, laid out plainly.
 - Markdown descriptions (sanitized) with a scrolling formatting toolbar, searchable **labels**, due dates, **assignees**, and
   priorities.
 - **Checklists / sub-tasks**, **parent ↔ child cards**, and **threaded
-  comments**.
+  comments**. The new comment composer expands on focus, leaving more room for
+  discussion.
 - **Card relations**: link related, duplicate or blocking cards from a list or
   pick the target directly on the board.
 - **Attachments**: upload files to a card (up to 100 MiB each). They live in
