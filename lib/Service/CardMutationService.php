@@ -9,6 +9,7 @@ namespace OCA\Kanso\Service;
 
 use OCA\Kanso\Db\CardMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\DB\Exception as DbException;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 use Psr\Log\LoggerInterface;
@@ -72,8 +73,10 @@ class CardMutationService {
 			$this->depth--;
 			$this->committed = array_slice($this->committed, 0, $commitOffset);
 			$cleanup = array_splice($this->rolledBack, $rollbackOffset);
+			$rollbackConfirmed = false;
 			try {
 				$this->db->rollBack();
+				$rollbackConfirmed = true;
 				if (!$commitStarted) {
 					foreach (array_reverse($cleanup) as $callback) {
 						try {
@@ -85,6 +88,11 @@ class CardMutationService {
 				}
 			} catch (\Throwable) {
 				// Retain storage when the transaction outcome cannot be confirmed.
+			}
+			if ($outermost && !$commitStarted && $rollbackConfirmed
+				&& $this->db->getDatabaseProvider() === IDBConnection::PLATFORM_SQLITE
+				&& $e instanceof DbException && $e->getReason() === DbException::REASON_LOCK_WAIT_TIMEOUT) {
+				throw new MutationConflictException($e);
 			}
 			throw $e;
 		}
@@ -124,12 +132,10 @@ class CardMutationService {
 		$provider = $this->db->getDatabaseProvider();
 		if ($provider === IDBConnection::PLATFORM_SQLITE) {
 			// SQLite snapshots fail their write upgrade if another writer commits.
-			if ($exclusive) {
-				$qb = $this->db->getQueryBuilder();
-				$qb->update('kanso_boards')->set('last_modified', 'last_modified')
-					->where($qb->expr()->eq('id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)));
-				$qb->executeStatement();
-			}
+			$qb = $this->db->getQueryBuilder();
+			$qb->update('kanso_boards')->set('last_modified', 'last_modified')
+				->where($qb->expr()->eq('id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)));
+			$qb->executeStatement();
 			$this->lockRow('kanso_boards', $boardId, '');
 			return;
 		}

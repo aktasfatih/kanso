@@ -10,13 +10,169 @@ namespace OCA\Kanso\Tests\Unit\Service;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Service\CardMutationService;
+use OCA\Kanso\Service\MutationConflictException;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\DB\Exception as DbException;
 use OCP\DB\IResult;
+use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
 class CardMutationServiceTest extends TestCase {
+	/** @return array{IDBConnection, CardMutationService, IQueryBuilder} */
+	private function sqliteScope(): array {
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getDatabaseProvider')->willReturn(IDBConnection::PLATFORM_SQLITE);
+		$qb = $this->createMock(IQueryBuilder::class);
+		foreach (['update', 'set', 'where'] as $method) {
+			$qb->method($method)->willReturnSelf();
+		}
+		$qb->method('createNamedParameter')->willReturn(':board');
+		$expression = new class {
+			public function eq(mixed $left, mixed $right): string {
+				return 'id = :board';
+			}
+		};
+		$qb->method('expr')->willReturn($expression);
+		$db->method('getQueryBuilder')->willReturn($qb);
+		return [$db, new CardMutationService($db, $this->createMock(CardMapper::class), $this->createMock(LoggerInterface::class)), $qb];
+	}
+
+	private function lockTimeout(): DbException {
+		$error = $this->createMock(DbException::class);
+		$error->method('getReason')->willReturn(DbException::REASON_LOCK_WAIT_TIMEOUT);
+		return $error;
+	}
+
+	public function testSqliteReservesWriterBeforeOrdinaryAndExclusiveCallbacks(): void {
+		foreach ([false, true] as $exclusive) {
+			[$db, $scope, $qb] = $this->sqliteScope();
+			$events = [];
+			$qb->expects(self::once())->method('executeStatement')->willReturnCallback(static function () use (&$events): int {
+				$events[] = 'reserve';
+				return 1;
+			});
+			$db->expects(self::once())->method('executeQuery')->willReturnCallback(function () use (&$events): IResult {
+				self::assertSame(['reserve'], $events);
+				$events[] = 'snapshot';
+				$result = $this->createMock(IResult::class);
+				$result->method('fetch')->willReturn(['id' => 7]);
+				return $result;
+			});
+			$scope->runForBoards([7], static function () use (&$events): void {
+				$events[] = 'write';
+			}, $exclusive);
+			self::assertSame(['reserve', 'snapshot', 'write'], $events);
+		}
+	}
+
+	public function testSqliteReservationTimeoutNeverRunsTheMutationAndResetsScope(): void {
+		[$db, $scope, $qb] = $this->sqliteScope();
+		$error = $this->lockTimeout();
+		$qb->method('executeStatement')->willThrowException($error);
+		$db->expects(self::once())->method('rollBack');
+		try {
+			$scope->runForBoards([7], static fn () => self::fail('A failed reservation must not run the mutation'));
+			self::fail('Expected contention');
+		} catch (MutationConflictException $conflict) {
+			self::assertSame($error, $conflict->getPrevious());
+		}
+		$completed = false;
+		$scope->afterCommit(static function () use (&$completed): void {
+			$completed = true;
+		});
+		self::assertTrue($completed);
+	}
+
+	public function testKnownSqliteRollbackReportsConflictWithoutRetryingCallbacks(): void {
+		[$db, $scope] = $this->sqliteScope();
+		$db->expects(self::once())->method('rollBack');
+		$calls = 0;
+		$cleaned = false;
+		try {
+			$scope->runForBoards([], function () use ($scope, &$calls, &$cleaned): void {
+				$calls++;
+				$scope->afterCommit(static fn () => self::fail('Rolled-back data must not notify'));
+				$scope->afterRollback(static function () use (&$cleaned): void {
+					$cleaned = true;
+				});
+				throw $this->lockTimeout();
+			});
+			self::fail('Expected contention');
+		} catch (MutationConflictException) {
+		}
+		self::assertSame(1, $calls);
+		self::assertTrue($cleaned);
+	}
+
+	public function testNestedContentionWaitsForConfirmedOuterRollback(): void {
+		[$db, $scope] = $this->sqliteScope();
+		$error = $this->lockTimeout();
+		$rollbacks = 0;
+		$db->expects(self::exactly(2))->method('rollBack')->willReturnCallback(static function () use (&$rollbacks): void {
+			if (++$rollbacks === 2) {
+				throw new \RuntimeException('Outer rollback outcome unknown');
+			}
+		});
+		try {
+			$scope->runForBoards([], function () use ($scope, $error): void {
+				$scope->runForBoards([], static fn () => throw $error);
+			});
+			self::fail('Expected original database failure');
+		} catch (DbException $actual) {
+			self::assertSame($error, $actual);
+		}
+	}
+
+	public function testUnknownSqliteCommitDoesNotBecomeRetryableConflict(): void {
+		[$db, $scope] = $this->sqliteScope();
+		$error = $this->lockTimeout();
+		$db->method('commit')->willThrowException($error);
+		$db->expects(self::once())->method('rollBack');
+		try {
+			$scope->runForBoards([], function () use ($scope): void {
+				$scope->afterCommit(static fn () => self::fail('Unknown commit must not notify'));
+				$scope->afterRollback(static fn () => self::fail('Unknown commit must retain storage'));
+			});
+			self::fail('Expected original commit failure');
+		} catch (DbException $actual) {
+			self::assertSame($error, $actual);
+		}
+	}
+
+	public function testUnrelatedSqliteDatabaseFailureRemainsUnchanged(): void {
+		[$db, $scope] = $this->sqliteScope();
+		$error = $this->createMock(DbException::class);
+		$error->method('getReason')->willReturn(DbException::REASON_CONNECTION_LOST);
+		$db->expects(self::once())->method('rollBack');
+		try {
+			$scope->runForBoards([], static fn () => throw $error);
+			self::fail('Expected original database failure');
+		} catch (DbException $actual) {
+			self::assertSame($error, $actual);
+		}
+	}
+
+	public function testSqlServerSharedFenceAndErrorsRemainUnchanged(): void {
+		foreach ([IDBConnection::PLATFORM_POSTGRES => ' FOR SHARE', IDBConnection::PLATFORM_MYSQL => ' LOCK IN SHARE MODE'] as $provider => $suffix) {
+			$db = $this->createMock(IDBConnection::class);
+			$db->method('getDatabaseProvider')->willReturn($provider);
+			$db->expects(self::never())->method('getQueryBuilder');
+			$result = $this->createMock(IResult::class);
+			$result->method('fetch')->willReturn(['id' => 7]);
+			$db->expects(self::once())->method('executeQuery')->with('SELECT id FROM *PREFIX*kanso_boards WHERE id = ?' . $suffix)->willReturn($result);
+			$scope = new CardMutationService($db, $this->createMock(CardMapper::class), $this->createMock(LoggerInterface::class));
+			$error = $this->lockTimeout();
+			try {
+				$scope->runForBoards([7], static fn () => throw $error);
+				self::fail('Expected original SQL-server failure');
+			} catch (DbException $actual) {
+				self::assertSame($error, $actual);
+			}
+		}
+	}
+
 	public function testNestedCallbacksWaitForOutermostCommit(): void {
 		$db = $this->createMock(IDBConnection::class);
 		$scope = new CardMutationService($db, $this->createMock(CardMapper::class), $this->createMock(LoggerInterface::class));
@@ -110,10 +266,9 @@ class CardMutationServiceTest extends TestCase {
 	}
 
 	public function testRejectsSourceDeletedWhileAcquiringTheFence(): void {
-		$db = $this->createMock(IDBConnection::class);
+		[$db] = $this->sqliteScope();
 		$cards = $this->createMock(CardMapper::class);
 		$scope = new CardMutationService($db, $cards, $this->createMock(LoggerInterface::class));
-		$db->method('getDatabaseProvider')->willReturn(IDBConnection::PLATFORM_SQLITE);
 		$result = $this->createMock(IResult::class);
 		$result->method('fetch')->willReturn(['id' => 1]);
 		$db->method('executeQuery')->willReturn($result);

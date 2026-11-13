@@ -246,6 +246,32 @@ card trash, then verifies expiry before purge and removal afterward. Only owned
 fixture board IDs are purged; an attached neighboring board must survive.
 Fixture boards, users, group and upload are removed in `finally`.
 
+## SQLite mutation contention
+
+Run against an explicitly selected disposable SQLite installation. The expected
+data directory must match its configuration exactly:
+
+```sh
+docker exec -u www-data \
+  -e NEXTCLOUD_ROOT=/var/www/html \
+  -e KANSO_INTEGRATION_DISPOSABLE=1 \
+  -e KANSO_SQLITE_EXPECTED_DATA_DIR=/path/to/disposable/data \
+  YOUR_DISPOSABLE_NEXTCLOUD_CONTAINER \
+  php /var/www/html/custom_apps/kanso/tests/integration/sqlite-mutation-contention.php
+```
+
+Independent processes and source hashes exercise the actual assignment service.
+A barrier after its snapshot lets a competing writer attempt a real update;
+the writer must report its actual lock rejection before assignment continues.
+Separate cases release contention before a connection-local timeout, exhaust
+that timeout through the real controller, and roll back single-person replacement.
+Assignment, change-log and subscription snapshots must remain intact on rejection.
+No mutation callback is retried, and unknown commit or rollback outcomes remain
+unclassified failures. The production boundary uses the connection's configured
+busy timeout; only test-worker connections receive the harness's shorter timeouts.
+The harness prints JSON results and purges only its owned board and temporary user
+in `finally`, including after a failed assertion.
+
 ## Single-assignee concurrency
 
 After applying the checkout migrations, run this against an explicitly selected
