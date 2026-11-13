@@ -110,13 +110,13 @@ test.describe('Review status error reasons and names', () => {
 	}
 
 	for (const count of [4, 8]) {
-		test(`names three people with ${count - 3} remaining without double-counting typed reviews`, async ({ page }) => {
+		test(`names three people with ${count - 3} remaining without double-counting typed reviews`, async ({ page, user }) => {
 			const people = reviewers.slice(0, count)
 			const state = await fixture(people)
 			for (const person of people) await api.put(`/cards/${state.card.id}/reviews/${person.user}`)
 			const type = await api.post('/review-types', { boardId: state.board.id, title: 'Second review' })
 			await api.put(`/cards/${state.card.id}/reviews/${people[0].user}`, { reviewTypeId: type.id })
-			await openCard(page, state)
+			await openCard(page, state, user)
 			await page.locator('.card-modal__done-btn').click()
 			const remaining = count - 3
 			const list = await page.evaluate(({ names, remaining }) => new Intl.ListFormat(
@@ -154,11 +154,11 @@ test.describe('Review status error reasons and names', () => {
 	})
 
 	for (const stale of [false, true]) {
-		test(`uses the generic review reason when cached reviewers are ${stale ? 'outdated' : 'missing'}`, async ({ page }) => {
+		test(`uses the generic review reason when cached reviewers are ${stale ? 'outdated' : 'missing'}`, async ({ page, user }) => {
 			const state = await fixture(reviewers.slice(0, 2))
 			if (stale) await api.put(`/cards/${state.card.id}/reviews/${reviewers[0].user}`)
 			const before = await api.get(`/cards/${state.card.id}`)
-			await openCard(page, state)
+			await openCard(page, state, user)
 			let releaseReads
 			const readsReleased = new Promise((resolve) => { releaseReads = resolve })
 			await page.route(new RegExp(`/apps/kanso/api/cards/${state.card.id}$`), async (route) => {

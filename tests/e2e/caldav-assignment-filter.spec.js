@@ -82,6 +82,11 @@ test.describe.serial('Personal CalDAV assignment filter', () => {
 
 	test('a read-only member enables the filter in settings and it persists', async ({ page }) => {
 		const errors = []
+		const automationReads = []
+		page.on('request', (request) => {
+			const path = new URL(request.url()).pathname.replace(/^\/index.php/, '')
+			if (request.method() === 'GET' && path === `/apps/kanso/api/boards/${state.boards[0]}/automation-rules`) automationReads.push(path)
+		})
 		page.on('pageerror', (error) => errors.push(error.message))
 		page.on('console', (message) => {
 			if (message.type() !== 'error') return
@@ -89,12 +94,10 @@ test.describe.serial('Personal CalDAV assignment filter', () => {
 			const text = message.text()
 			const noUserStatus = path === '/ocs/v2.php/apps/user_status/api/v1/user_status'
 				&& text === 'Failed to load resource: the server responded with a status of 404 (Not Found)'
-			const deniedAutomationRead = path === `/index.php/apps/kanso/api/boards/${state.boards[0]}/automation-rules`
-				&& text === 'Failed to load resource: the server responded with a status of 403 (Forbidden)'
 			const coreStatusLog = path === '/dist/core-common.js'
 				&& text.startsWith('[ERROR] core: Failed to load user status ')
 				&& text.includes('Request failed with status code 404')
-			if (!noUserStatus && !deniedAutomationRead && !coreStatusLog) errors.push(text)
+			if (!noUserStatus && !coreStatusLog) errors.push(text)
 		})
 		const before = await fetch(state.feed.url)
 		const beforeBody = await before.text()
@@ -128,6 +131,7 @@ test.describe.serial('Personal CalDAV assignment filter', () => {
 		expect(after.headers.get('etag')).toBe(before.headers.get('etag'))
 		const eventIds = (body) => [...body.matchAll(/UID:([^\r\n]+)/g)].map((m) => m[1]).sort()
 		expect(eventIds(await after.text())).toEqual(eventIds(beforeBody))
+		expect(automationReads).toEqual([])
 		expect(errors).toEqual([])
 	})
 
@@ -171,8 +175,11 @@ test.describe.serial('Personal CalDAV assignment filter', () => {
 		expect(multi.body).toContain(`SUMMARY:CalDAV unassigned ${token}`)
 		for (const key of ['mine', 'private', 'internal']) {
 			const excluded = await multiget([state.cards.unassigned, state.cards[key]])
-			expect(excluded.status).toBe(404)
+			expect(excluded.status, excluded.body).toBe(207)
+			expect(objectIds(excluded.body)).toEqual([state.cards.unassigned])
+			expect(excluded.body).toContain(`SUMMARY:CalDAV unassigned ${token}`)
 			expect(excluded.body).not.toContain(`SUMMARY:CalDAV ${key} ${token}`)
+			expect((await dav(reader(), 'GET', objectPath(state.cards[key]))).status).toBe(404)
 		}
 	})
 

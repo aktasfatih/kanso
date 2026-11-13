@@ -163,7 +163,9 @@ class CardMoveAliasServiceTest extends TestCase {
 
 	public function testHumanReferenceWithUnknownDestinationIdentityFailsClosed(): void {
 		$aliases = $this->createMock(CardMoveAliasMapper::class);
-		$aliases->method('findByRef')->with(1, 'OLD', 9)->willReturn($this->alias(20));
+		$alias = $this->alias(20);
+		$alias->setOldCardId(10);
+		$aliases->method('findByRef')->with(1, 'OLD', 9)->willReturn($alias);
 		$cards = $this->createMock(CardMapper::class);
 		$cards->expects(self::never())->method('find');
 		$service = new CardMoveAliasService($aliases, $cards, $this->createMock(BoardMapper::class), $this->createMock(PermissionService::class), $this->createMock(CardVisibilityGuard::class));

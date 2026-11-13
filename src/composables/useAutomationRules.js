@@ -19,7 +19,7 @@ function resolveBoardId(boardId) {
 	return boardId
 }
 
-export function useAutomationRules(boardId) {
+export function useAutomationRules(boardId, { enabled } = {}) {
 	const queryClient = useQueryClient()
 
 	function invalidate() {
@@ -29,6 +29,7 @@ export function useAutomationRules(boardId) {
 	const query = useQuery({
 		queryKey: ['automation-rules', boardId],
 		queryFn: () => apiFetchAutomationRules(resolveBoardId(boardId)),
+		enabled,
 	})
 
 	const createRule = useMutation({

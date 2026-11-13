@@ -5306,7 +5306,7 @@ const {
 	createRule: createAutoRule,
 	setEnabled: setAutoRuleEnabled,
 	deleteRule: deleteAutoRule,
-} = useAutomationRules(computed(() => props.boardId))
+} = useAutomationRules(computed(() => props.boardId), { enabled: canManage })
 
 const autoRulesQuery = { isLoading: autoRulesLoading, isError: autoRulesError }
 const autoRules = computed(() => autoRulesData.value ?? [])

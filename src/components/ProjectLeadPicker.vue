@@ -15,6 +15,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			:placeholder="t('kanso', 'No lead')"
 			label="displayName"
 			@search="search">
+			<template #option="{ displayName }">
+				<span class="project-lead-picker__option" dir="auto" :title="displayName">{{ displayName }}</span>
+			</template>
 			<template #no-options>{{ t('kanso', 'No users found.') }}</template>
 		</NcSelect>
 		<span v-if="isError" class="project-lead-picker__error" role="alert">{{ t('kanso', 'Failed to search.') }}</span>
@@ -68,6 +71,13 @@ onBeforeUnmount(() => clearTimeout(timer))
 </script>
 
 <style scoped>
+.project-lead-picker__option {
+	display: block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .project-lead-picker__hint {
 	margin: 4px 0 0;
 	color: var(--color-text-maxcontrast);
