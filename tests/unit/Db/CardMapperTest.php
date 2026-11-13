@@ -446,7 +446,7 @@ class CardMapperTest extends TestCase {
 					'col' => $args[0] ?? null,
 					'value' => $args[1] ?? null,
 				];
-				return '';
+				return json_encode([$name, ...$args]) ?: '';
 			}
 		};
 	}
@@ -456,18 +456,32 @@ class CardMapperTest extends TestCase {
 	 * and every setMaxResults, and returns both.
 	 *
 	 * @param callable(CardMapper): mixed $call
-	 * @return array{predicates: list<array{op: string, col: mixed, value: mixed}>, maxResults: list<int>}
+	 * @return array{predicates: list<array{op: string, col: mixed, value: mixed}>, maxResults: list<int>, conditions: list<array{method: string, expressions: list<mixed>}>, ordering: list<array{column: string, direction: ?string}>}
 	 */
 	private function recordQuery(callable $call): array {
 		$predicates = [];
 		$maxResults = [];
+		$conditions = [];
+		$ordering = [];
 
 		$qb = $this->createMock(IQueryBuilder::class);
 		foreach ([
 			'select', 'selectAlias', 'addSelect', 'from', 'innerJoin', 'leftJoin',
-			'where', 'andWhere', 'groupBy', 'orderBy', 'addOrderBy',
+			'groupBy',
 		] as $method) {
 			$qb->method($method)->willReturnSelf();
+		}
+		foreach (['where', 'andWhere'] as $method) {
+			$qb->method($method)->willReturnCallback(function (...$expressions) use ($qb, $method, &$conditions): IQueryBuilder {
+				$conditions[] = ['method' => $method, 'expressions' => $expressions];
+				return $qb;
+			});
+		}
+		foreach (['orderBy', 'addOrderBy'] as $method) {
+			$qb->method($method)->willReturnCallback(function (string $column, ?string $direction = null) use ($qb, &$ordering): IQueryBuilder {
+				$ordering[] = ['column' => $column, 'direction' => $direction];
+				return $qb;
+			});
 		}
 		$qb->method('setMaxResults')->willReturnCallback(function (?int $limit) use ($qb, &$maxResults): IQueryBuilder {
 			$maxResults[] = (int)$limit;
@@ -487,7 +501,7 @@ class CardMapperTest extends TestCase {
 		$db->method('getQueryBuilder')->willReturn($qb);
 		$call(new CardMapper($db, new CardVisibilityScope()));
 
-		return ['predicates' => $predicates, 'maxResults' => $maxResults];
+		return ['predicates' => $predicates, 'maxResults' => $maxResults, 'conditions' => $conditions, 'ordering' => $ordering];
 	}
 
 	/**
@@ -1099,6 +1113,27 @@ class CardMapperTest extends TestCase {
 	public function testUnfilteredCalendarDoesNotRestrictAssignments(): void {
 		$recorded = $this->recordQuery(fn (CardMapper $m) => $m->findDuedateSummariesByBoard(7, self::externalViewer()));
 		self::assertSame([], self::boundValues($recorded['predicates'], 'eq', 'participant'));
+	}
+
+	public function testCalendarDatesAreGroupedUnderTheExistingFiltersAndOrdering(): void {
+		$dates = json_encode(['orX', json_encode(['isNotNull', 'duedate']), json_encode(['isNotNull', 'start_date'])]);
+		foreach ([false, true] as $assignedOnly) {
+			$recorded = $this->recordQuery(fn (CardMapper $m) => $m->findDuedateSummariesByBoard(7, self::externalViewer(), $assignedOnly));
+			self::assertContains(['method' => 'andWhere', 'expressions' => [$dates]], $recorded['conditions']);
+			self::assertSame([
+				['column' => 'duedate', 'direction' => 'ASC'],
+				['column' => 'id', 'direction' => 'ASC'],
+			], $recorded['ordering']);
+		}
+	}
+
+	public function testAnonymousCalendarStillRequiresADueDate(): void {
+		$recorded = $this->recordQuery(fn (CardMapper $m) => $m->findWithDuedateByBoard(7, 2000));
+		self::assertContains([
+			'method' => 'andWhere',
+			'expressions' => [json_encode(['isNotNull', 'duedate'])],
+		], $recorded['conditions']);
+		self::assertSame([], self::boundValues($recorded['predicates'], 'isNotNull', 'start_date'));
 	}
 
 	/**

@@ -22,13 +22,13 @@ use Sabre\VObject\Reader;
 
 /**
  * One board, presented to the CalDAV stack as a read-only calendar of VTODOs
- * (#3534 / issue #49). The children are {@see CardCalendarObject}s, one per due
+ * (#3534 / issue #49). The children are {@see CardCalendarObject}s, one per dated
  * card the syncing user may see. Every write is rejected: this is a display /
  * one-way-sync surface, not an editor. All data + access decisions come from
  * {@see CardCalendarService}.
  */
 class CardCalendar extends ExternalCalendar {
-	/** @var Card[]|null the board's due cards, loaded once per request. VTODO
+	/** @var Card[]|null the board's dated cards, loaded once per request. VTODO
 	 *  serialisation happens per object only when it is actually read, so a
 	 *  calendar-home listing never serialises anything. */
 	private ?array $cards = null;
@@ -219,7 +219,7 @@ class CardCalendar extends ExternalCalendar {
 	}
 
 	/**
-	 * The board's due cards, loaded once per request. A non-user principal
+	 * The board's dated cards, loaded once per request. A non-user principal
 	 * (should never reach here) yields nothing.
 	 *
 	 * @return Card[]
@@ -246,7 +246,7 @@ class CardCalendar extends ExternalCalendar {
 		return null;
 	}
 
-	/** Serialises one due card into a read-only VTODO object. */
+	/** Serialises one dated card into a read-only VTODO object. */
 	private function object(Card $card): CardCalendarObject {
 		return new CardCalendarObject(
 			$this->service->objectName($card),

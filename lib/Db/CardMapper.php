@@ -454,12 +454,12 @@ class CardMapper extends QBMapper {
 
 	/**
 	 * Summaries (no description) of the non-deleted, non-archived, non-template
-	 * cards on a board that HAVE a due date, scoped to what a SPECIFIC VIEWER may
+	 * cards on a board with a start or due date, scoped to what a SPECIFIC VIEWER may
 	 * see - the source for the read-only CalDAV VTODO calendar (#3534 / issue
 	 * #49). The authenticated counterpart of {@see self::findWithDuedateByBoard}:
 	 * that one is anonymous (public-only) for the token feed, this one honours the
 	 * viewer's card-visibility so a board member syncing over CalDAV sees exactly
-	 * the due cards they see on the board. Board-scoped like every board query.
+	 * the dated cards they see on the board. Board-scoped like every board query.
 	 *
 	 * @return Card[]
 	 * @throws Exception
@@ -472,7 +472,10 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
-			->andWhere($qb->expr()->isNotNull('duedate'))
+			->andWhere($qb->expr()->orX(
+				$qb->expr()->isNotNull('duedate'),
+				$qb->expr()->isNotNull('start_date'),
+			))
 			->orderBy('duedate', 'ASC')
 			->addOrderBy('id', 'ASC');
 		$this->visibilityScope->applyForViewer($qb, '', $viewer);

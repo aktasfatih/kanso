@@ -21,7 +21,7 @@ use Sabre\VObject\Component\VCalendar;
 /**
  * The read-only CalDAV VTODO surface (#3534 / issue #49): every board a user can
  * access is exposed to their CalDAV principal as a calendar of VTODOs, one per
- * card that HAS a due date. Discoverable by Nextcloud Calendar and DAVx5 exactly
+ * card with a start or due date. Discoverable by Nextcloud Calendar and DAVx5 exactly
  * the way Deck's board calendars are (via the DAV app's
  * {@see \OCA\DAV\CalDAV\Integration\ICalendarProvider} extension point, wired in
  * `appinfo/info.xml`).
@@ -39,7 +39,7 @@ use Sabre\VObject\Component\VCalendar;
  *    ({@see CalendarFeedService}), the reader is the logged-in CalDAV principal:
  *    {@see BoardAccess::contextFor} gates board membership and
  *    {@see CardMapper::findDuedateSummariesByBoard} applies that viewer's
- *    card-visibility, so a member sees exactly the due cards they see on the
+ *    card-visibility, so a member sees exactly the dated cards they see on the
  *    board - never another board's, never a card hidden from them.
  */
 class CardCalendarService {
@@ -230,7 +230,7 @@ class CardCalendarService {
 	}
 
 	/**
-	 * The board's due cards visible to $uid, as VTODO source rows. The caller has
+	 * The board's dated cards visible to $uid, as VTODO source rows. The caller has
 	 * already proven membership (via {@see self::boardForPrincipal}); this mints
 	 * the viewer context again to scope card visibility.
 	 *

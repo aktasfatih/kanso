@@ -321,6 +321,28 @@ class CardCalendarServiceTest extends TestCase {
 		self::assertStringNotContainsString('DUE:20260815T', $ics);
 	}
 
+	public function testSerializeStartOnlyCardEmitsUtcStartWithoutInventedEnd(): void {
+		$board = $this->board();
+		$card = $this->card(8, 'Start only', null);
+		$card->setStartDate(new \DateTime('2026-08-15T09:30:00-04:00'));
+
+		$ics = $this->service->serializeCard($board, $card);
+		self::assertStringContainsString('DTSTART:20260815T133000Z', $ics);
+		self::assertStringNotContainsString('DUE', $ics);
+		self::assertStringNotContainsString('DURATION', $ics);
+		self::assertStringNotContainsString('DTEND', $ics);
+		self::assertSame($ics, $this->service->serializeCard($board, $card));
+	}
+
+	public function testSerializeAllDayStartOnlyCardEmitsDateWithoutDue(): void {
+		$card = $this->card(9, 'All-day start only', null, allDay: true);
+		$card->setStartDate(new \DateTime('2026-08-15T00:00:00+00:00'));
+
+		$ics = $this->service->serializeCard($this->board(), $card);
+		self::assertStringContainsString('DTSTART;VALUE=DATE:20260815', $ics);
+		self::assertStringNotContainsString('DUE', $ics);
+	}
+
 	public function testSerializeDoneCardMarksCompleted(): void {
 		$board = $this->board(7);
 		$card = $this->card(5, 'Done card', new \DateTime('2026-08-15T09:30:00+00:00'), doneAt: 1_700_001_000);
