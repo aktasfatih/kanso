@@ -17,6 +17,8 @@
     "lint:info-xml": "node scripts/validate-info-xml.mjs",
     "lint:e2e-timeouts": "node scripts/check-e2e-timeouts.mjs",
     "test:e2e-timeouts": "node --test scripts/check-e2e-timeouts.test.mjs",
+    "lint:enterkeyhint": "node scripts/check-enterkeyhint.mjs",
+    "test:enterkeyhint": "node --test scripts/check-enterkeyhint.test.mjs",
     "test:l10n": "node --test scripts/l10n.lint.test.mjs",
     "test:unit": "node --test tests/unit/*.test.mjs",
     "check:push": "node tests/e2e/push-health.js",

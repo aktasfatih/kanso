@@ -46,6 +46,20 @@ every PR but are not in the required list, so a red one will not block a merge.
 Treat them as required anyway: don't merge on a red `unit-php (8.4)` or
 `unit-php (8.5)`.
 
+## Mobile Enter shortcuts
+
+Text inputs that save on `@keydown.enter` or `@keyup.enter` need a static
+`enterkeyhint` such as `enter` or `done`. This also applies to `NcTextField` and
+`NcInputField`: mobile keyboards can otherwise show Next and move focus without
+sending Enter. Run `npm run test:enterkeyhint` and `npm run lint:enterkeyhint`;
+the existing frontend CI job runs both.
+
+The guard parses Vue templates, including IME-helper and arrow callbacks. It
+accepts HTML hint keywords and bound string literals; unknown dynamic hints or
+spreads require an explanation. Unknown dynamic input types remain checked.
+For an intentional exception, place `<!-- enterkeyhint-ok: concrete reason -->`
+immediately before that input as a sibling comment. It exempts that input only.
+
 ## Writing a migration
 
 Every other CI job installs the branch's own tree onto an empty Nextcloud, so a
