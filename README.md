@@ -84,8 +84,9 @@ your work, on your own Nextcloud, laid out plainly.
   get notified of new activity.
 - **Parent/child cards**: progress counts done or archived children as resolved.
   Parent auto-completion is **off by default**. Enable it in board settings to
-  complete a parent after a child changes once all children are done or archived,
-  its own checklist is complete, and its reviews are approved. Manual and
+  complete a parent after a child changes or its final checklist item is completed,
+  once all children are done or archived, its own checklist is complete, and
+  its reviews are approved. Manual and
   rule-driven archives use the same completion rule. Reopening or unarchiving a
   child never reopens the parent.
 

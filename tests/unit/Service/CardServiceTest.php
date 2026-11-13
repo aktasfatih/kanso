@@ -73,6 +73,7 @@ class CardServiceTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->cardMapper = $this->createMock(CardMapper::class);
+		$this->cardMapper->method('findForMutation')->willReturnCallback(fn (int $id): Card => $this->cardMapper->find($id));
 		$this->stackMapper = $this->createMock(StackMapper::class);
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
@@ -157,6 +158,7 @@ class CardServiceTest extends TestCase {
 			$this->moveCleanupService,
 			$container,
 			new \OCA\Kanso\Tests\Stubs\CardMutationService($this->db),
+			new \OCA\Kanso\Service\ParentCompletionService($this->cardMapper, $this->boardMapper, $this->checklistItemMapper, $this->cardReviewMapper, $this->changeNotifier),
 		);
 	}
 

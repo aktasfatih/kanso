@@ -50,6 +50,7 @@ class ChecklistService {
 		private BoardAccess $boardAccess,
 		private NotificationService $notificationService,
 		private CardMutationService $cardMutation,
+		private ParentCompletionService $parentCompletion,
 	) {
 	}
 
@@ -128,6 +129,7 @@ class ChecklistService {
 			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 			$changed = false;
+			$completed = false;
 			if ($title !== null) {
 				$normalized = $this->normalizeTitle($title);
 				if ($normalized !== $item->getTitle()) {
@@ -136,6 +138,7 @@ class ChecklistService {
 				}
 			}
 			if ($done !== null && $done !== $item->getDone()) {
+				$completed = $done;
 				$item->setDone($done);
 				// `done` stays the source of truth; `done_at` is only the stamp of
 				// the flip (#3745) - set on complete, cleared on un-done.
@@ -148,7 +151,11 @@ class ChecklistService {
 			}
 
 			// Atomic item-write + card change-row (#3579); push after commit.
-			return $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
+			$saved = $this->writeItemChange($card, $actorUid, fn (): ChecklistItem => $this->itemMapper->update($item));
+			if ($completed) {
+				$this->parentCompletion->maybeComplete($card->getId(), $card->getBoardId(), $actorUid, false);
+			}
+			return $saved;
 		});
 	}
 

@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\ChecklistItem;
 use OCA\Kanso\Db\ChecklistItemMapper;
@@ -22,6 +23,7 @@ use OCA\Kanso\Service\ChecklistService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotificationService;
 use OCA\Kanso\Service\NotPermittedException;
+use OCA\Kanso\Service\ParentCompletionService;
 use OCA\Kanso\Service\PermissionService;
 use OCA\Kanso\Service\SortKeyService;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -32,6 +34,7 @@ use PHPUnit\Framework\TestCase;
 class ChecklistServiceTest extends TestCase {
 	private ChecklistItemMapper&MockObject $itemMapper;
 	private CardMapper&MockObject $cardMapper;
+	private CardReviewMapper&MockObject $cardReviewMapper;
 	private BoardMapper&MockObject $boardMapper;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
@@ -45,6 +48,8 @@ class ChecklistServiceTest extends TestCase {
 		parent::setUp();
 		$this->itemMapper = $this->createMock(ChecklistItemMapper::class);
 		$this->cardMapper = $this->createMock(CardMapper::class);
+		$this->cardMapper->method('findForMutation')->willReturnCallback(fn (int $id): Card => $this->cardMapper->find($id));
+		$this->cardReviewMapper = $this->createMock(CardReviewMapper::class);
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->changeNotifier = $this->createMock(ChangeNotifier::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
@@ -75,6 +80,7 @@ class ChecklistServiceTest extends TestCase {
 			$this->boardAccess,
 			$this->notificationService,
 			$this->cardMutation(),
+			new ParentCompletionService($this->cardMapper, $this->boardMapper, $this->itemMapper, $this->cardReviewMapper, $this->changeNotifier),
 		);
 	}
 
@@ -210,6 +216,50 @@ class ChecklistServiceTest extends TestCase {
 	}
 
 	// ---- updateItem -------------------------------------------------------
+
+	public function testCompletingFinalOwnItemCompletesParentWithResolvedChildren(): void {
+		$board = $this->board();
+		$board->setAutoCompleteParent(true);
+		$parent = $this->card();
+		$this->cardMapper->method('find')->with(9)->willReturn($parent);
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$doneChild = $this->card(20);
+		$doneChild->setDoneAt(100);
+		$archivedChild = $this->card(21);
+		$archivedChild->setArchived(true);
+		$this->cardMapper->method('findChildren')->with(9)->willReturn([$doneChild, $archivedChild]);
+		$item = $this->item(50, 'I');
+		$this->itemMapper->method('find')->with(50)->willReturn($item);
+		$this->itemMapper->method('findByCard')->with(9)->willReturn([$item]);
+		$this->itemMapper->method('update')->willReturnArgument(0);
+		$this->cardMapper->expects(self::once())->method('update')->with($parent)->willReturnArgument(0);
+		$verbs = [];
+		$this->changeNotifier->expects(self::exactly(2))->method('recordChange')
+			->willReturnCallback(static function (int $boardId, int $type, int $id, int $action, ?string $uid, ?int $verb) use (&$verbs): Change {
+				self::assertSame([1, Change::ENTITY_CARD, 9, Change::ACTION_UPDATE, 'alice'], [$boardId, $type, $id, $action, $uid]);
+				$verbs[] = $verb;
+				return new Change();
+			});
+		$this->changeNotifier->expects(self::once())->method('pushBoardChanged')->with(1);
+
+		$result = $this->service->updateItem(50, null, true, 'alice');
+		self::assertTrue($result->getDone());
+		self::assertGreaterThan(0, $parent->getDoneAt());
+		self::assertSame([Change::VERB_CHECKLIST, Change::VERB_UPDATED], $verbs);
+	}
+
+	public function testRenameIdempotentCompletionAndReopeningDoNotTriggerParentCompletion(): void {
+		$board = $this->expectItemLoaded(static fn (ChecklistItem $item) => $item->setDone(true));
+		$board->setAutoCompleteParent(true);
+		$this->cardMapper->expects(self::never())->method('findChildren');
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->itemMapper->method('update')->willReturnArgument(0);
+		$this->changeNotifier->method('recordChange')->willReturn(new Change());
+
+		$this->service->updateItem(50, 'Renamed', true, 'alice');
+		$this->service->updateItem(50, null, true, 'alice');
+		$this->service->updateItem(50, null, false, 'alice');
+	}
 
 	public function testUpdateItemTogglesDoneAndWritesCardChangeRow(): void {
 		$board = $this->board();

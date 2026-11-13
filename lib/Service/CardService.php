@@ -136,6 +136,7 @@ class CardService {
 		// ChangeNotifier. Only touched on the rare date-edit-of-a-template path.
 		private ContainerInterface $container,
 		private CardMutationService $cardMutation,
+		private ParentCompletionService $parentCompletion,
 	) {
 	}
 
@@ -1801,51 +1802,10 @@ class CardService {
 	 */
 	public function maybeCompleteParent(Card $child, ?string $uid, bool $push = true): void {
 		$parentId = $child->getParentCardId();
-		if ($parentId === null || $child->getDeletedAt() > 0) {
+		if ($parentId === null || $child->getDeletedAt() > 0 || ($child->getDoneAt() === 0 && !$child->getArchived())) {
 			return;
 		}
-		try {
-			$parent = $this->cardMapper->find($parentId);
-		} catch (DoesNotExistException) {
-			return;
-		}
-		if ($parent->getDeletedAt() > 0 || $parent->getDoneAt() > 0 || $parent->getBoardId() !== $child->getBoardId()) {
-			return;
-		}
-		try {
-			$board = $this->boardMapper->find($parent->getBoardId());
-		} catch (DoesNotExistException) {
-			return;
-		}
-		if ($board->getAutoCompleteParent() !== true) {
-			return;
-		}
-		foreach ($this->cardMapper->findChildren($parentId) as $sibling) {
-			if ($sibling->getDoneAt() === 0 && !$sibling->getArchived()) {
-				return;
-			}
-		}
-		foreach ($this->checklistItemMapper->findByCard($parentId) as $item) {
-			if (!$item->getDone()) {
-				return;
-			}
-		}
-		if ($this->cardReviewMapper->hasUnapprovedReviews($parentId)) {
-			return;
-		}
-
-		$now = time();
-		$parent->setDoneAt($now);
-		$parent->setLastModified($now);
-		$this->writeCardChange(
-			$parent->getBoardId(),
-			$parentId,
-			Change::ACTION_UPDATE,
-			$uid,
-			Change::VERB_UPDATED,
-			fn (): Card => $this->cardMapper->update($parent),
-			push: $push,
-		);
+		$this->parentCompletion->maybeComplete($parentId, $child->getBoardId(), $uid, $push);
 	}
 
 	/**

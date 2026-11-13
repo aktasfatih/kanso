@@ -145,6 +145,8 @@ class ArchitectureTest extends TestCase {
 	 *                                      mutation retains its permission/visibility gates
 	 * - Service/CsvImportService.php ..... importer, creates cards only
 	 * - Service/DeckImportService.php .... importer, creates cards only
+	 * - Service/ParentCompletionService.php internal completion gate; includes
+	 *                                      hidden children and returns no card data
 	 * - Service/PublicShareService.php ... anonymous snapshot; PUBLIC-ONLY is
 	 *                                      applied inside findPublicByBoard /
 	 *                                      progressByBoardPublicOnly /
@@ -169,6 +171,7 @@ class ArchitectureTest extends TestCase {
 		'Service/CardMutationService.php',
 		'Service/CsvImportService.php',
 		'Service/DeckImportService.php',
+		'Service/ParentCompletionService.php',
 		'Service/PublicShareService.php',
 		'Service/TrelloImportService.php',
 	];
