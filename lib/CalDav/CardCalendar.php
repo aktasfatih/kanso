@@ -16,6 +16,7 @@ use Sabre\CalDAV\Plugin;
 use Sabre\CalDAV\Xml\Property\SupportedCalendarComponentSet;
 use Sabre\DAV\Exception\Forbidden;
 use Sabre\DAV\Exception\NotFound;
+use Sabre\DAV\IMultiGet;
 use Sabre\DAV\PropPatch;
 use Sabre\VObject\Component\VCalendar;
 use Sabre\VObject\Reader;
@@ -27,7 +28,7 @@ use Sabre\VObject\Reader;
  * one-way-sync surface, not an editor. All data + access decisions come from
  * {@see CardCalendarService}.
  */
-class CardCalendar extends ExternalCalendar {
+class CardCalendar extends ExternalCalendar implements IMultiGet {
 	/** @var Card[]|null the board's dated cards, loaded once per request. VTODO
 	 *  serialisation happens per object only when it is actually read, so a
 	 *  calendar-home listing never serialises anything. */
@@ -151,6 +152,22 @@ class CardCalendar extends ExternalCalendar {
 		return array_map(fn (Card $card): CardCalendarObject => $this->object($card), $this->cards());
 	}
 
+	/** @return CardCalendarObject[] */
+	#[\Override]
+	public function getMultipleChildren(array $paths) {
+		if ($paths === []) {
+			return [];
+		}
+		$requested = array_fill_keys($paths, true);
+		$children = [];
+		foreach ($this->cards() as $card) {
+			if (isset($requested[$this->service->objectName($card)])) {
+				$children[] = $this->object($card);
+			}
+		}
+		return $children;
+	}
+
 	/**
 	 * @inheritDoc
 	 */
@@ -253,6 +270,7 @@ class CardCalendar extends ExternalCalendar {
 			$this->service->serializeCard($this->board, $card),
 			$this->service->etag($card),
 			$this->service->lastModified($card),
+			$this->principalUri,
 		);
 	}
 }
