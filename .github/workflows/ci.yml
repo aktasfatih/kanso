@@ -106,6 +106,10 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
+          # Verification extension contract, also asserted by dev/php/Dockerfile.
+          extensions: >-
+            ctype, date, dom, filter, iconv, json, libxml, mbstring, openssl,
+            pcre, pdo, phar, reflection, simplexml, spl, tokenizer, xmlreader, xmlwriter, zip
           tools: composer
       # Tripwire: setup-php reports success even when the php it installed
       # cannot start, so assert it here — at a named step with an obvious
@@ -159,6 +163,9 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
+          extensions: >-
+            ctype, date, dom, filter, iconv, json, libxml, mbstring, openssl,
+            pcre, pdo, phar, reflection, simplexml, spl, tokenizer, xmlreader, xmlwriter, zip
           tools: composer
       - name: Verify the PHP binary starts
         run: php -v
@@ -236,6 +243,9 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
+          extensions: >-
+            ctype, date, dom, filter, iconv, json, libxml, mbstring, openssl,
+            pcre, pdo, phar, reflection, simplexml, spl, tokenizer, xmlreader, xmlwriter, zip
           tools: composer
       - name: Verify the PHP binary starts
         run: php -v

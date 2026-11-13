@@ -479,23 +479,15 @@ migration**: `setup.sh` only re-enables the app, and Nextcloud re-runs an app's
 migrations only when `info.xml`'s `<version>` grows, which feature branches never
 do. `./seed.sh` refills a reset stack; `./smoke.sh` reports a schema left behind.
 
-PHP tooling runs via Docker (no host PHP needed):
-
-```sh
-docker run --rm -u "$(id -u):$(id -g)" -e COMPOSER_HOME=/tmp/composer \
-  -v "$PWD":/app -w /app composer:2 composer install
-docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/app -w /app \
-  php:8.2-cli-alpine php vendor/bin/php-cs-fixer fix --dry-run
-docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/app -w /app \
-  php:8.2-cli-alpine php vendor/bin/psalm
-```
+PHP tooling runs via Docker (no host PHP needed). Follow the
+[PHP verification commands](CONTRIBUTING.md#php-verification) to build the
+PHP 8.2 image with CI's explicit extensions and run PHPUnit, Psalm and style
+checks in your checkout or worktree.
 
 Tests: PHPUnit for the API/services, Playwright for board interactions.
 
 ```sh
 npm run test:e2e                           # Playwright e2e (needs the dev stack up)
-docker run --rm -v "$PWD":/app -w /app php:8.2-cli-alpine \
-  php vendor/bin/phpunit -c phpunit.xml    # PHP unit tests
 ```
 
 ## Tech
