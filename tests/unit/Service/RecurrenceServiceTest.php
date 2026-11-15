@@ -52,6 +52,8 @@ class RecurrenceServiceTest extends TestCase {
 	private IConfig&MockObject $config;
 	private LoggerInterface&MockObject $logger;
 	private RecurrenceService $service;
+	/** @var array<int, RecurRule> */
+	private array $storedRules = [];
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -89,6 +91,7 @@ class RecurrenceServiceTest extends TestCase {
 			$this->db,
 			$this->config,
 			$this->logger,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 
@@ -115,6 +118,7 @@ class RecurrenceServiceTest extends TestCase {
 			$this->db,
 			$this->config,
 			$this->logger,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 
@@ -203,6 +207,7 @@ class RecurrenceServiceTest extends TestCase {
 		$rule->setCreatedAt(self::NOW);
 		// Anchor in UTC so the +86400 daily-step assertions are host-tz agnostic.
 		$rule->setTimezone('UTC');
+		$this->storedRules[$id] = $rule;
 		return $rule;
 	}
 
@@ -1088,6 +1093,7 @@ class RecurrenceServiceTest extends TestCase {
 	// ---- spawn CLONE ------------------------------------------------------
 
 	public function testSpawnCloneCreatesCardCopiesDescriptionLabelsAssignees(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$rule = $this->rule(mode: RecurRule::MODE_CLONE, policy: RecurRule::POLICY_AT_OCCURRENCE, nextOccurrenceAt: self::NOW);
 		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
 
@@ -1134,6 +1140,7 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	public function testSpawnCloneSlidesStartEndWindowToOccurrence(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// The template has a 2-day Start→End window anchored in the past. A clone's
 		// window slides forward to the occurrence, keeping its 2-day length (the
 		// calendar-event model): Start = occurrence, End = occurrence + 2 days.
@@ -1159,6 +1166,7 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	public function testSpawnCloneNonePolicyLeavesDuedateNull(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$rule = $this->rule(policy: RecurRule::POLICY_NONE, nextOccurrenceAt: self::NOW);
 		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
 		$this->cardService->method('create')->willReturn($this->spawnedCard());
@@ -1177,6 +1185,7 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	public function testSpawnCloneCopiesTemplateAllDayFlag(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// #4125: an all-day template must spawn an all-day clone, else the clone
 		// defaults to all_day=false and shows a spurious 00:00 time.
 		$template = $this->templateCard();
@@ -1199,6 +1208,7 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	public function testSpawnCloneAllDayCarriesFlagAndSlidesTheSingleDate(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// An all-day card is a single day (just an End date, at UTC midnight). Its
 		// clone keeps the all-day flag and slides that one date to the occurrence -
 		// no start date is invented, so the clone stays a clean single all-day day.
@@ -1226,6 +1236,7 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	public function testSpawnResetAllDayKeepsFlagAndSlidesTheSingleDate(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// RESET on an all-day card slides its single day forward and leaves the
 		// all-day flag on (the reset card is its own template).
 		$dayTs = (new \DateTimeImmutable('2027-01-15T00:00:00Z'))->getTimestamp();
@@ -1252,6 +1263,7 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	public function testSpawnCloneDefaultsAllDayFalseForNonAllDayTemplate(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// A template with no all-day flag (null) spawns a timed clone (all_day=false),
 		// never null - the flag is always set explicitly on the clone.
 		$rule = $this->rule(mode: RecurRule::MODE_CLONE, policy: RecurRule::POLICY_AT_OCCURRENCE, nextOccurrenceAt: self::NOW);
@@ -1274,6 +1286,7 @@ class RecurrenceServiceTest extends TestCase {
 	// ---- soft-trashed template pauses the schedule (#4124) ----------------
 
 	public function testSpawnPausesWhenTemplateIsSoftTrashed(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// A soft-trashed template (deleted_at > 0, not purged) must NOT spawn: the
 		// spawn hot path read the template raw and kept cloning it. It pauses -
 		// no card, no error, no hard-disable - and advances the schedule so the
@@ -1302,6 +1315,7 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	public function testSpawnPausesWhenResetTemplateIsSoftTrashed(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// RESET mode moves the template card itself - a soft-trashed template must
 		// pause too, never move a trashed card back into play.
 		$trashed = $this->templateCard();
@@ -1317,6 +1331,7 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	public function testSpawnResumesAfterTemplateRestored(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// Once the template is restored (deleted_at back to 0) the very next spawn
 		// clones again - the pause left the rule enabled and did not disable it.
 		$rule = $this->rule(mode: RecurRule::MODE_CLONE, rrule: 'FREQ=DAILY', nextOccurrenceAt: self::NOW);
@@ -1337,6 +1352,7 @@ class RecurrenceServiceTest extends TestCase {
 	// ---- spawn RESET ------------------------------------------------------
 
 	public function testSpawnResetMovesTemplateBackClearsDoneSlidesWindow(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$rule = $this->rule(mode: RecurRule::MODE_RESET, nextOccurrenceAt: self::NOW);
 
 		// Target stack empty → move to top (afterCardId null).
@@ -1380,6 +1396,7 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	public function testSpawnResetClearsStartedAtSoTheCardIsNotStuckInProgress(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// A card's status is the (started_at, done_at) PAIR. The reset cleared only
 		// done_at, so the returning occurrence read "In progress" from the moment it
 		// came back - forever, and for every later occurrence - even though nobody
@@ -1412,6 +1429,7 @@ class RecurrenceServiceTest extends TestCase {
 	// ---- skip_while_open --------------------------------------------------
 
 	public function testSpawnCloneSkipsWhenPreviousCardStillOpen(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$rule = $this->rule(skipWhileOpen: true, nextOccurrenceAt: self::NOW, lastSpawnedAt: 42, occurrencesSpawned: 1);
 
 		// spawn() reads the (live) template first, then previousCardOpen reads the
@@ -1432,6 +1450,7 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	public function testSpawnCloneDoesNotSkipWhenPreviousCardDone(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$rule = $this->rule(skipWhileOpen: true, nextOccurrenceAt: self::NOW, lastSpawnedAt: 42, occurrencesSpawned: 1);
 
 		$doneCard = $this->spawnedCard(42);
@@ -1455,6 +1474,7 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	public function testManualSpawnIgnoresSkipWhileOpen(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$rule = $this->rule(skipWhileOpen: true, nextOccurrenceAt: self::NOW, lastSpawnedAt: 42);
 		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
 		$this->cardService->expects(self::once())->method('create')->willReturn($this->spawnedCard());
@@ -1470,6 +1490,7 @@ class RecurrenceServiceTest extends TestCase {
 	// ---- COUNT exhaustion self-disables -----------------------------------
 
 	public function testSpawnCountExhaustionSelfDisables(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// A COUNT=1 rule: after this single spawn, no next occurrence → disable.
 		$rule = $this->rule(rrule: 'FREQ=DAILY;COUNT=1', nextOccurrenceAt: self::NOW);
 		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
@@ -1498,6 +1519,7 @@ class RecurrenceServiceTest extends TestCase {
 	 * unfixed this run produces a 4th card and leaves the rule armed for tomorrow.
 	 */
 	public function testResetCountLimitedSeriesStopsAfterItsLastOccurrence(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// Series origin 3 days back → occurrences at t-3d, t-2d, t-1d. A 4th daily
 		// step would land exactly on now, so an unbounded rule spawns it too.
 		$origin = self::NOW - 3 * 86400;
@@ -1538,6 +1560,7 @@ class RecurrenceServiceTest extends TestCase {
 	 * hand back "no COUNT" - and precisely those rules would keep running away.
 	 */
 	public function testResetSeriesIsBoundedForACountSpellingSabreAccepts(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$origin = self::NOW - 3 * 86400;
 		$rule = $this->rule(mode: RecurRule::MODE_RESET, rrule: 'FREQ=DAILY;COUNT=+3', nextOccurrenceAt: $origin);
 		$template = $this->templateCard();
@@ -1565,6 +1588,7 @@ class RecurrenceServiceTest extends TestCase {
 	 *           [2]
 	 */
 	public function testShortCountLimitedResetSeriesStillYieldExactlyCountCards(int $count): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$origin = self::NOW - 3 * 86400;
 		$rule = $this->rule(
 			mode: RecurRule::MODE_RESET,
@@ -1617,6 +1641,7 @@ class RecurrenceServiceTest extends TestCase {
 	 * the same occurrence, never double-count and cut the series short.
 	 */
 	public function testCloneCountLimitedSeriesStillYieldsExactlyCountCards(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$origin = self::NOW - 3 * 86400;
 		$rule = $this->rule(rrule: 'FREQ=DAILY;COUNT=3', nextOccurrenceAt: $origin);
 
@@ -1646,6 +1671,7 @@ class RecurrenceServiceTest extends TestCase {
 	 * ended the series correctly and must keep doing so.
 	 */
 	public function testResetUntilLimitedSeriesIsUnchanged(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$origin = self::NOW - 3 * 86400;
 		// Last allowed occurrence is yesterday → t-3d, t-2d, t-1d, then done.
 		$rrule = 'FREQ=DAILY;UNTIL=' . gmdate('Ymd\THis\Z', self::NOW - 86400);
@@ -1678,6 +1704,7 @@ class RecurrenceServiceTest extends TestCase {
 	 * never created - it cannot hand the occurrence back.
 	 */
 	public function testSkipWhileOpenDoesNotTripTheCountGuard(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// One of three delivered at t-1d; the cursor sits on the second of the
 		// three occurrences (t-1d, now, t+1d).
 		$rule = $this->rule(
@@ -1721,6 +1748,7 @@ class RecurrenceServiceTest extends TestCase {
 	 * as a skip: no card was delivered, so the series still owes the user one.
 	 */
 	public function testTrashedTemplatePauseDoesNotConsumeACountSlot(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$rule = $this->rule(rrule: 'FREQ=DAILY;COUNT=3', nextOccurrenceAt: self::NOW, occurrencesSpawned: 2);
 		$trashed = $this->templateCard();
 		$trashed->setStartDate(new \DateTime('@' . (self::NOW - 86400)));
@@ -1738,6 +1766,7 @@ class RecurrenceServiceTest extends TestCase {
 	// ---- atomic spawn (idempotency on cron retry) -------------------------
 
 	public function testSpawnCommitsOnSuccess(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$rule = $this->rule(nextOccurrenceAt: self::NOW);
 		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
 		$this->cardService->method('create')->willReturn($this->spawnedCard());
@@ -1762,6 +1791,7 @@ class RecurrenceServiceTest extends TestCase {
 	 * the rule stayed due, so the next run stamped a duplicate.
 	 */
 	public function testSpawnRollsBackAndDoesNotAdvanceRuleWhenEnrichFails(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$rule = $this->rule(nextOccurrenceAt: self::NOW, occurrencesSpawned: 0);
 		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
 		// Card gets created...
@@ -1801,6 +1831,7 @@ class RecurrenceServiceTest extends TestCase {
 	 * make a client refetch state the transaction may still roll back).
 	 */
 	public function testSpawnCloneLogsEnrichmentInsideTransactionAndPushesAfterCommit(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$rule = $this->rule(nextOccurrenceAt: self::NOW);
 		$this->cardMapper->method('find')->with(10)->willReturn($this->templateCard());
 		$this->cardService->method('create')->willReturn($this->spawnedCard());
@@ -1833,6 +1864,7 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	public function testSpawnSkipCommitsAdvancedSchedule(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// A skip still opens a transaction, advances the schedule and commits -
 		// so the rule does not re-fire immediately, atomically.
 		$rule = $this->rule(skipWhileOpen: true, nextOccurrenceAt: self::NOW, lastSpawnedAt: 42, occurrencesSpawned: 1);
@@ -1900,7 +1932,31 @@ class RecurrenceServiceTest extends TestCase {
 
 	// ---- runDueRules (cron entry) -----------------------------------------
 
+	public function testCronAdvancesItsCursorWhenEachFindReturnsAFreshRule(): void {
+		$origin = self::NOW - 3 * 86400;
+		$cursor = $this->rule(mode: RecurRule::MODE_RESET, rrule: 'FREQ=DAILY;COUNT=3', nextOccurrenceAt: $origin);
+		$stored = clone $cursor;
+		$template = $this->templateCard();
+		$template->setStartDate(new \DateTime('@' . $origin));
+		$this->ruleMapper->method('findDueEnabled')->willReturn([$cursor]);
+		$this->ruleMapper->method('find')->willReturnCallback(static function () use (&$stored): RecurRule {
+			return clone $stored;
+		});
+		$this->ruleMapper->method('update')->willReturnCallback(static function (RecurRule $rule) use (&$stored): RecurRule {
+			$stored = clone $rule;
+			return $rule;
+		});
+		$this->cardMapper->method('find')->willReturn($template);
+		$this->cardService->method('move')->willReturn($template);
+		$this->cardMapper->method('update')->willReturnArgument(0);
+		self::assertSame(3, $this->service->runDueRules());
+		self::assertSame(3, $stored->getOccurrencesSpawned());
+		self::assertFalse($stored->getEnabled());
+		self::assertFalse($cursor->getEnabled());
+	}
+
 	public function testRunDueRulesSpawnsEachAndSkipsBroken(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$ruleA = $this->rule(id: 1, nextOccurrenceAt: self::NOW);
 		// Rule A's template card (id 11) is hard-gone; rule B's (id 10) is live.
 		$ruleA->setTemplateCardId(11);
@@ -1933,6 +1989,7 @@ class RecurrenceServiceTest extends TestCase {
 	 * loop is still left untouched - no card, no schedule advance.
 	 */
 	public function testRunDueRulesSkipsRuleNotYetDue(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$rule = $this->rule(nextOccurrenceAt: self::NOW + 86400); // fires tomorrow
 		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
 		$this->cardService->expects(self::never())->method('create');
@@ -1949,6 +2006,7 @@ class RecurrenceServiceTest extends TestCase {
 	 * holds independently of the query.
 	 */
 	public function testRunDueRulesSkipsExhaustedRule(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$rule = $this->rule(nextOccurrenceAt: 0);
 		$this->ruleMapper->method('findDueEnabled')->willReturn([$rule]);
 		$this->cardService->expects(self::never())->method('create');
@@ -1965,6 +2023,7 @@ class RecurrenceServiceTest extends TestCase {
 	 * while the rule stays due (next_occurrence_at <= now).
 	 */
 	public function testCatchUpSpawnsOneCardPerMissedOccurrence(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// Daily rule; cursor sits 3 days before now → 3 missed daily occurrences
 		// are due (t-3d, t-2d, t-1d); the t=now one is also due (<= now) = 4.
 		$firstMissed = self::NOW - 3 * 86400;
@@ -2012,6 +2071,7 @@ class RecurrenceServiceTest extends TestCase {
 	 * remainder continue on the next run.
 	 */
 	public function testCatchUpIsBoundedByMaxCatchupAndLogsTruncation(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// Hourly rule dormant for far more than MAX_CATCHUP hours.
 		$backlog = RecurrenceService::MAX_CATCHUP + 20;
 		$first = self::NOW - $backlog * 3600;
@@ -2051,6 +2111,7 @@ class RecurrenceServiceTest extends TestCase {
 	 * ONLY the second - never a duplicate of the already-committed first.
 	 */
 	public function testCatchUpMakesDurablePartialProgressNoDoubleSpawn(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$firstMissed = self::NOW - 2 * 86400;
 		$rule = $this->rule(rrule: 'FREQ=DAILY', nextOccurrenceAt: $firstMissed);
 		$rule->setCreatedAt($firstMissed);
@@ -2145,6 +2206,7 @@ class RecurrenceServiceTest extends TestCase {
 			$this->cardLabelMapper, $this->cardAssigneeMapper, $this->cardService,
 			$this->changeNotifier, $this->permissionService, $this->visibilityGuard,
 			$this->time, $this->db, $config, $this->logger,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
@@ -2162,6 +2224,7 @@ class RecurrenceServiceTest extends TestCase {
 	// ---- visibility (#3760) ------------------------------------------------
 
 	public function testSpawnedCloneInheritsTemplateVisibilityAndCreatorRoleVerbatim(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// A provider-internal template spawns a provider-internal card - the
 		// class and the frozen creator side ride the CREATE itself, so no
 		// fan-out ever sees a wider interim 'public' card.
@@ -2182,6 +2245,7 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	public function testLegacyTemplateWithoutVisibilitySpawnsPublic(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// Pre-migration template rows (NULL visibility) read as 'public' - the
 		// clone gets the explicit backfill value, creator side left to create().
 		$rule = $this->rule(mode: RecurRule::MODE_CLONE, nextOccurrenceAt: self::NOW);
@@ -2198,6 +2262,7 @@ class RecurrenceServiceTest extends TestCase {
 	}
 
 	public function testSpawnRefusesWhenTemplateIsHiddenFromTheRuleOwner(): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		// The template's visibility narrowed past the rule owner after the rule
 		// was created: cloning its content into a card the owner CAN see would
 		// be a leak - the spawn fails like a missing template, nothing created.
@@ -2601,6 +2666,7 @@ class RecurrenceServiceTest extends TestCase {
 			$this->cardLabelMapper, $this->cardAssigneeMapper, $this->cardService,
 			$this->changeNotifier, $this->permissionService, $this->visibilityGuard,
 			$this->time, $this->db, $config, $this->logger,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
@@ -2627,6 +2693,7 @@ class RecurrenceServiceTest extends TestCase {
 			$this->cardLabelMapper, $this->cardAssigneeMapper, $this->cardService,
 			$this->changeNotifier, $this->permissionService, $this->visibilityGuard,
 			$this->time, $this->db, $config, $this->logger,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
@@ -2847,6 +2914,7 @@ class RecurrenceServiceTest extends TestCase {
 	 *           ["FREQ=MONTHLY;BYMONTHDAY=32"]
 	 */
 	public function testRunDueRulesDisablesAStoredPoisonedRuleInsteadOfSpinning(string $rrule): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$rule = $this->rule(rrule: $rrule, nextOccurrenceAt: self::NOW);
 		// The template's Start date is the schedule's anchor, and putting it just
 		// AFTER the occurrence being advanced past is the same trick
@@ -2885,6 +2953,7 @@ class RecurrenceServiceTest extends TestCase {
 	 *           ["INTERVAL=2"]
 	 */
 	public function testRunDueRulesDisablesAStoredFreqLessRuleInsteadOfSpinning(string $rrule): void {
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
 		$rule = $this->rule(rrule: $rrule, nextOccurrenceAt: self::NOW);
 		// Anchor just after the occurrence being advanced past, so the advance loop
 		// is never entered and a regressed guard fails this test in milliseconds
@@ -2903,4 +2972,25 @@ class RecurrenceServiceTest extends TestCase {
 		self::assertSame(0, $rule->getNextOccurrenceAt());
 		self::assertFalse($rule->getEnabled());
 	}
+	public function testSingleAssigneeCloneRejectsGrandfatheredTemplateWithoutAdvancingRule(): void {
+		$board = $this->board();
+		$board->setSingleAssignee(true);
+		$this->boardMapper->method('find')->willReturn($board);
+		$rule = $this->rule(mode: RecurRule::MODE_CLONE, nextOccurrenceAt: self::NOW);
+		$this->ruleMapper->method('find')->willReturnCallback(fn (int $id): RecurRule => $this->storedRules[$id]);
+		$this->cardMapper->method('find')->willReturn($this->templateCard());
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn(['bob', 'carol']);
+		$this->cardService->expects(self::never())->method('create');
+		$this->ruleMapper->expects(self::never())->method('update');
+		$this->cardAssigneeMapper->expects(self::never())->method('insertAssignment');
+		try {
+			$this->service->spawn($rule, true);
+			self::fail('A single-assignee clone copied multiple people');
+		} catch (InvalidInputException $e) {
+			self::assertStringContainsString('one assignee', $e->getMessage());
+		}
+		self::assertSame(self::NOW, $rule->getNextOccurrenceAt());
+		self::assertSame(0, $rule->getOccurrencesSpawned());
+	}
+
 }

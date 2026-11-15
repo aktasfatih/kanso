@@ -9,19 +9,50 @@ namespace OCA\Kanso\CalDav;
 
 use Sabre\CalDAV\ICalendarObject;
 use Sabre\DAV\Exception\Forbidden;
+use Sabre\DAVACL\IACL;
 
 /**
  * One card, presented as a read-only VTODO calendar object (#3534 / issue #49).
  * A pure value object: the VCALENDAR body, ETag, name and mtime are computed up
  * front by {@see \OCA\Kanso\Service\CardCalendarService}; every write is rejected.
  */
-class CardCalendarObject implements ICalendarObject {
+class CardCalendarObject implements ICalendarObject, IACL {
 	public function __construct(
 		private string $name,
 		private string $calendarData,
 		private string $etag,
 		private int $lastModified,
+		private string $principalUri,
 	) {
+	}
+
+	#[\Override]
+	public function getOwner() {
+		return $this->principalUri;
+	}
+
+	#[\Override]
+	public function getGroup() {
+		return null;
+	}
+
+	#[\Override]
+	public function getACL() {
+		return [[
+			'privilege' => '{DAV:}read',
+			'principal' => $this->principalUri,
+			'protected' => true,
+		]];
+	}
+
+	#[\Override]
+	public function setACL(array $acl) {
+		throw new Forbidden('This calendar is read-only');
+	}
+
+	#[\Override]
+	public function getSupportedPrivilegeSet() {
+		return null;
 	}
 
 	/**

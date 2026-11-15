@@ -289,6 +289,56 @@ async def test_recur_rule_create_now_tool_unwraps_the_card():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_update_card_tool_returns_refreshed_details():
+    respx.patch(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json={"id": 100, "title": "Updated"})
+    )
+    details = {
+        "id": 100,
+        "title": "Updated",
+        "labelIds": [5],
+        "assigneeIds": ["bob"],
+        "assignees": [{"uid": "bob", "displayName": "Bob"}],
+        "relations": {
+            "blocks": [{"id": 9, "cardId": 200, "title": "Blocked"}],
+            "blockedBy": [],
+            "duplicates": [],
+            "relates": [],
+        },
+    }
+    respx.get(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json=details)
+    )
+    tools, client = _tools()
+    async with client:
+        result = await tools["kanso_update_card"](100, title="Updated")
+
+    assert result["title"] == "Updated"
+    assert result["labelIds"] == [5]
+    assert result["assigneeIds"] == ["bob"]
+    assert result["assignees"] == details["assignees"]
+    assert result["relations"] == details["relations"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_move_card_tool_preserves_sparse_result():
+    payload = {"id": 100, "title": "Moved", "stackId": 12}
+    respx.post(f"{BASE}/cards/100/move").mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+    tools, client = _tools()
+    async with client:
+        result = await tools["kanso_move_card"](100, 12)
+
+    assert result == {"moved": True, "result": payload}
+    assert not {"labelIds", "assigneeIds", "assignees", "relations"} & result[
+        "result"
+    ].keys()
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_move_card_to_board_tool_returns_the_new_card():
     route = respx.post(f"{BASE}/cards/100/move-to-board").mock(
         return_value=httpx.Response(
@@ -982,7 +1032,16 @@ def test_filter_to_query_matches_the_js_original_key_for_key():
 
 
 PROJECTS = [
-    {"id": 4, "title": "Launch", "color": "0082c9", "owner": "admin", "createdAt": 1},
+    {
+        "id": 4,
+        "title": "Launch",
+        "color": "0082c9",
+        "owner": "admin",
+        "createdAt": 1,
+        "lead": "alice",
+        "leadDisplayName": "Alice",
+        "lifecycleStatus": "in_progress",
+    },
     {"id": 5, "title": "Hiring", "owner": "admin", "createdAt": 2},
 ]
 PROJECT_CARDS = [
@@ -1004,6 +1063,9 @@ async def test_get_project_merges_the_record_and_its_cards():
 
     assert project["id"] == 4
     assert project["title"] == "Launch"
+    assert project["lead"] == "alice"
+    assert project["leadDisplayName"] == "Alice"
+    assert project["lifecycleStatus"] == "in_progress"
     assert [c["id"] for c in project["cards"]] == [100, 200]
     assert {c["boardTitle"] for c in project["cards"]} == {"Board", "Other"}
 
@@ -1037,6 +1099,55 @@ async def test_update_project_tool_sends_only_what_changed():
 
     assert json.loads(route.calls.last.request.content) == {"title": "Ship"}
     assert project["title"] == "Ship"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_create_project_tool_forwards_metadata():
+    route = respx.post(f"{BASE}/projects").mock(
+        return_value=httpx.Response(200, json=PROJECTS[0])
+    )
+    tools, client = _tools()
+    async with client:
+        project = await tools["kanso_create_project"](
+            "Launch", lead="alice", lifecycle_status="in_progress"
+        )
+
+    assert json.loads(route.calls.last.request.content) == {
+        "title": "Launch",
+        "lead": "alice",
+        "lifecycleStatus": "in_progress",
+    }
+    assert project["lead"] == "alice"
+    assert project["lifecycleStatus"] == "in_progress"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_project_tool_clears_lead_and_sets_lifecycle():
+    route = respx.patch(f"{BASE}/projects/4").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                **PROJECTS[0],
+                "lead": None,
+                "leadDisplayName": None,
+                "lifecycleStatus": "done",
+            },
+        )
+    )
+    tools, client = _tools()
+    async with client:
+        project = await tools["kanso_update_project"](
+            4, lead="", lifecycle_status="done"
+        )
+
+    assert json.loads(route.calls.last.request.content) == {
+        "lead": "",
+        "lifecycleStatus": "done",
+    }
+    assert project["lead"] is None
+    assert project["lifecycleStatus"] == "done"
 
 
 @respx.mock
@@ -1128,6 +1239,17 @@ async def test_project_tools_schema_and_hints():
 
     assert tools["kanso_create_project"].inputSchema["required"] == ["title"]
     assert tools["kanso_update_project"].inputSchema["required"] == ["project_id"]
+    for name in ("kanso_create_project", "kanso_update_project"):
+        properties = tools[name].inputSchema["properties"]
+        assert properties["lead"]["anyOf"] == [
+            {"type": "string"},
+            {"type": "null"},
+        ]
+        assert properties["lifecycle_status"]["anyOf"] == [
+            {"enum": ["planned", "in_progress", "done"], "type": "string"},
+            {"type": "null"},
+        ]
+        assert properties["lifecycle_status"]["default"] is None
     assert tools["kanso_add_project_comment"].inputSchema["required"] == [
         "project_id",
         "body",
@@ -1370,3 +1492,25 @@ async def test_list_project_shares_rejects_a_non_list_body():
     async with client:
         with pytest.raises(KansoApiError):
             await tools["kanso_list_project_shares"](4)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_single_assignee_setting_is_optional_and_visible_through_tools():
+    from mcp.server.fastmcp import FastMCP
+
+    client = KansoClient(KansoConfig(host="http://nc.test", username="admin", password="pw"))
+    server = FastMCP("kanso-test")
+    register_tools(server, client)
+    async with client:
+        tool = next(t for t in await server.list_tools() if t.name == "kanso_update_board")
+    assert "single_assignee" in tool.inputSchema["properties"]
+    assert "single_assignee" not in tool.inputSchema.get("required", [])
+    route = respx.patch(f"{BASE}/boards/7").mock(
+        return_value=httpx.Response(200, json={"id": 7, "title": "Board", "singleAssignee": True})
+    )
+    tools, client = _tools()
+    async with client:
+        board = await tools["kanso_update_board"](7, single_assignee=True)
+    assert json.loads(route.calls.last.request.content) == {"singleAssignee": True}
+    assert board["singleAssignee"] is True

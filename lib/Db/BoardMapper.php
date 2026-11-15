@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Kanso\Db;
 
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\AppFramework\Db\Entity;
 use OCP\AppFramework\Db\MultipleObjectsReturnedException;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\Exception;
@@ -22,6 +23,29 @@ use OCP\IDBConnection;
 class BoardMapper extends QBMapper {
 	public function __construct(IDBConnection $db) {
 		parent::__construct($db, 'kanso_boards', Board::class);
+	}
+
+	/**
+	 * @param Board $entity
+	 * @return Board
+	 */
+	#[\Override]
+	public function insert(Entity $entity): Entity {
+		$this->db->beginTransaction();
+		try {
+			$board = parent::insert($entity);
+			$qb = $this->db->getQueryBuilder();
+			$qb->insert('kanso_card_sequences')->values([
+				'board_id' => $qb->createNamedParameter($board->getId(), IQueryBuilder::PARAM_INT),
+				'last_seq' => $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT),
+			]);
+			$qb->executeStatement();
+			$this->db->commit();
+			return $board;
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
 	}
 
 	/**
@@ -191,6 +215,37 @@ class BoardMapper extends QBMapper {
 			static fn (Board $a, Board $b): int => $b->getLastModified() <=> $a->getLastModified()
 		);
 		return $boards;
+	}
+
+	/**
+	 * @param string[] $groupIds
+	 * @return Board[]
+	 */
+	public function findDeletedForUser(string $uid, array $groupIds, int $deletedSince): array {
+		$qb = $this->db->getQueryBuilder();
+		$participants = $qb->expr()->orX(
+			$qb->expr()->eq('b.owner', $qb->createNamedParameter($uid)),
+			$qb->expr()->andX(
+				$qb->expr()->eq('acl.participant_type', $qb->createNamedParameter(Acl::TYPE_USER, IQueryBuilder::PARAM_INT)),
+				$qb->expr()->eq('acl.participant', $qb->createNamedParameter($uid)),
+			),
+		);
+		if ($groupIds !== []) {
+			$participants->add($qb->expr()->andX(
+				$qb->expr()->eq('acl.participant_type', $qb->createNamedParameter(Acl::TYPE_GROUP, IQueryBuilder::PARAM_INT)),
+				$qb->expr()->in('acl.participant', $qb->createNamedParameter($groupIds, IQueryBuilder::PARAM_STR_ARRAY)),
+			));
+		}
+		$qb->selectDistinct('b.*')
+			->from($this->getTableName(), 'b')
+			->leftJoin('b', 'kanso_board_acl', 'acl', $qb->expr()->eq('acl.board_id', 'b.id'))
+			->where($qb->expr()->gt('b.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->gte('b.deleted_at', $qb->createNamedParameter($deletedSince, IQueryBuilder::PARAM_INT)))
+			->andWhere($participants)
+			->orderBy('b.deleted_at', 'DESC')
+			->addOrderBy('b.id', 'DESC');
+
+		return $this->findEntities($qb);
 	}
 
 	/**

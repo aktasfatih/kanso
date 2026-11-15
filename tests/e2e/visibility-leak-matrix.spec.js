@@ -157,20 +157,30 @@ test.describe.serial('Card visibility leak matrix (#3743)', () => {
 		expect(upsertIds).not.toContain(state.cards.PRIV.id)
 	})
 
-	test('search: hidden titles never match — not even via a comment on a hidden card', async () => {
+	test('search: templates and hidden cards never match, including their comments', async () => {
 		// A comment carrying the token on a card hidden from tester.
 		await api(ADMIN, 'POST', `/cards/${state.cards.PROV.id}/comments`, { body: 'needle ' + token })
 
-		const admin = await api(ADMIN, 'GET', `/search?q=${token}`)
-		const adminTitles = admin.results.filter((r) => r.type === 'card').map((r) => r.title).sort()
-		expect(adminTitles).toEqual(['PROV', 'PRIV', 'PUB'].map(title).sort())
+		const template = await api(ADMIN, 'POST', '/cards', { stackId: state.stackId, title: title('BLUEPRINT') })
+		try {
+			await api(ADMIN, 'POST', `/cards/${template.id}/comments`, { body: 'template needle ' + token })
+			await api(ADMIN, 'PUT', `/cards/${template.id}/template`, { isTemplate: true })
+			for (const scope of ['', `&boardId=${state.boardId}`]) {
+				const admin = await api(ADMIN, 'GET', `/search?q=${token}${scope}`)
+				const adminTitles = admin.results.filter((r) => r.type === 'card').map((r) => r.title).sort()
+				expect(adminTitles).toEqual(['PROV', 'PRIV', 'PUB'].map(title).sort())
+				expect(admin.results.filter((r) => r.type === 'comment').map((r) => r.cardId)).toEqual([state.cards.PROV.id])
 
-		const tester = await api(TESTER, 'GET', `/search?q=${token}`)
-		const testerTitles = tester.results.filter((r) => r.type === 'card').map((r) => r.title).sort()
-		expect(testerTitles).toEqual(['CLI', 'PUB'].map(title).sort())
-		// The comment on PROV must not surface for tester in ANY result type.
-		expect(tester.results.some((r) => r.type === 'comment')).toBe(false)
-		expect(JSON.stringify(tester.results)).not.toContain(title('PROV'))
+				const tester = await api(TESTER, 'GET', `/search?q=${token}${scope}`)
+				const testerTitles = tester.results.filter((r) => r.type === 'card').map((r) => r.title).sort()
+				expect(testerTitles).toEqual(['CLI', 'PUB'].map(title).sort())
+				expect(tester.results.some((r) => r.type === 'comment')).toBe(false)
+				expect(JSON.stringify(tester.results)).not.toContain(title('PROV'))
+			}
+		} finally {
+			await api(ADMIN, 'DELETE', `/cards/${template.id}`)
+			await api(ADMIN, 'DELETE', `/cards/${template.id}/purge`)
+		}
 	})
 
 	test('my-cards: assignment grants no visibility', async () => {

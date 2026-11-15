@@ -534,6 +534,32 @@ class BoardControllerTest extends TestCase {
 		self::assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
 	}
 
+	public function testDeletedReturnsRecoveryMetadataForCurrentUser(): void {
+		$payload = [['id' => 1, 'title' => 'Deleted', 'restoreUntil' => 1_800_000_000]];
+		$this->boardService->expects(self::once())->method('findDeleted')->with('alice')->willReturn($payload);
+		$response = $this->controller->deleted();
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame($payload, $response->getData());
+	}
+
+	public function testRestoreUsesCurrentUser(): void {
+		$board = $this->board();
+		$this->boardService->expects(self::once())->method('restore')->with(1, 'alice')->willReturn($board);
+		$response = $this->controller->restore(1);
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame($board, $response->getData());
+	}
+
+	public function testRestoreMapsPermissionDenialTo403(): void {
+		$this->boardService->method('restore')->willThrowException(new NotPermittedException());
+		self::assertSame(Http::STATUS_FORBIDDEN, $this->controller->restore(1)->getStatus());
+	}
+
+	public function testRestoreMapsUnavailableBoardTo404(): void {
+		$this->boardService->method('restore')->willThrowException(new DoesNotExistException('unavailable'));
+		self::assertSame(Http::STATUS_NOT_FOUND, $this->controller->restore(1)->getStatus());
+	}
+
 	/**
 	 * @param list<array{uid: string, displayName: string}> $participants
 	 * @return array{participants: list<array{uid: string, displayName: string}>, truncated: bool, limit: int}

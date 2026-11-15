@@ -30,6 +30,7 @@ use OCP\IDBConnection;
  * @template-extends QBMapper<Card>
  */
 class CardMapper extends QBMapper {
+
 	/**
 	 * Every column EXCEPT `description`. The description is deliberately
 	 * excluded from board/stack listings - this is the charter's
@@ -85,27 +86,53 @@ class CardMapper extends QBMapper {
 		parent::__construct($db, 'kanso_cards', Card::class);
 	}
 
-	/**
-	 * The next per-board human-id sequence number: MAX(board_seq) + 1 for the
-	 * board, or 1 when the board has no numbered card yet. Deleted cards still
-	 * count so a number is never reused after a card is trashed (the id stays
-	 * stable and unambiguous). The (board_id, board_seq) unique index guards the
-	 * actual assignment against a concurrent create deriving the same value -
-	 * {@see \OCA\Kanso\Service\CardService::create} retries on that collision.
-	 *
-	 * @throws Exception
-	 */
-	public function nextBoardSeq(int $boardId): int {
+	public function findForMutation(int $id): Card {
+		if (!$this->db->inTransaction()) {
+			throw new \LogicException('A card write lock requires a transaction');
+		}
+		if ($this->db->getDatabaseProvider() !== IDBConnection::PLATFORM_SQLITE) {
+			$result = $this->db->executeQuery('SELECT id FROM *PREFIX*kanso_cards WHERE id = ? FOR UPDATE', [(string)$id], [IQueryBuilder::PARAM_INT]);
+			$result->fetch();
+			$result->closeCursor();
+		}
+		return $this->find($id);
+	}
+
+	public function hasLiveBoardSeq(int $boardId, int $seq): bool {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select($qb->func()->max('board_seq'))
-			->from($this->getTableName())
-			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)));
-
+		$qb->select('id')->from($this->getTableName())
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('board_seq', $qb->createNamedParameter($seq, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
 		$result = $qb->executeQuery();
-		$max = $result->fetchOne();
+		$found = $result->fetchOne() !== false;
 		$result->closeCursor();
+		return $found;
+	}
 
-		return ((int)$max) + 1;
+	/** Reserve a range in the caller's transaction and return its first number. */
+	public function nextBoardSeq(int $boardId, int $count = 1): int {
+		if (!$this->db->inTransaction()) {
+			throw new \LogicException('Card number allocation requires a transaction');
+		}
+		if ($count < 1) {
+			throw new \InvalidArgumentException('Card number reservation must be positive');
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->update('kanso_card_sequences')
+			->set('last_seq', $qb->createFunction($qb->getColumnName('last_seq') . ' + ' . (string)$qb->createNamedParameter($count, IQueryBuilder::PARAM_INT)))
+			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->lte('last_seq', $qb->createNamedParameter(PHP_INT_MAX - $count, IQueryBuilder::PARAM_INT)));
+		if ($qb->executeStatement() !== 1) {
+			throw new \OverflowException('Card number sequence is unavailable or exhausted');
+		}
+		$read = $this->db->getQueryBuilder();
+		$read->select('last_seq')->from('kanso_card_sequences')
+			->where($read->expr()->eq('board_id', $read->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)));
+		$result = $read->executeQuery();
+		$last = (int)$result->fetchOne();
+		$result->closeCursor();
+		return $last - $count + 1;
 	}
 
 	/**
@@ -427,17 +454,17 @@ class CardMapper extends QBMapper {
 
 	/**
 	 * Summaries (no description) of the non-deleted, non-archived, non-template
-	 * cards on a board that HAVE a due date, scoped to what a SPECIFIC VIEWER may
+	 * cards on a board with a start or due date, scoped to what a SPECIFIC VIEWER may
 	 * see - the source for the read-only CalDAV VTODO calendar (#3534 / issue
 	 * #49). The authenticated counterpart of {@see self::findWithDuedateByBoard}:
 	 * that one is anonymous (public-only) for the token feed, this one honours the
 	 * viewer's card-visibility so a board member syncing over CalDAV sees exactly
-	 * the due cards they see on the board. Board-scoped like every board query.
+	 * the dated cards they see on the board. Board-scoped like every board query.
 	 *
 	 * @return Card[]
 	 * @throws Exception
 	 */
-	public function findDuedateSummariesByBoard(int $boardId, ViewerContext $viewer): array {
+	public function findDuedateSummariesByBoard(int $boardId, ViewerContext $viewer, bool $assignedOnly = false): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select(self::SUMMARY_COLUMNS)
 			->from($this->getTableName())
@@ -445,10 +472,21 @@ class CardMapper extends QBMapper {
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
-			->andWhere($qb->expr()->isNotNull('duedate'))
+			->andWhere($qb->expr()->orX(
+				$qb->expr()->isNotNull('duedate'),
+				$qb->expr()->isNotNull('start_date'),
+			))
 			->orderBy('duedate', 'ASC')
 			->addOrderBy('id', 'ASC');
 		$this->visibilityScope->applyForViewer($qb, '', $viewer);
+		if ($assignedOnly) {
+			$assigned = $this->db->getQueryBuilder();
+			$assigned->select('card_id')
+				->from('kanso_card_assignees')
+				->where($assigned->expr()->eq('participant', $qb->createNamedParameter($viewer->userId)))
+				->andWhere($assigned->expr()->eq('type', $qb->createNamedParameter(CardAssignee::TYPE_USER, IQueryBuilder::PARAM_INT)));
+			$qb->andWhere($qb->createFunction('id IN (' . $assigned->getSQL() . ')'));
+		}
 
 		return $this->findEntities($qb);
 	}
@@ -767,9 +805,7 @@ class CardMapper extends QBMapper {
 	 * baseline now matches the archived-BOARD rule search already applies
 	 * ({@see \OCA\Kanso\Service\SearchService::search()}, #10126); the flag only
 	 * ever WIDENS it, so the archive stays reachable as the historical record it
-	 * is. Still NOT matched to the other listings here in one respect: they also
-	 * carry `is_template = false`, and this query does not, so template cards do
-	 * still turn up in search - a separate gap, deliberately left alone here.
+	 * is. Template cards are excluded from all search paths.
 	 *
 	 * @param int[] $boardIds
 	 * @param array<int, string> $rolesByBoard the viewer's role per board id
@@ -798,6 +834,7 @@ class CardMapper extends QBMapper {
 			->from($this->getTableName())
 			->where($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->orX(
 				$qb->expr()->iLike('title', $qb->createNamedParameter($likePattern)),
 				$qb->expr()->iLike('description', $qb->createNamedParameter($likePattern)),
@@ -836,6 +873,7 @@ class CardMapper extends QBMapper {
 			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->in('board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->setMaxResults(1);
 		if (!$includeArchived) {
 			$qb->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)));
@@ -866,6 +904,7 @@ class CardMapper extends QBMapper {
 			->where($qb->expr()->eq('board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('board_seq', $qb->createNamedParameter($seq, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->setMaxResults(1);
 		if (!$includeArchived) {
 			$qb->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)));
@@ -964,7 +1003,7 @@ class CardMapper extends QBMapper {
 	/**
 	 * Per-parent child progress for every non-deleted card on a board that has
 	 * children, as a fixed two-query self-scan - the board payload stays a
-	 * constant number of queries. "done" counts children whose `done_at > 0`.
+	 * constant number of queries. "done" counts children that are done or archived.
 	 * Parents with no children are absent from the map (callers default to 0/0).
 	 *
 	 * Visibility (#3743): only children the VIEWER can see are counted, so a
@@ -1020,8 +1059,8 @@ class CardMapper extends QBMapper {
 	}
 
 	/**
-	 * Child counts grouped by parent for a board, optionally restricted to done
-	 * children (`done_at > 0`). Only non-deleted children with a parent are
+	 * Child counts grouped by parent for a board, optionally restricted to resolved
+	 * children (done or archived). Only non-deleted children with a parent are
 	 * counted.
 	 *
 	 * @return array<int, int> map of parentCardId => count
@@ -1039,7 +1078,10 @@ class CardMapper extends QBMapper {
 		$this->visibilityScope->applyForViewer($qb, '', $viewer);
 
 		if ($doneOnly) {
-			$qb->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+			$qb->andWhere($qb->expr()->orX(
+				$qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)),
+				$qb->expr()->eq('archived', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)),
+			));
 		}
 
 		$result = $qb->executeQuery();
@@ -1077,7 +1119,10 @@ class CardMapper extends QBMapper {
 		$this->visibilityScope->apply($qb, '', $uid, null, $rolesByBoard);
 
 		if ($doneOnly) {
-			$qb->andWhere($qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+			$qb->andWhere($qb->expr()->orX(
+				$qb->expr()->gt('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)),
+				$qb->expr()->eq('archived', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)),
+			));
 		}
 
 		$result = $qb->executeQuery();

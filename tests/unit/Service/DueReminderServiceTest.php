@@ -49,10 +49,13 @@ class DueReminderServiceTest extends TestCase {
 	 * @var array<string, string>
 	 */
 	private array $rolesOnBoard = [];
+	/** @var array<int, Card> */
+	private array $storedCards = [];
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->cardMapper = $this->createMock(CardMapper::class);
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => $this->storedCards[$id]);
 		$this->cardAssigneeMapper = $this->createMock(CardAssigneeMapper::class);
 		$this->subscriptionMapper = $this->createMock(SubscriptionMapper::class);
 		$this->notificationService = $this->createMock(NotificationService::class);
@@ -92,6 +95,7 @@ class DueReminderServiceTest extends TestCase {
 			$this->time,
 			$this->logger,
 			$this->changeNotifier,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 
@@ -114,10 +118,21 @@ class DueReminderServiceTest extends TestCase {
 		$card->setDueReminderDayBefore($dayBefore);
 		$card->setDueReminderSent($dueSent);
 		$card->setDayBeforeReminderSent($dayBeforeSent);
+		$this->storedCards[$id] = $card;
 		return $card;
 	}
 
 	// ---- at-due path: notifies assignees + watchers once -------------------
+
+	public function testFailedDeliveryLeavesTheDueMarkerPending(): void {
+		$card = $this->card(10, self::NOW - 60);
+		$this->cardMapper->method('findDueForReminder')->willReturn([$card]);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturn(['alice']);
+		$this->notificationService->method('notifyCardDue')->willThrowException(new \RuntimeException('notifications offline'));
+		$this->cardMapper->expects(self::never())->method('update');
+		self::assertSame(0, $this->service->runDueReminders());
+		self::assertSame(0, $card->getDueReminderSent());
+	}
 
 	public function testDueCardNotifiesAssigneesAndWatchersOnce(): void {
 		$card = $this->card(10, self::NOW - 60);

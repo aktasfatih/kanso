@@ -39,7 +39,6 @@ use OCP\Files\IAppData;
 use OCP\Files\IMimeTypeDetector;
 use OCP\Files\NotFoundException;
 use OCP\Files\SimpleFS\ISimpleFolder;
-use OCP\IDBConnection;
 use OCP\ITempManager;
 use OCP\IUserManager;
 use OCP\Security\ISecureRandom;
@@ -122,7 +121,7 @@ class ImportService {
 		private AutomationRuleMapper $automationRuleMapper,
 		private CardAttachmentMapper $cardAttachmentMapper,
 		private IUserManager $userManager,
-		private IDBConnection $db,
+		private CardMutationService $cardMutation,
 		private BoardAccess $boardAccess,
 		private RecurrenceService $recurrenceService,
 		private IAppData $appData,
@@ -356,18 +355,13 @@ class ImportService {
 	 * @return array{boardId: int, title: string, stacks: int, cards: int, labels: int}
 	 */
 	private function rebuildInTransaction(array $board, string $actorUid, ?ImportArchiveReader $archive = null): array {
-		/** @var list<array{cardId: int, storageKey: string}> $writtenObjects */
-		$writtenObjects = [];
-		$this->db->beginTransaction();
-		try {
-			$result = $this->rebuild($board, $actorUid, $archive, $writtenObjects);
-			$this->db->commit();
-			return $result;
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			$this->cleanupWrittenObjects($writtenObjects);
-			throw $e;
-		}
+		return $this->cardMutation->runForBoards([], function () use ($board, $actorUid, $archive): array {
+			$writtenObjects = [];
+			$this->cardMutation->afterRollback(function () use (&$writtenObjects): void {
+				$this->cleanupWrittenObjects($writtenObjects);
+			});
+			return $this->rebuild($board, $actorUid, $archive, $writtenObjects);
+		});
 	}
 
 	/**
@@ -426,6 +420,10 @@ class ImportService {
 			$board, $boardId, $stackIdMap, $labelIdMap, $reviewTypeIdMap, $actorUid, $now,
 			$archive, $writtenObjects
 		);
+
+		if (($board['singleAssignee'] ?? false) === true) {
+			$this->boardService->update($boardId, null, null, null, $actorUid, singleAssignee: true);
+		}
 
 		$this->importArchiveRules($board, $boardId, $stackIdMap, $now);
 		$this->importRecurRules($board, $boardId, $stackIdMap, $cardIdMap, $actorUid, $now);
@@ -542,14 +540,10 @@ class ImportService {
 		$parentOf = [];
 		$count = 0;
 
-		// Assign human-id numbers locally: seed once from the board's next value
-		// (1 for the freshly-created import target) and increment per inserted
-		// card - a single query, never one per card. Import runs single-threaded
-		// so no unique-index contention; the (board_id, board_seq) index still
-		// guards it. Cards are numbered in export/iteration order.
-		$nextBoardSeq = $this->cardMapper->nextBoardSeq($boardId);
+		$rows = $this->rows($board, 'cards');
+		$nextBoardSeq = $rows === [] ? 1 : $this->cardMapper->nextBoardSeq($boardId, count($rows));
 
-		foreach ($this->rows($board, 'cards') as $row) {
+		foreach ($rows as $row) {
 			$oldStackId = isset($row['stackId']) ? (int)$row['stackId'] : null;
 			$newStackId = $oldStackId !== null ? ($stackIdMap[$oldStackId] ?? null) : null;
 			// A card pointing at a stack that is not in the export is skipped

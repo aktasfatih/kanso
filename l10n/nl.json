@@ -176,6 +176,10 @@
             "%n heeft review nodig",
             "%n hebben review nodig"
         ],
+        "_%n other reviewer_::_%n other reviewers_": [
+            "%n andere beoordelaar",
+            "%n andere beoordelaars"
+        ],
         "_%n overdue_::_%n overdue_": [
             "%n te laat",
             "%n te laat"
@@ -257,6 +261,7 @@
         "All day (no time)": "Hele dag (geen tijd)",
         "All due dates": "Alle vervaldatums",
         "All issues": "Alle issues",
+        "All requested reviews must be approved before this card can be marked done.": "Alle aangevraagde reviews moeten goedgekeurd zijn voordat deze kaart als klaar kan worden gemarkeerd.",
         "All requested reviews must be approved before this card can be marked done. Waiting on {names}.": "Alle aangevraagde reviews moeten goedgekeurd zijn voordat deze kaart als klaar kan worden gemarkeerd. Wacht op {names}.",
         "All statuses": "Alle statussen",
         "Analytics": "Statistieken",
@@ -585,7 +590,6 @@
         "Delete": "Verwijderen",
         "Delete \"{name}\"": "\"{name}\" verwijderen",
         "Delete \"{name}\"?": "\"{name}\" verwijderen?",
-        "Delete \"{title}\" and all of its cards for everyone? This cannot be undone.": "\"{title}\" en alle kaarten erin voor iedereen verwijderen? Dit kan niet ongedaan worden gemaakt.",
         "Delete \"{title}\"?": "\"{title}\" verwijderen?",
         "Delete {name}? Kanso keeps no second copy of it.": "{name} verwijderen? Kanso bewaart er geen tweede kopie van.",
         "Delete {name}? The file goes to the backup account's trashbin — Kanso keeps no second copy of it.": "{name} verwijderen? Het bestand gaat naar de prullenbak van het back-upaccount — Kanso bewaart er geen tweede kopie van.",
@@ -607,7 +611,6 @@
         "Delete selected": "Selectie verwijderen",
         "Delete template": "Sjabloon verwijderen",
         "Delete these sample cards whenever you like": "Verwijder deze voorbeeldkaarten wanneer je maar wilt",
-        "Delete this board permanently?": "Dit bord definitief verwijderen?",
         "Delete this rule?": "Deze regel verwijderen?",
         "Delete this template?": "Dit sjabloon verwijderen?",
         "Delete view \"{name}\"?": "Weergave \"{name}\" verwijderen?",
@@ -929,7 +932,6 @@
         "Hide changes": "Wijzigingen verbergen",
         "Hide the card sections this board does not use. Nothing is deleted — turning a section back on restores everything that was already there.": "Verberg de kaartsecties die dit bord niet gebruikt. Er wordt niets verwijderd — zet je een sectie weer aan, dan staat alles er weer.",
         "Hide the discussion panel": "Het discussiepaneel verbergen",
-        "Hide this board without deleting it. You can restore it later.": "Verberg dit bord zonder het te verwijderen. Je kunt het later terughalen.",
         "High": "Hoog",
         "Hours": "Uren",
         "https://cloud.example.com/call/abc123": "https://cloud.example.com/call/abc123",
@@ -1239,7 +1241,6 @@
         "People you share with see this project’s details and its whole discussion, including earlier notes. They only see the cards they can already access on their boards.": "Mensen met wie je deelt, zien de details van dit project en de hele discussie, inclusief eerdere notities. Ze zien alleen de kaarten waartoe ze op hun borden al toegang hebben.",
         "per mailbox": "per mailbox",
         "per sender": "per afzender",
-        "Permanently remove this board and all of its cards for everyone. This cannot be undone.": "Verwijder dit bord en al zijn kaarten definitief, voor iedereen. Dit kan niet ongedaan worden gemaakt.",
         "Pick a card to link…": "Kies een kaart om te koppelen…",
         "Pick a card…": "Kies een kaart…",
         "Pick a color": "Kies een kleur",
@@ -1499,7 +1500,6 @@
         "Strikethrough": "Doorhalen",
         "Sub-card": "Subkaart",
         "Sub-card progress": "Voortgang van de subkaarten",
-        "Sub-card progress {done} of {total}": "Voortgang van de subkaarten {done} van {total}",
         "Sub-cards": "Subkaarten",
         "Submit": "Indienen",
         "Subscribe to this board's card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card.": "Abonneer je in elke agenda-app (Nextcloud Agenda, Thunderbird, je telefoon) op de einddata van de kaarten op dit bord. De feed is alleen-lezen en toont alleen kaarttitels, einddata en een link terug naar elke kaart.",
@@ -1553,7 +1553,6 @@
         "This project no longer exists, or you no longer have access to it.": "Dit project bestaat niet meer of je hebt er geen toegang meer toe.",
         "This public board link has expired. Ask whoever shared the board for a new link.": "Deze openbare bordlink is verlopen. Vraag degene die het bord heeft gedeeld om een nieuwe link.",
         "This public board link is invalid or has been disabled.": "Deze link naar een openbaar bord is ongeldig of is uitgeschakeld.",
-        "This removes the board and all of its cards for everyone. This cannot be undone.": "Hiermee verdwijnt het bord met al zijn kaarten voor iedereen. Dit kan niet ongedaan worden gemaakt.",
         "This same card is brought back and reset each time": "Dezelfde kaart wordt elke keer teruggehaald en opnieuw ingesteld",
         "This saved view no longer exists.": "Deze opgeslagen weergave bestaat niet meer.",
         "This week": "Deze week",

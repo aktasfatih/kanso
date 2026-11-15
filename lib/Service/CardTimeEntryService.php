@@ -49,6 +49,7 @@ class CardTimeEntryService {
 		private PermissionService $permissionService,
 		private ChangeNotifier $changeNotifier,
 		private CardVisibilityGuard $visibilityGuard,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -80,37 +81,39 @@ class CardTimeEntryService {
 	 * @throws InvalidInputException if the duration is zero/negative or absurdly large
 	 */
 	public function add(int $cardId, int $seconds, ?string $note, string $actorUid): CardTimeEntry {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		return $this->cardMutation->run($cardId, function () use ($cardId, $seconds, $note, $actorUid): CardTimeEntry {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		if ($seconds <= 0) {
-			throw new InvalidInputException('Duration must be greater than zero');
-		}
-		if ($seconds > self::MAX_SECONDS) {
-			throw new InvalidInputException('Duration is too large');
-		}
+			if ($seconds <= 0) {
+				throw new InvalidInputException('Duration must be greater than zero');
+			}
+			if ($seconds > self::MAX_SECONDS) {
+				throw new InvalidInputException('Duration is too large');
+			}
 
-		$entry = new CardTimeEntry();
-		$entry->setCardId($cardId);
-		$entry->setBoardId($card->getBoardId());
-		$entry->setSeconds($seconds);
-		$entry->setNote($this->sanitizeNote($note));
-		$entry->setCreatedBy($actorUid);
-		$entry->setCreatedAt(time());
+			$entry = new CardTimeEntry();
+			$entry->setCardId($cardId);
+			$entry->setBoardId($card->getBoardId());
+			$entry->setSeconds($seconds);
+			$entry->setNote($this->sanitizeNote($note));
+			$entry->setCreatedBy($actorUid);
+			$entry->setCreatedAt(time());
 
-		$entry = $this->timeEntryMapper->insert($entry);
+			$entry = $this->timeEntryMapper->insert($entry);
 
-		$this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_UPDATE,
-			$actorUid
-		);
+			$this->changeNotifier->notify(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$cardId,
+				Change::ACTION_UPDATE,
+				$actorUid
+			);
 
-		return $entry;
+			return $entry;
+		});
 	}
 
 	/**
@@ -121,21 +124,23 @@ class CardTimeEntryService {
 	 * @throws NotPermittedException if the actor may not edit the board
 	 */
 	public function delete(int $cardId, int $entryId, string $actorUid): void {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$this->cardMutation->run($cardId, function () use ($cardId, $entryId, $actorUid): void {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		$entry = $this->loadEntryOnCard($entryId, $cardId);
-		$this->timeEntryMapper->delete($entry);
+			$entry = $this->loadEntryOnCard($entryId, $cardId);
+			$this->timeEntryMapper->delete($entry);
 
-		$this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_UPDATE,
-			$actorUid
-		);
+			$this->changeNotifier->notify(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$cardId,
+				Change::ACTION_UPDATE,
+				$actorUid
+			);
+		});
 	}
 
 	/**

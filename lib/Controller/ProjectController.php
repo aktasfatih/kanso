@@ -44,20 +44,27 @@ class ProjectController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function create(string $title = '', ?string $description = null, ?string $color = null, ?string $startDate = null, ?string $targetDate = null): JSONResponse {
-		return $this->respond(function () use ($title, $description, $color, $startDate, $targetDate): JSONResponse {
+	public function create(string $title = '', ?string $description = null, ?string $color = null, ?string $startDate = null, ?string $targetDate = null, ?string $lead = null, string $lifecycleStatus = 'planned'): JSONResponse {
+		return $this->respond(function () use ($title, $description, $color, $startDate, $targetDate, $lead, $lifecycleStatus): JSONResponse {
 			return new JSONResponse(
-				$this->projectService->create($this->currentUserId(), $title, $description, $color, $startDate, $targetDate)->jsonSerialize()
+				$this->projectService->create($this->currentUserId(), $title, $description, $color, $startDate, $targetDate, $lead, $lifecycleStatus)->jsonSerialize()
 			);
 		});
 	}
 
 	#[NoAdminRequired]
-	public function update(int $id, ?string $title = null, ?string $description = null, ?string $color = null, ?string $startDate = null, ?string $targetDate = null): JSONResponse {
-		return $this->respond(function () use ($id, $title, $description, $color, $startDate, $targetDate): JSONResponse {
+	public function update(int $id, ?string $title = null, ?string $description = null, ?string $color = null, ?string $startDate = null, ?string $targetDate = null, ?string $lead = null, ?string $lifecycleStatus = null): JSONResponse {
+		return $this->respond(function () use ($id, $title, $description, $color, $startDate, $targetDate, $lead, $lifecycleStatus): JSONResponse {
 			return new JSONResponse(
-				$this->projectService->update($id, $this->currentUserId(), $title, $description, $color, $startDate, $targetDate)->jsonSerialize()
+				$this->projectService->update($id, $this->currentUserId(), $title, $description, $color, $startDate, $targetDate, $lead, $lifecycleStatus)->jsonSerialize()
 			);
+		});
+	}
+
+	#[NoAdminRequired]
+	public function leadCandidates(string $q = ''): JSONResponse {
+		return $this->respond(function () use ($q): JSONResponse {
+			return new JSONResponse($this->projectService->leadCandidates($q, $this->currentUserId()));
 		});
 	}
 

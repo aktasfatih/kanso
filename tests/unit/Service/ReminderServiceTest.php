@@ -60,6 +60,9 @@ class ReminderServiceTest extends TestCase {
 		$this->boardMapper = $this->createMock(BoardMapper::class);
 		$this->commentMapper = $this->createMock(CommentMapper::class);
 		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->permissionService->method('getPermissions')->willReturnCallback(
+			fn (Board $board, string $uid): int => isset($this->rolesOnBoard[$uid]) ? PermissionService::PERMISSION_READ : 0,
+		);
 		$this->notificationService = $this->createMock(NotificationService::class);
 
 		$board = new Board();
@@ -95,6 +98,7 @@ class ReminderServiceTest extends TestCase {
 			new CardVisibilityGuard($this->boardAccess, new CardVisibilityScope()),
 			$this->time,
 			$this->logger,
+			$this->cardMutation(),
 		);
 	}
 
@@ -236,6 +240,7 @@ class ReminderServiceTest extends TestCase {
 		$this->rolesOnBoard = ['alice' => ViewerContext::ROLE_INTERNAL];
 		$reminder = $this->reminder(5, 'alice', 10, self::NOW - 60, 77);
 		$this->reminderMapper->method('findDue')->willReturn([$reminder]);
+		$this->reminderMapper->method('findById')->with($reminder->getId())->willReturn($reminder);
 		$this->cardMapper->method('find')->with(10)->willReturn($this->card());
 
 		$this->notificationService->expects(self::once())
@@ -256,6 +261,7 @@ class ReminderServiceTest extends TestCase {
 		$this->rolesOnBoard = ['alice' => ViewerContext::ROLE_INTERNAL];
 		$overdue = $this->reminder(5, 'alice', 10, self::NOW - 86400);
 		$this->reminderMapper->method('findDue')->willReturn([$overdue]);
+		$this->reminderMapper->method('findById')->with($overdue->getId())->willReturn($overdue);
 		$this->cardMapper->method('find')->with(10)->willReturn($this->card());
 
 		$this->notificationService->expects(self::once())
@@ -276,6 +282,7 @@ class ReminderServiceTest extends TestCase {
 	public function testFireDueStampsButDoesNotNotifyWhenCardWasPurged(): void {
 		$reminder = $this->reminder(5, 'alice', 10, self::NOW - 60);
 		$this->reminderMapper->method('findDue')->willReturn([$reminder]);
+		$this->reminderMapper->method('findById')->with($reminder->getId())->willReturn($reminder);
 		$this->cardMapper->method('find')->with(10)
 			->willThrowException(new DoesNotExistException('gone'));
 
@@ -296,6 +303,7 @@ class ReminderServiceTest extends TestCase {
 		$bad = $this->reminder(5, 'alice', 10, self::NOW - 60);
 		$good = $this->reminder(6, 'alice', 11, self::NOW - 60);
 		$this->reminderMapper->method('findDue')->willReturn([$bad, $good]);
+		$this->reminderMapper->method('findById')->willReturnMap([[5, $bad], [6, $good]]);
 		$this->cardMapper->method('find')->willReturnCallback(function (int $id): Card {
 			if ($id === 10) {
 				throw new \RuntimeException('card lookup blew up');
@@ -327,6 +335,7 @@ class ReminderServiceTest extends TestCase {
 		];
 		$reminder = $this->reminder(5, 'alice', 10, self::NOW - 60);
 		$this->reminderMapper->method('findDue')->willReturn([$reminder]);
+		$this->reminderMapper->method('findById')->with($reminder->getId())->willReturn($reminder);
 		$this->cardMapper->method('find')->with(10)->willReturn($card);
 
 		$this->notificationService->expects(self::never())->method('notifyCardReminder');
@@ -339,4 +348,96 @@ class ReminderServiceTest extends TestCase {
 
 		self::assertSame(0, $this->service->fireDue());
 	}
+
+	public function testFireDueSkipsReminderTransferredBeforeTheBoardFence(): void {
+		$beforeMove = $this->reminder(5, 'alice', 10, self::NOW - 60);
+		$afterMove = $this->reminder(5, 'alice', 20, self::NOW - 60);
+		$this->reminderMapper->method('findDue')->willReturn([$beforeMove]);
+		$this->reminderMapper->method('findById')->with(5)->willReturn($afterMove);
+		$this->cardMapper->method('find')->with(10)->willReturn($this->card());
+		$this->notificationService->expects(self::never())->method('notifyCardReminder');
+		$this->reminderMapper->expects(self::never())->method('update');
+
+		self::assertSame(0, $this->service->fireDue());
+	}
+
+	public function testFailedReminderDeliveryLeavesItPending(): void {
+		$this->rolesOnBoard = ['alice' => ViewerContext::ROLE_INTERNAL];
+		$reminder = $this->reminder(5, 'alice', 10, self::NOW - 60);
+		$this->reminderMapper->method('findDue')->willReturn([$reminder]);
+		$this->reminderMapper->method('findById')->with(5)->willReturn($reminder);
+		$this->cardMapper->method('find')->with(10)->willReturn($this->card());
+		$this->notificationService->expects(self::once())->method('notifyCardReminder')
+			->willThrowException(new \RuntimeException('delivery unavailable'));
+		$this->reminderMapper->expects(self::never())->method('update');
+		$this->logger->expects(self::once())->method('warning');
+
+		self::assertSame(0, $this->service->fireDue());
+		self::assertNull($reminder->getFiredAt());
+	}
+
+	public function testDeliveryMarkerPreservesAReminderMovedDuringDelivery(): void {
+		$this->rolesOnBoard = ['alice' => ViewerContext::ROLE_INTERNAL];
+		$source = $this->reminder(5, 'alice', 10, self::NOW - 60, 11);
+		$destination = $this->reminder(5, 'alice', 20, self::NOW - 60, 21);
+		$current = $source;
+		$this->reminderMapper->method('findDue')->willReturn([$source]);
+		$this->reminderMapper->method('findById')->willReturnCallback(function () use (&$current): Reminder {
+			return $current;
+		});
+		$this->cardMapper->method('find')->willReturnCallback(fn (int $id): Card => $this->card($id));
+		$this->notificationService->expects(self::once())->method('notifyCardReminder')
+			->willReturnCallback(function () use (&$current, $destination): void {
+				$current = $destination;
+			});
+		$this->reminderMapper->expects(self::once())->method('update')->with($destination)->willReturnArgument(0);
+
+		self::assertSame(1, $this->service->fireDue());
+		self::assertNull($source->getFiredAt());
+		self::assertSame(self::NOW, $destination->getFiredAt());
+		self::assertSame(21, $destination->getCommentId());
+	}
+
+	public function testReminderMovedBeforeTheDeliveryCardLookupRemainsPending(): void {
+		$this->rolesOnBoard = ['alice' => ViewerContext::ROLE_INTERNAL];
+		$source = $this->reminder(5, 'alice', 10, self::NOW - 60, 11);
+		$destination = $this->reminder(5, 'alice', 20, self::NOW - 60, 21);
+		$current = clone $source;
+		$writes = [];
+		$this->reminderMapper->method('findDue')->willReturn([clone $source]);
+		$this->reminderMapper->method('findById')->willReturnCallback(function () use (&$current): Reminder {
+			return clone $current;
+		});
+		$lookups = 0;
+		$this->cardMapper->method('find')->willReturnCallback(function (int $id) use (&$lookups, &$current, $destination): Card {
+			if ($id === 10 && ++$lookups > 1) {
+				$current = clone $destination;
+				throw new DoesNotExistException('source moved');
+			}
+			$card = $this->card($id);
+			$card->setBoardId($id === 20 ? 2 : 1);
+			return $card;
+		});
+		$this->reminderMapper->method('update')->willReturnCallback(function (Reminder $reminder) use (&$writes, &$current): Reminder {
+			$writes[] = clone $reminder;
+			$current = clone $reminder;
+			return $reminder;
+		});
+		$this->notificationService->expects(self::never())->method('notifyCardReminder');
+
+		self::assertSame(0, $this->service->fireDue());
+		self::assertSame([], $writes);
+		self::assertSame(20, $current->getCardId());
+		self::assertSame(21, $current->getCommentId());
+		self::assertNull($current->getFiredAt());
+	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('run')->willReturnCallback(static fn (int $cardId, callable $write): mixed => $write());
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		$mutation->method('afterCommit')->willReturnCallback(static fn (callable $callback): mixed => $callback());
+		return $mutation;
+	}
+
 }

@@ -56,6 +56,7 @@ class SubscriptionServiceTest extends TestCase {
 			$this->notificationService,
 			$this->boardSubscriptionMapper,
 			$this->visibilityGuard,
+			$this->cardMutation(),
 		);
 	}
 
@@ -501,6 +502,7 @@ class SubscriptionServiceTest extends TestCase {
 			$this->notificationService,
 			$this->boardSubscriptionMapper,
 			$guard,
+			$this->cardMutation(),
 		);
 	}
 
@@ -540,4 +542,12 @@ class SubscriptionServiceTest extends TestCase {
 
 		self::assertSame(['alice'], $notified);
 	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('run')->willReturnCallback(static fn (int $cardId, callable $write): mixed => $write());
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
 }

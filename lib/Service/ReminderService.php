@@ -52,14 +52,6 @@ class ReminderService {
 	 */
 	public const MAX_PER_RUN = 500;
 
-	/**
-	 * Per-run board memo for the fire-time visibility filter - one sweep may
-	 * touch many reminders on the same board.
-	 *
-	 * @var array<int, Board>
-	 */
-	private array $boards = [];
-
 	public function __construct(
 		private ReminderMapper $reminderMapper,
 		private CardMapper $cardMapper,
@@ -70,6 +62,7 @@ class ReminderService {
 		private CardVisibilityGuard $visibilityGuard,
 		private ITimeFactory $time,
 		private \Psr\Log\LoggerInterface $logger,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -85,27 +78,29 @@ class ReminderService {
 	 * @throws InvalidInputException if $remindAt is not in the future, or $commentId is not on this card
 	 */
 	public function schedule(int $cardId, string $uid, int $remindAt, ?int $commentId = null): Reminder {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
-		$this->visibilityGuard->assertVisible($board, $card, $uid);
+		return $this->cardMutation->run($cardId, function () use ($cardId, $uid, $remindAt, $commentId): Reminder {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
+			$this->visibilityGuard->assertVisible($board, $card, $uid);
 
-		if ($remindAt <= $this->time->getTime()) {
-			throw new InvalidInputException('Reminder time must be in the future');
-		}
-
-		if ($commentId !== null) {
-			try {
-				$comment = $this->commentMapper->find($commentId);
-			} catch (DoesNotExistException) {
-				throw new InvalidInputException('Comment does not exist');
+			if ($remindAt <= $this->time->getTime()) {
+				throw new InvalidInputException('Reminder time must be in the future');
 			}
-			if ($comment->getCardId() !== $cardId) {
-				throw new InvalidInputException('Comment belongs to another card');
-			}
-		}
 
-		return $this->reminderMapper->insertReminder($uid, $cardId, $commentId, $remindAt);
+			if ($commentId !== null) {
+				try {
+					$comment = $this->commentMapper->find($commentId);
+				} catch (DoesNotExistException) {
+					throw new InvalidInputException('Comment does not exist');
+				}
+				if ($comment->getCardId() !== $cardId) {
+					throw new InvalidInputException('Comment belongs to another card');
+				}
+			}
+
+			return $this->reminderMapper->insertReminder($uid, $cardId, $commentId, $remindAt);
+		});
 	}
 
 	/**
@@ -118,18 +113,20 @@ class ReminderService {
 	 * @throws NotPermittedException if the actor may not read the board
 	 */
 	public function cancel(int $cardId, int $reminderId, string $uid): void {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
-		$this->visibilityGuard->assertVisible($board, $card, $uid);
+		$this->cardMutation->run($cardId, function () use ($cardId, $reminderId, $uid): void {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_READ);
+			$this->visibilityGuard->assertVisible($board, $card, $uid);
 
-		$reminder = $this->reminderMapper->findById($reminderId);
-		if ($reminder === null
-			|| $reminder->getCardId() !== $cardId
-			|| $reminder->getUserId() !== $uid) {
-			return;
-		}
-		$this->reminderMapper->delete($reminder);
+			$reminder = $this->reminderMapper->findById($reminderId);
+			if ($reminder === null
+				|| $reminder->getCardId() !== $cardId
+				|| $reminder->getUserId() !== $uid) {
+				return;
+			}
+			$this->reminderMapper->delete($reminder);
+		});
 	}
 
 	/**
@@ -185,38 +182,71 @@ class ReminderService {
 	 * for the next run.
 	 */
 	private function fireOne(Reminder $reminder, int $now): bool {
+		$cardId = $reminder->getCardId();
+		$boardIds = $this->reminderBoards($cardId);
 		$delivered = false;
-
-		try {
-			$card = $this->cardMapper->find($reminder->getCardId());
-			if ($card->getDeletedAt() > 0) {
-				// The card was trashed after scheduling - consume, deliver nothing.
-				$card = null;
+		$this->cardMutation->runForBoards($boardIds, function () use ($reminder, $cardId, $now, &$delivered): void {
+			$current = $this->reminderMapper->findById($reminder->getId());
+			if ($current === null || $current->getCardId() !== $cardId || $current->getFiredAt() !== null) {
+				return;
 			}
+			$this->cardMutation->afterCommit(function () use ($reminder, $now, &$delivered): void {
+				try {
+					$delivered = $this->deliverReminder($reminder->getId(), $now);
+				} catch (\Throwable $e) {
+					$this->logger->warning('kanso: could not fire personal reminder ' . $reminder->getId(), ['exception' => $e]);
+				}
+			});
+		});
+		return $delivered;
+	}
+
+	private function deliverReminder(int $reminderId, int $now): bool {
+		$reminder = $this->reminderMapper->findById($reminderId);
+		if ($reminder === null || $reminder->getFiredAt() !== null) {
+			return false;
+		}
+		$deliveryCardId = $reminder->getCardId();
+		$delivered = false;
+		try {
+			$card = $this->loadCard($reminder->getCardId());
 		} catch (DoesNotExistException) {
 			$card = null;
 		}
-
 		if ($card !== null) {
-			$board = $this->boards[$card->getBoardId()]
-				??= $this->boardMapper->find($card->getBoardId());
-			// Fire-time visibility re-check (#3761 pattern): the card may have
-			// narrowed past the setter since scheduling - a bell entry naming a
-			// card they can no longer see would be an existence oracle.
-			if ($this->visibilityGuard->isVisible($board, $card, $reminder->getUserId())) {
-				$this->notificationService->notifyCardReminder(
-					$card->getId(),
-					$reminder->getUserId(),
-					$reminder->getCommentId(),
-				);
+			$board = $this->loadBoard($card->getBoardId());
+			if (($this->permissionService->getPermissions($board, $reminder->getUserId()) & PermissionService::PERMISSION_READ) !== 0
+				&& $this->visibilityGuard->isVisible($board, $card, $reminder->getUserId())) {
+				$this->notificationService->notifyCardReminder($card->getId(), $reminder->getUserId(), $reminder->getCommentId());
 				$delivered = true;
 			}
 		}
-
-		$reminder->setFiredAt($now);
-		$this->reminderMapper->update($reminder);
-
+		$current = $this->reminderMapper->findById($reminderId);
+		if ($current === null) {
+			return $delivered;
+		}
+		if (!$delivered && $current->getCardId() !== $deliveryCardId) {
+			return false;
+		}
+		$cardId = $current->getCardId();
+		$this->cardMutation->runForBoards($this->reminderBoards($cardId), function () use ($reminderId, $cardId, $now): void {
+			$current = $this->reminderMapper->findById($reminderId);
+			if ($current === null || $current->getCardId() !== $cardId || $current->getFiredAt() !== null) {
+				return;
+			}
+			$current->setFiredAt($now);
+			$this->reminderMapper->update($current);
+		});
 		return $delivered;
+	}
+
+	/** @return list<int> */
+	private function reminderBoards(int $cardId): array {
+		try {
+			return [$this->cardMapper->find($cardId)->getBoardId()];
+		} catch (DoesNotExistException) {
+			return [];
+		}
 	}
 
 	/**

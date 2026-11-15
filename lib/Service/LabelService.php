@@ -47,6 +47,7 @@ class LabelService {
 		private IDBConnection $db,
 		private CardVisibilityGuard $visibilityGuard,
 		private ChangeDetailMapper $changeDetailMapper,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -71,25 +72,27 @@ class LabelService {
 	 * @throws InvalidInputException on invalid title or color
 	 */
 	public function create(int $boardId, string $title, ?string $color, string $uid, bool $push = true): Label {
-		$board = $this->loadBoard($boardId);
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+		return $this->cardMutation->runForBoards([$boardId], function () use ($boardId, $title, $color, $uid, $push): Label {
+			$board = $this->loadBoard($boardId);
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
-		$label = new Label();
-		$label->setBoardId($boardId);
-		$label->setTitle($this->validateTitle($title));
-		$label->setColor(ColorValidator::assertValid($color));
-		$label = $this->labelMapper->insert($label);
+			$label = new Label();
+			$label->setBoardId($boardId);
+			$label->setTitle($this->validateTitle($title));
+			$label->setColor(ColorValidator::assertValid($color));
+			$label = $this->labelMapper->insert($label);
 
-		$this->changeNotifier->notify(
-			$boardId,
-			Change::ENTITY_LABEL,
-			$label->getId(),
-			Change::ACTION_CREATE,
-			$uid,
-			$push,
-		);
+			$this->changeNotifier->notify(
+				$boardId,
+				Change::ENTITY_LABEL,
+				$label->getId(),
+				Change::ACTION_CREATE,
+				$uid,
+				$push,
+			);
 
-		return $label;
+			return $label;
+		});
 	}
 
 	/**
@@ -101,28 +104,31 @@ class LabelService {
 	 * @throws InvalidInputException on invalid title or color
 	 */
 	public function update(int $id, ?string $title, ?string $color, string $uid): Label {
-		$label = $this->labelMapper->find($id);
-		$board = $this->loadBoard($label->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+		$boardId = $this->labelMapper->find($id)->getBoardId();
+		return $this->cardMutation->runForBoards([$boardId], function () use ($id, $title, $color, $uid): Label {
+			$label = $this->labelMapper->find($id);
+			$board = $this->loadBoard($label->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
-		if ($title !== null) {
-			$label->setTitle($this->validateTitle($title));
-		}
-		if ($color !== null) {
-			$label->setColor(ColorValidator::assertValid($color));
-		}
+			if ($title !== null) {
+				$label->setTitle($this->validateTitle($title));
+			}
+			if ($color !== null) {
+				$label->setColor(ColorValidator::assertValid($color));
+			}
 
-		$label = $this->labelMapper->update($label);
+			$label = $this->labelMapper->update($label);
 
-		$this->changeNotifier->notify(
-			$label->getBoardId(),
-			Change::ENTITY_LABEL,
-			$id,
-			Change::ACTION_UPDATE,
-			$uid
-		);
+			$this->changeNotifier->notify(
+				$label->getBoardId(),
+				Change::ENTITY_LABEL,
+				$id,
+				Change::ACTION_UPDATE,
+				$uid
+			);
 
-		return $label;
+			return $label;
+		});
 	}
 
 	/**
@@ -133,29 +139,32 @@ class LabelService {
 	 * @throws NotPermittedException if the user may not manage the board
 	 */
 	public function delete(int $id, string $uid): void {
-		$label = $this->labelMapper->find($id);
-		$board = $this->loadBoard($label->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+		$boardId = $this->labelMapper->find($id)->getBoardId();
+		$this->cardMutation->runForBoards([$boardId], function () use ($id, $uid): void {
+			$label = $this->labelMapper->find($id);
+			$board = $this->loadBoard($label->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
-		// Cascade + label row + change row are one transaction (same convention
-		// as CardService::move): a torn delete would leave orphaned assignment
-		// rows reappearing in labelIds, or a deletion invisible to the ETag.
-		$this->db->beginTransaction();
-		try {
-			$this->cardLabelMapper->deleteByLabel($id);
-			$this->labelMapper->delete($label);
-			$this->changeNotifier->notify(
-				$label->getBoardId(),
-				Change::ENTITY_LABEL,
-				$id,
-				Change::ACTION_DELETE,
-				$uid
-			);
-			$this->db->commit();
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
-		}
+			// Cascade + label row + change row are one transaction (same convention
+			// as CardService::move): a torn delete would leave orphaned assignment
+			// rows reappearing in labelIds, or a deletion invisible to the ETag.
+			$this->db->beginTransaction();
+			try {
+				$this->cardLabelMapper->deleteByLabel($id);
+				$this->labelMapper->delete($label);
+				$this->changeNotifier->notify(
+					$label->getBoardId(),
+					Change::ENTITY_LABEL,
+					$id,
+					Change::ACTION_DELETE,
+					$uid
+				);
+				$this->db->commit();
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+		});
 	}
 
 	/**
@@ -167,32 +176,34 @@ class LabelService {
 	 * @throws InvalidInputException if the label belongs to another board
 	 */
 	public function assign(int $cardId, int $labelId, string $uid): void {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $uid);
+		$this->cardMutation->run($cardId, function () use ($cardId, $labelId, $uid): void {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $uid);
 
-		$label = $this->labelMapper->find($labelId);
-		if ($label->getBoardId() !== $card->getBoardId()) {
-			throw new InvalidInputException('Cannot assign a label from another board');
-		}
+			$label = $this->labelMapper->find($labelId);
+			if ($label->getBoardId() !== $card->getBoardId()) {
+				throw new InvalidInputException('Cannot assign a label from another board');
+			}
 
-		if ($this->cardLabelMapper->exists($cardId, $labelId)) {
-			return;
-		}
+			if ($this->cardLabelMapper->exists($cardId, $labelId)) {
+				return;
+			}
 
-		$this->cardLabelMapper->insertAssignment($cardId, $labelId);
+			$this->cardLabelMapper->insertAssignment($cardId, $labelId);
 
-		$change = $this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_UPDATE,
-			$uid,
-			verb: Change::VERB_LABELED,
-		);
-		// Record the label title so the Activity feed can say WHICH label was added.
-		$this->changeDetailMapper->insertDetail($change->getId(), null, $this->capDetail($label->getTitle()));
+			$change = $this->changeNotifier->notify(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$cardId,
+				Change::ACTION_UPDATE,
+				$uid,
+				verb: Change::VERB_LABELED,
+			);
+			// Record the label title so the Activity feed can say WHICH label was added.
+			$this->changeDetailMapper->insertDetail($change->getId(), null, $this->capDetail($label->getTitle()));
+		});
 	}
 
 	/**
@@ -203,36 +214,38 @@ class LabelService {
 	 * @throws NotPermittedException if the user may not edit the board
 	 */
 	public function unassign(int $cardId, int $labelId, string $uid): void {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $uid);
+		$this->cardMutation->run($cardId, function () use ($cardId, $labelId, $uid): void {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $uid);
 
-		// Resolve the label title BEFORE the assignment is gone, so the Activity feed
-		// can say WHICH label was removed. A label deleted out from under a stale
-		// assignment leaves no title - the detail is simply skipped then.
-		$labelTitle = null;
-		try {
-			$labelTitle = $this->labelMapper->find($labelId)->getTitle();
-		} catch (DoesNotExistException) {
-			// Label already gone; record the change without a from/to detail.
-		}
+			// Resolve the label title BEFORE the assignment is gone, so the Activity feed
+			// can say WHICH label was removed. A label deleted out from under a stale
+			// assignment leaves no title - the detail is simply skipped then.
+			$labelTitle = null;
+			try {
+				$labelTitle = $this->labelMapper->find($labelId)->getTitle();
+			} catch (DoesNotExistException) {
+				// Label already gone; record the change without a from/to detail.
+			}
 
-		if ($this->cardLabelMapper->deleteAssignment($cardId, $labelId) === 0) {
-			return;
-		}
+			if ($this->cardLabelMapper->deleteAssignment($cardId, $labelId) === 0) {
+				return;
+			}
 
-		$change = $this->changeNotifier->notify(
-			$card->getBoardId(),
-			Change::ENTITY_CARD,
-			$cardId,
-			Change::ACTION_UPDATE,
-			$uid,
-			verb: Change::VERB_UNLABELED,
-		);
-		if ($labelTitle !== null) {
-			$this->changeDetailMapper->insertDetail($change->getId(), $this->capDetail($labelTitle), null);
-		}
+			$change = $this->changeNotifier->notify(
+				$card->getBoardId(),
+				Change::ENTITY_CARD,
+				$cardId,
+				Change::ACTION_UPDATE,
+				$uid,
+				verb: Change::VERB_UNLABELED,
+			);
+			if ($labelTitle !== null) {
+				$this->changeDetailMapper->insertDetail($change->getId(), $this->capDetail($labelTitle), null);
+			}
+		});
 	}
 
 	/**

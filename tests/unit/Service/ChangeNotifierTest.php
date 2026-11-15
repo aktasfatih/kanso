@@ -60,7 +60,8 @@ class ChangeNotifierTest extends TestCase {
 			$this->container,
 			$this->logger,
 			$this->activityPublisher,
-			$this->visibilityGuard
+			$this->visibilityGuard,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 
@@ -307,7 +308,8 @@ class ChangeNotifierTest extends TestCase {
 			$this->container,
 			$this->logger,
 			$this->activityPublisher,
-			$guard
+			$guard,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 
 		$this->activityPublisher->expects(self::once())

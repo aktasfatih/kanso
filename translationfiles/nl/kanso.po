@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— geen —"
 
-#: src/components/BoardSettingsModal.vue:4939
+#: src/components/BoardSettingsModal.vue:5006
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n keer"
@@ -345,21 +345,21 @@ msgstr "%1$s heeft jouw review gevraagd op %2$s"
 msgid "%1$s shared %2$s with you"
 msgstr "%1$s heeft %2$s met je gedeeld"
 
-#: src/views/BoardList.vue:219
+#: src/views/BoardList.vue:225
 msgid "%n attachment"
 msgid_plural "%n attachments"
 msgstr[0] "%n bijlage"
 msgstr[1] "%n bijlagen"
 
-#: src/views/BoardList.vue:226
+#: src/views/BoardList.vue:232
 msgid "%n attachment could not be copied and is missing from the new board. Keep your Deck board until you have checked it."
 msgid_plural "%n attachments could not be copied and are missing from the new board. Keep your Deck board until you have checked them."
 msgstr[0] "%n bijlage kon niet worden gekopieerd en ontbreekt op het nieuwe bord. Bewaar je Deck-bord tot je hem hebt gecontroleerd."
 msgstr[1] "%n bijlagen konden niet worden gekopieerd en ontbreken op het nieuwe bord. Bewaar je Deck-bord tot je ze hebt gecontroleerd."
 
 #: src/components/BoardTileContent.vue:18
-#: src/views/BoardList.vue:216
-#: src/views/BoardList.vue:259
+#: src/views/BoardList.vue:222
+#: src/views/BoardList.vue:265
 #: src/views/BoardStats.vue:444
 #: src/views/ProjectStats.vue:347
 msgid "%n card"
@@ -367,7 +367,7 @@ msgid_plural "%n cards"
 msgstr[0] "%n kaart"
 msgstr[1] "%n kaarten"
 
-#: src/components/StackColumn.vue:1092
+#: src/components/StackColumn.vue:1093
 msgid "%n card archived"
 msgid_plural "%n cards archived"
 msgstr[0] "%n kaart gearchiveerd"
@@ -379,13 +379,13 @@ msgid_plural "%n cards created"
 msgstr[0] "%n kaart aangemaakt"
 msgstr[1] "%n kaarten aangemaakt"
 
-#: src/views/BoardList.vue:215
+#: src/views/BoardList.vue:221
 msgid "%n column"
 msgid_plural "%n columns"
 msgstr[0] "%n kolom"
 msgstr[1] "%n kolommen"
 
-#: src/views/BoardList.vue:218
+#: src/views/BoardList.vue:224
 msgid "%n comment"
 msgid_plural "%n comments"
 msgstr[0] "%n reactie"
@@ -397,11 +397,17 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n gegevensrij gevonden"
 msgstr[1] "%n gegevensrijen gevonden"
 
-#: src/components/CardDetail.vue:5095
+#: src/components/CardDetail.vue:5117
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dag geleden"
 msgstr[1] "%n dagen geleden"
+
+#: src/components/DeletedBoards.vue:32
+msgid "%n day left"
+msgid_plural "%n days left"
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/components/BoardAttachmentsModal.vue:14
 msgid "%n file"
@@ -409,19 +415,19 @@ msgid_plural "%n files"
 msgstr[0] "%n bestand"
 msgstr[1] "%n bestanden"
 
-#: src/components/CardDetail.vue:5093
+#: src/components/CardDetail.vue:5115
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n uur geleden"
 msgstr[1] "%n uur geleden"
 
-#: src/views/BoardView.vue:2752
+#: src/views/BoardView.vue:2753
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n ID gekopieerd."
 msgstr[1] "%n ID's gekopieerd."
 
-#: src/views/BoardList.vue:217
+#: src/views/BoardList.vue:223
 msgid "%n label"
 msgid_plural "%n labels"
 msgstr[0] "%n label"
@@ -439,7 +445,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n label is niet aangemaakt en ontbreekt op de geïmporteerde kaarten: alleen bordbeheerders kunnen nieuwe labels toevoegen. Vraag een beheerder om het toe te voegen en stel het daarna in op de kaarten."
 msgstr[1] "%n labels zijn niet aangemaakt en ontbreken op de geïmporteerde kaarten: alleen bordbeheerders kunnen nieuwe labels toevoegen. Vraag een beheerder om ze toe te voegen en stel ze daarna in op de kaarten."
 
-#: src/components/CardDetail.vue:5091
+#: src/components/CardDetail.vue:5113
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuut geleden"
@@ -450,6 +456,12 @@ msgid "%n need review"
 msgid_plural "%n need review"
 msgstr[0] "%n heeft review nodig"
 msgstr[1] "%n hebben review nodig"
+
+#: src/components/CardDetail.vue:3954
+msgid "%n other reviewer"
+msgid_plural "%n other reviewers"
+msgstr[0] "%n andere beoordelaar"
+msgstr[1] "%n andere beoordelaars"
 
 #: src/components/BoardTileContent.vue:39
 msgid "%n overdue"
@@ -463,13 +475,13 @@ msgid_plural "%n points"
 msgstr[0] "%n punt"
 msgstr[1] "%n punten"
 
-#: src/components/CardDetail.vue:1258
+#: src/components/CardDetail.vue:1259
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n project"
 msgstr[1] "%n projecten"
 
-#: src/components/CardDetail.vue:2348
+#: src/components/CardDetail.vue:2350
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n antwoord"
@@ -487,7 +499,7 @@ msgid_plural "%n unscheduled cards"
 msgstr[0] "%n ongeplande kaart"
 msgstr[1] "%n ongeplande kaarten"
 
-#: src/components/CardDetail.vue:326
+#: src/components/CardDetail.vue:321
 msgid "%n watcher"
 msgid_plural "%n watchers"
 msgstr[0] "%n volger"
@@ -718,6 +730,10 @@ msgstr "Alle vervaldatums"
 #: src/components/BoardSettingsModal.vue
 msgid "All issues"
 msgstr "Alle issues"
+
+#: src/components/CardDetail.vue
+msgid "All requested reviews must be approved before this card can be marked done."
+msgstr "Alle aangevraagde reviews moeten goedgekeurd zijn voordat deze kaart als klaar kan worden gemarkeerd."
 
 #: src/components/CardDetail.vue
 msgid "All requested reviews must be approved before this card can be marked done. Waiting on {names}."
@@ -1021,7 +1037,7 @@ msgstr "Geblokkeerd"
 msgid "Blocked by"
 msgstr "Geblokkeerd door"
 
-#: src/views/ProjectView.vue:300
+#: src/views/ProjectView.vue:304
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Geblokkeerd door {count} open kaart"
@@ -1102,6 +1118,14 @@ msgstr "Bordopties"
 #: src/views/BoardView.vue
 msgid "Board ordering needs a refresh."
 msgstr "De volgorde van het bord moet ververst worden."
+
+#: src/components/DeletedBoards.vue
+msgid "Board restored. Find it under Active."
+msgstr ""
+
+#: src/components/DeletedBoards.vue
+msgid "Board restored. Find it under Archived."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/views/BoardView.vue
@@ -1187,6 +1211,10 @@ msgstr "Standaard staat de discussie naast de kaart. Zet je hem eronder, dan wor
 #: src/components/BoardSettingsModal.vue
 msgid "Calendar feed"
 msgstr "Agendafeed"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Can comment"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue
@@ -1370,6 +1398,10 @@ msgstr "Kaarten die je van het bord verwijdert komen hier terecht tot ze worden 
 msgid "Change and clear"
 msgstr "Wijzigen en wissen"
 
+#: src/components/CardDetail.vue
+msgid "Change assignee"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Change color"
 msgstr "Kleur wijzigen"
@@ -1483,9 +1515,9 @@ msgstr "Checklist onvolledig"
 msgid "Checklist progress {done} of {total}"
 msgstr "Voortgang van de checklist {done} van {total}"
 
-#: src/components/BoardListView.vue:1078
+#: src/components/BoardListView.vue:1079
 #: src/components/CardPreview.vue:239
-#: src/components/CardTile.vue:520
+#: src/components/CardTile.vue:521
 msgid "Checklist progress {done} of {total}, %n overdue step"
 msgid_plural "Checklist progress {done} of {total}, %n overdue steps"
 msgstr[0] "Voortgang van de checklist {done} van {total}, %n stap te laat"
@@ -1523,6 +1555,18 @@ msgstr "Kiezen uit Bestanden"
 #: src/App.vue
 msgid "Choose which sections appear in the left sidebar."
 msgstr "Kies welke secties in de linkerzijbalk verschijnen."
+
+#: src/components/ProjectLeadPicker.vue
+msgid "Choosing a lead does not share the project."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Choosing another person replaces the current assignee."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Choosing another person replaces the current assignee. Existing cards with multiple assignees keep everyone; remove extra people before choosing someone new."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Choosing from Files stores a copy on the card — editing, renaming or deleting the original in Files does not change it."
@@ -1681,6 +1725,7 @@ msgstr "Opdrachtenpalet"
 msgid "comment"
 msgstr "reactie"
 
+#: src/components/BoardSettingsModal.vue
 #: src/components/SearchBox.vue
 msgid "Comment"
 msgstr "Reactie"
@@ -1843,6 +1888,14 @@ msgstr "Kan dat bestand niet importeren."
 msgid "Could not import that Trello file."
 msgstr "Kan dat Trello-bestand niet importeren."
 
+#: src/components/BoardSettingsModal.vue
+msgid "Could not load calendar preferences"
+msgstr ""
+
+#: src/components/DeletedBoards.vue
+msgid "Could not load deleted boards."
+msgstr ""
+
 #: src/components/BoardAttachmentsModal.vue
 msgid "Could not load more files. Try again."
 msgstr "Kan niet meer bestanden laden. Probeer het opnieuw."
@@ -1867,9 +1920,17 @@ msgstr "Kan je Deck-borden niet laden."
 msgid "Could not remove the mailbox."
 msgstr "Kan de mailbox niet verwijderen."
 
+#: src/components/DeletedBoards.vue
+msgid "Could not restore the board. Try again."
+msgstr ""
+
 #: src/admin-backup.js
 msgid "Could not save backup settings"
 msgstr "Kan de back-upinstellingen niet opslaan"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Could not save calendar preferences"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Could not save the email intake settings."
@@ -2040,8 +2101,8 @@ msgstr "Gevarenzone"
 msgid "Date"
 msgstr "Datum"
 
-#: src/components/BoardSettingsModal.vue:2312
-#: src/components/CardDetail.vue:5284
+#: src/components/BoardSettingsModal.vue:2346
+#: src/components/CardDetail.vue:5308
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dag"
@@ -2084,8 +2145,8 @@ msgid "Delete \"{name}\"?"
 msgstr "\"{name}\" verwijderen?"
 
 #: src/views/BoardList.vue
-msgid "Delete \"{title}\" and all of its cards for everyone? This cannot be undone."
-msgstr "\"{title}\" en alle kaarten erin voor iedereen verwijderen? Dit kan niet ongedaan worden gemaakt."
+msgid "Delete \"{title}\" and remove it for everyone?"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Delete \"{title}\"?"
@@ -2175,8 +2236,8 @@ msgid "Delete these sample cards whenever you like"
 msgstr "Verwijder deze voorbeeldkaarten wanneer je maar wilt"
 
 #: src/components/BoardSettingsModal.vue
-msgid "Delete this board permanently?"
-msgstr "Dit bord definitief verwijderen?"
+msgid "Delete this board?"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Delete this rule?"
@@ -2193,6 +2254,11 @@ msgstr "Weergave \"{name}\" verwijderen?"
 #: src/views/TrashView.vue
 msgid "Deleted {when}"
 msgstr "Verwijderd {when}"
+
+#: src/components/DeletedBoards.vue
+#: src/views/BoardList.vue
+msgid "Deleted boards"
+msgstr ""
 
 #: src/views/BoardView.vue
 msgid "Deleted cards"
@@ -2308,6 +2374,7 @@ msgstr "Bezig"
 #: src/components/StackColumn.vue
 #: src/composables/useBoardFilters.js
 #: src/composables/useSwimlanes.js
+#: src/services/projectLifecycle.js
 #: src/services/projectStatus.js
 #: src/views/BoardList.vue
 #: src/views/ProjectView.vue
@@ -2321,6 +2388,11 @@ msgstr "Klaar EN ≥ N dagen geleden aangemaakt"
 #: src/components/BoardSettingsModal.vue
 msgid "Done for ≥ N days"
 msgstr "≥ N dagen klaar"
+
+#: src/components/CardDetail.vue
+#: src/components/CardTile.vue
+msgid "Done or archived sub-cards"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Done-gated columns block Done until every review is approved."
@@ -2496,6 +2568,10 @@ msgid "Editor"
 msgstr "Editor"
 
 #: src/components/BoardSettingsModal.vue
+msgid "Editors can also comment."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
 msgid "Email intake"
 msgstr "E-mailopname"
 
@@ -2597,7 +2673,7 @@ msgstr "Elke"
 msgid "Every card in this project is done."
 msgstr "Alle kaarten in dit project zijn klaar."
 
-#: src/components/BoardSettingsModal.vue:4919
+#: src/components/BoardSettingsModal.vue:4986
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Elke dag"
@@ -2607,19 +2683,19 @@ msgstr[1] "Elke %n dagen"
 msgid "Every estimate needs a label."
 msgstr "Elke schatting heeft een label nodig."
 
-#: src/components/BoardSettingsModal.vue:4929
+#: src/components/BoardSettingsModal.vue:4996
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Elke maand"
 msgstr[1] "Elke %n maanden"
 
-#: src/components/BoardSettingsModal.vue:4921
+#: src/components/BoardSettingsModal.vue:4988
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Elke week"
 msgstr[1] "Elke %n weken"
 
-#: src/components/BoardSettingsModal.vue:4931
+#: src/components/BoardSettingsModal.vue:4998
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Elk jaar"
@@ -3058,6 +3134,7 @@ msgstr "Kan het filter niet opslaan."
 msgid "Failed to save."
 msgstr "Kan niet opslaan."
 
+#: src/components/ProjectLeadPicker.vue
 #: src/composables/useProjectShares.js
 msgid "Failed to search."
 msgstr "Zoeken mislukt."
@@ -3479,8 +3556,8 @@ msgid "Hide the discussion panel"
 msgstr "Het discussiepaneel verbergen"
 
 #: src/components/BoardSettingsModal.vue
-msgid "Hide this board without deleting it. You can restore it later."
-msgstr "Verberg dit bord zonder het te verwijderen. Je kunt het later terughalen."
+msgid "Hide this board without deleting it. Unarchive it at any time; there is no deletion deadline."
+msgstr ""
 
 #: src/composables/usePriority.js
 msgid "High"
@@ -3556,6 +3633,7 @@ msgstr "In een map in Bestanden gaat een opgeruimde back-up naar de prullenbak v
 #: src/components/CardTile.vue
 #: src/components/StackColumn.vue
 #: src/composables/useSwimlanes.js
+#: src/services/projectLifecycle.js
 #: src/views/MyCardsView.vue
 #: src/views/ProjectView.vue
 msgid "In progress"
@@ -3624,7 +3702,7 @@ msgstr "Het doel, de afbakening of de afspraken. Iedereen op dit bord kan het le
 msgid "Jump to the discussion"
 msgstr "Naar de discussie springen"
 
-#: src/components/CardDetail.vue:7159
+#: src/components/CardDetail.vue:7194
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Naar de discussie springen (%n reactie)"
@@ -3786,6 +3864,11 @@ msgstr "Te laat"
 msgid "Later"
 msgstr "Later"
 
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Lead"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Leave"
 msgstr "Verlaten"
@@ -3801,6 +3884,11 @@ msgstr "Project verlaten"
 #: src/components/BoardSettingsModal.vue
 msgid "Leave this board?"
 msgstr "Dit bord verlaten?"
+
+#: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
+msgid "Lifecycle"
+msgstr ""
 
 #: src/services/estimateScales.js
 msgid "Linear (1–5)"
@@ -3877,6 +3965,10 @@ msgstr "Zet je schattingen op volgorde van klein naar groot. Het getal bepaalt h
 #: src/components/BoardAttachmentsModal.vue
 msgid "Load more files"
 msgstr "Meer bestanden laden"
+
+#: src/components/DeletedBoards.vue
+msgid "Loading deleted boards…"
+msgstr ""
 
 #: src/views/InboxView.vue
 msgid "Loading inbox…"
@@ -4005,8 +4097,8 @@ msgstr "Modus"
 msgid "Mon"
 msgstr "ma"
 
-#: src/components/BoardSettingsModal.vue:2314
-#: src/components/CardDetail.vue:5286
+#: src/components/BoardSettingsModal.vue:2348
+#: src/components/CardDetail.vue:5310
 msgid "month"
 msgid_plural "months"
 msgstr[0] "maand"
@@ -4262,6 +4354,7 @@ msgstr "Geen borden in deze map"
 msgid "No boards in this folder yet."
 msgstr "Nog geen borden in deze map."
 
+#: src/components/DeletedBoards.vue
 #: src/views/BoardList.vue
 msgid "No boards match your search."
 msgstr "Er zijn geen borden die overeenkomen met je zoekopdracht."
@@ -4345,6 +4438,10 @@ msgstr "Geen gegevens"
 msgid "No Deck boards found to import."
 msgstr "Geen Deck-borden gevonden om te importeren."
 
+#: src/components/DeletedBoards.vue
+msgid "No deleted boards to restore."
+msgstr ""
+
 #: src/views/TrashView.vue
 msgid "No deleted cards match “{query}”."
 msgstr "Er zijn geen verwijderde kaarten die overeenkomen met “{query}”."
@@ -4386,6 +4483,11 @@ msgstr "Nog geen labels op dit bord."
 #: src/components/BoardSettingsModal.vue
 msgid "No labels yet. Create one below."
 msgstr "Nog geen labels. Maak er hieronder een aan."
+
+#: src/components/ProjectLeadPicker.vue
+#: src/views/ProjectView.vue
+msgid "No lead"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "No limit"
@@ -4484,6 +4586,10 @@ msgstr "Nog geen threads. Iedereen die deze kaart volgt krijgt bericht zodra je 
 #: src/composables/useSwimlanes.js
 msgid "No type"
 msgstr "Geen type"
+
+#: src/components/ProjectLeadPicker.vue
+msgid "No users found."
+msgstr ""
 
 #: src/components/ProjectShareDialog.vue
 msgid "No users or groups found."
@@ -4599,9 +4705,21 @@ msgstr "Op schema"
 msgid "Once a day, Kanso saves a copy of every board as a zip file."
 msgstr "Eén keer per dag slaat Kanso van elk bord een kopie op als zip-bestand."
 
+#: src/components/BoardSettingsModal.vue
+msgid "One assignee per card"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Only a board manager can delete a thread with replies from other people."
+msgstr ""
+
 #: templates/admin-backup.php
 msgid "Only administrators can download them, and they can never be shared by a link."
 msgstr "Alleen beheerders kunnen ze downloaden, en ze kunnen nooit via een link worden gedeeld."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Only affects your calendar for this board. Public calendar feeds stay the same."
+msgstr ""
 
 #: src/composables/useBoardFilters.js
 msgid "Only archived"
@@ -4618,6 +4736,10 @@ msgstr "Alleen issues met een label"
 #: src/views/MyCardsView.vue
 msgid "Only loaded tasks are shown."
 msgstr "Alleen geladen taken worden weergegeven."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Only sync cards assigned to me"
+msgstr ""
 
 #: src/views/MyCardsView.vue
 msgid "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list."
@@ -4743,6 +4865,14 @@ msgstr "Te laat"
 msgid "Owner"
 msgstr "Eigenaar"
 
+#: src/components/DeletedBoards.vue
+msgid "Owners and managers can restore deleted boards for 30 days. After that, the board and its contents are permanently removed. Archived boards have no deletion deadline."
+msgstr ""
+
+#: src/views/BoardList.vue
+msgid "Owners and managers can restore it from Deleted boards for 30 days. After that, the board and its contents are permanently removed. Archive instead to hide it without a deletion deadline."
+msgstr ""
+
 #: src/components/ProjectHealth.vue
 msgid "Pace"
 msgstr "Tempo"
@@ -4783,10 +4913,6 @@ msgstr "per mailbox"
 #: src/components/BoardSettingsModal.vue
 msgid "per sender"
 msgstr "per afzender"
-
-#: src/components/BoardSettingsModal.vue
-msgid "Permanently remove this board and all of its cards for everyone. This cannot be undone."
-msgstr "Verwijder dit bord en al zijn kaarten definitief, voor iedereen. Dit kan niet ongedaan worden gemaakt."
 
 #: src/components/CardDetail.vue
 msgid "Pick a card to link…"
@@ -4843,6 +4969,10 @@ msgstr "Vastzetten in zijbalk"
 #: src/views/BoardList.vue
 msgid "Pinned"
 msgstr "Vastgezet"
+
+#: src/services/projectLifecycle.js
+msgid "Planned"
+msgstr ""
 
 #: src/services/estimateScales.js
 msgid "Planning poker (0, ½, 1, 2, 3, 5 … 100)"
@@ -4985,6 +5115,10 @@ msgstr "Alleen-lezen"
 msgid "Recently done"
 msgstr "Recent afgerond"
 
+#: src/components/DeletedBoards.vue
+msgid "Recovery window expired."
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Recurring cards"
 msgstr "Terugkerende kaarten"
@@ -5094,6 +5228,10 @@ msgstr "Toegewezen persoon verwijderen"
 msgid "Remove attachment"
 msgstr "Bijlage verwijderen"
 
+#: src/components/CardDetail.vue
+msgid "Remove extra assignees before choosing someone new. Existing assignees are kept."
+msgstr ""
+
 #: src/components/BoardTileMenu.vue
 msgid "Remove from folder"
 msgstr "Uit de map halen"
@@ -5125,6 +5263,10 @@ msgstr "Mailbox verwijderen"
 #: src/components/CardDetail.vue
 msgid "Remove relation"
 msgstr "Relatie verwijderen"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Remove this board for everyone. Owners and managers have 30 days to restore it before permanent removal."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Remove time entry"
@@ -5283,6 +5425,14 @@ msgstr "heeft een thread opgelost"
 msgid "Restore"
 msgstr "Herstellen"
 
+#: src/components/DeletedBoards.vue
+msgid "Restore before {date}"
+msgstr ""
+
+#: src/components/DeletedBoards.vue
+msgid "Restore board"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Restore panel size"
 msgstr "Paneelgrootte herstellen"
@@ -5291,6 +5441,10 @@ msgstr "Paneelgrootte herstellen"
 #: src/views/TrashView.vue
 msgid "Restore selected"
 msgstr "Selectie herstellen"
+
+#: src/components/DeletedBoards.vue
+msgid "Restores to Archived."
+msgstr ""
 
 #: src/components/CommandPalette.vue
 msgid "Results"
@@ -5651,7 +5805,7 @@ msgstr "De discussie onder de kaart tonen"
 msgid "Show the discussion panel"
 msgstr "Het discussiepaneel tonen"
 
-#: src/components/CardDetail.vue:7165
+#: src/components/CardDetail.vue:7200
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Het discussiepaneel tonen (%n reactie)"
@@ -5856,8 +6010,8 @@ msgid "Sub-card progress"
 msgstr "Voortgang van de subkaarten"
 
 #: src/components/BoardListView.vue
-msgid "Sub-card progress {done} of {total}"
-msgstr "Voortgang van de subkaarten {done} van {total}"
+msgid "Sub-card progress {done} of {total} (done or archived)"
+msgstr ""
 
 #: src/components/BoardFilterBar.vue
 #: src/components/CardDetail.vue
@@ -6019,6 +6173,10 @@ msgstr "De streefdatum is verstreken en er staat nog werk open."
 msgid "There is no other board you can move this card to."
 msgstr "Er is geen ander bord waar je deze kaart naartoe kunt verplaatsen."
 
+#: src/components/DeletedBoards.vue
+msgid "This board can no longer be restored. Its recovery window or your access may have ended."
+msgstr ""
+
 #: src/views/BoardView.vue
 msgid "This board no longer exists or you no longer have access."
 msgstr "Dit bord bestaat niet meer of je hebt geen toegang meer."
@@ -6080,8 +6238,8 @@ msgid "This public board link is invalid or has been disabled."
 msgstr "Deze link naar een openbaar bord is ongeldig of is uitgeschakeld."
 
 #: src/components/BoardSettingsModal.vue
-msgid "This removes the board and all of its cards for everyone. This cannot be undone."
-msgstr "Hiermee verdwijnt het bord met al zijn kaarten voor iedereen. Dit kan niet ongedaan worden gemaakt."
+msgid "This removes the board for everyone. Owners and managers can restore it from Deleted boards for 30 days. After that, the board and its contents are permanently removed. Archive instead to hide it without a deletion deadline."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "This same card is brought back and reset each time"
@@ -6202,6 +6360,10 @@ msgstr "De prullenbak is leeg"
 #: src/views/BoardList.vue
 msgid "Trello (.json)"
 msgstr "Trello (.json)"
+
+#: src/components/DeletedBoards.vue
+msgid "Try again"
+msgstr ""
 
 #: src/views/MyCardsView.vue
 msgid "Try changing your filters or search."
@@ -6457,8 +6619,8 @@ msgstr "Webhook actief"
 msgid "Wed"
 msgstr "wo"
 
-#: src/components/BoardSettingsModal.vue:2313
-#: src/components/CardDetail.vue:5285
+#: src/components/BoardSettingsModal.vue:2347
+#: src/components/CardDetail.vue:5309
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "week"
@@ -6497,7 +6659,7 @@ msgid "When a card enters role"
 msgstr "Zodra een kaart in een rol komt"
 
 #: src/components/BoardSettingsModal.vue
-msgid "When on, a parent card is completed automatically once all of its sub-issues are done or archived. Off by default — the parent stays open for a human to close."
+msgid "When on, a parent card is completed automatically once all of its sub-issues are done or archived, its checklist is complete and its reviews are approved. Off by default. Reopening or restoring a sub-issue never reopens the parent."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -6566,8 +6728,8 @@ msgstr "Geschreven op"
 msgid "wrote"
 msgstr "schreef"
 
-#: src/components/BoardSettingsModal.vue:2315
-#: src/components/CardDetail.vue:5287
+#: src/components/BoardSettingsModal.vue:2349
+#: src/components/CardDetail.vue:5311
 msgid "year"
 msgid_plural "years"
 msgstr[0] "jaar"

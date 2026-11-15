@@ -15,13 +15,33 @@ use OCP\DB\Types;
  * @method void setOldCardId(int $id)
  * @method int getTargetCardId()
  * @method void setTargetCardId(int $id)
+ * @method int|null getBoardId()
+ * @method void setBoardId(?int $id)
+ * @method string|null getPrefix()
+ * @method void setPrefix(?string $prefix)
+ * @method int|null getBoardSeq()
+ * @method void setBoardSeq(?int $seq)
+ * @method int|null getTargetBoardId()
+ * @method void setTargetBoardId(?int $id)
+ * @method int|null getTargetBoardSeq()
+ * @method void setTargetBoardSeq(?int $seq)
  */
 class CardMoveAlias extends Entity {
 	protected ?int $oldCardId = null;
 	protected ?int $targetCardId = null;
+	protected ?int $boardId = null;
+	protected ?string $prefix = null;
+	protected ?int $boardSeq = null;
+	protected ?int $targetBoardId = null;
+	protected ?int $targetBoardSeq = null;
 
 	public function __construct() {
 		$this->addType('oldCardId', Types::INTEGER);
 		$this->addType('targetCardId', Types::INTEGER);
+		$this->addType('boardId', Types::INTEGER);
+		$this->addType('prefix', Types::STRING);
+		$this->addType('boardSeq', Types::INTEGER);
+		$this->addType('targetBoardId', Types::INTEGER);
+		$this->addType('targetBoardSeq', Types::INTEGER);
 	}
 }

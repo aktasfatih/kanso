@@ -89,7 +89,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:data-stack-id="rows[vRow.index].stackId"
 							@input="(e) => { draftByStack[rows[vRow.index].stackId] = e.target.value }"
 							@paste="(e) => onComposerPaste(e, rows[vRow.index].stackId)"
-							@keydown.enter.prevent="submitCard(rows[vRow.index].stackId)" />
+							@keydown.enter="submitOnEnter($event, () => submitCard(rows[vRow.index].stackId))" />
 					</form>
 
 					<!-- "+ from template" picker: hidden when callbacks absent -->
@@ -378,13 +378,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				:aria-label="t('kanso', 'Add column…')"
 				:placeholder="t('kanso', 'Add column…')"
 				:disabled="addColumnPending"
-				@keydown.enter.prevent="submitNewColumn">
+				@keydown.enter="submitOnEnter($event, submitNewColumn)">
 			<p v-if="addColumnError" class="add-column-composer__error">{{ addColumnError }}</p>
 		</form>
 	</div>
 </template>
 
 <script setup>
+import { submitOnEnter } from '../utils/keyboard.js'
 import { ref, computed, inject, nextTick, reactive, watch, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
@@ -1079,7 +1080,7 @@ function progressBadge(card) {
 	} else {
 		label = fromChecklist
 			? t('kanso', 'Checklist progress {done} of {total}', counts)
-			: t('kanso', 'Sub-card progress {done} of {total}', counts)
+			: t('kanso', 'Sub-card progress {done} of {total} (done or archived)', counts)
 	}
 
 	return { done: progress.done, total: progress.total, overdue, label }

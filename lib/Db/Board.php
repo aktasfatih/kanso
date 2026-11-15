@@ -66,6 +66,8 @@ use OCP\DB\Types;
  * @method void setDescription(?string $description)
  * @method bool|null getAllowAiActors()
  * @method void setAllowAiActors(?bool $allowAiActors)
+ * @method bool|null getSingleAssignee()
+ * @method void setSingleAssignee(?bool $singleAssignee)
  * @method bool|null getAutoCompleteParent()
  * @method void setAutoCompleteParent(?bool $autoCompleteParent)
  */
@@ -156,6 +158,7 @@ class Board extends Entity implements \JsonSerializable {
 	// manual "mark the parent done" behaviour. When false, completing a child's
 	// last sibling never stamps the parent done.
 	protected ?bool $autoCompleteParent = null;
+	protected ?bool $singleAssignee = null;
 
 	public function __construct() {
 		$this->addType('title', Types::STRING);
@@ -184,10 +187,11 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('description', Types::TEXT);
 		$this->addType('allowAiActors', Types::BOOLEAN);
 		$this->addType('autoCompleteParent', Types::BOOLEAN);
+		$this->addType('singleAssignee', Types::BOOLEAN);
 	}
 
 	/**
-	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, background: ?string, archived: bool, lastModified: int, estimateScale: string, estimateTokens: list<array{label: string, value: float}>, estimateCustom: list<array{label: string, value: float}>, newCardsOnTop: bool, prefix: string, chatUrl: ?string, description: ?string, cardFeatures: array<string, bool>, allowAiActors: bool, autoCompleteParent: bool}
+	 * @return array{id: int, title: ?string, owner: ?string, color: ?string, background: ?string, archived: bool, lastModified: int, estimateScale: string, estimateTokens: list<array{label: string, value: float}>, estimateCustom: list<array{label: string, value: float}>, newCardsOnTop: bool, prefix: string, chatUrl: ?string, description: ?string, cardFeatures: array<string, bool>, allowAiActors: bool, autoCompleteParent: bool, singleAssignee: bool}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -225,6 +229,7 @@ class Board extends Entity implements \JsonSerializable {
 			// "All children done → parent done" gate (#198): a NULL column reads as
 			// OFF, so boards that predate the column keep the manual behaviour.
 			'autoCompleteParent' => $this->autoCompleteParent ?? false,
+			'singleAssignee' => $this->singleAssignee ?? false,
 		];
 	}
 

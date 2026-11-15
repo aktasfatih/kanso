@@ -77,6 +77,7 @@ class GithubWebhookServiceTest extends TestCase {
 			$this->urlGenerator,
 			$this->labelService,
 			$this->labelMapper,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 
@@ -1382,6 +1383,7 @@ class GithubWebhookServiceTest extends TestCase {
 			$this->urlGenerator,
 			$this->labelService,
 			$this->labelMapper,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
@@ -1423,6 +1425,7 @@ class GithubWebhookServiceTest extends TestCase {
 			$this->urlGenerator,
 			$this->labelService,
 			$this->labelMapper,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
@@ -1528,6 +1531,7 @@ class GithubWebhookServiceTest extends TestCase {
 			$this->urlGenerator,
 			$this->labelService,
 			$this->labelMapper,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 

@@ -49,6 +49,7 @@ class ReviewService {
 		private CommentService $commentService,
 		private BoardAccess $boardAccess,
 		private CardVisibilityGuard $visibilityGuard,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -92,64 +93,65 @@ class ReviewService {
 	 * @throws InvalidInputException if the reviewer cannot read the board, the review type is invalid, or an AI actor name is set on a board that does not allow it
 	 */
 	public function requestReview(int $cardId, string $reviewerUid, string $actorUid, ?int $reviewTypeId = null, ?string $actorName = null): void {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
-		$actorName = $this->normalizeActorName($board, $actorName);
+		$this->cardMutation->run($cardId, function () use ($cardId, $reviewerUid, $actorUid, $reviewTypeId, $actorName): void {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+			$actorName = $this->normalizeActorName($board, $actorName);
 
-		// A reviewer who cannot see the board could never open the card to act.
-		if (($this->permissionService->getPermissions($board, $reviewerUid) & PermissionService::PERMISSION_READ) === 0) {
-			throw new InvalidInputException('User has no access to this board');
-		}
-		// ... and one who cannot see this CARD could not either (#3743): an
-		// internal/private card must not be reviewable across the fence -
-		// the request itself would leak the title into their feed.
-		if (!$this->visibilityGuard->isVisible($board, $card, $reviewerUid)) {
-			throw new InvalidInputException('User has no access to this card');
-		}
-
-		// A typed request must reference a review type of this card's board.
-		if ($reviewTypeId !== null) {
-			try {
-				$type = $this->reviewTypeMapper->find($reviewTypeId);
-			} catch (DoesNotExistException) {
-				throw new InvalidInputException('Review type does not exist');
+			// A reviewer who cannot see the board could never open the card to act.
+			if (($this->permissionService->getPermissions($board, $reviewerUid) & PermissionService::PERMISSION_READ) === 0) {
+				throw new InvalidInputException('User has no access to this board');
 			}
-			if ($type->getBoardId() !== $card->getBoardId()) {
-				throw new InvalidInputException('Review type belongs to another board');
+			// ... and one who cannot see this CARD could not either (#3743): an
+			// internal/private card must not be reviewable across the fence -
+			// the request itself would leak the title into their feed.
+			if (!$this->visibilityGuard->isVisible($board, $card, $reviewerUid)) {
+				throw new InvalidInputException('User has no access to this card');
 			}
-		}
 
-		if ($this->cardReviewMapper->existsForType($cardId, $reviewerUid, $reviewTypeId ?? 0)) {
-			return;
-		}
+			// A typed request must reference a review type of this card's board.
+			if ($reviewTypeId !== null) {
+				try {
+					$type = $this->reviewTypeMapper->find($reviewTypeId);
+				} catch (DoesNotExistException) {
+					throw new InvalidInputException('Review type does not exist');
+				}
+				if ($type->getBoardId() !== $card->getBoardId()) {
+					throw new InvalidInputException('Review type belongs to another board');
+				}
+			}
 
-		try {
-			$review = $this->cardReviewMapper->insertRequest($cardId, $reviewerUid, $actorUid, $reviewTypeId, $actorName);
-		} catch (\OCP\DB\Exception $e) {
-			if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
-				// Concurrent PUT lost the check-then-insert race - the request
-				// exists, which is the idempotent success case.
+			if ($this->cardReviewMapper->existsForType($cardId, $reviewerUid, $reviewTypeId ?? 0)) {
+				$this->fireDeferredNotifications($board, $card);
 				return;
 			}
-			throw $e;
-		}
 
-		// Always emit the change row so the chip renders (gated or not). The
-		// reviewer notification is DEFERRED while the new review is gated behind a
-		// lower-stage unapproved review; it fires later from setState() when the
-		// blocking reviews approve. notified_at is stamped only when we notify, so
-		// the deferral is idempotent.
-		$this->notify($card, $actorUid, Change::VERB_REVIEW_REQUESTED);
+			try {
+				$review = $this->cardReviewMapper->insertRequest($cardId, $reviewerUid, $actorUid, $reviewTypeId, $actorName);
+			} catch (\OCP\DB\Exception $e) {
+				if ($e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
+					// Concurrent PUT lost the check-then-insert race - the request
+					// exists, which is the idempotent success case.
+					return;
+				}
+				throw $e;
+			}
 
-		$stageMap = $this->reviewTypeMapper->stageMapForBoard($card->getBoardId());
-		$siblings = $this->cardReviewMapper->findByCard($cardId);
-		if (!$this->isGated($review, $siblings, $stageMap)) {
-			$this->notificationService->notifyReviewRequested($cardId, $reviewerUid, $actorUid);
-			$review->setNotifiedAt(time());
-			$this->cardReviewMapper->update($review);
-		}
+			// Always emit the change row so the chip renders (gated or not). The
+			// reviewer notification is DEFERRED while the new review is gated behind a
+			// lower-stage unapproved review; it fires later from setState() when the
+			// blocking reviews approve. notified_at is stamped only when we notify, so
+			// the deferral is idempotent.
+			$this->notify($card, $actorUid, Change::VERB_REVIEW_REQUESTED);
+
+			$stageMap = $this->reviewTypeMapper->stageMapForBoard($card->getBoardId());
+			$siblings = $this->cardReviewMapper->findByCard($cardId);
+			if (!$this->isGated($review, $siblings, $stageMap)) {
+				$this->queueNotification($review->getId());
+			}
+		});
 	}
 
 	/**
@@ -160,20 +162,22 @@ class ReviewService {
 	 * @throws NotPermittedException if the actor may not edit the board
 	 */
 	public function withdrawReview(int $cardId, int $reviewId, string $actorUid): void {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$this->cardMutation->run($cardId, function () use ($cardId, $reviewId, $actorUid): void {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		$review = $this->cardReviewMapper->findById($reviewId);
-		if ($review === null || $review->getCardId() !== $cardId) {
-			return;
-		}
-		$reviewerUid = $review->getReviewer();
-		$this->cardReviewMapper->delete($review);
+			$review = $this->cardReviewMapper->findById($reviewId);
+			if ($review === null || $review->getCardId() !== $cardId) {
+				return;
+			}
+			$reviewerUid = $review->getReviewer();
+			$this->cardReviewMapper->delete($review);
 
-		$this->notify($card, $actorUid);
-		$this->notificationService->dismissReviewRequested($cardId, $reviewerUid);
+			$this->notify($card, $actorUid);
+			$this->notificationService->dismissReviewRequested($cardId, $reviewerUid);
+		});
 	}
 
 	/**
@@ -187,59 +191,61 @@ class ReviewService {
 	 * @throws InvalidInputException if $state is not a settable verdict
 	 */
 	public function setState(int $cardId, int $reviewId, string $state, string $actorUid, ?string $reason = null): void {
-		if (!in_array($state, CardReview::settableStates(), true)) {
-			throw new InvalidInputException('Invalid review state');
-		}
-
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		// Membership FIRST, then visibility - the ordering the siblings above use
-		// and {@see CardVisibilityGuard} documents. A reviewer needs READ to act,
-		// and asserting it before the guard (and before the review lookup) stops a
-		// non-member telling 403 from 404 and so probing whether review R exists
-		// on card N.
-		if (($this->permissionService->getPermissions($board, $actorUid) & PermissionService::PERMISSION_READ) === 0) {
-			throw new NotPermittedException('User has no access to this board');
-		}
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
-
-		$review = $this->cardReviewMapper->findById($reviewId);
-		if ($review === null || $review->getCardId() !== $cardId) {
-			throw new DoesNotExistException('Review ' . $reviewId . ' does not exist on card ' . $cardId);
-		}
-		if ($actorUid !== $review->getReviewer()) {
-			throw new NotPermittedException('Only the reviewer may set their review state');
-		}
-
-		$reason = $reason !== null ? trim($reason) : null;
-
-		// Record the verdict FIRST so it always lands - a reviewer only needs READ
-		// to review, so the verdict must not depend on the (EDIT-gated) comment.
-		if ($review->getState() !== $state) {
-			$review->setState($state);
-			$this->cardReviewMapper->update($review);
-
-			$this->notify($card, $actorUid, Change::VERB_REVIEW_VERDICT);
-			// The reviewer has acted - clear their pending "review requested" bell.
-			$this->notificationService->dismissReviewRequested($cardId, $review->getReviewer());
-
-			// A flip to APPROVED may un-gate downstream reviews: fire any deferred
-			// reviewer notification for a now-ungated review that was never notified.
-			if ($state === CardReview::STATE_APPROVED) {
-				$this->fireDeferredNotifications($board, $card);
+		$this->cardMutation->run($cardId, function () use ($cardId, $reviewId, $state, $actorUid, $reason): void {
+			if (!in_array($state, CardReview::settableStates(), true)) {
+				throw new InvalidInputException('Invalid review state');
 			}
-		}
 
-		// A "request changes" reason becomes a comment by the reviewer (even if the
-		// state was unchanged - they can add further reasons). Best-effort: a
-		// READ-only reviewer who can't comment still keeps their verdict.
-		if ($state === CardReview::STATE_CHANGES_REQUESTED && $reason !== null && $reason !== '') {
-			try {
-				$this->commentService->addComment($cardId, '**Requested changes:** ' . $reason, null, $actorUid);
-			} catch (\Throwable) {
-				// Reviewer lacks EDIT to comment - the verdict still stands.
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			// Membership FIRST, then visibility - the ordering the siblings above use
+			// and {@see CardVisibilityGuard} documents. A reviewer needs READ to act,
+			// and asserting it before the guard (and before the review lookup) stops a
+			// non-member telling 403 from 404 and so probing whether review R exists
+			// on card N.
+			if (($this->permissionService->getPermissions($board, $actorUid) & PermissionService::PERMISSION_READ) === 0) {
+				throw new NotPermittedException('User has no access to this board');
 			}
-		}
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+
+			$review = $this->cardReviewMapper->findById($reviewId);
+			if ($review === null || $review->getCardId() !== $cardId) {
+				throw new DoesNotExistException('Review ' . $reviewId . ' does not exist on card ' . $cardId);
+			}
+			if ($actorUid !== $review->getReviewer()) {
+				throw new NotPermittedException('Only the reviewer may set their review state');
+			}
+
+			$reason = $reason !== null ? trim($reason) : null;
+
+			// Record the verdict FIRST so it always lands - a reviewer only needs READ
+			// to review, so the verdict must not depend on the (EDIT-gated) comment.
+			if ($review->getState() !== $state) {
+				$review->setState($state);
+				$this->cardReviewMapper->update($review);
+
+				$this->notify($card, $actorUid, Change::VERB_REVIEW_VERDICT);
+				// The reviewer has acted - clear their pending "review requested" bell.
+				$this->notificationService->dismissReviewRequested($cardId, $review->getReviewer());
+
+				// A flip to APPROVED may un-gate downstream reviews: fire any deferred
+				// reviewer notification for a now-ungated review that was never notified.
+				if ($state === CardReview::STATE_APPROVED) {
+					$this->fireDeferredNotifications($board, $card);
+				}
+			}
+
+			// A "request changes" reason becomes a comment by the reviewer (even if the
+			// state was unchanged - they can add further reasons). Best-effort: a
+			// READ-only reviewer who can't comment still keeps their verdict.
+			if ($state === CardReview::STATE_CHANGES_REQUESTED && $reason !== null && $reason !== '') {
+				try {
+					$this->commentService->addComment($cardId, '**Requested changes:** ' . $reason, null, $actorUid);
+				} catch (\Throwable) {
+					// Reviewer lacks EDIT to comment - the verdict still stands.
+				}
+			}
+		});
 	}
 
 	/**
@@ -363,14 +369,38 @@ class ReviewService {
 			if (!$this->visibilityGuard->isVisible($board, $card, $review->getReviewer())) {
 				continue;
 			}
-			$this->notificationService->notifyReviewRequested(
-				$cardId,
-				$review->getReviewer(),
-				$review->getRequestedBy(),
-			);
-			$review->setNotifiedAt(time());
-			$this->cardReviewMapper->update($review);
+			$this->queueNotification($review->getId());
 		}
+	}
+
+	private function queueNotification(int $reviewId): void {
+		$this->cardMutation->afterCommit(function () use ($reviewId): void {
+			$review = $this->cardReviewMapper->findById($reviewId);
+			if ($review === null || $review->getNotifiedAt() !== null || $review->getState() === CardReview::STATE_APPROVED) {
+				return;
+			}
+			$card = $this->loadCard($review->getCardId());
+			$board = $this->loadBoard($card->getBoardId());
+			if (($this->permissionService->getPermissions($board, $review->getReviewer()) & PermissionService::PERMISSION_READ) === 0
+				|| !$this->visibilityGuard->isVisible($board, $card, $review->getReviewer())
+				|| $this->isGated($review, $this->cardReviewMapper->findByCard($card->getId()), $this->reviewTypeMapper->stageMapForBoard($board->getId()))) {
+				return;
+			}
+			$this->notificationService->notifyReviewRequested($card->getId(), $review->getReviewer(), $review->getRequestedBy());
+			$current = $this->cardReviewMapper->findById($reviewId);
+			if ($current === null) {
+				return;
+			}
+			$cardId = $current->getCardId();
+			$this->cardMutation->run($cardId, function () use ($reviewId, $cardId): void {
+				$current = $this->cardReviewMapper->findById($reviewId);
+				if ($current === null || $current->getCardId() !== $cardId || $current->getNotifiedAt() !== null) {
+					return;
+				}
+				$current->setNotifiedAt(time());
+				$this->cardReviewMapper->update($current);
+			});
+		});
 	}
 
 	/**

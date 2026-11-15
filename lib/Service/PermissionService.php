@@ -37,11 +37,13 @@ class PermissionService {
 	public const PERMISSION_EDIT = 2;
 	public const PERMISSION_SHARE = 4;
 	public const PERMISSION_MANAGE = 8;
+	public const PERMISSION_COMMENT = 16;
 
 	public const PERMISSION_ALL = self::PERMISSION_READ
 		| self::PERMISSION_EDIT
 		| self::PERMISSION_SHARE
-		| self::PERMISSION_MANAGE;
+		| self::PERMISSION_MANAGE
+		| self::PERMISSION_COMMENT;
 
 	/** The bits an external-role member can never hold effectively. */
 	public const INTERNAL_ONLY_PERMISSIONS = self::PERMISSION_SHARE | self::PERMISSION_MANAGE;
@@ -63,6 +65,12 @@ class PermissionService {
 		if (($this->getPermissions($board, $uid) & $permission) !== $permission) {
 			throw new NotPermittedException('Operation not allowed on this board');
 		}
+	}
+
+	public static function withImpliedPermissions(int $permissions): int {
+		return ($permissions & self::PERMISSION_EDIT) !== 0
+			? $permissions | self::PERMISSION_COMMENT
+			: $permissions;
 	}
 
 	/**
@@ -97,7 +105,7 @@ class PermissionService {
 		if ($permissions !== 0 && !$sawInternal) {
 			$permissions &= ~self::INTERNAL_ONLY_PERMISSIONS;
 		}
-		return $permissions;
+		return self::withImpliedPermissions($permissions);
 	}
 
 	/**
@@ -148,6 +156,7 @@ class PermissionService {
 			if ($map[$boardId] !== 0 && !($sawInternal[$boardId] ?? false)) {
 				$map[$boardId] &= ~self::INTERNAL_ONLY_PERMISSIONS;
 			}
+			$map[$boardId] = self::withImpliedPermissions($map[$boardId]);
 		}
 		return $map;
 	}

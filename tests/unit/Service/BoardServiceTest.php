@@ -9,6 +9,7 @@ namespace OCA\Kanso\Tests\Unit\Service;
 
 use OCA\Kanso\Access\BoardAccess;
 use OCA\Kanso\Access\ViewerContext;
+use OCA\Kanso\Cron\PurgeDeletedBoards;
 use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardGroupMemberMapper;
 use OCA\Kanso\Db\BoardMapper;
@@ -18,14 +19,18 @@ use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardReviewMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Service\BoardService;
+use OCA\Kanso\Service\CardMutationService;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\PermissionService;
+use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\AppFramework\Utility\ITimeFactory;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 class BoardServiceTest extends TestCase {
+	private const NOW = 1_800_000_000;
 	private BoardMapper&MockObject $boardMapper;
 	private ChangeNotifier&MockObject $changeNotifier;
 	private PermissionService&MockObject $permissionService;
@@ -34,6 +39,7 @@ class BoardServiceTest extends TestCase {
 	private BoardGroupMemberMapper&MockObject $boardGroupMemberMapper;
 	private BoardPinMapper&MockObject $boardPinMapper;
 	private BoardAccess&MockObject $boardAccess;
+	private CardMutationService&MockObject $mutation;
 	private BoardService $service;
 
 	protected function setUp(): void {
@@ -46,6 +52,7 @@ class BoardServiceTest extends TestCase {
 		$this->boardGroupMemberMapper = $this->createMock(BoardGroupMemberMapper::class);
 		$this->boardPinMapper = $this->createMock(BoardPinMapper::class);
 		$this->boardAccess = $this->createMock(BoardAccess::class);
+		$this->mutation = $this->cardMutation();
 		$this->service = new BoardService(
 			$this->boardMapper,
 			$this->changeNotifier,
@@ -54,8 +61,16 @@ class BoardServiceTest extends TestCase {
 			$this->cardReviewMapper,
 			$this->boardGroupMemberMapper,
 			$this->boardPinMapper,
-			$this->boardAccess
+			$this->boardAccess,
+			$this->mutation,
+			$this->clock(),
 		);
+	}
+
+	private function clock(): ITimeFactory {
+		$clock = $this->createMock(ITimeFactory::class);
+		$clock->method('getTime')->willReturn(self::NOW);
+		return $clock;
 	}
 
 	private function board(int $id = 1, string $owner = 'alice'): Board {
@@ -65,6 +80,93 @@ class BoardServiceTest extends TestCase {
 		$board->setTitle('Existing board');
 		$board->setDeletedAt(0);
 		return $board;
+	}
+
+	public function testDeletedListUsesBatchedEffectivePermissionsAndOnlyRecoveryMetadata(): void {
+		$owner = $this->board();
+		$owner->setDeletedAt(self::NOW - 10);
+		$owner->setDescription('Private purpose');
+		$owner->setPublicShareToken('secret');
+		$owner->setWebhookSecret('secret');
+		$manager = $this->board(2, 'bob');
+		$manager->setDeletedAt(self::NOW - PurgeDeletedBoards::RETENTION_SECONDS);
+		$manager->setArchived(true);
+		$reader = $this->board(3, 'bob');
+		$boards = [$owner, $manager, $reader];
+		$this->permissionService->method('getUserGroupIds')->with('alice')->willReturn(['team']);
+		$this->boardMapper->expects(self::once())->method('findDeletedForUser')
+			->with('alice', ['team'], self::NOW - PurgeDeletedBoards::RETENTION_SECONDS)->willReturn($boards);
+		$this->permissionService->expects(self::once())->method('getPermissionsForBoards')->with($boards, 'alice')
+			->willReturn([1 => PermissionService::PERMISSION_ALL, 2 => 9, 3 => 3]);
+		$this->cardMapper->expects(self::never())->method('countByBoards');
+		self::assertSame([
+			['id' => 1, 'title' => 'Existing board', 'color' => null, 'archived' => false,
+				'deletedAt' => self::NOW - 10, 'restoreUntil' => self::NOW - 10 + PurgeDeletedBoards::RETENTION_SECONDS],
+			['id' => 2, 'title' => 'Existing board', 'color' => null, 'archived' => true,
+				'deletedAt' => self::NOW - PurgeDeletedBoards::RETENTION_SECONDS, 'restoreUntil' => self::NOW],
+		], $this->service->findDeleted('alice'));
+	}
+
+	public static function recoverableBoards(): array {
+		return ['owner' => ['alice', false, 10], 'manager at cutoff' => ['bob', true, PurgeDeletedBoards::RETENTION_SECONDS]];
+	}
+
+	#[\PHPUnit\Framework\Attributes\DataProvider('recoverableBoards')]
+	public function testRestorePreservesBoardStateAndUsesExclusiveFence(string $actor, bool $archived, int $age): void {
+		$board = $this->board();
+		$board->setArchived($archived);
+		$board->setDeletedAt(self::NOW - $age);
+		$board->setDescription('Preserved');
+		$board->setPublicShareToken('public-token');
+		$board->setIcalFeedToken('feed-token');
+		$before = $board->jsonSerialize();
+		$this->boardMapper->method('find')->with(1)->willReturn($board);
+		$this->mutation->expects(self::once())->method('runForBoards')->with([1], self::isType('callable'), true);
+		$this->permissionService->expects(self::once())->method('assertPermission')
+			->with($board, $actor, PermissionService::PERMISSION_MANAGE);
+		$this->boardMapper->expects(self::once())->method('update')->willReturnArgument(0);
+		$this->changeNotifier->expects(self::once())->method('notify')
+			->with(1, Change::ENTITY_BOARD, 1, Change::ACTION_UPDATE, $actor)->willReturn(new Change());
+		$restored = $this->service->restore(1, $actor);
+		self::assertSame(0, $restored->getDeletedAt());
+		self::assertSame(array_replace($before, ['lastModified' => self::NOW]), $restored->jsonSerialize());
+		self::assertSame('public-token', $restored->getPublicShareToken());
+		self::assertSame('feed-token', $restored->getIcalFeedToken());
+	}
+
+	public function testRestoreDeniesUsersWithoutManage(): void {
+		$board = $this->board();
+		$board->setDeletedAt(self::NOW - 10);
+		$this->boardMapper->method('find')->willReturn($board);
+		$this->permissionService->expects(self::once())->method('assertPermission')
+			->with($board, 'bob', PermissionService::PERMISSION_MANAGE)->willThrowException(new NotPermittedException());
+		$this->boardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->expectException(NotPermittedException::class);
+		$this->service->restore(1, 'bob');
+	}
+
+	public static function unavailableBoards(): array {
+		return ['live' => [0], 'expired' => [self::NOW - PurgeDeletedBoards::RETENTION_SECONDS - 1]];
+	}
+
+	#[\PHPUnit\Framework\Attributes\DataProvider('unavailableBoards')]
+	public function testRestoreRejectsLiveAndExpiredRows(int $deletedAt): void {
+		$board = $this->board();
+		$board->setDeletedAt($deletedAt);
+		$this->boardMapper->method('find')->willReturn($board);
+		$this->boardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->expectException(DoesNotExistException::class);
+		$this->service->restore(1, 'alice');
+	}
+
+	public function testRestoreRejectsPurgedBoards(): void {
+		$this->boardMapper->method('find')->willThrowException(new DoesNotExistException('gone'));
+		$this->boardMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->expectException(DoesNotExistException::class);
+		$this->service->restore(1, 'alice');
 	}
 
 	public function testCreateInsertsBoardAndChangeRow(): void {
@@ -813,4 +915,32 @@ class BoardServiceTest extends TestCase {
 	public function testNormalizeDescription(?string $input, ?string $expected): void {
 		self::assertSame($expected, BoardService::normalizeDescription($input));
 	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
+	public function testSingleAssigneeDefaultsOffAndCanBeToggledWithManageUnderExclusiveFence(): void {
+		$board = $this->board();
+		self::assertFalse($board->jsonSerialize()['singleAssignee']);
+		$this->boardMapper->method('find')->willReturn($board);
+		$this->boardMapper->method('update')->willReturnArgument(0);
+		$this->mutation->expects(self::exactly(3))->method('runForBoards')->with([1], self::isType('callable'), true);
+		$this->permissionService->expects(self::exactly(3))->method('assertPermission')->with($board, 'alice', PermissionService::PERMISSION_MANAGE);
+		self::assertTrue($this->service->update(1, null, null, null, 'alice', singleAssignee: true)->jsonSerialize()['singleAssignee']);
+		self::assertTrue($this->service->update(1, null, null, null, 'alice')->jsonSerialize()['singleAssignee']);
+		self::assertFalse($this->service->update(1, null, null, null, 'alice', singleAssignee: false)->jsonSerialize()['singleAssignee']);
+	}
+
+	public function testSingleAssigneeSettingDeniesEditors(): void {
+		$board = $this->board();
+		$this->boardMapper->method('find')->willReturn($board);
+		$this->permissionService->method('assertPermission')->willThrowException(new NotPermittedException());
+		$this->boardMapper->expects(self::never())->method('update');
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(1, null, null, null, 'editor', singleAssignee: true);
+	}
+
 }

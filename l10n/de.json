@@ -176,6 +176,10 @@
             "%n benötigt Review",
             "%n benötigen Review"
         ],
+        "_%n other reviewer_::_%n other reviewers_": [
+            "%n weitere prüfende Person",
+            "%n weitere prüfende Personen"
+        ],
         "_%n overdue_::_%n overdue_": [
             "%n überfällig",
             "%n überfällig"
@@ -257,6 +261,7 @@
         "All day (no time)": "Ganztägig (keine Uhrzeit)",
         "All due dates": "Alle Fälligkeitstermine",
         "All issues": "Alle Issues",
+        "All requested reviews must be approved before this card can be marked done.": "Alle angeforderten Reviews müssen genehmigt sein, bevor diese Karte als erledigt markiert werden kann.",
         "All requested reviews must be approved before this card can be marked done. Waiting on {names}.": "Alle angeforderten Reviews müssen genehmigt sein, bevor diese Karte als erledigt markiert werden kann. Wartet auf {names}.",
         "All statuses": "Alle Status",
         "Analytics": "Analysen",
@@ -585,7 +590,6 @@
         "Delete": "Löschen",
         "Delete \"{name}\"": "\"{name}\" löschen",
         "Delete \"{name}\"?": "\"{name}\" löschen?",
-        "Delete \"{title}\" and all of its cards for everyone? This cannot be undone.": "\"{title}\" und alle enthaltenen Karten für alle löschen? Dies kann nicht rückgängig gemacht werden.",
         "Delete \"{title}\"?": "\"{title}\" löschen?",
         "Delete {name}? Kanso keeps no second copy of it.": "{name} löschen? Kanso bewahrt keine zweite Kopie davon auf.",
         "Delete {name}? The file goes to the backup account's trashbin — Kanso keeps no second copy of it.": "{name} löschen? Die Datei landet im Papierkorb des Backup-Kontos – Kanso bewahrt keine zweite Kopie davon auf.",
@@ -607,7 +611,6 @@
         "Delete selected": "Auswahl löschen",
         "Delete template": "Vorlage löschen",
         "Delete these sample cards whenever you like": "Diese Beispielkarten können jederzeit gelöscht werden",
-        "Delete this board permanently?": "Dieses Board dauerhaft löschen?",
         "Delete this rule?": "Diese Regel löschen?",
         "Delete this template?": "Diese Vorlage löschen?",
         "Delete view \"{name}\"?": "Ansicht \"{name}\" löschen?",
@@ -929,7 +932,6 @@
         "Hide changes": "Änderungen ausblenden",
         "Hide the card sections this board does not use. Nothing is deleted — turning a section back on restores everything that was already there.": "Blende die Kartenabschnitte aus, die dieses Board nicht nutzt. Es wird nichts gelöscht – wird ein Abschnitt wieder eingeschaltet, ist alles wieder da, was bereits vorhanden war.",
         "Hide the discussion panel": "Diskussionsbereich ausblenden",
-        "Hide this board without deleting it. You can restore it later.": "Dieses Board ausblenden, ohne es zu löschen. Du kannst es später wiederherstellen.",
         "High": "Hoch",
         "Hours": "Stunden",
         "https://cloud.example.com/call/abc123": "https://cloud.example.com/call/abc123",
@@ -1239,7 +1241,6 @@
         "People you share with see this project’s details and its whole discussion, including earlier notes. They only see the cards they can already access on their boards.": "Personen, mit denen du teilst, sehen die Details dieses Projekts und die gesamte Diskussion, einschließlich früherer Notizen. Sie sehen nur die Karten, auf die sie in ihren Boards bereits Zugriff haben.",
         "per mailbox": "pro Postfach",
         "per sender": "pro Absender",
-        "Permanently remove this board and all of its cards for everyone. This cannot be undone.": "Dieses Board und alle Karten dauerhaft für alle entfernen. Dies kann nicht rückgängig gemacht werden.",
         "Pick a card to link…": "Karte zum Verknüpfen auswählen…",
         "Pick a card…": "Karte auswählen…",
         "Pick a color": "Farbe auswählen",
@@ -1499,7 +1500,6 @@
         "Strikethrough": "Durchgestrichen",
         "Sub-card": "Unterkarte",
         "Sub-card progress": "Fortschritt der Unterkarten",
-        "Sub-card progress {done} of {total}": "Fortschritt der Unterkarten {done} von {total}",
         "Sub-cards": "Unterkarten",
         "Submit": "Absenden",
         "Subscribe to this board's card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card.": "Abonniere die Fälligkeitsdaten der Karten dieses Boards in einer beliebigen Kalender-App (Nextcloud Calendar, Thunderbird, dein Smartphone). Der Feed ist schreibgeschützt und zeigt nur Kartentitel, Fälligkeitsdaten und einen Link zur jeweiligen Karte.",
@@ -1553,7 +1553,6 @@
         "This project no longer exists, or you no longer have access to it.": "Dieses Projekt existiert nicht mehr oder du hast keinen Zugriff mehr darauf.",
         "This public board link has expired. Ask whoever shared the board for a new link.": "Dieser öffentliche Board-Link ist abgelaufen. Bitte die Person, die das Board geteilt hat, um einen neuen Link.",
         "This public board link is invalid or has been disabled.": "Dieser öffentliche Board-Link ist ungültig oder wurde deaktiviert.",
-        "This removes the board and all of its cards for everyone. This cannot be undone.": "Dadurch werden das Board und alle seine Karten für alle Benutzer gelöscht. Dies kann nicht rückgängig gemacht werden.",
         "This same card is brought back and reset each time": "Jedes Mal wird dieselbe Karte zurückgeholt und zurückgesetzt",
         "This saved view no longer exists.": "Diese gespeicherte Ansicht existiert nicht mehr.",
         "This week": "Diese Woche",

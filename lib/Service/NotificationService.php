@@ -49,6 +49,7 @@ class NotificationService {
 	public function __construct(
 		private IManager $manager,
 		private IGroupManager $groupManager,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -57,18 +58,20 @@ class NotificationService {
 	 * the actor assigns themselves.
 	 */
 	public function notifyCardAssigned(int $cardId, string $targetUid, string $actorUid): void {
-		if ($targetUid === $actorUid) {
-			return;
-		}
+		$this->cardMutation->afterCommit(function () use ($cardId, $targetUid, $actorUid): void {
+			if ($targetUid === $actorUid) {
+				return;
+			}
 
-		$notification = $this->manager->createNotification();
-		$notification->setApp('kanso')
-			->setUser($targetUid)
-			->setDateTime((new \DateTime())->setTimestamp(time()))
-			->setObject(self::OBJECT_CARD, (string)$cardId)
-			->setSubject(self::SUBJECT_CARD_ASSIGNED, ['actor' => $actorUid, 'cardId' => $cardId]);
+			$notification = $this->manager->createNotification();
+			$notification->setApp('kanso')
+				->setUser($targetUid)
+				->setDateTime((new \DateTime())->setTimestamp(time()))
+				->setObject(self::OBJECT_CARD, (string)$cardId)
+				->setSubject(self::SUBJECT_CARD_ASSIGNED, ['actor' => $actorUid, 'cardId' => $cardId]);
 
-		$this->manager->notify($notification);
+			$this->manager->notify($notification);
+		});
 	}
 
 	/**
@@ -77,18 +80,20 @@ class NotificationService {
 	 * comment even though commenting auto-subscribes you).
 	 */
 	public function notifyCardComment(int $cardId, string $targetUid, string $actorUid): void {
-		if ($targetUid === $actorUid) {
-			return;
-		}
+		$this->cardMutation->afterCommit(function () use ($cardId, $targetUid, $actorUid): void {
+			if ($targetUid === $actorUid) {
+				return;
+			}
 
-		$notification = $this->manager->createNotification();
-		$notification->setApp('kanso')
-			->setUser($targetUid)
-			->setDateTime((new \DateTime())->setTimestamp(time()))
-			->setObject(self::OBJECT_CARD, (string)$cardId)
-			->setSubject(self::SUBJECT_CARD_COMMENT, ['actor' => $actorUid, 'cardId' => $cardId]);
+			$notification = $this->manager->createNotification();
+			$notification->setApp('kanso')
+				->setUser($targetUid)
+				->setDateTime((new \DateTime())->setTimestamp(time()))
+				->setObject(self::OBJECT_CARD, (string)$cardId)
+				->setSubject(self::SUBJECT_CARD_COMMENT, ['actor' => $actorUid, 'cardId' => $cardId]);
 
-		$this->manager->notify($notification);
+			$this->manager->notify($notification);
+		});
 	}
 
 	/**
@@ -98,18 +103,20 @@ class NotificationService {
 	 * No-op when a user mentions themselves.
 	 */
 	public function notifyCardMentioned(int $cardId, string $targetUid, string $actorUid): void {
-		if ($targetUid === $actorUid) {
-			return;
-		}
+		$this->cardMutation->afterCommit(function () use ($cardId, $targetUid, $actorUid): void {
+			if ($targetUid === $actorUid) {
+				return;
+			}
 
-		$notification = $this->manager->createNotification();
-		$notification->setApp('kanso')
-			->setUser($targetUid)
-			->setDateTime((new \DateTime())->setTimestamp(time()))
-			->setObject(self::OBJECT_CARD, (string)$cardId)
-			->setSubject(self::SUBJECT_CARD_MENTIONED, ['actor' => $actorUid, 'cardId' => $cardId]);
+			$notification = $this->manager->createNotification();
+			$notification->setApp('kanso')
+				->setUser($targetUid)
+				->setDateTime((new \DateTime())->setTimestamp(time()))
+				->setObject(self::OBJECT_CARD, (string)$cardId)
+				->setSubject(self::SUBJECT_CARD_MENTIONED, ['actor' => $actorUid, 'cardId' => $cardId]);
 
-		$this->manager->notify($notification);
+			$this->manager->notify($notification);
+		});
 	}
 
 	/**
@@ -117,18 +124,20 @@ class NotificationService {
 	 * when the actor requests a review from themselves.
 	 */
 	public function notifyReviewRequested(int $cardId, string $targetUid, string $actorUid): void {
-		if ($targetUid === $actorUid) {
-			return;
-		}
+		$this->cardMutation->afterCommit(function () use ($cardId, $targetUid, $actorUid): void {
+			if ($targetUid === $actorUid) {
+				return;
+			}
 
-		$notification = $this->manager->createNotification();
-		$notification->setApp('kanso')
-			->setUser($targetUid)
-			->setDateTime((new \DateTime())->setTimestamp(time()))
-			->setObject(self::OBJECT_CARD, (string)$cardId)
-			->setSubject(self::SUBJECT_CARD_REVIEW_REQUESTED, ['actor' => $actorUid, 'cardId' => $cardId]);
+			$notification = $this->manager->createNotification();
+			$notification->setApp('kanso')
+				->setUser($targetUid)
+				->setDateTime((new \DateTime())->setTimestamp(time()))
+				->setObject(self::OBJECT_CARD, (string)$cardId)
+				->setSubject(self::SUBJECT_CARD_REVIEW_REQUESTED, ['actor' => $actorUid, 'cardId' => $cardId]);
 
-		$this->manager->notify($notification);
+			$this->manager->notify($notification);
+		});
 	}
 
 	/**
@@ -138,18 +147,20 @@ class NotificationService {
 	 * notification links to the new card.
 	 */
 	public function notifyBoardActivity(int $cardId, string $targetUid, string $actorUid): void {
-		if ($targetUid === $actorUid) {
-			return;
-		}
+		$this->cardMutation->afterCommit(function () use ($cardId, $targetUid, $actorUid): void {
+			if ($targetUid === $actorUid) {
+				return;
+			}
 
-		$notification = $this->manager->createNotification();
-		$notification->setApp('kanso')
-			->setUser($targetUid)
-			->setDateTime((new \DateTime())->setTimestamp(time()))
-			->setObject(self::OBJECT_CARD, (string)$cardId)
-			->setSubject(self::SUBJECT_BOARD_ACTIVITY, ['actor' => $actorUid, 'cardId' => $cardId]);
+			$notification = $this->manager->createNotification();
+			$notification->setApp('kanso')
+				->setUser($targetUid)
+				->setDateTime((new \DateTime())->setTimestamp(time()))
+				->setObject(self::OBJECT_CARD, (string)$cardId)
+				->setSubject(self::SUBJECT_BOARD_ACTIVITY, ['actor' => $actorUid, 'cardId' => $cardId]);
 
-		$this->manager->notify($notification);
+			$this->manager->notify($notification);
+		});
 	}
 
 	/**
@@ -162,18 +173,20 @@ class NotificationService {
 	 * the later at-due one (both can land for the same card).
 	 */
 	public function notifyCardDue(int $cardId, string $targetUid, int $daysBefore): void {
-		$subject = $daysBefore >= 1
-			? self::SUBJECT_CARD_DUE_SOON
-			: self::SUBJECT_CARD_DUE;
+		$this->cardMutation->afterCommit(function () use ($cardId, $targetUid, $daysBefore): void {
+			$subject = $daysBefore >= 1
+				? self::SUBJECT_CARD_DUE_SOON
+				: self::SUBJECT_CARD_DUE;
 
-		$notification = $this->manager->createNotification();
-		$notification->setApp('kanso')
-			->setUser($targetUid)
-			->setDateTime((new \DateTime())->setTimestamp(time()))
-			->setObject(self::OBJECT_CARD, (string)$cardId)
-			->setSubject($subject, ['cardId' => $cardId]);
+			$notification = $this->manager->createNotification();
+			$notification->setApp('kanso')
+				->setUser($targetUid)
+				->setDateTime((new \DateTime())->setTimestamp(time()))
+				->setObject(self::OBJECT_CARD, (string)$cardId)
+				->setSubject($subject, ['cardId' => $cardId]);
 
-		$this->manager->notify($notification);
+			$this->manager->notify($notification);
+		});
 	}
 
 	/**
@@ -185,17 +198,19 @@ class NotificationService {
 	 * can point at the specific comment the reminder was about.
 	 */
 	public function notifyCardReminder(int $cardId, string $targetUid, ?int $commentId = null): void {
-		$notification = $this->manager->createNotification();
-		$notification->setApp('kanso')
-			->setUser($targetUid)
-			->setDateTime((new \DateTime())->setTimestamp(time()))
-			->setObject(self::OBJECT_CARD, (string)$cardId)
-			->setSubject(self::SUBJECT_CARD_REMINDER, [
-				'cardId' => $cardId,
-				'commentId' => $commentId,
-			]);
+		$this->cardMutation->afterCommit(function () use ($cardId, $targetUid, $commentId): void {
+			$notification = $this->manager->createNotification();
+			$notification->setApp('kanso')
+				->setUser($targetUid)
+				->setDateTime((new \DateTime())->setTimestamp(time()))
+				->setObject(self::OBJECT_CARD, (string)$cardId)
+				->setSubject(self::SUBJECT_CARD_REMINDER, [
+					'cardId' => $cardId,
+					'commentId' => $commentId,
+				]);
 
-		$this->manager->notify($notification);
+			$this->manager->notify($notification);
+		});
 	}
 
 	/**
@@ -206,18 +221,20 @@ class NotificationService {
 	 * when the actor assigns themselves.
 	 */
 	public function notifyStepAssigned(int $itemId, int $cardId, string $targetUid, string $actorUid): void {
-		if ($targetUid === $actorUid) {
-			return;
-		}
+		$this->cardMutation->afterCommit(function () use ($itemId, $cardId, $targetUid, $actorUid): void {
+			if ($targetUid === $actorUid) {
+				return;
+			}
 
-		$notification = $this->manager->createNotification();
-		$notification->setApp('kanso')
-			->setUser($targetUid)
-			->setDateTime((new \DateTime())->setTimestamp(time()))
-			->setObject(self::OBJECT_CHECKLIST_ITEM, (string)$itemId)
-			->setSubject(self::SUBJECT_STEP_ASSIGNED, ['actor' => $actorUid, 'cardId' => $cardId]);
+			$notification = $this->manager->createNotification();
+			$notification->setApp('kanso')
+				->setUser($targetUid)
+				->setDateTime((new \DateTime())->setTimestamp(time()))
+				->setObject(self::OBJECT_CHECKLIST_ITEM, (string)$itemId)
+				->setSubject(self::SUBJECT_STEP_ASSIGNED, ['actor' => $actorUid, 'cardId' => $cardId]);
 
-		$this->manager->notify($notification);
+			$this->manager->notify($notification);
+		});
 	}
 
 	/**
@@ -246,32 +263,34 @@ class NotificationService {
 	 * @param string $message the run's own summary line, as shown in the panel
 	 */
 	public function notifyBackupResult(bool $ok, string $message): void {
-		$admins = $this->groupManager->get('admin')?->getUsers() ?? [];
-		if ($admins === []) {
-			return;
-		}
+		$this->cardMutation->afterCommit(function () use ($ok, $message): void {
+			$admins = $this->groupManager->get('admin')?->getUsers() ?? [];
+			if ($admins === []) {
+				return;
+			}
 
-		$subject = $ok ? self::SUBJECT_BACKUP_OK : self::SUBJECT_BACKUP_FAILED;
-		foreach ($admins as $admin) {
-			$uid = $admin->getUID();
+			$subject = $ok ? self::SUBJECT_BACKUP_OK : self::SUBJECT_BACKUP_FAILED;
+			foreach ($admins as $admin) {
+				$uid = $admin->getUID();
 
-			// Supersede: drop this recipient's previous backup notification
-			// (either subject) before posting the new one.
-			$previous = $this->manager->createNotification();
-			$previous->setApp('kanso')
-				->setUser($uid)
-				->setObject(self::OBJECT_BACKUP, self::OBJECT_BACKUP_RUN);
-			$this->manager->markProcessed($previous);
+				// Supersede: drop this recipient's previous backup notification
+				// (either subject) before posting the new one.
+				$previous = $this->manager->createNotification();
+				$previous->setApp('kanso')
+					->setUser($uid)
+					->setObject(self::OBJECT_BACKUP, self::OBJECT_BACKUP_RUN);
+				$this->manager->markProcessed($previous);
 
-			$notification = $this->manager->createNotification();
-			$notification->setApp('kanso')
-				->setUser($uid)
-				->setDateTime((new \DateTime())->setTimestamp(time()))
-				->setObject(self::OBJECT_BACKUP, self::OBJECT_BACKUP_RUN)
-				->setSubject($subject, ['message' => $message]);
+				$notification = $this->manager->createNotification();
+				$notification->setApp('kanso')
+					->setUser($uid)
+					->setDateTime((new \DateTime())->setTimestamp(time()))
+					->setObject(self::OBJECT_BACKUP, self::OBJECT_BACKUP_RUN)
+					->setSubject($subject, ['message' => $message]);
 
-			$this->manager->notify($notification);
-		}
+				$this->manager->notify($notification);
+			}
+		});
 	}
 
 	/**
@@ -280,13 +299,15 @@ class NotificationService {
 	 * dismissing an absent notification is a no-op at the manager level.
 	 */
 	public function dismissStepAssigned(int $itemId, string $targetUid): void {
-		$notification = $this->manager->createNotification();
-		$notification->setApp('kanso')
-			->setUser($targetUid)
-			->setObject(self::OBJECT_CHECKLIST_ITEM, (string)$itemId)
-			->setSubject(self::SUBJECT_STEP_ASSIGNED);
+		$this->cardMutation->afterCommit(function () use ($itemId, $targetUid): void {
+			$notification = $this->manager->createNotification();
+			$notification->setApp('kanso')
+				->setUser($targetUid)
+				->setObject(self::OBJECT_CHECKLIST_ITEM, (string)$itemId)
+				->setSubject(self::SUBJECT_STEP_ASSIGNED);
 
-		$this->manager->markProcessed($notification);
+			$this->manager->markProcessed($notification);
+		});
 	}
 
 	/**
@@ -295,13 +316,15 @@ class NotificationService {
 	 * notification is a no-op at the manager level.
 	 */
 	public function dismissCardAssigned(int $cardId, string $targetUid): void {
-		$notification = $this->manager->createNotification();
-		$notification->setApp('kanso')
-			->setUser($targetUid)
-			->setObject(self::OBJECT_CARD, (string)$cardId)
-			->setSubject(self::SUBJECT_CARD_ASSIGNED);
+		$this->cardMutation->afterCommit(function () use ($cardId, $targetUid): void {
+			$notification = $this->manager->createNotification();
+			$notification->setApp('kanso')
+				->setUser($targetUid)
+				->setObject(self::OBJECT_CARD, (string)$cardId)
+				->setSubject(self::SUBJECT_CARD_ASSIGNED);
 
-		$this->manager->markProcessed($notification);
+			$this->manager->markProcessed($notification);
+		});
 	}
 
 	/**
@@ -310,13 +333,15 @@ class NotificationService {
 	 * Idempotent - dismissing an absent notification is a no-op.
 	 */
 	public function dismissReviewRequested(int $cardId, string $targetUid): void {
-		$notification = $this->manager->createNotification();
-		$notification->setApp('kanso')
-			->setUser($targetUid)
-			->setObject(self::OBJECT_CARD, (string)$cardId)
-			->setSubject(self::SUBJECT_CARD_REVIEW_REQUESTED);
+		$this->cardMutation->afterCommit(function () use ($cardId, $targetUid): void {
+			$notification = $this->manager->createNotification();
+			$notification->setApp('kanso')
+				->setUser($targetUid)
+				->setObject(self::OBJECT_CARD, (string)$cardId)
+				->setSubject(self::SUBJECT_CARD_REVIEW_REQUESTED);
 
-		$this->manager->markProcessed($notification);
+			$this->manager->markProcessed($notification);
+		});
 	}
 
 	/**

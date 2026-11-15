@@ -25,7 +25,7 @@ class NotificationServiceTest extends TestCase {
 		parent::setUp();
 		$this->manager = $this->createMock(IManager::class);
 		$this->groupManager = $this->createMock(IGroupManager::class);
-		$this->service = new NotificationService($this->manager, $this->groupManager);
+		$this->service = new NotificationService($this->manager, $this->groupManager, new \OCA\Kanso\Tests\Stubs\CardMutationService());
 	}
 
 	/** Wires the `admin` group to contain exactly these uids. */

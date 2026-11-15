@@ -43,6 +43,8 @@ class ReviewServiceTest extends TestCase {
 	private CommentService&MockObject $commentService;
 	private BoardAccess&MockObject $boardAccess;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
+	/** @var list<int> */
+	private array $guardedCardIds = [];
 	private ReviewService $service;
 
 	/** @var string[] uids the guard reports as unable to see the card */
@@ -87,6 +89,7 @@ class ReviewServiceTest extends TestCase {
 			$this->commentService,
 			$this->boardAccess,
 			$this->visibilityGuard,
+			$this->cardMutation(),
 		);
 	}
 
@@ -132,6 +135,7 @@ class ReviewServiceTest extends TestCase {
 	 */
 	private function expectInsertReturns(CardReview $inserted, array $siblings): void {
 		$this->cardReviewMapper->method('insertRequest')->willReturn($inserted);
+		$this->cardReviewMapper->method('findById')->with($inserted->getId())->willReturn($inserted);
 		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn($siblings);
 	}
 
@@ -147,6 +151,7 @@ class ReviewServiceTest extends TestCase {
 			->willReturn(PermissionService::PERMISSION_READ);
 		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 0)->willReturn(false);
 		$inserted = $this->review('bob');
+		$this->cardReviewMapper->method('findById')->with($inserted->getId())->willReturn($inserted);
 		$this->cardReviewMapper->expects(self::once())
 			->method('insertRequest')
 			->with(9, 'bob', 'alice', null, null)
@@ -185,6 +190,7 @@ class ReviewServiceTest extends TestCase {
 		$code = $this->review('carol', CardReview::STATE_PENDING, 1, 9);
 		$code->setReviewTypeId(1); // stage 0
 		$qa = $this->review('bob', CardReview::STATE_PENDING, 2, 9);
+		$this->cardReviewMapper->method('findById')->with($qa->getId())->willReturn($qa);
 		$qa->setReviewTypeId(2); // stage 1
 		$this->cardReviewMapper->method('insertRequest')->willReturn($qa);
 		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$code, $qa]);
@@ -207,6 +213,7 @@ class ReviewServiceTest extends TestCase {
 		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 2)->willReturn(false);
 
 		$qa = $this->review('bob', CardReview::STATE_PENDING, 2, 9);
+		$this->cardReviewMapper->method('findById')->with($qa->getId())->willReturn($qa);
 		$qa->setReviewTypeId(2); // stage 1, alone on the card
 		$this->cardReviewMapper->method('insertRequest')->willReturn($qa);
 		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$qa]);
@@ -227,6 +234,7 @@ class ReviewServiceTest extends TestCase {
 			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
 		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 0)->willReturn(false);
 		$inserted = $this->review('bob');
+		$this->cardReviewMapper->method('findById')->with($inserted->getId())->willReturn($inserted);
 		$this->cardReviewMapper->expects(self::once())
 			->method('insertRequest')
 			->with(9, 'bob', 'alice', null, 'Claude Code')
@@ -256,6 +264,7 @@ class ReviewServiceTest extends TestCase {
 		// bob already has an untyped review (type 0) but not a type-5 one.
 		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 5)->willReturn(false);
 		$inserted = $this->review('bob', CardReview::STATE_PENDING, 7, 9);
+		$this->cardReviewMapper->method('findById')->with($inserted->getId())->willReturn($inserted);
 		$inserted->setReviewTypeId(5);
 		$this->cardReviewMapper->expects(self::once())->method('insertRequest')->with(9, 'bob', 'alice', 5, null)
 			->willReturn($inserted);
@@ -377,6 +386,7 @@ class ReviewServiceTest extends TestCase {
 		$this->reviewTypeMapper->method('find')->with(3)->willReturn($this->reviewType(3, 1));
 		$this->cardReviewMapper->method('existsForType')->with(9, 'bob', 3)->willReturn(false);
 		$inserted = $this->review('bob', CardReview::STATE_PENDING, 7, 9);
+		$this->cardReviewMapper->method('findById')->with($inserted->getId())->willReturn($inserted);
 		$inserted->setReviewTypeId(3);
 		$this->cardReviewMapper->expects(self::once())
 			->method('insertRequest')
@@ -497,7 +507,7 @@ class ReviewServiceTest extends TestCase {
 		// notified_at stamped so a re-approval never re-fires.
 		$board = $this->loadCardAndBoard();
 		$this->permissionService->method('getPermissions')
-			->with($board, 'bob')->willReturn(PermissionService::PERMISSION_READ);
+			->willReturn(PermissionService::PERMISSION_READ);
 
 		$code = $this->review('bob', CardReview::STATE_PENDING, 1, 9);
 		$code->setReviewTypeId(1); // stage 0
@@ -506,7 +516,7 @@ class ReviewServiceTest extends TestCase {
 		$qa->setRequestedBy('alice');
 		$qa->setNotifiedAt(null); // deferred at request time
 
-		$this->cardReviewMapper->method('findById')->with(1)->willReturn($code);
+		$this->cardReviewMapper->method('findById')->willReturnMap([[1, $code], [2, $qa]]);
 		// After bob's verdict is written, findByCard returns the now-approved code
 		// review plus the still-pending QA one.
 		$this->cardReviewMapper->method('findByCard')->with(9)->willReturn([$code, $qa]);
@@ -901,4 +911,78 @@ class ReviewServiceTest extends TestCase {
 
 		self::assertSame([], $this->service->findMine('bob'));
 	}
+
+	public function testFailedRequestDeliveryLeavesTheReviewRetryable(): void {
+		$board = $this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_READ);
+		$review = $this->review();
+		$this->cardReviewMapper->method('insertRequest')->willReturn($review);
+		$this->cardReviewMapper->method('findByCard')->willReturn([$review]);
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($review);
+		$this->notificationService->expects(self::once())->method('notifyReviewRequested')
+			->willThrowException(new \OCP\DB\Exception('delivery unavailable'));
+		$this->cardReviewMapper->expects(self::never())->method('update');
+
+		$this->service->requestReview(9, 'bob', 'alice');
+
+		self::assertNull($review->getNotifiedAt());
+	}
+
+	public function testRepeatedRequestRetriesAnUnnotifiedReview(): void {
+		$this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_READ);
+		$review = $this->review();
+		$this->cardReviewMapper->method('existsForType')->willReturn(true);
+		$this->cardReviewMapper->method('findByCard')->willReturn([$review]);
+		$this->cardReviewMapper->method('findById')->with(1)->willReturn($review);
+		$this->cardReviewMapper->expects(self::never())->method('insertRequest');
+		$this->notificationService->expects(self::once())->method('notifyReviewRequested')->with(9, 'bob', 'alice');
+		$this->cardReviewMapper->expects(self::once())->method('update')->willReturnArgument(0);
+
+		$this->service->requestReview(9, 'bob', 'alice');
+
+		self::assertNotNull($review->getNotifiedAt());
+	}
+
+	public function testDeliveryMarkerFollowsAReviewMovedDuringDelivery(): void {
+		$this->loadCardAndBoard();
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_READ);
+		$source = $this->review();
+		$destination = clone $source;
+		$destination->setCardId(20);
+		$current = $source;
+		$this->cardReviewMapper->method('insertRequest')->willReturn($source);
+		$this->cardReviewMapper->method('findByCard')->willReturn([$source]);
+		$this->cardReviewMapper->method('findById')->willReturnCallback(function () use (&$current): CardReview {
+			return $current;
+		});
+		$this->notificationService->expects(self::once())->method('notifyReviewRequested')
+			->willReturnCallback(function () use (&$current, $destination): void {
+				$current = $destination;
+			});
+		$this->cardReviewMapper->expects(self::once())->method('update')->with($destination)->willReturnArgument(0);
+
+		$this->service->requestReview(9, 'bob', 'alice');
+
+		self::assertNull($source->getNotifiedAt());
+		self::assertNotNull($destination->getNotifiedAt());
+		self::assertSame([9, 20], $this->guardedCardIds);
+	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('run')->willReturnCallback(function (int $cardId, callable $write): mixed {
+			$this->guardedCardIds[] = $cardId;
+			return $write();
+		});
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		$mutation->method('afterCommit')->willReturnCallback(static function (callable $callback): void {
+			try {
+				$callback();
+			} catch (\OCP\DB\Exception) {
+			}
+		});
+		return $mutation;
+	}
+
 }

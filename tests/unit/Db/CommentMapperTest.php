@@ -39,6 +39,14 @@ class CommentMapperTest extends TestCase {
 		self::assertSame([], self::boundValues($predicates, 'eq', 'deleted_at'));
 	}
 
+	public function testOtherAuthorsRepliesCheckIgnoresDeletedAndOwnReplies(): void {
+		$predicates = $this->recordQuery(fn (CommentMapper $mapper) => $mapper->hasRepliesFromOthers(42, 'alice'));
+
+		self::assertSame([42], self::boundValues($predicates, 'eq', 'parent_comment_id'));
+		self::assertSame([0], self::boundValues($predicates, 'eq', 'deleted_at'));
+		self::assertSame(['alice'], self::boundValues($predicates, 'neq', 'author'));
+	}
+
 	/**
 	 * A spying expression builder recording every comparison as
 	 * (operator, column, bound value). The OCP expression interface references

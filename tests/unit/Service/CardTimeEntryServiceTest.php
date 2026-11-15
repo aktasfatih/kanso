@@ -50,6 +50,7 @@ class CardTimeEntryServiceTest extends TestCase {
 			$this->permissionService,
 			$this->changeNotifier,
 			$this->visibilityGuard,
+			$this->cardMutation(),
 		);
 	}
 
@@ -235,4 +236,12 @@ class CardTimeEntryServiceTest extends TestCase {
 	// The purge cascade used to come through this service (deleteAllForCard);
 	// `kanso_card_time_entries` is swept from BoardCascade::BY_CARD_ID now, by
 	// both the board purge and the per-card trash purge (#10456).
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('run')->willReturnCallback(static fn (int $cardId, callable $write): mixed => $write());
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
 }

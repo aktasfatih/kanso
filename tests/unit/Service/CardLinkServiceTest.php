@@ -56,6 +56,7 @@ class CardLinkServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->clientService,
 			$this->visibilityGuard,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 

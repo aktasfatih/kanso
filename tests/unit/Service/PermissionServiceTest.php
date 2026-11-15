@@ -16,6 +16,7 @@ use OCA\Kanso\Service\PermissionService;
 use OCP\IGroupManager;
 use OCP\IUser;
 use OCP\IUserManager;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -102,7 +103,7 @@ class PermissionServiceTest extends TestCase {
 
 		$this->service->assertPermission($board, 'bob', PermissionService::PERMISSION_EDIT);
 		self::assertSame(
-			PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT,
+			PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT | PermissionService::PERMISSION_COMMENT,
 			$this->service->getPermissions($board, 'bob')
 		);
 	}
@@ -127,6 +128,50 @@ class PermissionServiceTest extends TestCase {
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->assertPermission($board, 'bob', PermissionService::PERMISSION_READ);
+	}
+
+	#[DataProvider('commentMemberships')]
+	public function testCommentOnlyMembershipGrantsDiscussionWithoutEditing(int $type, string $role): void {
+		$board = $this->board();
+		$mask = PermissionService::PERMISSION_READ | PermissionService::PERMISSION_COMMENT;
+		$acl = $this->acl($type, $type === Acl::TYPE_USER ? 'bob' : 'devs', $mask);
+		$acl->setRole($role);
+		$acl->setBoardId(1);
+		$this->aclMapper->method('findByBoard')->with(1)->willReturn([$acl]);
+		$this->aclMapper->method('findByBoards')->with([1])->willReturn([$acl]);
+		$this->userManager->method('get')->with('bob')->willReturn($this->createMock(IUser::class));
+		$this->groupManager->method('getUserGroupIds')->willReturn(['devs']);
+
+		self::assertSame($mask, $this->service->getPermissions($board, 'bob'));
+		self::assertSame([1 => $mask], $this->service->getPermissionsForBoards([$board], 'bob'));
+		$this->service->assertPermission($board, 'bob', PermissionService::PERMISSION_COMMENT);
+		$this->expectException(NotPermittedException::class);
+		$this->service->assertPermission($board, 'bob', PermissionService::PERMISSION_EDIT);
+	}
+
+	public static function commentMemberships(): array {
+		return [
+			'user internal' => [Acl::TYPE_USER, ViewerContext::ROLE_INTERNAL],
+			'user external' => [Acl::TYPE_USER, ViewerContext::ROLE_EXTERNAL],
+			'group internal' => [Acl::TYPE_GROUP, ViewerContext::ROLE_INTERNAL],
+			'group external' => [Acl::TYPE_GROUP, ViewerContext::ROLE_EXTERNAL],
+		];
+	}
+
+	public function testReadingDoesNotImplyCommentPermission(): void {
+		$this->aclMapper->method('findByBoard')->willReturn([
+			$this->acl(Acl::TYPE_USER, 'bob', PermissionService::PERMISSION_READ),
+		]);
+		$this->expectException(NotPermittedException::class);
+		$this->service->assertPermission($this->board(), 'bob', PermissionService::PERMISSION_COMMENT);
+	}
+
+	public function testLegacyEditorRetainsCommentPermission(): void {
+		$this->aclMapper->method('findByBoard')->willReturn([
+			$this->acl(Acl::TYPE_USER, 'bob', PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT),
+		]);
+		self::assertSame(19, $this->service->getPermissions($this->board(), 'bob'));
+		$this->service->assertPermission($this->board(), 'bob', PermissionService::PERMISSION_COMMENT);
 	}
 
 	public function testGetPermissionsForBoardsOwnerGetsAllWithoutAclFetch(): void {
@@ -180,7 +225,7 @@ class PermissionServiceTest extends TestCase {
 			// Owned → full bitmask without any ACL row.
 			1 => PermissionService::PERMISSION_ALL,
 			// Shared directly → exactly the granted (reduced) bits.
-			2 => $readEdit,
+			2 => $readEdit | PermissionService::PERMISSION_COMMENT,
 			// Shared via a group bob belongs to → the group's bits.
 			3 => PermissionService::PERMISSION_READ,
 			// Rows addressing other users/groups grant nothing.
@@ -220,7 +265,7 @@ class PermissionServiceTest extends TestCase {
 		]);
 
 		self::assertSame(
-			PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT,
+			PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT | PermissionService::PERMISSION_COMMENT,
 			$this->service->getPermissions($board, 'client')
 		);
 		$this->expectException(NotPermittedException::class);
@@ -241,7 +286,7 @@ class PermissionServiceTest extends TestCase {
 
 		$this->service->assertPermission($board, 'client', PermissionService::PERMISSION_EDIT);
 		self::assertSame(
-			PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT,
+			PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT | PermissionService::PERMISSION_COMMENT,
 			$this->service->getPermissions($board, 'client')
 		);
 	}
@@ -293,7 +338,7 @@ class PermissionServiceTest extends TestCase {
 		);
 
 		self::assertSame([
-			2 => PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT,
+			2 => PermissionService::PERMISSION_READ | PermissionService::PERMISSION_EDIT | PermissionService::PERMISSION_COMMENT,
 			3 => PermissionService::PERMISSION_ALL,
 		], $map);
 	}

@@ -5,6 +5,8 @@ import { computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { fetchCard, updateCard as apiUpdateCard } from '../services/api.js'
 import { boardQueryKey, invalidateCrossBoardFeeds } from './queryKeys.js'
+import { beginLifecycleRead, finishLifecycleRead, projectLifecycleCard, projectLifecycleCardError } from './cardLifecycle.js'
+import { beginHierarchyRead, finishHierarchyRead, projectHierarchyCard } from './cardHierarchy.js'
 
 export function useCard(id, enabled) {
 	const queryClient = useQueryClient()
@@ -17,7 +19,19 @@ export function useCard(id, enabled) {
 
 	const query = useQuery({
 		queryKey: computed(() => ['card', typeof id === 'object' ? id.value : id]),
-		queryFn: () => fetchCard(typeof id === 'object' ? id.value : id),
+		queryFn: async () => {
+			const cardId = typeof id === 'object' ? id.value : id
+			const ticket = beginLifecycleRead(queryClient, { cardId })
+			const hierarchyTicket = beginHierarchyRead(queryClient)
+			try {
+				return projectLifecycleCard(queryClient, cardId, projectHierarchyCard(queryClient, cardId, await fetchCard(cardId), hierarchyTicket), ticket)
+			} catch (error) {
+				throw projectLifecycleCardError(queryClient, cardId, error, ticket)
+			} finally {
+				finishLifecycleRead(queryClient, ticket)
+				finishHierarchyRead(queryClient, hierarchyTicket)
+			}
+		},
 		enabled: isEnabled,
 	})
 

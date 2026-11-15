@@ -141,8 +141,12 @@ class ArchitectureTest extends TestCase {
 	 *                                      CardMapper::findWithDuedateByBoard
 	 * - Service/CardMoveContentService.php  writes the already-authorized target
 	 *                                      supplied by CardService; it reads no cards
+	 * - Service/CardMutationService.php .. locks and rechecks liveness; the calling
+	 *                                      mutation retains its permission/visibility gates
 	 * - Service/CsvImportService.php ..... importer, creates cards only
 	 * - Service/DeckImportService.php .... importer, creates cards only
+	 * - Service/ParentCompletionService.php internal completion gate; includes
+	 *                                      hidden children and returns no card data
 	 * - Service/PublicShareService.php ... anonymous snapshot; PUBLIC-ONLY is
 	 *                                      applied inside findPublicByBoard /
 	 *                                      progressByBoardPublicOnly /
@@ -164,8 +168,10 @@ class ArchitectureTest extends TestCase {
 		'Service/BulkCardService.php',
 		'Service/CalendarFeedService.php',
 		'Service/CardMoveContentService.php',
+		'Service/CardMutationService.php',
 		'Service/CsvImportService.php',
 		'Service/DeckImportService.php',
+		'Service/ParentCompletionService.php',
 		'Service/PublicShareService.php',
 		'Service/TrelloImportService.php',
 	];

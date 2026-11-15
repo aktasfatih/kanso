@@ -39,6 +39,10 @@ namespace Sabre\DAV {
 		public function getSize();
 	}
 
+	interface IMultiGet extends ICollection {
+		public function getMultipleChildren(array $paths);
+	}
+
 	interface IProperties extends INode {
 		public function propPatch(PropPatch $propPatch);
 		public function getProperties($properties);

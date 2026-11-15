@@ -34,6 +34,7 @@ class ReviewTypeService {
 		private ChangeNotifier $changeNotifier,
 		private PermissionService $permissionService,
 		private IDBConnection $db,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -43,26 +44,28 @@ class ReviewTypeService {
 	 * @throws InvalidInputException on invalid title, color, or negative stage
 	 */
 	public function create(int $boardId, string $title, ?string $color, string $uid, ?int $stage = null): ReviewType {
-		$board = $this->loadBoard($boardId);
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+		return $this->cardMutation->runForBoards([$boardId], function () use ($boardId, $title, $color, $uid, $stage): ReviewType {
+			$board = $this->loadBoard($boardId);
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
-		$type = new ReviewType();
-		$type->setBoardId($boardId);
-		$type->setTitle($this->validateTitle($title));
-		$type->setColor(ColorValidator::assertValid($color));
-		$this->assertStageValid($stage);
-		$type->setStage($stage ?? 0);
-		$type = $this->reviewTypeMapper->insert($type);
+			$type = new ReviewType();
+			$type->setBoardId($boardId);
+			$type->setTitle($this->validateTitle($title));
+			$type->setColor(ColorValidator::assertValid($color));
+			$this->assertStageValid($stage);
+			$type->setStage($stage ?? 0);
+			$type = $this->reviewTypeMapper->insert($type);
 
-		$this->changeNotifier->notify(
-			$boardId,
-			Change::ENTITY_REVIEW_TYPE,
-			$type->getId(),
-			Change::ACTION_CREATE,
-			$uid
-		);
+			$this->changeNotifier->notify(
+				$boardId,
+				Change::ENTITY_REVIEW_TYPE,
+				$type->getId(),
+				Change::ACTION_CREATE,
+				$uid
+			);
 
-		return $type;
+			return $type;
+		});
 	}
 
 	/**
@@ -71,32 +74,35 @@ class ReviewTypeService {
 	 * @throws InvalidInputException on invalid title, color, or negative stage
 	 */
 	public function update(int $id, ?string $title, ?string $color, string $uid, ?int $stage = null): ReviewType {
-		$type = $this->reviewTypeMapper->find($id);
-		$board = $this->loadBoard($type->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+		$boardId = $this->reviewTypeMapper->find($id)->getBoardId();
+		return $this->cardMutation->runForBoards([$boardId], function () use ($id, $title, $color, $uid, $stage): ReviewType {
+			$type = $this->reviewTypeMapper->find($id);
+			$board = $this->loadBoard($type->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
-		if ($title !== null) {
-			$type->setTitle($this->validateTitle($title));
-		}
-		if ($color !== null) {
-			$type->setColor(ColorValidator::assertValid($color));
-		}
-		if ($stage !== null) {
-			$this->assertStageValid($stage);
-			$type->setStage($stage);
-		}
+			if ($title !== null) {
+				$type->setTitle($this->validateTitle($title));
+			}
+			if ($color !== null) {
+				$type->setColor(ColorValidator::assertValid($color));
+			}
+			if ($stage !== null) {
+				$this->assertStageValid($stage);
+				$type->setStage($stage);
+			}
 
-		$type = $this->reviewTypeMapper->update($type);
+			$type = $this->reviewTypeMapper->update($type);
 
-		$this->changeNotifier->notify(
-			$type->getBoardId(),
-			Change::ENTITY_REVIEW_TYPE,
-			$id,
-			Change::ACTION_UPDATE,
-			$uid
-		);
+			$this->changeNotifier->notify(
+				$type->getBoardId(),
+				Change::ENTITY_REVIEW_TYPE,
+				$id,
+				Change::ACTION_UPDATE,
+				$uid
+			);
 
-		return $type;
+			return $type;
+		});
 	}
 
 	/**
@@ -108,26 +114,29 @@ class ReviewTypeService {
 	 * @throws NotPermittedException if the user may not manage the board
 	 */
 	public function delete(int $id, string $uid): void {
-		$type = $this->reviewTypeMapper->find($id);
-		$board = $this->loadBoard($type->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+		$boardId = $this->reviewTypeMapper->find($id)->getBoardId();
+		$this->cardMutation->runForBoards([$boardId], function () use ($id, $uid): void {
+			$type = $this->reviewTypeMapper->find($id);
+			$board = $this->loadBoard($type->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
-		$this->db->beginTransaction();
-		try {
-			$this->cardReviewMapper->clearType($id);
-			$this->reviewTypeMapper->delete($type);
-			$this->changeNotifier->notify(
-				$type->getBoardId(),
-				Change::ENTITY_REVIEW_TYPE,
-				$id,
-				Change::ACTION_DELETE,
-				$uid
-			);
-			$this->db->commit();
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
-		}
+			$this->db->beginTransaction();
+			try {
+				$this->cardReviewMapper->clearType($id);
+				$this->reviewTypeMapper->delete($type);
+				$this->changeNotifier->notify(
+					$type->getBoardId(),
+					Change::ENTITY_REVIEW_TYPE,
+					$id,
+					Change::ACTION_DELETE,
+					$uid
+				);
+				$this->db->commit();
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+		});
 	}
 
 	/**

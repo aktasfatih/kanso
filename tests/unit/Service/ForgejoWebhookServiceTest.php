@@ -80,6 +80,7 @@ class ForgejoWebhookServiceTest extends TestCase {
 			$this->urlGenerator,
 			$this->labelService,
 			$this->labelMapper,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 
@@ -487,6 +488,7 @@ class ForgejoWebhookServiceTest extends TestCase {
 			$this->urlGenerator,
 			$this->labelService,
 			$this->labelMapper,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 
 		$url = self::BASE . '/issues/12';

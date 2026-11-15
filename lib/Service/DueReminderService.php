@@ -81,6 +81,7 @@ class DueReminderService {
 		private ITimeFactory $time,
 		private \Psr\Log\LoggerInterface $logger,
 		private ChangeNotifier $changeNotifier,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -148,54 +149,41 @@ class DueReminderService {
 	 * changed nothing.
 	 */
 	private function processCard(Card $card, int $now): bool {
-		$duedate = $card->getDuedate();
-		if ($duedate === null) {
-			// Defensive: the query excludes NULL due dates, but never assume.
+		$cardId = $card->getId();
+		$card = $this->cardMutation->run($cardId, fn (): Card => clone $this->cardMapper->find($cardId));
+		$dueTs = $card->getDuedate()?->getTimestamp();
+		if ($dueTs === null) {
 			return false;
 		}
-		$dueTs = $duedate->getTimestamp();
-
-		$fired = false;
-
-		// "1 day before": opted in, unsent, and within the lead window.
-		if (($card->getDueReminderDayBefore() ?? false)
+		$before = ($card->getDueReminderDayBefore() ?? false)
 			&& $card->getDayBeforeReminderSent() === 0
-			&& ($dueTs - self::DAY_SECONDS) <= $now) {
+			&& $dueTs - self::DAY_SECONDS <= $now;
+		$due = $card->getDueReminderSent() === 0 && $dueTs <= $now;
+		if (!$before && !$due) {
+			return false;
+		}
+		if ($before) {
 			$this->notifyRecipients($card, 1);
-			$card->setDayBeforeReminderSent($now);
-			$fired = true;
 		}
-
-		// "At due time": unsent and the due date has passed.
-		if ($card->getDueReminderSent() === 0 && $dueTs <= $now) {
+		if ($due) {
 			$this->notifyRecipients($card, 0);
-			$card->setDueReminderSent($now);
-			$fired = true;
 		}
-
-		if ($fired) {
-			$card->setLastModified($now);
-			$this->cardMapper->update($card);
-			// `last_modified` and both reminder markers are CardMapper::SUMMARY_COLUMNS,
-			// so this stamp IS a board-payload mutation. Without the row the board ETag
-			// never moves and a delta-sync client keeps serving the pre-reminder card
-			// forever. Actor null - the cron acts for nobody (and ChangeNotifier skips
-			// Activity for a null actor, which is what we want for a sweep).
-			//
-			// Written here, inside the caller's per-card try/catch, so a failed insert
-			// skips ONE card instead of aborting the sweep. The push is deliberately
-			// NOT emitted per card: runDueReminders() collects the boards and fires
-			// one event each at the end of the run.
-			$this->changeNotifier->recordChange(
-				$card->getBoardId(),
-				Change::ENTITY_CARD,
-				$card->getId(),
-				Change::ACTION_UPDATE,
-				null,
-			);
-		}
-
-		return $fired;
+		return $this->cardMutation->run($cardId, function () use ($cardId, $dueTs, $before, $due, $now): bool {
+			$current = $this->cardMapper->find($cardId);
+			if ($current->getDuedate()?->getTimestamp() !== $dueTs) {
+				return false;
+			}
+			if ($before) {
+				$current->setDayBeforeReminderSent($now);
+			}
+			if ($due) {
+				$current->setDueReminderSent($now);
+			}
+			$current->setLastModified($now);
+			$this->cardMapper->update($current);
+			$this->changeNotifier->recordChange($current->getBoardId(), Change::ENTITY_CARD, $cardId, Change::ACTION_UPDATE, null);
+			return true;
+		});
 	}
 
 	/**

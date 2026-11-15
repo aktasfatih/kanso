@@ -15,18 +15,15 @@ use OCA\Kanso\Service\NonJsonWebhookBodyException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
+use OCP\AppFramework\Http\Attribute\BruteForceProtection;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\IRequest;
 use OCP\IUserSession;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
-/**
- * The PUBLIC webhook ingest endpoint's status mapping. The distinction that
- * matters: a bad signature is an attacker signal (401 + brute-force throttle),
- * while a correctly-signed body that is not JSON is a MISCONFIGURED user - the
- * webhook was created with GitHub's form-encoded content type - and must get a
- * 400 carrying the fix, with NO throttle.
- */
 class WebhookControllerTest extends TestCase {
 	private IRequest&MockObject $request;
 	private IUserSession&MockObject $userSession;
@@ -37,7 +34,6 @@ class WebhookControllerTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->request = $this->createMock(IRequest::class);
-		$this->request->method('getHeader')->willReturn('sha256=abc');
 		$this->userSession = $this->createMock(IUserSession::class);
 		$this->webhookService = $this->createMock(GithubWebhookService::class);
 		$this->forgejoService = $this->createMock(ForgejoWebhookService::class);
@@ -48,6 +44,23 @@ class WebhookControllerTest extends TestCase {
 			$this->webhookService,
 			$this->forgejoService,
 		);
+	}
+
+	/** @return array<string, array{string}> */
+	public static function providers(): array {
+		return [
+			'GitHub' => ['github'],
+			'Forgejo' => ['forgejo'],
+		];
+	}
+
+	#[DataProvider('providers')]
+	public function testIngestRemainsPublicWithoutPreVerificationLockout(string $provider): void {
+		$method = new \ReflectionMethod(WebhookController::class, $provider);
+
+		self::assertSame([], $method->getAttributes(BruteForceProtection::class));
+		self::assertCount(1, $method->getAttributes(PublicPage::class));
+		self::assertCount(1, $method->getAttributes(NoCSRFRequired::class));
 	}
 
 	public function testFormEncodedBodyGets400WithTheContentTypeHint(): void {
@@ -63,9 +76,6 @@ class WebhookControllerTest extends TestCase {
 	}
 
 	public function testMisconfiguredContentTypeIsNotThrottled(): void {
-		// A correctly-signed sender with the wrong content type is a user who
-		// mis-created their webhook, not an attacker - throttling them would
-		// punish the very deliveries the 400 is meant to help them fix.
 		$this->webhookService->method('handleWebhook')
 			->willThrowException(new NonJsonWebhookBodyException('Webhook body is not JSON'));
 
@@ -73,11 +83,6 @@ class WebhookControllerTest extends TestCase {
 	}
 
 	public function testARejectedCardMutationDoesNotGetTheContentTypeHint(): void {
-		// handleWebhook() also creates and moves cards (issue intake, PR moves),
-		// and those throw the plain InvalidInputException. Their content type was
-		// already application/json, so telling them to change it is a confidently
-		// wrong diagnosis - and it is the only line the user sees in GitHub's
-		// delivery log. Still a 400, but reported as what actually went wrong.
 		$this->webhookService->method('handleWebhook')
 			->willThrowException(new InvalidInputException('Card title must not be empty'));
 
@@ -90,35 +95,94 @@ class WebhookControllerTest extends TestCase {
 		self::assertFalse($response->isThrottled());
 	}
 
-	public function testInvalidSignatureIs401AndStillThrottled(): void {
-		$this->webhookService->method('handleWebhook')
+	#[DataProvider('providers')]
+	public function testInvalidSignatureIs401WithoutSharedThrottling(string $provider): void {
+		$service = $provider === 'github' ? $this->webhookService : $this->forgejoService;
+		$service->method('handleWebhook')
 			->willThrowException(new NotPermittedException('Invalid webhook signature'));
 
-		$response = $this->controller->github(1);
+		$response = $this->controller->$provider(1);
 
 		self::assertSame(Http::STATUS_UNAUTHORIZED, $response->getStatus());
-		self::assertTrue($response->isThrottled());
+		self::assertSame(['error' => 'unauthorized'], $response->getData());
+		self::assertFalse($response->isThrottled());
 	}
 
-	public function testAcceptedNoopStillReturns200(): void {
-		// A ping (or any non-PR/issue event) is valid JSON and a legitimate no-op:
-		// the 400 above must not have collaterally hardened this path.
-		$this->webhookService->method('handleWebhook')->willReturn(['handled' => false]);
+	#[DataProvider('providers')]
+	public function testAcceptedDeliveryReturnsItsResultWithoutThrottling(string $provider): void {
+		$service = $provider === 'github' ? $this->webhookService : $this->forgejoService;
+		$result = ['handled' => true, 'cardId' => 42, 'moved' => true];
+		$service->method('handleWebhook')->willReturn($result);
 
-		$response = $this->controller->github(1);
+		$response = $this->controller->$provider(1);
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		self::assertSame($result, $response->getData());
+		self::assertFalse($response->isThrottled());
+	}
+
+	#[DataProvider('providers')]
+	public function testAcceptedNoopStillReturns200(string $provider): void {
+		$service = $provider === 'github' ? $this->webhookService : $this->forgejoService;
+		$service->method('handleWebhook')->willReturn(['handled' => false]);
+
+		$response = $this->controller->$provider(1);
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertSame(['handled' => false], $response->getData());
 		self::assertFalse($response->isThrottled());
 	}
 
-	public function testUnknownBoardIs404(): void {
-		$this->webhookService->method('handleWebhook')
+	#[DataProvider('providers')]
+	public function testUnknownBoardIs404(string $provider): void {
+		$service = $provider === 'github' ? $this->webhookService : $this->forgejoService;
+		$service->method('handleWebhook')
 			->willThrowException(new DoesNotExistException('gone'));
 
-		$response = $this->controller->github(999);
+		$response = $this->controller->$provider(999);
 
 		self::assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+		self::assertSame(['error' => 'not_found'], $response->getData());
 		self::assertFalse($response->isThrottled());
+	}
+
+	#[DataProvider('providers')]
+	public function testMissingSignatureIsStillVerifiedAndRejected(string $provider): void {
+		$service = $provider === 'github' ? $this->webhookService : $this->forgejoService;
+		$service->expects(self::once())->method('handleWebhook')->with(1, '', '')
+			->willThrowException(new NotPermittedException('Invalid webhook signature'));
+
+		$response = $this->controller->$provider(1);
+
+		self::assertSame(Http::STATUS_UNAUTHORIZED, $response->getStatus());
+		self::assertSame(['error' => 'unauthorized'], $response->getData());
+		self::assertFalse($response->isThrottled());
+	}
+
+	/** @return array<string, array{string, array<string, string>, string}> */
+	public static function signatureHeaders(): array {
+		return [
+			'GitHub' => ['github', ['X-Hub-Signature-256' => 'sha256=github'], 'sha256=github'],
+			'Forgejo first' => ['forgejo', [
+				'X-Forgejo-Signature' => 'forgejo',
+				'X-Gitea-Signature' => 'gitea',
+				'X-Hub-Signature-256' => 'sha256=github',
+			], 'forgejo'],
+			'Gitea fallback' => ['forgejo', ['X-Gitea-Signature' => 'gitea'], 'gitea'],
+			'GitHub fallback' => ['forgejo', ['X-Hub-Signature-256' => 'sha256=github'], 'sha256=github'],
+		];
+	}
+
+	/** @param array<string, string> $headers */
+	#[DataProvider('signatureHeaders')]
+	public function testSignatureHeadersReachOnlyTheMatchingProvider(string $provider, array $headers, string $signature): void {
+		$this->request->method('getHeader')->willReturnCallback(static fn (string $header): string => $headers[$header] ?? '');
+		$service = $provider === 'github' ? $this->webhookService : $this->forgejoService;
+		$otherService = $provider === 'github' ? $this->forgejoService : $this->webhookService;
+		$service->expects(self::once())->method('handleWebhook')->with(1, $signature, '')
+			->willReturn(['handled' => false]);
+		$otherService->expects(self::never())->method('handleWebhook');
+
+		self::assertSame(Http::STATUS_OK, $this->controller->$provider(1)->getStatus());
 	}
 }

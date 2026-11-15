@@ -150,7 +150,11 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
 
 - `kanso_get_card` — full card incl. description
 - `kanso_create_card` / `kanso_update_card` / `kanso_delete_card`
-- `kanso_move_card` — move a card into a stack on its own board (optionally after a card)
+  — updates return full card details read after the write succeeds. A failure of
+  that detail read does not undo the update.
+- `kanso_move_card` — move a card into a stack on its own board (optionally after a card).
+  Its result is sparse: missing labels, assignees or relations are omitted, not empty.
+  Use `kanso_get_card` for full details.
 - `kanso_move_card_to_board` — move a card to a stack on **another** board. Needs edit
   permission on both. On servers with connected-move support, the full connected card graph
   moves together, with its data and relationships, or the move fails if access or board
@@ -169,7 +173,11 @@ claude mcp add --transport http kanso http://127.0.0.1:7654/mcp
 
 - `kanso_create_label` — create a board label
 - `kanso_assign_label` / `kanso_unassign_label`
-- `kanso_assign_user` / `kanso_unassign_user`
+- `kanso_assign_user` / `kanso_unassign_user`: on a single-assignee board,
+  selecting another person replaces the sole assignee. Existing cards with
+  multiple people require manual removals to at most one before a new selection.
+  Managers can toggle this through `kanso_update_board(single_assignee=true)`;
+  board reads report `singleAssignee`, which defaults to false.
 
 **Reviews** (hand work back to a human without it getting lost)
 
@@ -185,7 +193,14 @@ requested. Approving/rejecting stays a human action in the UI.
 **Comments**
 
 - `kanso_list_comments` — read a card's comments (author + body + timestamps)
-- `kanso_add_comment` — post a comment (optionally reply to a comment)
+- `kanso_add_comment` — post a comment (optionally reply to a comment); needs
+  signed-in membership with Comment or Edit permission on a visible card. Public
+  links stay read-only.
+
+Board payload `permissions` is an effective bitmask: Read=1, Edit=2, Share=4,
+Manage=8, Comment=16. Edit implies Comment, including existing editor shares.
+Comment alone does not allow card edits or thread resolution. Sharing remains
+limited to capabilities the acting user holds, including managers.
 
 **Checklist**
 
@@ -231,9 +246,9 @@ If the owner's account is deleted, an editor takes over, direct shares first.
 With no editor the project and its discussion are deleted. View-only members are
 never promoted.
 
-- `kanso_list_projects` — your projects (`id`, `title`, `description`, `color`, `owner`, `createdAt`, `startDate`, `targetDate`, plus `isOwner`, `canEdit`, `canLeave`, `shared`, `ownerDisplayName`)
+- `kanso_list_projects` — your projects (`id`, `title`, `description`, `color`, `owner`, `createdAt`, `startDate`, `targetDate`, `lead`, `lifecycleStatus`, plus `isOwner`, `canEdit`, `canLeave`, `shared`, `ownerDisplayName`, `leadDisplayName`)
 - `kanso_get_project` — one project's record plus its member cards
-- `kanso_create_project` / `kanso_update_project` (title, description, color, start and target date) / `kanso_delete_project`
+- `kanso_create_project` / `kanso_update_project` (title, description, color, start and target date, lead and lifecycle) / `kanso_delete_project`
   (memberships go, the cards stay)
 - `kanso_list_project_cards` — the member cards, with `boardTitle` + `stackTitle`; archived cards and
   cards on boards you can no longer read are left out
@@ -250,6 +265,12 @@ never promoted.
 - `kanso_update_project_comment` / `kanso_delete_project_comment` — edit or delete by **comment** id,
   your own while you can still edit the project; the owner can delete any comment (deleting a
   top-level comment takes its replies with it, so only the owner can delete one others replied to)
+
+`lead` takes a Nextcloud user id and does not grant access or share the project.
+`lifecycle_status` is `planned` (the default), `in_progress`, or `done`, independent
+of the forecast health returned by `kanso_get_project_plan`. On update, omitted
+or null fields stay unchanged; `lead=""` clears the lead. Owners and editors can
+update this metadata; viewers can read it.
 
 **Search**
 

@@ -69,6 +69,7 @@ class AssigneeServiceTest extends TestCase {
 			$this->visibilityGuard,
 			$this->changeDetailMapper,
 			$this->userManager,
+			$this->cardMutation(),
 		);
 	}
 
@@ -262,6 +263,7 @@ class AssigneeServiceTest extends TestCase {
 			$this->visibilityGuard,
 			$this->changeDetailMapper,
 			$userManager,
+			$this->cardMutation(),
 		);
 
 		$this->cardMapper->method('find')->with(9)->willReturn($this->card());
@@ -576,6 +578,7 @@ class AssigneeServiceTest extends TestCase {
 			$visibilityGuard,
 			$this->changeDetailMapper,
 			$this->userManager,
+			$this->cardMutation(),
 		);
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
 		$this->boardMapper->method('find')->with(1)->willReturn($board);
@@ -584,4 +587,93 @@ class AssigneeServiceTest extends TestCase {
 		$this->expectException(DoesNotExistException::class);
 		$service->listForCard(9, 'external');
 	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('run')->willReturnCallback(static fn (int $cardId, callable $write): mixed => $write());
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
+	/** @param list<string> $assigned */
+	private function singleAssigneeState(array &$assigned): Board {
+		$board = $this->board();
+		$board->setSingleAssignee(true);
+		$this->cardMapper->method('find')->willReturn($this->card());
+		$this->boardMapper->method('find')->willReturn($board);
+		$this->permissionService->method('getPermissions')->willReturn(PermissionService::PERMISSION_READ);
+		$this->cardAssigneeMapper->method('exists')->willReturnCallback(
+			static function (int $id, string $uid) use (&$assigned): bool {
+				return in_array($uid, $assigned, true);
+			}
+		);
+		$this->cardAssigneeMapper->method('findUserIdsByCard')->willReturnCallback(
+			static function () use (&$assigned): array {
+				return $assigned;
+			}
+		);
+		$this->cardAssigneeMapper->method('deleteAssignment')->willReturnCallback(
+			static function (int $id, string $uid) use (&$assigned): int {
+				$before = count($assigned);
+				$assigned = array_values(array_diff($assigned, [$uid]));
+				return $before - count($assigned);
+			}
+		);
+		$this->cardAssigneeMapper->method('insertAssignment')->willReturnCallback(
+			static function (int $id, string $uid) use (&$assigned): CardAssignee {
+				$assigned[] = $uid;
+				return new CardAssignee();
+			}
+		);
+		$change = new Change();
+		$change->setId(90);
+		$this->changeNotifier->method('notify')->willReturn($change);
+		return $board;
+	}
+
+	public function testSingleModeSelectsAndReplacesWithAssignmentHistory(): void {
+		$assigned = [];
+		$this->singleAssigneeState($assigned);
+		$this->changeNotifier->expects(self::exactly(3))->method('notify');
+		$this->notificationService->expects(self::once())->method('dismissCardAssigned')->with(9, 'bob');
+		$this->notificationService->expects(self::exactly(2))->method('notifyCardAssigned');
+		$this->changeDetailMapper->expects(self::exactly(3))->method('insertDetail');
+		$this->service->assign(9, 'bob', 'alice');
+		self::assertSame(['bob'], $assigned);
+		$this->service->assign(9, 'carol', 'alice');
+		self::assertSame(['carol'], $assigned);
+		$this->service->assign(9, 'carol', 'alice');
+		self::assertSame(['carol'], $assigned);
+	}
+
+	public function testGrandfatheredPeopleAreKeptUntilManualRemovalThenSelectionReplaces(): void {
+		$assigned = ['bob', 'carol', 'dana'];
+		$this->singleAssigneeState($assigned);
+		$this->service->assign(9, 'bob', 'alice');
+		self::assertSame(['bob', 'carol', 'dana'], $assigned);
+		try {
+			$this->service->assign(9, 'erin', 'alice');
+			self::fail('A new person was accepted before cleanup');
+		} catch (InvalidInputException $e) {
+			self::assertStringContainsString('Remove extra assignees', $e->getMessage());
+		}
+		self::assertSame(['bob', 'carol', 'dana'], $assigned);
+		$this->service->unassign(9, 'bob', 'alice');
+		$this->service->unassign(9, 'carol', 'alice');
+		$this->service->assign(9, 'erin', 'alice');
+		self::assertSame(['erin'], $assigned);
+		$this->service->unassign(9, 'erin', 'alice');
+		self::assertSame([], $assigned);
+	}
+
+	public function testSingleModePermissionDenialKeepsCurrentPerson(): void {
+		$assigned = ['bob'];
+		$this->singleAssigneeState($assigned);
+		$this->permissionService->method('assertPermission')->willThrowException(new NotPermittedException());
+		$this->cardAssigneeMapper->expects(self::never())->method('deleteAssignment');
+		$this->cardAssigneeMapper->expects(self::never())->method('insertAssignment');
+		$this->expectException(NotPermittedException::class);
+		$this->service->assign(9, 'carol', 'viewer');
+	}
+
 }

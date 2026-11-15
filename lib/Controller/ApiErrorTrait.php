@@ -9,6 +9,7 @@ namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\Service\DescriptionConflictException;
 use OCA\Kanso\Service\InvalidInputException;
+use OCA\Kanso\Service\MutationConflictException;
 use OCA\Kanso\Service\NotPermittedException;
 use OCA\Kanso\Service\StorageLimitException;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -44,6 +45,8 @@ trait ApiErrorTrait {
 			return new JSONResponse(['error' => $e->getMessage()], Http::STATUS_FORBIDDEN);
 		} catch (DoesNotExistException) {
 			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+		} catch (MutationConflictException $e) {
+			return new JSONResponse(['error' => $e->getMessage()], Http::STATUS_CONFLICT);
 		} catch (DescriptionConflictException $e) {
 			// Optimistic-concurrency conflict on a card description: the write was
 			// based on a stale version and would have clobbered somebody else's

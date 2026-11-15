@@ -72,6 +72,16 @@ class ProjectMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
+	/** @throws Exception */
+	public function clearLeadByUser(string $uid): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('lead', $qb->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
+			->where($qb->expr()->eq('lead', $qb->createNamedParameter($uid)));
+
+		return $qb->executeStatement();
+	}
+
 	/**
 	 * The projects among $ids the user can reach, in one query - the board
 	 * payload's project lookup. Anything else stays invisible: its title and

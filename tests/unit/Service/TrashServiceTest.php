@@ -14,6 +14,7 @@ use OCA\Kanso\Db\BoardCascade;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardMoveAlias;
 use OCA\Kanso\Db\CardMoveAliasMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Service\CardAttachmentService;
@@ -75,13 +76,14 @@ class TrashServiceTest extends TestCase {
 			$this->notifications,
 			$this->moveAliases,
 			$this->db,
+			$this->cardMutation(),
 		);
 	}
 
 	/**
 	 * Wires every destructive collaborator to append to {@see $steps}, so the
 	 * ORDER of the purge - grandchildren before the parents that locate them,
-	 * bytes before the rows naming them, the card row last - is assertable
+	 * attachment cleanup preparation before the card row - is assertable
 	 * rather than assumed.
 	 */
 	private function recordSteps(): void {
@@ -104,7 +106,7 @@ class TrashServiceTest extends TestCase {
 			});
 		$this->cardAttachmentService->method('deleteAllForCard')
 			->willReturnCallback(function (int $cardId): void {
-				$this->steps[] = 'storage:' . $cardId;
+				$this->steps[] = 'attachments:' . $cardId;
 			});
 		$this->cascade->method('deleteByCardIds')
 			->willReturnCallback(function (array $ids): int {
@@ -365,10 +367,8 @@ class TrashServiceTest extends TestCase {
 				// Reactions are dropped by comment id BEFORE the comments that
 				// located them are hard-deleted (#3550).
 				'deleteIn:kanso_comment_reactions:comment_id:50,51',
-				// Then the bytes, while the rows naming the storage keys are
-				// still there (#3526).
-				'storage:9',
 				// Then every card-scoped table in one registry-driven sweep.
+				'attachments:9',
 				'card-scoped:9',
 				'card:9',
 			],
@@ -413,7 +413,7 @@ class TrashServiceTest extends TestCase {
 		}
 	}
 
-	public function testPurgeCleansUpAttachmentsBeforeHardDeletingCard(): void {
+	public function testPurgePreparesAttachmentCleanupBeforeDeletingCard(): void {
 		$card = $this->trashedCard(9);
 		$this->cardMapper->method('find')->with(9)->willReturn($card);
 		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
@@ -592,4 +592,36 @@ class TrashServiceTest extends TestCase {
 		$this->expectException(NotPermittedException::class);
 		$this->service->purge(9, 'editor');
 	}
+	public function testDelayedRestoreRejectsAMoveAfterItsInitialRead(): void {
+		$this->cardMapper->method('find')->with(9)->willReturn($this->trashedCard(9));
+		$this->boardMapper->method('find')->with(1)->willReturn($this->board());
+		$alias = new CardMoveAlias();
+		$alias->setOldCardId(9);
+		$alias->setTargetCardId(19);
+		$this->moveAliases->method('findByOldId')->with(9)->willReturnOnConsecutiveCalls(null, $alias);
+		$this->cardMapper->expects(self::never())->method('update');
+		$this->moveAliases->expects(self::never())->method('deleteByOldId');
+
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('Card changed');
+		$this->service->restore(9, 'alice');
+	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$callbacks = [];
+		$mutation->method('runForBoards')->willReturnCallback(static function (array $boardIds, callable $write) use (&$callbacks): mixed {
+			$result = $write();
+			foreach ($callbacks as $callback) {
+				$callback();
+			}
+			$callbacks = [];
+			return $result;
+		});
+		$mutation->method('afterCommit')->willReturnCallback(static function (callable $callback) use (&$callbacks): void {
+			$callbacks[] = $callback;
+		});
+		return $mutation;
+	}
+
 }

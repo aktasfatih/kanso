@@ -176,6 +176,10 @@
             "%n inceleme bekliyor",
             "%n inceleme bekliyor"
         ],
+        "_%n other reviewer_::_%n other reviewers_": [
+            "%n diğer inceleyen",
+            "%n diğer inceleyen"
+        ],
         "_%n overdue_::_%n overdue_": [
             "%n gecikmiş",
             "%n gecikmiş"
@@ -257,6 +261,7 @@
         "All day (no time)": "Tüm gün (saatsiz)",
         "All due dates": "Tüm son tarihler",
         "All issues": "Tüm sorunlar",
+        "All requested reviews must be approved before this card can be marked done.": "Bu kartın tamamlandı olarak işaretlenebilmesi için istenen tüm incelemelerin onaylanması gerekir.",
         "All requested reviews must be approved before this card can be marked done. Waiting on {names}.": "Bu kartın tamamlandı olarak işaretlenebilmesi için istenen tüm incelemelerin onaylanması gerekir. {names} bekleniyor.",
         "All statuses": "Tüm durumlar",
         "Analytics": "Analitik",
@@ -585,7 +590,6 @@
         "Delete": "Sil",
         "Delete \"{name}\"": "\"{name}\" öğesini sil",
         "Delete \"{name}\"?": "\"{name}\" silinsin mi?",
-        "Delete \"{title}\" and all of its cards for everyone? This cannot be undone.": "\"{title}\" ve içindeki tüm kartlar herkes için silinsin mi? Bu geri alınamaz.",
         "Delete \"{title}\"?": "\"{title}\" silinsin mi?",
         "Delete {name}? Kanso keeps no second copy of it.": "{name} silinsin mi? Kanso bunun ikinci bir kopyasını tutmaz.",
         "Delete {name}? The file goes to the backup account's trashbin — Kanso keeps no second copy of it.": "{name} silinsin mi? Dosya yedek hesabının çöp kutusuna gider — Kanso bunun ikinci bir kopyasını tutmaz.",
@@ -607,7 +611,6 @@
         "Delete selected": "Seçilenleri sil",
         "Delete template": "Şablonu sil",
         "Delete these sample cards whenever you like": "Bu örnek kartları istediğin zaman sil",
-        "Delete this board permanently?": "Bu pano kalıcı olarak silinsin mi?",
         "Delete this rule?": "Bu kural silinsin mi?",
         "Delete this template?": "Bu şablon silinsin mi?",
         "Delete view \"{name}\"?": "\"{name}\" görünümü silinsin mi?",
@@ -929,7 +932,6 @@
         "Hide changes": "Değişiklikleri gizle",
         "Hide the card sections this board does not use. Nothing is deleted — turning a section back on restores everything that was already there.": "Bu panonun kullanmadığı kart bölümlerini gizle. Hiçbir şey silinmez — bir bölümü yeniden açtığında içindeki her şey geri gelir.",
         "Hide the discussion panel": "Tartışma panelini gizle",
-        "Hide this board without deleting it. You can restore it later.": "Bu panoyu silmeden gizle. Daha sonra geri yükleyebilirsin.",
         "High": "Yüksek",
         "Hours": "Saat",
         "https://cloud.example.com/call/abc123": "https://cloud.example.com/call/abc123",
@@ -1239,7 +1241,6 @@
         "People you share with see this project’s details and its whole discussion, including earlier notes. They only see the cards they can already access on their boards.": "Paylaştığınız kişiler bu projenin ayrıntılarını ve önceki notlar dahil tüm tartışmayı görür. Yalnızca panolarında zaten erişebildikleri kartları görürler.",
         "per mailbox": "posta kutusu başına",
         "per sender": "gönderen başına",
-        "Permanently remove this board and all of its cards for everyone. This cannot be undone.": "Bu panoyu ve içindeki tüm kartları herkes için kalıcı olarak kaldır. Bu geri alınamaz.",
         "Pick a card to link…": "Bağlanacak kartı seç…",
         "Pick a card…": "Bir kart seç…",
         "Pick a color": "Bir renk seç",
@@ -1499,7 +1500,6 @@
         "Strikethrough": "Üstü çizili",
         "Sub-card": "Alt kart",
         "Sub-card progress": "Alt kart ilerlemesi",
-        "Sub-card progress {done} of {total}": "Alt kart ilerlemesi: {total} karttan {done} tanesi",
         "Sub-cards": "Alt kartlar",
         "Submit": "Gönder",
         "Subscribe to this board's card due dates in any calendar app (Nextcloud Calendar, Thunderbird, your phone). The feed is read-only and shows only card titles, due dates and a link back to each card.": "Bu panonun kart bitiş tarihlerine herhangi bir takvim uygulamasından (Nextcloud Takvim, Thunderbird, telefonun) abone ol. Akış salt okunurdur ve yalnızca kart başlıklarını, bitiş tarihlerini ve her karta dönen bir bağlantıyı gösterir.",
@@ -1553,7 +1553,6 @@
         "This project no longer exists, or you no longer have access to it.": "Bu proje artık yok veya projeye artık erişiminiz yok.",
         "This public board link has expired. Ask whoever shared the board for a new link.": "Bu herkese açık pano bağlantısının süresi dolmuş. Panoyu paylaşan kişiden yeni bir bağlantı iste.",
         "This public board link is invalid or has been disabled.": "Bu herkese açık pano bağlantısı geçersiz ya da devre dışı bırakılmış.",
-        "This removes the board and all of its cards for everyone. This cannot be undone.": "Bu, panoyu ve içindeki tüm kartları herkes için kaldırır. Bu geri alınamaz.",
         "This same card is brought back and reset each time": "Her seferinde aynı kart geri getirilir ve sıfırlanır",
         "This saved view no longer exists.": "Bu kayıtlı görünüm artık yok.",
         "This week": "Bu hafta",

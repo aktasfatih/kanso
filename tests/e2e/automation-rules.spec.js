@@ -143,8 +143,62 @@ test.describe('Automation rules (#3400)', () => {
 		// The card-rules "Add rule" form: pick In-progress role + add-label, then submit.
 		const roleSelect = page.locator(`#auto-role-${state.boardId}`)
 		await expect(roleSelect).toBeVisible()
+		const form = page.locator('form').filter({ has: roleSelect })
+		const actionSelect = page.locator(`#auto-action-${state.boardId}`)
+		const translations = {
+			'When a card enters role': 'Wenn eine Karte in eine Spalte mit der folgenden festgelegten Rolle verschoben wird',
+			'Do': 'Anschließend die folgende Automatisierungsaktion ausführen',
+			'Reviewer': 'Für die Überprüfung verantwortliche Person',
+			'Label': 'Die folgende Bezeichnung zur Karte hinzufügen',
+		}
+		for (const translated of [false, true]) {
+			if (translated) {
+				await page.evaluate(translations => Object.assign(globalThis._oc_l10n_registry_translations.kanso ||= {}, translations), translations)
+			}
+			for (const width of [1280, 900, 375]) {
+				await page.setViewportSize({ width, height: 900 })
+				for (const action of ['add_label', 'request_review']) {
+					await actionSelect.selectOption(action)
+					await expect(page.locator(`#auto-${action === 'add_label' ? 'label' : 'reviewer'}-${state.boardId}`)).toBeVisible()
+					await expect(form.locator('.automation__form-label').first()).toHaveText(translated ? translations['When a card enters role'] : 'When a card enters role')
+					const formWidth = await form.evaluate(el => el.getBoundingClientRect().width)
+					if (width === 900) expect(formWidth).toBeLessThan(400)
+					if (width === 375) expect(formWidth).toBeLessThan(200)
+					const rows = await form.locator('.automation__form-row').evaluateAll(rows => rows.map(row => {
+						const label = row.querySelector('label')
+						const labelBox = label.getBoundingClientRect()
+						const control = row.querySelector('select').getBoundingClientRect()
+						const rowBox = row.getBoundingClientRect()
+						const range = document.createRange()
+						range.selectNodeContents(label)
+						const text = [...range.getClientRects()].filter(rect => rect.width > 0)
+						return {
+							label: label.textContent.trim(),
+							contained: text.length > 0 && text.every(rect => rect.left >= labelBox.left - 1 && rect.right <= labelBox.right + 1 && rect.top >= labelBox.top - 1 && rect.bottom <= labelBox.bottom + 1),
+							overlaps: text.some(rect => rect.left < control.right && rect.right > control.left && rect.top < control.bottom && rect.bottom > control.top),
+							controlFits: control.left >= rowBox.left - 1 && control.right <= rowBox.right + 1,
+							controlWidth: control.width,
+						}
+					}))
+					expect(rows).toHaveLength(3)
+					for (const row of rows) {
+						expect(row.contained, row.label).toBe(true)
+						expect(row.overlaps, row.label).toBe(false)
+						expect(row.controlFits, row.label).toBe(true)
+						expect(row.controlWidth, row.label).toBeGreaterThanOrEqual(100)
+					}
+					for (const select of await form.locator('select').all()) {
+						await select.scrollIntoViewIfNeeded()
+						expect(await select.evaluate(el => {
+							const box = el.getBoundingClientRect()
+							return document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) === el
+						})).toBe(true)
+					}
+				}
+			}
+		}
 		await roleSelect.selectOption(String(ROLE_IN_PROGRESS))
-		await page.locator(`#auto-action-${state.boardId}`).selectOption('add_label')
+		await actionSelect.selectOption('add_label')
 		await page.locator(`#auto-label-${state.boardId}`).selectOption(String(state.labelId))
 		await page.getByRole('button', { name: /^Add rule$/ }).last().click()
 

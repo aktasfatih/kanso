@@ -114,6 +114,7 @@ class CsvImportService {
 		private CardService $cardService,
 		private IUserManager $userManager,
 		private IDBConnection $db,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -225,15 +226,11 @@ class CsvImportService {
 	 * @return array{boardId: int, stackId: int, cards: int, skipped: int, labelsCreated: int, labelsSkipped: int}
 	 */
 	private function attempt($handle, bool $hasHeader, Board $board, Stack $stack, array $mapping, string $actorUid, int $dataRows): array {
-		$this->db->beginTransaction();
-		try {
-			$result = $this->rebuild($handle, $hasHeader, $board, $stack, $mapping, $actorUid, $dataRows);
-			$this->db->commit();
-			return $result;
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
-		}
+		return $this->cardMutation->runForBoards([$board->getId()], function () use ($handle, $hasHeader, $board, $stack, $mapping, $actorUid, $dataRows): array {
+			$board = $this->boardService->find($board->getId(), $actorUid);
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			return $this->rebuild($handle, $hasHeader, $board, $stack, $mapping, $actorUid, $dataRows);
+		});
 	}
 
 	/**
@@ -251,6 +248,7 @@ class CsvImportService {
 		$boardId = $board->getId();
 		$stackId = $stack->getId();
 		$now = time();
+		$nextBoardSeq = $dataRows === 0 ? 1 : $this->cardMapper->nextBoardSeq($boardId, $dataRows);
 
 		// Existing labels on the board, indexed case-insensitively by title, so a
 		// name that already exists is REUSED rather than duplicated.
@@ -320,7 +318,7 @@ class CsvImportService {
 			$card->setDescription($description !== '' ? $description : null);
 			$card->setSortKey($sortKeys[$keyIndex]);
 			$keyIndex++;
-			$card->setBoardSeq($this->cardMapper->nextBoardSeq($boardId));
+			$card->setBoardSeq($nextBoardSeq++);
 			$due = $dueIdx === null ? null : $this->toDate($this->cell($row, $dueIdx));
 			$card->setDuedate($due);
 			// A date-only value (no time component) is an all-day due date, so the
@@ -465,6 +463,7 @@ class CsvImportService {
 	 */
 	private function attachAssignees(array $uids, int $cardId, Board $board): void {
 		$seen = [];
+		$accepted = [];
 		foreach ($uids as $uid) {
 			$uid = trim($uid);
 			if ($uid === '' || isset($seen[$uid])) {
@@ -477,6 +476,12 @@ class CsvImportService {
 			if (($this->permissionService->getPermissions($board, $uid) & PermissionService::PERMISSION_READ) === 0) {
 				continue;
 			}
+			$accepted[] = $uid;
+		}
+		if ($board->getSingleAssignee() === true && count($accepted) > 1) {
+			throw new InvalidInputException('This board allows one assignee per card; import each card with at most one assignee');
+		}
+		foreach ($accepted as $uid) {
 			$this->cardAssigneeMapper->insertAssignment($cardId, $uid);
 		}
 	}

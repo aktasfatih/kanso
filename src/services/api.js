@@ -53,6 +53,12 @@ axios.interceptors.response.use(undefined, (error) => {
 export const fetchBoards = () =>
 	axios.get(url('/api/boards')).then((r) => r.data)
 
+export const fetchDeletedBoards = () =>
+	axios.get(url('/api/boards/deleted')).then((r) => r.data)
+
+export const restoreBoard = (id) =>
+	axios.post(url(`/api/boards/${id}/restore`)).then((r) => r.data)
+
 /**
  * Read a board - conditionally when the caller already holds its payload.
  *
@@ -619,8 +625,8 @@ export const disableCalendarFeed = (boardId) =>
 export const fetchCalendarSync = (boardId) =>
 	axios.get(url(`/api/boards/${boardId}/calendar-sync`)).then((r) => r.data)
 
-export const setCalendarSync = (boardId, enabled) =>
-	axios.put(url(`/api/boards/${boardId}/calendar-sync`), { enabled }).then((r) => r.data)
+export const setCalendarSync = (boardId, enabled, assignedOnly) =>
+	axios.put(url(`/api/boards/${boardId}/calendar-sync`), { enabled, assignedOnly }).then((r) => r.data)
 
 // Subscriptions (board watchers)
 export const subscribeBoard = (boardId) =>
@@ -835,6 +841,9 @@ export const createProject = (data) =>
 
 export const updateProject = (id, data) =>
 	axios.patch(url(`/api/projects/${id}`), data).then((r) => r.data)
+
+export const searchProjectLeads = (q) =>
+	axios.get(url('/api/projects/leads'), { params: { q } }).then((r) => r.data)
 
 export const deleteProject = (id) =>
 	axios.delete(url(`/api/projects/${id}`)).then((r) => r.data)

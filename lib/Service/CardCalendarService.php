@@ -21,7 +21,7 @@ use Sabre\VObject\Component\VCalendar;
 /**
  * The read-only CalDAV VTODO surface (#3534 / issue #49): every board a user can
  * access is exposed to their CalDAV principal as a calendar of VTODOs, one per
- * card that HAS a due date. Discoverable by Nextcloud Calendar and DAVx5 exactly
+ * card with a start or due date. Discoverable by Nextcloud Calendar and DAVx5 exactly
  * the way Deck's board calendars are (via the DAV app's
  * {@see \OCA\DAV\CalDAV\Integration\ICalendarProvider} extension point, wired in
  * `appinfo/info.xml`).
@@ -39,7 +39,7 @@ use Sabre\VObject\Component\VCalendar;
  *    ({@see CalendarFeedService}), the reader is the logged-in CalDAV principal:
  *    {@see BoardAccess::contextFor} gates board membership and
  *    {@see CardMapper::findDuedateSummariesByBoard} applies that viewer's
- *    card-visibility, so a member sees exactly the due cards they see on the
+ *    card-visibility, so a member sees exactly the dated cards they see on the
  *    board - never another board's, never a card hidden from them.
  */
 class CardCalendarService {
@@ -64,9 +64,10 @@ class CardCalendarService {
 	 * no schema change, and it never affects another user's calendar.
 	 */
 	private const HIDDEN_BOARDS_KEY = 'calendar_hidden_boards';
+	private const ASSIGNED_ONLY_BOARDS_KEY = 'calendar_assigned_only_boards';
 
 	/** Bounds the stored list so a scripted client can't grow the value forever. */
-	private const MAX_HIDDEN_BOARDS = 2000;
+	private const MAX_PREFERENCE_BOARDS = 2000;
 
 	public function __construct(
 		private BoardMapper $boardMapper,
@@ -122,7 +123,12 @@ class CardCalendarService {
 	 * @return int[]
 	 */
 	public function hiddenBoardIds(string $uid): array {
-		$raw = $this->config->getUserValue($uid, 'kanso', self::HIDDEN_BOARDS_KEY, '');
+		return $this->boardIdsForPreference($uid, self::HIDDEN_BOARDS_KEY);
+	}
+
+	/** @return int[] */
+	private function boardIdsForPreference(string $uid, string $key): array {
+		$raw = $this->config->getUserValue($uid, 'kanso', $key, '');
 		if (!\is_string($raw) || $raw === '') {
 			return [];
 		}
@@ -138,35 +144,59 @@ class CardCalendarService {
 		return !\in_array($boardId, $this->hiddenBoardIds($uid), true);
 	}
 
+	public function isAssignedOnlyForUser(string $uid, int $boardId): bool {
+		return \in_array($boardId, $this->boardIdsForPreference($uid, self::ASSIGNED_ONLY_BOARDS_KEY), true);
+	}
+
+	/** @return array{enabled: bool, assignedOnly: bool} */
+	public function preferencesForUser(string $uid, int $boardId): array {
+		$this->assertBoardMember($uid, $boardId);
+		return [
+			'enabled' => $this->isEnabledForUser($uid, $boardId),
+			'assignedOnly' => $this->isAssignedOnlyForUser($uid, $boardId),
+		];
+	}
+
 	/**
-	 * Show or hide a board in $uid's own calendar. Requires the user to be a
-	 * member of the board (you cannot set a preference for a board you can't see),
-	 * which also bounds the stored list to real, accessible boards.
+	 * Update the supplied personal calendar preferences. Omitted values are kept.
 	 *
 	 * @throws DoesNotExistException if the board does not exist or is deleted
 	 * @throws \OCA\Kanso\Access\NotAMemberException if $uid is not a member
 	 */
-	public function setEnabledForUser(string $uid, int $boardId, bool $enabled): void {
+	public function setPreferencesForUser(string $uid, int $boardId, ?bool $enabled = null, ?bool $assignedOnly = null): void {
+		$this->assertBoardMember($uid, $boardId);
+		$updates = [];
+		foreach ([self::HIDDEN_BOARDS_KEY => $enabled === null ? null : !$enabled, self::ASSIGNED_ONLY_BOARDS_KEY => $assignedOnly] as $key => $include) {
+			if ($include === null) {
+				continue;
+			}
+			$ids = $this->boardIdsForPreference($uid, $key);
+			$contains = \in_array($boardId, $ids, true);
+			if ($include === $contains) {
+				continue;
+			}
+			if ($include) {
+				if (\count($ids) >= self::MAX_PREFERENCE_BOARDS) {
+					throw new InvalidInputException('Too many calendar board preferences');
+				}
+				$ids[] = $boardId;
+			} else {
+				$ids = array_values(array_filter($ids, static fn (int $id): bool => $id !== $boardId));
+			}
+			$updates[$key] = json_encode($ids) ?: '[]';
+		}
+		foreach ($updates as $key => $value) {
+			$this->config->setUserValue($uid, 'kanso', $key, $value);
+		}
+	}
+
+	private function assertBoardMember(string $uid, int $boardId): void {
 		$board = $this->boardMapper->find($boardId);
 		if ($board->getDeletedAt() > 0) {
 			throw new DoesNotExistException('Board ' . $boardId . ' is deleted');
 		}
 		// Throws NotAMemberException for a non-member.
 		$this->boardAccess->contextFor($board, $uid);
-
-		$hidden = $this->hiddenBoardIds($uid);
-		$isHidden = \in_array($boardId, $hidden, true);
-		if ($enabled && $isHidden) {
-			$hidden = array_values(array_filter($hidden, static fn (int $id): bool => $id !== $boardId));
-		} elseif (!$enabled && !$isHidden) {
-			if (\count($hidden) >= self::MAX_HIDDEN_BOARDS) {
-				return;
-			}
-			$hidden[] = $boardId;
-		} else {
-			return; // already in the desired state
-		}
-		$this->config->setUserValue($uid, 'kanso', self::HIDDEN_BOARDS_KEY, json_encode($hidden) ?: '[]');
 	}
 
 	/**
@@ -200,7 +230,7 @@ class CardCalendarService {
 	}
 
 	/**
-	 * The board's due cards visible to $uid, as VTODO source rows. The caller has
+	 * The board's dated cards visible to $uid, as VTODO source rows. The caller has
 	 * already proven membership (via {@see self::boardForPrincipal}); this mints
 	 * the viewer context again to scope card visibility.
 	 *
@@ -209,7 +239,7 @@ class CardCalendarService {
 	 */
 	public function dueCards(Board $board, string $uid): array {
 		$viewer = $this->boardAccess->contextFor($board, $uid);
-		return $this->cardMapper->findDuedateSummariesByBoard((int)$board->getId(), $viewer);
+		return $this->cardMapper->findDuedateSummariesByBoard((int)$board->getId(), $viewer, $this->isAssignedOnlyForUser($uid, (int)$board->getId()));
 	}
 
 	public function calendarUri(Board $board): string {

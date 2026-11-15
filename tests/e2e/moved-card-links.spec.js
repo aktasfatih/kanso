@@ -55,3 +55,57 @@ test('old card links follow repeated moves after purge without redirecting mutat
 		for (const boardId of boards) await api.delete(`/boards/${boardId}`).catch(() => {})
 	}
 })
+
+test('old human references keep their board context after moves, purge and prefix changes', async ({ page, peer }) => {
+	const boards = []
+	try {
+		const stacks = []
+		for (let i = 0; i < 3; i++) {
+			const board = await api.post('/boards', { title: `Human alias ${i} ${Date.now()}` })
+			boards.push(board.id)
+			await api.patch(`/boards/${board.id}`, { prefix: 'ORIG' })
+			stacks.push((await api.post('/stacks', { boardId: board.id, title: 'Work' })).id)
+		}
+		const source = await api.post('/cards', { stackId: stacks[0], title: 'Human alias target' })
+		const unrelated = await api.post('/cards', { stackId: stacks[1], title: 'Independent ORIG reference' })
+		const first = await api.post(`/cards/${source.id}/move-to-board`, { targetStackId: stacks[1] })
+		const ref = `ORIG-${source.boardSeq}`
+		const path = `/boards/${boards[0]}/cards/by-ref/${ref}`
+		expect(await api.get(path)).toEqual({ cardId: first.id, title: source.title })
+		expect(await api.get(`/boards/${boards[1]}/cards/by-ref/${ref}`)).toEqual({ cardId: unrelated.id, title: unrelated.title })
+		await api.patch(`/boards/${boards[0]}`, { prefix: 'NEW' })
+		expect(await api.get(path)).toEqual({ cardId: first.id, title: source.title })
+		expect((await api.raw('GET', `/boards/${boards[0]}/cards/by-ref/NEW-${source.boardSeq}`)).status).toBe(404)
+		const latest = await api.post(`/cards/${first.id}/move-to-board`, { targetStackId: stacks[2] })
+		await api.delete(`/cards/${source.id}/purge`)
+		await api.delete(`/cards/${first.id}/purge`)
+		const later = await api.post('/cards', { stackId: stacks[0], title: 'Later source card' })
+		expect(later.boardSeq).toBeGreaterThan(source.boardSeq)
+		expect(await api.get(path)).toEqual({ cardId: latest.id, title: source.title })
+
+		await api.post(`/boards/${boards[0]}/acl`, { participant: peer.user, participantType: 'user', permission: 1 })
+		expect((await peer.api.raw('GET', path)).status).toBe(404)
+		await api.post(`/boards/${boards[2]}/acl`, { participant: peer.user, participantType: 'user', permission: 1, role: 'external' })
+		expect(await peer.api.get(path)).toEqual({ cardId: latest.id, title: source.title })
+		await api.patch(`/cards/${latest.id}`, { visibility: 'private' })
+		expect((await peer.api.raw('GET', path)).status).toBe(404)
+		await api.patch(`/cards/${latest.id}`, { visibility: 'internal' })
+		expect((await peer.api.raw('GET', path)).status).toBe(404)
+		await api.patch(`/cards/${latest.id}`, { visibility: 'public' })
+
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso/#/board/${boards[0]}/card/${ref}`)
+		await expect(page).toHaveURL(new RegExp(`/board/${boards[2]}/card/${latest.id}$`))
+		await expect(page.locator('.card-modal')).toContainText('Human alias target')
+		await expect(page.locator('.card-modal__ref')).toHaveText(`ORIG-${latest.boardSeq}`)
+
+		const restored = await api.post('/cards', { stackId: stacks[0], title: 'Restored human source' })
+		await api.post(`/cards/${restored.id}/move-to-board`, { targetStackId: stacks[2] })
+		await api.patch(`/boards/${boards[0]}`, { prefix: 'BACK' })
+		await api.post(`/cards/${restored.id}/restore`)
+		expect((await api.raw('GET', `/boards/${boards[0]}/cards/by-ref/NEW-${restored.boardSeq}`)).status).toBe(404)
+		expect(await api.get(`/boards/${boards[0]}/cards/by-ref/BACK-${restored.boardSeq}`)).toEqual({ cardId: restored.id, title: restored.title })
+	} finally {
+		for (const boardId of boards) await api.delete(`/boards/${boardId}`).catch(() => {})
+	}
+})

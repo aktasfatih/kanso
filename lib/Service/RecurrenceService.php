@@ -177,6 +177,7 @@ class RecurrenceService {
 		private IDBConnection $db,
 		private IConfig $config,
 		private \Psr\Log\LoggerInterface $logger,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -606,65 +607,67 @@ class RecurrenceService {
 		string $uid,
 		?string $timezone = null,
 	): RecurRule {
-		$board = $this->loadBoard($boardId);
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
-		$this->validate($boardId, $templateCardId, $targetStackId, $mode, $rrule, $duedatePolicy, $duedateOffsetSeconds);
-		// Visibility (#3760): a rule may only be anchored on a template card its
-		// creator can SEE - a hidden template reads as "does not exist" (404,
-		// same as a bogus id - no existence oracle). Spawns re-check against the
-		// rule OWNER, so a later visibility narrowing cannot keep leaking copies.
-		$template = $this->loadCard($templateCardId);
-		$this->visibilityGuard->assertVisible($board, $template, $uid);
+		return $this->cardMutation->runForBoards([$boardId], function () use ($boardId, $templateCardId, $targetStackId, $mode, $rrule, $duedatePolicy, $duedateOffsetSeconds, $skipWhileOpen, $uid, $timezone): RecurRule {
+			$board = $this->loadBoard($boardId);
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+			$this->validate($boardId, $templateCardId, $targetStackId, $mode, $rrule, $duedatePolicy, $duedateOffsetSeconds);
+			// Visibility (#3760): a rule may only be anchored on a template card its
+			// creator can SEE - a hidden template reads as "does not exist" (404,
+			// same as a bogus id - no existence oracle). Spawns re-check against the
+			// rule OWNER, so a later visibility narrowing cannot keep leaking copies.
+			$template = $this->loadCard($templateCardId);
+			$this->visibilityGuard->assertVisible($board, $template, $uid);
 
-		$now = $this->time->getTime();
-		$rule = new RecurRule();
-		$rule->setBoardId($boardId);
-		$rule->setTemplateCardId($templateCardId);
-		$rule->setTargetStackId($targetStackId);
-		$rule->setMode($mode);
-		$rule->setRrule($rrule);
-		$rule->setDuedatePolicy($duedatePolicy);
-		$rule->setDuedateOffsetSeconds($duedateOffsetSeconds);
-		$rule->setSkipWhileOpen($skipWhileOpen);
-		$rule->setEnabled(true);
-		$rule->setOwner($uid);
-		$rule->setLastSpawnedAt(0);
-		$rule->setOccurrencesSpawned(0);
-		$rule->setCreatedAt($now);
-		// The schedule is expanded as floating wall-clock time in this zone: an
-		// explicit IANA id from the caller wins, otherwise the owner's personal
-		// timezone (server default fallback).
-		$rule->setTimezone($this->resolveTimezone($timezone, $uid));
-		// Work out when this rule should fire for the FIRST time.
-		//
-		// The schedule is anchored at the card's Start date (its due date, then the
-		// creation time, as fallbacks - see anchorFor()). We pick the first
-		// occurrence at or after that anchor, but NEVER the occurrence that coincides
-		// with "now": the card the user just set up already exists, and firing on it
-		// would immediately reset/clone the card and overwrite the date they just
-		// picked (that was bug #80 - a "Yearly" repeat re-stamped to today). A Start
-		// date set for the future fires on that date; otherwise the first fire is the
-		// next occurrence after now. See firstFireFor(). "Create now" is the way to
-		// spawn one right away on purpose.
-		$rule->setNextOccurrenceAt($this->firstFireFor($rule, $this->anchorFor($template, $rule)));
+			$now = $this->time->getTime();
+			$rule = new RecurRule();
+			$rule->setBoardId($boardId);
+			$rule->setTemplateCardId($templateCardId);
+			$rule->setTargetStackId($targetStackId);
+			$rule->setMode($mode);
+			$rule->setRrule($rrule);
+			$rule->setDuedatePolicy($duedatePolicy);
+			$rule->setDuedateOffsetSeconds($duedateOffsetSeconds);
+			$rule->setSkipWhileOpen($skipWhileOpen);
+			$rule->setEnabled(true);
+			$rule->setOwner($uid);
+			$rule->setLastSpawnedAt(0);
+			$rule->setOccurrencesSpawned(0);
+			$rule->setCreatedAt($now);
+			// The schedule is expanded as floating wall-clock time in this zone: an
+			// explicit IANA id from the caller wins, otherwise the owner's personal
+			// timezone (server default fallback).
+			$rule->setTimezone($this->resolveTimezone($timezone, $uid));
+			// Work out when this rule should fire for the FIRST time.
+			//
+			// The schedule is anchored at the card's Start date (its due date, then the
+			// creation time, as fallbacks - see anchorFor()). We pick the first
+			// occurrence at or after that anchor, but NEVER the occurrence that coincides
+			// with "now": the card the user just set up already exists, and firing on it
+			// would immediately reset/clone the card and overwrite the date they just
+			// picked (that was bug #80 - a "Yearly" repeat re-stamped to today). A Start
+			// date set for the future fires on that date; otherwise the first fire is the
+			// next occurrence after now. See firstFireFor(). "Create now" is the way to
+			// spawn one right away on purpose.
+			$rule->setNextOccurrenceAt($this->firstFireFor($rule, $this->anchorFor($template, $rule)));
 
-		$inserted = $this->ruleMapper->insert($rule);
+			$inserted = $this->ruleMapper->insert($rule);
 
-		// The template card now wears the "recurring" badge - a card-SUMMARY field
-		// derived from the board's enabled rules
-		// ({@see CardSummaryService::serialize}, {@see RecurRuleMapper::findTemplateCardIdsByBoard}).
-		// The rule row lives in its own table, so nothing else moves the change log:
-		// without this row the badge is invisible to every open client until some
-		// unrelated mutation happens to bump the board ETag.
-		$this->changeNotifier->notify(
-			$boardId,
-			Change::ENTITY_CARD,
-			$templateCardId,
-			Change::ACTION_UPDATE,
-			$uid,
-		);
+			// The template card now wears the "recurring" badge - a card-SUMMARY field
+			// derived from the board's enabled rules
+			// ({@see CardSummaryService::serialize}, {@see RecurRuleMapper::findTemplateCardIdsByBoard}).
+			// The rule row lives in its own table, so nothing else moves the change log:
+			// without this row the badge is invisible to every open client until some
+			// unrelated mutation happens to bump the board ETag.
+			$this->changeNotifier->notify(
+				$boardId,
+				Change::ENTITY_CARD,
+				$templateCardId,
+				Change::ACTION_UPDATE,
+				$uid,
+			);
 
-		return $inserted;
+			return $inserted;
+		});
 	}
 
 	/**
@@ -701,151 +704,158 @@ class RecurrenceService {
 		string $uid,
 		?string $timezone = null,
 	): RecurRule {
-		$rule = $this->ruleMapper->find($id);
-		$board = $this->loadBoard($rule->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
-		$newTemplate = $templateCardId ?? $rule->getTemplateCardId();
-		$newStack = $targetStackId ?? $rule->getTargetStackId();
-		$newMode = $mode ?? $rule->getMode();
-		$newRrule = $rrule ?? $rule->getRrule();
-		$newPolicy = $duedatePolicy ?? $rule->getDuedatePolicy();
-		$newOffset = $duedateOffsetSeconds ?? $rule->getDuedateOffsetSeconds();
-		// Turning a rule OFF must never depend on its stored RRULE still passing
-		// validation. Rules predate their guards: a `FREQ=MINUTELY` (spec-valid, and
-		// accepted until it was found to wedge the iterator), a `FREQ=WEEKLY;BYHOUR=99`,
-		// or the empty rrule the API's own default once produced are all sitting in
-		// existing installs. Re-validating the UNCHANGED stored rule on every update
-		// made `PATCH {"enabled": false}` 400, so the only way to stop such a rule was
-		// to delete it - losing the template link and the history with it. When the
-		// caller supplies no new RRULE and is switching the rule off, skip the RRULE
-		// check; every other field is still validated, and the cron already refuses to
-		// run the rule (advanceSchedule disables it on the same exception). Re-enabling
-		// still validates - a rule that cannot run must not be switchable back on.
-		$disablingStoredRule = $enabled === false && $rrule === null;
-		$this->validate(
-			$rule->getBoardId(),
-			$newTemplate,
-			$newStack,
-			$newMode,
-			$newRrule,
-			$newPolicy,
-			$newOffset,
-			!$disablingStoredRule,
-		);
-		// Same gate as create() (#3760): re-anchoring on a hidden template is a 404.
-		$template = $this->loadCard($newTemplate);
-		$this->visibilityGuard->assertVisible($board, $template, $uid);
+		$ruleBoardId = $this->ruleMapper->find($id)->getBoardId();
+		return $this->cardMutation->runForBoards([$ruleBoardId], function () use ($id, $templateCardId, $targetStackId, $mode, $rrule, $duedatePolicy, $duedateOffsetSeconds, $skipWhileOpen, $enabled, $uid, $timezone, $ruleBoardId): RecurRule {
+			$rule = $this->ruleMapper->find($id);
+			if ($rule->getBoardId() !== $ruleBoardId) {
+				throw new DoesNotExistException('Recurring rule moved; reload before editing');
+			}
+			$board = $this->loadBoard($rule->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
 
-		// Capture the pre-edit schedule + enabled state BEFORE applying the setters
-		// so we can tell an actual schedule change from a no-op edit (#65). The
-		// cursor may only be re-armed when the schedule really changed, and never
-		// rewound onto an occurrence the cron has already spawned.
-		$originalRrule = $rule->getRrule();
-		$originalTimezone = $rule->getTimezone();
-		$originalTemplate = $rule->getTemplateCardId();
-		$wasEnabled = $rule->getEnabled();
-		// A null/empty timezone means "leave the zone alone"; there is no way to
-		// clear it (a rule always expands in SOME zone, cleared just means the
-		// server default). An explicit bad id is rejected by resolveTimezone().
-		$newTimezone = ($timezone === null || $timezone === '')
-			? $originalTimezone
-			: $this->resolveTimezone($timezone, $uid);
+			$newTemplate = $templateCardId ?? $rule->getTemplateCardId();
+			$newStack = $targetStackId ?? $rule->getTargetStackId();
+			$newMode = $mode ?? $rule->getMode();
+			$newRrule = $rrule ?? $rule->getRrule();
+			$newPolicy = $duedatePolicy ?? $rule->getDuedatePolicy();
+			$newOffset = $duedateOffsetSeconds ?? $rule->getDuedateOffsetSeconds();
+			// Turning a rule OFF must never depend on its stored RRULE still passing
+			// validation. Rules predate their guards: a `FREQ=MINUTELY` (spec-valid, and
+			// accepted until it was found to wedge the iterator), a `FREQ=WEEKLY;BYHOUR=99`,
+			// or the empty rrule the API's own default once produced are all sitting in
+			// existing installs. Re-validating the UNCHANGED stored rule on every update
+			// made `PATCH {"enabled": false}` 400, so the only way to stop such a rule was
+			// to delete it - losing the template link and the history with it. When the
+			// caller supplies no new RRULE and is switching the rule off, skip the RRULE
+			// check; every other field is still validated, and the cron already refuses to
+			// run the rule (advanceSchedule disables it on the same exception). Re-enabling
+			// still validates - a rule that cannot run must not be switchable back on.
+			$disablingStoredRule = $enabled === false && $rrule === null;
+			$this->validate(
+				$rule->getBoardId(),
+				$newTemplate,
+				$newStack,
+				$newMode,
+				$newRrule,
+				$newPolicy,
+				$newOffset,
+				!$disablingStoredRule,
+			);
+			// Same gate as create() (#3760): re-anchoring on a hidden template is a 404.
+			$template = $this->loadCard($newTemplate);
+			$this->visibilityGuard->assertVisible($board, $template, $uid);
 
-		$rule->setTimezone($newTimezone);
-		$rule->setTemplateCardId($newTemplate);
-		$rule->setTargetStackId($newStack);
-		$rule->setMode($newMode);
-		$rule->setRrule($newRrule);
-		$rule->setDuedatePolicy($newPolicy);
-		$rule->setDuedateOffsetSeconds($newOffset);
-		if ($skipWhileOpen !== null) {
-			$rule->setSkipWhileOpen($skipWhileOpen);
-		}
-		if ($enabled !== null) {
-			$rule->setEnabled($enabled);
-		}
+			// Capture the pre-edit schedule + enabled state BEFORE applying the setters
+			// so we can tell an actual schedule change from a no-op edit (#65). The
+			// cursor may only be re-armed when the schedule really changed, and never
+			// rewound onto an occurrence the cron has already spawned.
+			$originalRrule = $rule->getRrule();
+			$originalTimezone = $rule->getTimezone();
+			$originalTemplate = $rule->getTemplateCardId();
+			$wasEnabled = $rule->getEnabled();
+			// A null/empty timezone means "leave the zone alone"; there is no way to
+			// clear it (a rule always expands in SOME zone, cleared just means the
+			// server default). An explicit bad id is rejected by resolveTimezone().
+			$newTimezone = ($timezone === null || $timezone === '')
+				? $originalTimezone
+				: $this->resolveTimezone($timezone, $uid);
 
-		// A new RRULE means a new series, so the "ends after N times" tally starts
-		// again from zero. `occurrences_spawned` is a LIFETIME counter, and the only
-		// thing that reads it is the COUNT guard in advanceSchedule(); leaving it
-		// alone made an edit that adds or lowers COUNT collapse to a single card -
-		// a weekly rule that had already spawned 12, edited to FREQ=WEEKLY;COUNT=4
-		// ("four more"), spawned one and then disabled itself because 13 >= 4.
-		// Trade-off, taken deliberately: lowering COUNT=10 to COUNT=3 half-way
-		// through also restarts the count instead of ending the series early. An
-		// RRULE edit is read as "this is the new schedule", not as a correction to
-		// the old one. Only an actual rule change resets - a no-op re-save does not.
-		if ($newRrule !== $originalRrule) {
-			$rule->setOccurrencesSpawned(0);
-		}
+			$rule->setTimezone($newTimezone);
+			$rule->setTemplateCardId($newTemplate);
+			$rule->setTargetStackId($newStack);
+			$rule->setMode($newMode);
+			$rule->setRrule($newRrule);
+			$rule->setDuedatePolicy($newPolicy);
+			$rule->setDuedateOffsetSeconds($newOffset);
+			if ($skipWhileOpen !== null) {
+				$rule->setSkipWhileOpen($skipWhileOpen);
+			}
+			if ($enabled !== null) {
+				$rule->setEnabled($enabled);
+			}
 
-		// Do we need to recalculate when this rule fires next?
-		//
-		// Only in two cases: the user changed the actual schedule (a different
-		// repeat rule), or they switched the rule back on after it was off. If they
-		// changed nothing about the schedule - e.g. just re-saved the card's Repeat
-		// control, or toggled "enabled" while it was already on - we must leave the
-		// next fire time exactly as it is. Recalculating a no-op edit could pull the
-		// fire time back onto a date the system already acted on, and re-firing it
-		// makes a duplicate card dated today (that was bug #65). The two flags below
-		// make sure a no-op edit skips this block entirely.
-		//
-		// When we DO recalculate, we pick the next date STRICTLY AFTER now (that is
-		// what passing $now does). Two reasons:
-		//   1. It fixes the "yearly reset to today" family of bugs (#80) - the rule
-		//      is never left ready to fire the instant the next cron runs.
-		//   2. If the user speeds up a rule (say Weekly -> Daily), it starts on the
-		//      new schedule right away. The old code kept the far-off weekly date, so
-		//      "Daily" did nothing for up to a week. It's also safe: a date after now
-		//      is always in the future, so it can never be one we already fired -
-		//      meaning no duplicate card (still safe for #65).
-		//
-		// A timezone change counts as a schedule change too: re-anchoring the same
-		// repeat rule in a different zone shifts every future occurrence. So does
-		// pointing the rule at a DIFFERENT template card: the schedule is anchored
-		// on the template's own Start/End date, so the old card's anchor is
-		// meaningless once the rule follows another card. Without this the rule
-		// would keep firing on the old card's dates while stamping copies of the
-		// new one, until some unrelated schedule edit happened to re-arm it.
-		$scheduleChanged = $newRrule !== $originalRrule
-			|| $newTimezone !== $originalTimezone
-			|| $newTemplate !== $originalTemplate;
-		$reEnabled = $rule->getEnabled() && !$wasEnabled;
-		if ($rule->getEnabled() && ($scheduleChanged || $reEnabled)) {
-			$rule->setNextOccurrenceAt($this->firstFireFor($rule, $this->anchorFor($template, $rule)));
-		}
+			// A new RRULE means a new series, so the "ends after N times" tally starts
+			// again from zero. `occurrences_spawned` is a LIFETIME counter, and the only
+			// thing that reads it is the COUNT guard in advanceSchedule(); leaving it
+			// alone made an edit that adds or lowers COUNT collapse to a single card -
+			// a weekly rule that had already spawned 12, edited to FREQ=WEEKLY;COUNT=4
+			// ("four more"), spawned one and then disabled itself because 13 >= 4.
+			// Trade-off, taken deliberately: lowering COUNT=10 to COUNT=3 half-way
+			// through also restarts the count instead of ending the series early. An
+			// RRULE edit is read as "this is the new schedule", not as a correction to
+			// the old one. Only an actual rule change resets - a no-op re-save does not.
+			if ($newRrule !== $originalRrule) {
+				$rule->setOccurrencesSpawned(0);
+			}
 
-		$updated = $this->ruleMapper->update($rule);
+			// Do we need to recalculate when this rule fires next?
+			//
+			// Only in two cases: the user changed the actual schedule (a different
+			// repeat rule), or they switched the rule back on after it was off. If they
+			// changed nothing about the schedule - e.g. just re-saved the card's Repeat
+			// control, or toggled "enabled" while it was already on - we must leave the
+			// next fire time exactly as it is. Recalculating a no-op edit could pull the
+			// fire time back onto a date the system already acted on, and re-firing it
+			// makes a duplicate card dated today (that was bug #65). The two flags below
+			// make sure a no-op edit skips this block entirely.
+			//
+			// When we DO recalculate, we pick the next date STRICTLY AFTER now (that is
+			// what passing $now does). Two reasons:
+			//   1. It fixes the "yearly reset to today" family of bugs (#80) - the rule
+			//      is never left ready to fire the instant the next cron runs.
+			//   2. If the user speeds up a rule (say Weekly -> Daily), it starts on the
+			//      new schedule right away. The old code kept the far-off weekly date, so
+			//      "Daily" did nothing for up to a week. It's also safe: a date after now
+			//      is always in the future, so it can never be one we already fired -
+			//      meaning no duplicate card (still safe for #65).
+			//
+			// A timezone change counts as a schedule change too: re-anchoring the same
+			// repeat rule in a different zone shifts every future occurrence. So does
+			// pointing the rule at a DIFFERENT template card: the schedule is anchored
+			// on the template's own Start/End date, so the old card's anchor is
+			// meaningless once the rule follows another card. Without this the rule
+			// would keep firing on the old card's dates while stamping copies of the
+			// new one, until some unrelated schedule edit happened to re-arm it.
+			$scheduleChanged = $newRrule !== $originalRrule
+				|| $newTimezone !== $originalTimezone
+				|| $newTemplate !== $originalTemplate;
+			$reEnabled = $rule->getEnabled() && !$wasEnabled;
+			if ($rule->getEnabled() && ($scheduleChanged || $reEnabled)) {
+				$rule->setNextOccurrenceAt($this->firstFireFor($rule, $this->anchorFor($template, $rule)));
+			}
 
-		// Every edit that can flip the "recurring" card-summary badge goes through
-		// here - enabling/disabling the rule, or pointing it at another card - so the
-		// edit has to reach the change log or the badge only corrects itself on a
-		// full board refetch. Recording unconditionally (rather than only for the
-		// enabled/template deltas) costs one row per save and keeps this free of a
-		// "which fields feed the summary" list that would silently rot.
-		$this->changeNotifier->recordChange(
-			$rule->getBoardId(),
-			Change::ENTITY_CARD,
-			$rule->getTemplateCardId(),
-			Change::ACTION_UPDATE,
-			$uid,
-		);
-		// A re-point clears the OLD card's badge too, so that card needs its own row.
-		// validate() has already established both cards are on THIS board, so the two
-		// rows share one push - a template switch is one board event, not two.
-		if ($templateCardId !== null && $templateCardId !== $originalTemplate) {
+			$updated = $this->ruleMapper->update($rule);
+
+			// Every edit that can flip the "recurring" card-summary badge goes through
+			// here - enabling/disabling the rule, or pointing it at another card - so the
+			// edit has to reach the change log or the badge only corrects itself on a
+			// full board refetch. Recording unconditionally (rather than only for the
+			// enabled/template deltas) costs one row per save and keeps this free of a
+			// "which fields feed the summary" list that would silently rot.
 			$this->changeNotifier->recordChange(
 				$rule->getBoardId(),
 				Change::ENTITY_CARD,
-				$originalTemplate,
+				$rule->getTemplateCardId(),
 				Change::ACTION_UPDATE,
 				$uid,
 			);
-		}
-		$this->changeNotifier->pushBoardChanged($rule->getBoardId());
+			// A re-point clears the OLD card's badge too, so that card needs its own row.
+			// validate() has already established both cards are on THIS board, so the two
+			// rows share one push - a template switch is one board event, not two.
+			if ($templateCardId !== null && $templateCardId !== $originalTemplate) {
+				$this->changeNotifier->recordChange(
+					$rule->getBoardId(),
+					Change::ENTITY_CARD,
+					$originalTemplate,
+					Change::ACTION_UPDATE,
+					$uid,
+				);
+			}
+			$this->changeNotifier->pushBoardChanged($rule->getBoardId());
 
-		return $updated;
+			return $updated;
+		});
 	}
 
 	/**
@@ -856,25 +866,32 @@ class RecurrenceService {
 	 * @throws NotPermittedException if the user may not manage the board
 	 */
 	public function delete(int $id, string $uid): RecurRule {
-		$rule = $this->ruleMapper->find($id);
-		$board = $this->loadBoard($rule->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
-		// Read the board/template ids BEFORE the delete - the entity is detached
-		// afterwards and nothing guarantees it stays readable.
-		$boardId = $rule->getBoardId();
-		$templateCardId = $rule->getTemplateCardId();
 
-		$deleted = $this->ruleMapper->delete($rule);
+		$ruleBoardId = $this->ruleMapper->find($id)->getBoardId();
+		return $this->cardMutation->runForBoards([$ruleBoardId], function () use ($id, $uid, $ruleBoardId): RecurRule {
+			$rule = $this->ruleMapper->find($id);
+			if ($rule->getBoardId() !== $ruleBoardId) {
+				throw new DoesNotExistException('Recurring rule moved; reload before editing');
+			}
+			$board = $this->loadBoard($rule->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+			// Read the board/template ids BEFORE the delete - the entity is detached
+			// afterwards and nothing guarantees it stays readable.
+			$boardId = $rule->getBoardId();
+			$templateCardId = $rule->getTemplateCardId();
 
-		$this->changeNotifier->notify(
-			$boardId,
-			Change::ENTITY_CARD,
-			$templateCardId,
-			Change::ACTION_UPDATE,
-			$uid,
-		);
+			$deleted = $this->ruleMapper->delete($rule);
 
-		return $deleted;
+			$this->changeNotifier->notify(
+				$boardId,
+				Change::ENTITY_CARD,
+				$templateCardId,
+				Change::ACTION_UPDATE,
+				$uid,
+			);
+
+			return $deleted;
+		});
 	}
 
 	/**
@@ -894,15 +911,22 @@ class RecurrenceService {
 	 * @throws NotPermittedException if the user may not manage the board
 	 */
 	public function createNow(int $id, string $uid): ?Card {
-		$rule = $this->ruleMapper->find($id);
-		$board = $this->loadBoard($rule->getBoardId());
-		$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
-		// Visibility (#3760): the spawned/reset card (title, description) is
-		// returned to the ACTOR - a template hidden from them must read as
-		// missing (404), or create-now would be a read oracle for hidden
-		// content. The spawn itself re-checks against the rule OWNER.
-		$this->visibilityGuard->assertVisible($board, $this->loadCard($rule->getTemplateCardId()), $uid);
-		return $this->spawn($rule, true);
+
+		$ruleBoardId = $this->ruleMapper->find($id)->getBoardId();
+		return $this->cardMutation->runForBoards([$ruleBoardId], function () use ($id, $uid, $ruleBoardId): ?Card {
+			$rule = $this->ruleMapper->find($id);
+			if ($rule->getBoardId() !== $ruleBoardId) {
+				throw new DoesNotExistException('Recurring rule moved; reload before editing');
+			}
+			$board = $this->loadBoard($rule->getBoardId());
+			$this->permissionService->assertPermission($board, $uid, PermissionService::PERMISSION_MANAGE);
+			// Visibility (#3760): the spawned/reset card (title, description) is
+			// returned to the ACTOR - a template hidden from them must read as
+			// missing (404), or create-now would be a read oracle for hidden
+			// content. The spawn itself re-checks against the rule OWNER.
+			$this->visibilityGuard->assertVisible($board, $this->loadCard($rule->getTemplateCardId()), $uid);
+			return $this->spawn($rule, true);
+		});
 	}
 
 	/**
@@ -928,29 +952,31 @@ class RecurrenceService {
 	 * gone.
 	 */
 	public function rearmForTemplateCard(Card $card): void {
-		try {
-			$rules = $this->ruleMapper->findByTemplateCard($card->getId());
-		} catch (\Throwable $e) {
-			$this->logger->warning(
-				'kanso: could not load recurring rules to re-arm after a date edit on card ' . $card->getId(),
-				['exception' => $e]
-			);
-			return;
-		}
-		foreach ($rules as $rule) {
-			if (!$rule->getEnabled()) {
-				continue;
-			}
+		$this->cardMutation->run($card->getId(), function () use ($card): void {
 			try {
-				$rule->setNextOccurrenceAt($this->firstFireFor($rule, $this->anchorFor($card, $rule)));
-				$this->ruleMapper->update($rule);
+				$rules = $this->ruleMapper->findByTemplateCard($card->getId());
 			} catch (\Throwable $e) {
 				$this->logger->warning(
-					'kanso: could not re-arm recurring rule ' . $rule->getId() . ' after a date edit',
+					'kanso: could not load recurring rules to re-arm after a date edit on card ' . $card->getId(),
 					['exception' => $e]
 				);
+				return;
 			}
-		}
+			foreach ($rules as $rule) {
+				if (!$rule->getEnabled()) {
+					continue;
+				}
+				try {
+					$rule->setNextOccurrenceAt($this->firstFireFor($rule, $this->anchorFor($card, $rule)));
+					$this->ruleMapper->update($rule);
+				} catch (\Throwable $e) {
+					$this->logger->warning(
+						'kanso: could not re-arm recurring rule ' . $rule->getId() . ' after a date edit',
+						['exception' => $e]
+					);
+				}
+			}
+		});
 	}
 
 	// ---- spawning ---------------------------------------------------------
@@ -999,81 +1025,94 @@ class RecurrenceService {
 	 * @throws InvalidInputException on a card mutation error
 	 */
 	public function spawn(RecurRule $rule, bool $manual = false): ?Card {
-		$occurrenceTs = $rule->getNextOccurrenceAt() > 0
-			? $rule->getNextOccurrenceAt()
-			: $this->time->getTime();
+		return $this->cardMutation->runForBoards([$rule->getBoardId()], function () use ($rule, $manual): ?Card {
+			$current = $this->ruleMapper->find($rule->getId());
+			if ($current->getBoardId() !== $rule->getBoardId()) {
+				throw new DoesNotExistException('Recurring rule moved; reload before editing');
+			}
+			$this->cardMutation->afterCommit(static function () use ($rule, $current): void {
+				$rule->setEnabled($current->getEnabled());
+				$rule->setNextOccurrenceAt($current->getNextOccurrenceAt());
+				$rule->setLastSpawnedAt($current->getLastSpawnedAt());
+				$rule->setOccurrencesSpawned($current->getOccurrencesSpawned());
+			});
+			$rule = $current;
+			$occurrenceTs = $rule->getNextOccurrenceAt() > 0
+				? $rule->getNextOccurrenceAt()
+				: $this->time->getTime();
 
-		// Read the template up front - both the soft-trash pause below and the CLONE
-		// enrichment need it, so read once (a missing/hard-deleted template stays
-		// null here and falls through to the mode branch, which throws its usual
-		// DoesNotExistException that the cron logs and retries).
-		$template = $this->findTemplateOrNull($rule);
-		// The cadence is anchored at the card's Start date (see anchorFor()); read it
-		// once here so every advanceSchedule() below walks the same anchor.
-		$anchorTs = $this->anchorFor($template, $rule);
+			// Read the template up front - both the soft-trash pause below and the CLONE
+			// enrichment need it, so read once (a missing/hard-deleted template stays
+			// null here and falls through to the mode branch, which throws its usual
+			// DoesNotExistException that the cron logs and retries).
+			$template = $this->findTemplateOrNull($rule);
+			// The cadence is anchored at the card's Start date (see anchorFor()); read it
+			// once here so every advanceSchedule() below walks the same anchor.
+			$anchorTs = $this->anchorFor($template, $rule);
 
-		// Pause on a SOFT-trashed template (#4124): create/update guard the template
-		// via loadCard() (throws on deleted_at > 0), but the spawn hot path read it
-		// raw, so a template moved to the trash kept cloning/resetting. Treat a
-		// soft-trashed template as a pause, not an error and not a hard-disable: skip
-		// the spawn but still advance the schedule past this occurrence (like a
-		// skip_while_open skip) so the cron does not busy-loop, and leave the rule
-		// enabled so it resumes automatically when the template is restored. A PURGED
-		// template is a different case - the purge drops the rule outright (#4123).
-		if ($template !== null && $template->getDeletedAt() > 0) {
+			// Pause on a SOFT-trashed template (#4124): create/update guard the template
+			// via loadCard() (throws on deleted_at > 0), but the spawn hot path read it
+			// raw, so a template moved to the trash kept cloning/resetting. Treat a
+			// soft-trashed template as a pause, not an error and not a hard-disable: skip
+			// the spawn but still advance the schedule past this occurrence (like a
+			// skip_while_open skip) so the cron does not busy-loop, and leave the rule
+			// enabled so it resumes automatically when the template is restored. A PURGED
+			// template is a different case - the purge drops the rule outright (#4123).
+			if ($template !== null && $template->getDeletedAt() > 0) {
+				$this->db->beginTransaction();
+				try {
+					$this->logger->info(
+						'kanso: recurring rule ' . $rule->getId()
+						. ' paused, template card is in the trash'
+					);
+					$this->advanceSchedule($rule, $this->advanceFrom($rule, $occurrenceTs, $manual), $anchorTs);
+					$this->ruleMapper->update($rule);
+					$this->db->commit();
+				} catch (\Throwable $e) {
+					$this->db->rollBack();
+					throw $e;
+				}
+				return null;
+			}
+
 			$this->db->beginTransaction();
 			try {
-				$this->logger->info(
-					'kanso: recurring rule ' . $rule->getId()
-					. ' paused, template card is in the trash'
-				);
+				if ($rule->getMode() === RecurRule::MODE_RESET) {
+					$card = $this->spawnReset($rule, $occurrenceTs);
+				} else {
+					if (!$manual && $rule->getSkipWhileOpen() && $this->previousCardOpen($rule)) {
+						$this->logger->info(
+							'kanso: recurring rule ' . $rule->getId()
+							. ' skipped, previously spawned card is still open'
+						);
+						// A skip is not an occurrence: leave the counters be, but still
+						// advance the schedule past this occurrence so the rule does not
+						// re-fire it (the next due occurrence is still handled next loop).
+						$this->advanceSchedule($rule, $this->advanceFrom($rule, $occurrenceTs, $manual), $anchorTs);
+						$this->ruleMapper->update($rule);
+						$this->db->commit();
+						return null;
+					}
+					$card = $this->spawnClone($rule, $occurrenceTs, $template);
+				}
+
+				$rule->setOccurrencesSpawned($rule->getOccurrencesSpawned() + 1);
+				$rule->setLastSpawnedAt($card->getId());
 				$this->advanceSchedule($rule, $this->advanceFrom($rule, $occurrenceTs, $manual), $anchorTs);
 				$this->ruleMapper->update($rule);
+
 				$this->db->commit();
 			} catch (\Throwable $e) {
 				$this->db->rollBack();
 				throw $e;
 			}
-			return null;
-		}
 
-		$this->db->beginTransaction();
-		try {
-			if ($rule->getMode() === RecurRule::MODE_RESET) {
-				$card = $this->spawnReset($rule, $occurrenceTs);
-			} else {
-				if (!$manual && $rule->getSkipWhileOpen() && $this->previousCardOpen($rule)) {
-					$this->logger->info(
-						'kanso: recurring rule ' . $rule->getId()
-						. ' skipped, previously spawned card is still open'
-					);
-					// A skip is not an occurrence: leave the counters be, but still
-					// advance the schedule past this occurrence so the rule does not
-					// re-fire it (the next due occurrence is still handled next loop).
-					$this->advanceSchedule($rule, $this->advanceFrom($rule, $occurrenceTs, $manual), $anchorTs);
-					$this->ruleMapper->update($rule);
-					$this->db->commit();
-					return null;
-				}
-				$card = $this->spawnClone($rule, $occurrenceTs, $template);
-			}
+			// Commit succeeded - now it is safe to broadcast the enrichment UPDATE
+			// row that spawnClone deferred (push=false inside the transaction).
+			$this->changeNotifier->pushBoardChanged($card->getBoardId());
 
-			$rule->setOccurrencesSpawned($rule->getOccurrencesSpawned() + 1);
-			$rule->setLastSpawnedAt($card->getId());
-			$this->advanceSchedule($rule, $this->advanceFrom($rule, $occurrenceTs, $manual), $anchorTs);
-			$this->ruleMapper->update($rule);
-
-			$this->db->commit();
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
-		}
-
-		// Commit succeeded - now it is safe to broadcast the enrichment UPDATE
-		// row that spawnClone deferred (push=false inside the transaction).
-		$this->changeNotifier->pushBoardChanged($card->getBoardId());
-
-		return $card;
+			return $card;
+		});
 	}
 
 	/**
@@ -1106,6 +1145,10 @@ class RecurrenceService {
 		// exactly as when the owner lost board access.
 		$board = $this->loadBoard($rule->getBoardId());
 		$this->visibilityGuard->assertVisible($board, $template, $rule->getOwner());
+		$assignees = $this->cardAssigneeMapper->findUserIdsByCard($template->getId());
+		if ($board->getSingleAssignee() === true && count($assignees) > 1) {
+			throw new InvalidInputException('This board allows one assignee per card; remove extra assignees from the recurring template');
+		}
 
 		// CardService::create runs as the owner: EDIT check, bottom-of-stack
 		// sort key, CREATE change - all in one place. The spawned card inherits
@@ -1141,7 +1184,7 @@ class RecurrenceService {
 				$this->cardLabelMapper->insertAssignment($card->getId(), $labelId);
 			}
 		}
-		foreach ($this->cardAssigneeMapper->findUserIdsByCard($template->getId()) as $assigneeUid) {
+		foreach ($assignees as $assigneeUid) {
 			if (!$this->cardAssigneeMapper->exists($card->getId(), $assigneeUid)) {
 				$this->cardAssigneeMapper->insertAssignment($card->getId(), $assigneeUid);
 			}

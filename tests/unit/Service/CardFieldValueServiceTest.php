@@ -53,6 +53,7 @@ class CardFieldValueServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->permissionService,
 			$this->visibilityGuard,
+			$this->cardMutation(),
 		);
 	}
 
@@ -286,4 +287,12 @@ class CardFieldValueServiceTest extends TestCase {
 		$this->expectException(NotPermittedException::class);
 		$this->service->clear(9, 3, 'mallory');
 	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('run')->willReturnCallback(static fn (int $cardId, callable $write): mixed => $write());
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
 }

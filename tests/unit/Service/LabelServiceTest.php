@@ -61,6 +61,7 @@ class LabelServiceTest extends TestCase {
 			$this->db,
 			$this->visibilityGuard,
 			$this->changeDetailMapper,
+			$this->cardMutation(),
 		);
 	}
 
@@ -445,4 +446,12 @@ class LabelServiceTest extends TestCase {
 		$this->expectException(NotPermittedException::class);
 		$this->service->unassign(9, 7, 'bob');
 	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('run')->willReturnCallback(static fn (int $cardId, callable $write): mixed => $write());
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
 }

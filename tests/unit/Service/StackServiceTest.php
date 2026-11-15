@@ -61,7 +61,8 @@ class StackServiceTest extends TestCase {
 			$this->permissionService,
 			new SortKeyService(),
 			$this->db,
-			$this->boardAccess
+			$this->boardAccess,
+			$this->cardMutation(),
 		);
 	}
 
@@ -642,4 +643,11 @@ class StackServiceTest extends TestCase {
 		$stack = $this->service->delete(5, 'bob');
 		self::assertGreaterThan(0, $stack->getDeletedAt());
 	}
+
+	private function cardMutation(): \OCA\Kanso\Service\CardMutationService {
+		$mutation = $this->createMock(\OCA\Kanso\Service\CardMutationService::class);
+		$mutation->method('runForBoards')->willReturnCallback(static fn (array $boardIds, callable $write): mixed => $write());
+		return $mutation;
+	}
+
 }

@@ -90,6 +90,16 @@ class BoardController extends Controller {
 	}
 
 	#[NoAdminRequired]
+	public function deleted(): JSONResponse {
+		return $this->respond(fn (): JSONResponse => new JSONResponse($this->boardService->findDeleted($this->currentUserId())));
+	}
+
+	#[NoAdminRequired]
+	public function restore(int $id): JSONResponse {
+		return $this->respond(fn (): JSONResponse => new JSONResponse($this->boardService->restore($id, $this->currentUserId())));
+	}
+
+	#[NoAdminRequired]
 	public function create(string $title = '', ?string $color = null): JSONResponse {
 		return $this->respond(function () use ($title, $color): JSONResponse {
 			return new JSONResponse(
@@ -448,10 +458,10 @@ class BoardController extends Controller {
 	 * @param array<array-key, mixed>|null $cardFeatures
 	 */
 	#[NoAdminRequired]
-	public function update(int $id, ?string $title = null, ?string $color = null, ?bool $archived = null, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null, ?array $cardFeatures = null, ?string $description = null, ?array $estimateCustom = null, ?bool $allowAiActors = null, ?bool $autoCompleteParent = null): JSONResponse {
-		return $this->respond(function () use ($id, $title, $color, $archived, $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl, $cardFeatures, $description, $estimateCustom, $allowAiActors, $autoCompleteParent): JSONResponse {
+	public function update(int $id, ?string $title = null, ?string $color = null, ?bool $archived = null, ?string $estimateScale = null, ?bool $newCardsOnTop = null, ?string $prefix = null, ?string $background = null, ?string $chatUrl = null, ?array $cardFeatures = null, ?string $description = null, ?array $estimateCustom = null, ?bool $allowAiActors = null, ?bool $autoCompleteParent = null, ?bool $singleAssignee = null): JSONResponse {
+		return $this->respond(function () use ($id, $title, $color, $archived, $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl, $cardFeatures, $description, $estimateCustom, $allowAiActors, $autoCompleteParent, $singleAssignee): JSONResponse {
 			return new JSONResponse(
-				$this->boardService->update($id, $title, $color, $archived, $this->currentUserId(), $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl, $cardFeatures, $description, $estimateCustom, $allowAiActors, $autoCompleteParent)
+				$this->boardService->update($id, $title, $color, $archived, $this->currentUserId(), $estimateScale, $newCardsOnTop, $prefix, $background, $chatUrl, $cardFeatures, $description, $estimateCustom, $allowAiActors, $autoCompleteParent, $singleAssignee)
 			);
 		});
 	}

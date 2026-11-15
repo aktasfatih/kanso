@@ -126,7 +126,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:label="t('kanso', 'View name')"
 							:placeholder="t('kanso', 'View name')"
 							:label-outside="true"
-							@keydown.enter.prevent="submitSave" />
+							@keydown.enter="submitOnEnter($event, submitSave)" />
 						<NcButton
 							type="tertiary"
 							:disabled="count === 0 || !saveName.trim()"
@@ -327,6 +327,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
+import { submitOnEnter } from '../utils/keyboard.js'
 import { ref, computed, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcPopover from '@nextcloud/vue/components/NcPopover'

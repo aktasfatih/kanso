@@ -19,10 +19,8 @@ use Psr\Log\LoggerInterface;
  * passed.
  *
  * The window matches {@see PruneChanges::RETENTION_SECONDS} deliberately: one
- * retention story for the whole app, not two numbers to reconcile. There is no
- * restore during it - boards have a separate `archived` flag for the reversible
- * case - it is a safety margin against an accidental delete being irreversible
- * the same second it happens.
+ * retention story for the whole app. Owners and managers can restore a board
+ * only before it becomes eligible for this job.
  *
  * Batched and capped like the change pruner: a fixed number of boards per run,
  * so an instance that just lost a hundred boards cannot stall cron. Whatever is

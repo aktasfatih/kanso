@@ -57,6 +57,7 @@ class AutomationService {
 		private CardRunningTimerMapper $runningTimerMapper,
 		private CardTimeEntryMapper $timeEntryMapper,
 		private ITimeFactory $timeFactory,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -135,25 +136,27 @@ class AutomationService {
 	 * (CardService::move) has already gated the move with EDIT.
 	 */
 	public function runCardEnteredRole(Card $card, int $role, string $actorUid): void {
-		if ($role === Stack::ROLE_NONE) {
-			return;
-		}
-		try {
-			$rules = $this->ruleMapper->findEnabledByBoardAndTrigger($card->getBoardId(), AutomationRule::TRIGGER_CARD_ENTERED_ROLE);
-		} catch (\Throwable) {
-			return;
-		}
-		foreach ($rules as $rule) {
-			$params = $rule->paramsArray();
-			if ((int)($params['role'] ?? 0) !== $role) {
-				continue;
+		$this->cardMutation->run($card->getId(), function () use ($card, $role, $actorUid): void {
+			if ($role === Stack::ROLE_NONE) {
+				return;
 			}
 			try {
-				$this->applyAction($rule->getAction(), $params, $card, $actorUid);
+				$rules = $this->ruleMapper->findEnabledByBoardAndTrigger($card->getBoardId(), AutomationRule::TRIGGER_CARD_ENTERED_ROLE);
 			} catch (\Throwable) {
-				// Best-effort - a broken rule never blocks the triggering move.
+				return;
 			}
-		}
+			foreach ($rules as $rule) {
+				$params = $rule->paramsArray();
+				if ((int)($params['role'] ?? 0) !== $role) {
+					continue;
+				}
+				try {
+					$this->applyAction($rule->getAction(), $params, $card, $actorUid);
+				} catch (\Throwable) {
+					// Best-effort - a broken rule never blocks the triggering move.
+				}
+			}
+		});
 	}
 
 	/**

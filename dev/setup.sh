@@ -197,8 +197,7 @@ docker compose --profile "$COMPOSE_PROFILE" up -d
 #   * only when BOTH volumes were absent before this boot, i.e. there is
 #     nothing to lose. Always true in CI, and true of a first local run; a
 #     stack that already has a database is never wiped for you;
-#   * only once. If the second boot fails too, nothing here catches it and the
-#     install wait below reports it exactly as it always did.
+#   * only once. A failed second boot reaches the database check below.
 if [ "$COMPOSE_PROFILE" = mysql ] && [ "$PRISTINE" = yes ] &&
 	[ "$(docker inspect -f '{{.State.Status}}' kanso-dev-db 2>/dev/null || echo missing)" = exited ] &&
 	docker logs kanso-dev-db 2>&1 | grep -q 'Initializing database files' &&
@@ -209,6 +208,33 @@ if [ "$COMPOSE_PROFILE" = mysql ] && [ "$PRISTINE" = yes ] &&
 	echo "booting once more." >&2
 	docker compose --profile "$COMPOSE_PROFILE" down -v
 	docker compose --profile "$COMPOSE_PROFILE" up -d
+fi
+
+if [ "$COMPOSE_PROFILE" != sqlite ]; then
+	case "$COMPOSE_PROFILE" in
+		postgres) DB_ENGINE=PostgreSQL ;;
+		mysql) DB_ENGINE=MariaDB ;;
+	esac
+	DB_INSPECT_EXIT=0
+	DB_STATE="$(docker inspect -f 'status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} exit={{.State.ExitCode}}' kanso-dev-db 2>/dev/null)" || DB_INSPECT_EXIT=$?
+	case "${DB_INSPECT_EXIT}:${DB_STATE}" in
+		'0:status=running health=healthy exit='*|'0:status=running health=none exit='*) ;;
+		*)
+			echo "${DB_ENGINE} database failed to start (kanso-dev-db: ${DB_STATE:-missing}; inspect exit=${DB_INSPECT_EXIT})." >&2
+			echo "Database log (last 60 lines):" >&2
+			DB_LOG_EXIT=0
+			DB_LOG="$(docker logs --tail 60 kanso-dev-db 2>&1)" || DB_LOG_EXIT=$?
+			printf '%s\n' "$DB_LOG" | awk '
+				{ if (tolower($0) ~ /password|secret|token|identified[[:space:]]+by|:\/\/[^[:space:]]*@/)
+					print "[redacted credential-bearing database log line]"
+				  else print }
+			' >&2 || true
+			if [ "$DB_LOG_EXIT" -ne 0 ]; then
+				echo "Could not read the database log (docker logs exit=${DB_LOG_EXIT})." >&2
+			fi
+			exit 1
+			;;
+	esac
 fi
 
 # The reset every message below points at. NOT a bare `down -v`: compose only

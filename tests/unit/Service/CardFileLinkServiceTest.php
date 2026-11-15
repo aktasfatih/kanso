@@ -67,6 +67,7 @@ class CardFileLinkServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->changeDetailMapper,
 			$this->rootFolder,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 
@@ -188,14 +189,11 @@ class CardFileLinkServiceTest extends TestCase {
 		$this->service->addLink(9, 42, 'bob');
 	}
 
-	public function testAddLinkReturnsTheExistingRowOnAUniqueViolation(): void {
+	public function testAddLinkReturnsTheExistingRowWithoutInserting(): void {
 		$this->expectCardLoaded();
 		$this->expectUserFolderById(42, [$this->fileNode()]);
-		$uniqueViolation = $this->createMock(\OCP\DB\Exception::class);
-		$uniqueViolation->method('getReason')
-			->willReturn(\OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION);
 		$fileLinkMapper = $this->createMock(CardFileLinkMapper::class);
-		$fileLinkMapper->method('insert')->willThrowException($uniqueViolation);
+		$fileLinkMapper->expects(self::never())->method('insert');
 		$fileLinkMapper->method('findByCard')->with(9)->willReturn([$this->link(3, 9, 7), $this->link(4, 9, 42)]);
 		$this->changeNotifier->expects(self::never())->method('notify');
 
@@ -208,6 +206,7 @@ class CardFileLinkServiceTest extends TestCase {
 			$this->changeNotifier,
 			$this->changeDetailMapper,
 			$this->rootFolder,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 
 		self::assertSame(4, $service->addLink(9, 42, 'bob')->getId());

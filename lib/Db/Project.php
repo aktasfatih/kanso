@@ -30,6 +30,10 @@ use OCP\DB\Types;
  * @method void setStartDate(?string $startDate)
  * @method string|null getTargetDate()
  * @method void setTargetDate(?string $targetDate)
+ * @method string|null getLead()
+ * @method void setLead(?string $lead)
+ * @method string|null getLifecycleStatus()
+ * @method void setLifecycleStatus(string $lifecycleStatus)
  */
 class Project extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -42,13 +46,15 @@ class Project extends Entity implements \JsonSerializable {
 	protected ?int $createdAt = null;
 	protected ?string $startDate = null;
 	protected ?string $targetDate = null;
+	protected ?string $lead = null;
+	protected ?string $lifecycleStatus = null;
 
 	public function __construct() {
 		$this->addType('createdAt', Types::INTEGER);
 	}
 
 	/**
-	 * @return array{id: int, title: string, description: ?string, color: ?string, owner: string, createdAt: int, startDate: ?string, targetDate: ?string}
+	 * @return array{id: int, title: string, description: ?string, color: ?string, owner: string, createdAt: int, startDate: ?string, targetDate: ?string, lead: ?string, lifecycleStatus: string}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -61,6 +67,8 @@ class Project extends Entity implements \JsonSerializable {
 			'createdAt' => (int)$this->getCreatedAt(),
 			'startDate' => $this->getStartDate(),
 			'targetDate' => $this->getTargetDate(),
+			'lead' => $this->getLead(),
+			'lifecycleStatus' => $this->getLifecycleStatus() ?? 'planned',
 		];
 	}
 }

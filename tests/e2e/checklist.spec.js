@@ -827,8 +827,8 @@ test.describe('Checklist steps - list view counter (#10733)', () => {
 		// alone proves which source the counter came from.
 		await expect(counter).toHaveText(/1\/2/)
 		await expect(counter).not.toHaveClass(/board-list-row__count--overdue/)
-		await expect(counter).toHaveAccessibleName('Sub-card progress 1 of 2')
+		await expect(counter).toHaveAccessibleName('Sub-card progress 1 of 2 (done or archived)')
 		await expect(page.locator('.board-list-row', { hasText: 'Steps hidden row' })
-			.getByRole('img', { name: 'Sub-card progress 1 of 2' })).toHaveCount(1)
+			.getByRole('img', { name: 'Sub-card progress 1 of 2 (done or archived)', exact: true })).toHaveCount(1)
 	})
 })

@@ -129,4 +129,13 @@ class BoardPinMapper extends QBMapper {
 
 		return $qb->executeStatement();
 	}
+
+	/** @throws Exception */
+	public function deleteByUser(string $uid): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('uid', $qb->createNamedParameter($uid)));
+
+		return $qb->executeStatement();
+	}
 }

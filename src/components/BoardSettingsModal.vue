@@ -76,10 +76,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<!-- Delete-board confirm -->
 					<div v-if="showDeleteBoardConfirm" class="bs-delete-confirm" role="alertdialog">
 						<p class="bs-delete-confirm__title">
-							{{ t('kanso', 'Delete this board permanently?') }}
+							{{ t('kanso', 'Delete this board?') }}
 						</p>
 						<p class="bs-delete-confirm__hint">
-							{{ t('kanso', 'This removes the board and all of its cards for everyone. This cannot be undone.') }}
+							{{ t('kanso', 'This removes the board for everyone. Owners and managers can restore it from Deleted boards for 30 days. After that, the board and its contents are permanently removed. Archive instead to hide it without a deletion deadline.') }}
 						</p>
 						<div class="bs-delete-confirm__actions">
 							<NcButton type="error" :disabled="isDeletingBoard" @click="doDeleteBoard">
@@ -113,7 +113,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										maxlength="100"
 										:disabled="nameSaving"
 										:placeholder="t('kanso', 'Board name')"
-										@keydown.enter.prevent="saveName">
+										@keydown.enter="submitOnEnter($event, saveName)">
 									<NcButton
 										:disabled="nameSaving || !nameDirty"
 										@click="saveName">
@@ -174,6 +174,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ t('kanso', 'Cards with a due date sync to your calendar and phone (via CalDAV/DAVx5) as tasks. Turn this off to keep this board out of your own calendar. Only affects you.') }}
 						</p>
 						<NcCheckboxRadioSwitch
+							:model-value="calendarAssignedOnly"
+							:disabled="calendarSyncBusy"
+							@update:model-value="setCalendarAssignedOnly">
+							{{ t('kanso', 'Only sync cards assigned to me') }}
+						</NcCheckboxRadioSwitch>
+						<p class="board-settings__general-hint">
+							{{ t('kanso', 'Only affects your calendar for this board. Public calendar feeds stay the same.') }}
+						</p>
+						<span v-if="calendarSyncError" class="label-settings__error" role="alert">{{ calendarSyncError }}</span>
+						<NcCheckboxRadioSwitch
 							v-if="canManage"
 							:model-value="newCardsOnTop"
 							:disabled="newCardsOnTopSaving"
@@ -184,6 +194,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ t('kanso', 'New cards are added to the bottom by default. Turn this on to add them at the top instead.') }}
 						</p>
 						<span v-if="newCardsOnTopError" class="label-settings__error">{{ newCardsOnTopError }}</span>
+
+						<NcCheckboxRadioSwitch
+							v-if="canManage"
+							:model-value="singleAssignee"
+							:disabled="singleAssigneeSaving"
+							data-test="single-assignee-switch"
+							@update:model-value="onSingleAssigneeChange">
+							{{ t('kanso', 'One assignee per card') }}
+						</NcCheckboxRadioSwitch>
+						<p v-if="canManage" class="board-settings__general-hint">
+							{{ t('kanso', 'Choosing another person replaces the current assignee. Existing cards with multiple assignees keep everyone; remove extra people before choosing someone new.') }}
+						</p>
+						<span v-if="singleAssigneeError" class="label-settings__error">{{ singleAssigneeError }}</span>
 
 						<!-- AI-actor attribution (#352): when on, comments, review
 						     requests and assignees on this board may carry an AI
@@ -213,7 +236,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ t('kanso', 'Mark parent as done when sub-issues are done') }}
 						</NcCheckboxRadioSwitch>
 						<p v-if="canManage" class="board-settings__general-hint">
-							{{ t('kanso', 'When on, a parent card is completed automatically once all of its sub-issues are done or archived. Off by default — the parent stays open for a human to close.') }}
+							{{ t('kanso', 'When on, a parent card is completed automatically once all of its sub-issues are done or archived, its checklist is complete and its reviews are approved. Off by default. Reopening or restoring a sub-issue never reopens the parent.') }}
 						</p>
 						<span v-if="autoCompleteParentError" class="label-settings__error">{{ autoCompleteParentError }}</span>
 
@@ -231,7 +254,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									maxlength="5"
 									:disabled="prefixSaving"
 									:placeholder="t('kanso', 'e.g. KAN')"
-									@keydown.enter.prevent="savePrefix">
+									@keydown.enter="submitOnEnter($event, savePrefix)">
 								<NcButton
 									:disabled="prefixSaving || !prefixDirty"
 									@click="savePrefix">
@@ -262,7 +285,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:disabled="chatUrlSaving"
 									:placeholder="t('kanso', 'https://cloud.example.com/call/abc123')"
 									data-test="board-chat-url-input"
-									@keydown.enter.prevent="saveChatUrl">
+									@keydown.enter="submitOnEnter($event, saveChatUrl)">
 								<NcButton
 									:disabled="chatUrlSaving || !chatUrlDirty"
 									data-test="board-chat-url-save"
@@ -374,7 +397,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<div class="board-actions__row">
 									<div class="board-actions__text">
 										<span class="board-actions__label">{{ t('kanso', 'Archive board') }}</span>
-										<span class="board-actions__hint">{{ t('kanso', 'Hide this board without deleting it. You can restore it later.') }}</span>
+										<span class="board-actions__hint">{{ t('kanso', 'Hide this board without deleting it. Unarchive it at any time; there is no deletion deadline.') }}</span>
 									</div>
 									<NcButton :disabled="archiving" @click="archiveBoard">
 										<template #icon>
@@ -387,7 +410,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<div class="board-actions__row">
 									<div class="board-actions__text">
 										<span class="board-actions__label board-actions__label--delete">{{ t('kanso', 'Delete board') }}</span>
-										<span class="board-actions__hint">{{ t('kanso', 'Permanently remove this board and all of its cards for everyone. This cannot be undone.') }}</span>
+										<span class="board-actions__hint">{{ t('kanso', 'Remove this board for everyone. Owners and managers have 30 days to restore it before permanent removal.') }}</span>
 									</div>
 									<NcButton type="error" :disabled="isDeletingBoard" @click="onDeleteBoardClick">
 										<template #icon>
@@ -466,7 +489,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								type="text"
 								maxlength="100"
 								:aria-label="t('kanso', 'Rename label')"
-								@keydown.enter.prevent="saveRename(label)"
+								@keydown.enter="submitOnEnter($event, () => saveRename(label))"
 								@keydown.escape="cancelRename"
 								@blur="saveRename(label)" />
 						</template>
@@ -570,7 +593,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:placeholder="t('kanso', 'Label name…')"
 							:disabled="isCreating"
 							:aria-label="t('kanso', 'New label name')"
-							@keydown.enter.prevent="submitCreate" />
+							@keydown.enter="submitOnEnter($event, submitCreate)" />
 						<button
 							class="label-settings__create-btn"
 							type="submit"
@@ -656,7 +679,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								type="text"
 								maxlength="100"
 								:aria-label="t('kanso', 'Rename review type')"
-								@keydown.enter.prevent="saveRtRename(rt)"
+								@keydown.enter="submitOnEnter($event, () => saveRtRename(rt))"
 								@keydown.escape="cancelRtRename"
 								@blur="saveRtRename(rt)" />
 						</template>
@@ -772,7 +795,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:placeholder="t('kanso', 'Review type name…')"
 							:disabled="isCreatingRt"
 							:aria-label="t('kanso', 'New review type name')"
-							@keydown.enter.prevent="submitCreateRt" />
+							@keydown.enter="submitOnEnter($event, submitCreateRt)" />
 						<label class="review-type-stage review-type-stage--create" :title="t('kanso', 'Stage — lower stages gate (defer) higher ones')">
 							<span class="review-type-stage__label">{{ t('kanso', 'Stage') }}</span>
 							<input
@@ -845,7 +868,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								type="text"
 								maxlength="100"
 								:aria-label="t('kanso', 'Rename field')"
-								@keydown.enter.prevent="saveCfRename(field)"
+								@keydown.enter="submitOnEnter($event, () => saveCfRename(field))"
 								@keydown.escape="cancelCfRename"
 								@blur="saveCfRename(field)" />
 						</template>
@@ -952,7 +975,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							:disabled="isCreatingCf"
 							:aria-label="t('kanso', 'New custom field name')"
 							data-test="cf-name-input"
-							@keydown.enter.prevent="submitCreateCf" />
+							@keydown.enter="submitOnEnter($event, submitCreateCf)" />
 						<select
 							v-model="newCfType"
 							class="workflow__select cf-settings__type-select"
@@ -1078,8 +1101,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ t('kanso', 'External') }}
 						</span>
 
-						<!-- Permission toggles: Edit (bit 2), Share (bit 4), Manage (bit 8) -->
+						<!-- Permission toggles -->
 						<div class="sharing__perms">
+							<label
+								class="sharing__perm-label"
+								:class="{ 'sharing__perm-label--disabled': !canToggleBit(entry, PERM_COMMENT) }"
+								:title="hasBit(entry.permission, PERM_EDIT) ? t('kanso', 'Editors can also comment.') : t('kanso', 'Can comment')">
+								<input
+									type="checkbox"
+									:checked="hasBit(effectivePermissions(entry.permission), PERM_COMMENT)"
+									:disabled="!canToggleBit(entry, PERM_COMMENT) || patchingAclId === entry.id"
+									@change="togglePerm(entry, PERM_COMMENT, $event.target.checked)" />
+								{{ t('kanso', 'Comment') }}
+							</label>
 							<label
 								class="sharing__perm-label"
 								:class="{ 'sharing__perm-label--disabled': !canToggleBit(entry, PERM_EDIT) }"
@@ -1530,7 +1564,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:placeholder="t('kanso', 'GitHub label name')"
 									:aria-label="t('kanso', 'GitHub label name')"
 									:disabled="intakeBusy"
-									@keyup.enter="saveIntakeLabel">
+									@keydown.enter="submitOnEnter($event, saveIntakeLabel)">
 								<NcButton :disabled="intakeBusy || !intakeLabelInput.trim()" @click="saveIntakeLabel">
 									{{ t('kanso', 'Save') }}
 								</NcButton>
@@ -1633,7 +1667,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:placeholder="t('kanso', 'Forgejo label name')"
 									:aria-label="t('kanso', 'Forgejo label name')"
 									:disabled="forgejoIntakeBusy"
-									@keyup.enter="saveForgejoIntakeLabel">
+									@keydown.enter="submitOnEnter($event, saveForgejoIntakeLabel)">
 								<NcButton :disabled="forgejoIntakeBusy || !forgejoIntakeLabelInput.trim()" @click="saveForgejoIntakeLabel">
 									{{ t('kanso', 'Save') }}
 								</NcButton>
@@ -2544,7 +2578,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</ul>
 
 					<!-- Add card rule form (MANAGE only) -->
-					<form v-if="canManage" class="automation__create-form" @submit.prevent="submitCreateAutoRule">
+					<form v-if="canManage" class="automation__create-form automation__create-form--card-rules" @submit.prevent="submitCreateAutoRule">
 						<h4 class="label-settings__create-heading">{{ t('kanso', 'Add rule') }}</h4>
 
 						<!-- Trigger role -->
@@ -2640,6 +2674,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
+import { submitOnEnter } from '../utils/keyboard.js'
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
@@ -2831,6 +2866,7 @@ const PERM_READ = 1
 const PERM_EDIT = 2
 const PERM_SHARE = 4
 const PERM_MANAGE = 8
+const PERM_COMMENT = 16
 
 const canManage = computed(() => (props.permissions & PERM_MANAGE) !== 0)
 const canShare = computed(() => (props.permissions & PERM_SHARE) !== 0)
@@ -3414,14 +3450,15 @@ function hasBit(mask, bit) {
 	return (mask & bit) !== 0
 }
 
-/**
- * Can the current user toggle a given bit on an entry?
- * Rule mirrors server cap: non-MANAGE holders can only touch bits they themselves hold.
- * MANAGE holders can toggle any bit.
- */
+function effectivePermissions(mask) {
+	return hasBit(mask, PERM_EDIT) ? mask | PERM_COMMENT : mask
+}
+
 function canToggleBit(entry, bit) {
-	if (canManage.value) return true
-	return hasBit(props.permissions, bit)
+	if (bit === PERM_COMMENT && hasBit(entry.permission, PERM_EDIT)) return false
+	const current = effectivePermissions(entry.permission)
+	const next = effectivePermissions(entry.permission ^ bit)
+	return ((current ^ next) & ~effectivePermissions(props.permissions)) === 0
 }
 
 // ── Tab / section-rail state ──────────────────────────────────────────────────
@@ -3595,22 +3632,40 @@ async function setDefaultBoard(checked) {
 // ── General: per-user "show this board in my calendar" (CalDAV, issue #49) ────
 // Personal preference; boards sync to your calendar by default, this hides them.
 const inMyCalendar = ref(true)
-const calendarSyncBusy = ref(false)
+const calendarAssignedOnly = ref(false)
+const calendarSyncBusy = ref(true)
+const calendarSyncError = ref('')
+function applyCalendarPreferences(res) {
+	inMyCalendar.value = res.enabled !== false
+	calendarAssignedOnly.value = res.assignedOnly === true
+}
 onMounted(async () => {
 	try {
-		const res = await fetchCalendarSync(props.boardId)
-		inMyCalendar.value = res.enabled !== false
+		applyCalendarPreferences(await fetchCalendarSync(props.boardId))
 	} catch {
-		// Non-fatal: default to on (its server-side default).
+		calendarSyncError.value = t('kanso', 'Could not load calendar preferences')
+	} finally {
+		calendarSyncBusy.value = false
 	}
 })
 async function setInMyCalendar(checked) {
+	await saveCalendarPreferences(checked, undefined)
+}
+async function setCalendarAssignedOnly(checked) {
+	await saveCalendarPreferences(undefined, checked)
+}
+async function saveCalendarPreferences(enabled, assignedOnly) {
+	if (calendarSyncBusy.value) return
+	const previous = { enabled: inMyCalendar.value, assignedOnly: calendarAssignedOnly.value }
+	if (enabled !== undefined) inMyCalendar.value = enabled
+	if (assignedOnly !== undefined) calendarAssignedOnly.value = assignedOnly
 	calendarSyncBusy.value = true
+	calendarSyncError.value = ''
 	try {
-		const res = await setCalendarSync(props.boardId, checked)
-		inMyCalendar.value = res.enabled !== false
+		applyCalendarPreferences(await setCalendarSync(props.boardId, enabled, assignedOnly))
 	} catch {
-		inMyCalendar.value = !checked // revert on failure
+		applyCalendarPreferences(previous)
+		calendarSyncError.value = t('kanso', 'Could not save calendar preferences')
 	} finally {
 		calendarSyncBusy.value = false
 	}
@@ -3854,6 +3909,21 @@ async function onNewCardsOnTopChange(checked) {
 		newCardsOnTopError.value = err?.response?.data?.error || t('kanso', 'Failed to update setting.')
 	} finally {
 		newCardsOnTopSaving.value = false
+	}
+}
+
+const singleAssignee = computed(() => boardQueryData.value?.board?.singleAssignee === true)
+const singleAssigneeSaving = ref(false)
+const singleAssigneeError = ref('')
+async function onSingleAssigneeChange(checked) {
+	singleAssigneeSaving.value = true
+	singleAssigneeError.value = ''
+	try {
+		await updateBoard.mutateAsync({ singleAssignee: checked })
+	} catch (err) {
+		singleAssigneeError.value = err?.response?.data?.error || t('kanso', 'Failed to update setting.')
+	} finally {
+		singleAssigneeSaving.value = false
 	}
 }
 
@@ -4525,11 +4595,10 @@ async function pickSharee(result) {
 	clearSearch()
 	addAclError.value = ''
 	try {
-		// Default permission: READ | EDIT (3)
 		await addAcl.mutateAsync({
 			participant: result.id,
 			participantType: result.type,
-			permission: PERM_READ | PERM_EDIT,
+			permission: PERM_READ | (canEdit.value ? PERM_EDIT : effectivePermissions(props.permissions) & PERM_COMMENT),
 		})
 	} catch (err) {
 		addAclError.value = err?.response?.data?.error || t('kanso', 'Failed to share board.')
@@ -4563,9 +4632,7 @@ async function togglePerm(entry, bit, checked) {
 // ── ACL: board side (internal/external, #3742) ────────────────────────────────
 
 /**
- * Re-assign a member's board side. MANAGE-gated (the selector only renders
- * for managers); the permission mask is re-submitted unchanged so the
- * escalation cap sees zero flipped bits.
+ * Re-assign a member's board side without changing their stored permission mask.
  */
 async function changeRole(entry, role) {
 	if (role === (entry.role || 'internal')) return
@@ -5239,7 +5306,7 @@ const {
 	createRule: createAutoRule,
 	setEnabled: setAutoRuleEnabled,
 	deleteRule: deleteAutoRule,
-} = useAutomationRules(computed(() => props.boardId))
+} = useAutomationRules(computed(() => props.boardId), { enabled: canManage })
 
 const autoRulesQuery = { isLoading: autoRulesLoading, isError: autoRulesError }
 const autoRules = computed(() => autoRulesData.value ?? [])
@@ -6412,6 +6479,23 @@ async function doDeleteAutoRule(rule) {
 .automation__form-select {
 	flex: 1;
 	min-width: 0;
+}
+
+.automation__create-form--card-rules .automation__form-row {
+	flex-wrap: wrap;
+}
+
+.automation__create-form--card-rules .automation__form-label {
+	width: auto;
+	max-width: 100%;
+	flex: 0 1 10rem;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
+.automation__create-form--card-rules .automation__form-select {
+	flex: 1 1 10rem;
+	max-width: 100%;
 }
 
 .automation__create-btn {

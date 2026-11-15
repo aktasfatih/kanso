@@ -113,6 +113,7 @@ class CardAttachmentService {
 		private IConfig $config,
 		private LoggerInterface $logger,
 		private BoardAccess $boardAccess,
+		private CardMutationService $cardMutation,
 	) {
 	}
 
@@ -191,94 +192,90 @@ class CardAttachmentService {
 	 * @throws StorageLimitException if an admin-configured instance-wide storage cap has no room left
 	 */
 	public function upload(int $cardId, ?array $upload, string $actorUid): CardAttachment {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		return $this->cardMutation->run($cardId, function () use ($cardId, $upload, $actorUid): CardAttachment {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		if ($upload === null || ($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-			$error = $upload['error'] ?? UPLOAD_ERR_NO_FILE;
-			if ($error === UPLOAD_ERR_INI_SIZE || $error === UPLOAD_ERR_FORM_SIZE) {
+			if ($upload === null || ($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+				$error = $upload['error'] ?? UPLOAD_ERR_NO_FILE;
+				if ($error === UPLOAD_ERR_INI_SIZE || $error === UPLOAD_ERR_FORM_SIZE) {
+					throw new InvalidInputException('File too large');
+				}
+				throw new InvalidInputException('No file uploaded');
+			}
+
+			// Reject on the CLIENT-REPORTED size first - so a caller announcing a
+			// huge upload is turned away before any bytes are read.
+			if ((int)($upload['size'] ?? 0) > self::MAX_SIZE) {
 				throw new InvalidInputException('File too large');
 			}
-			throw new InvalidInputException('No file uploaded');
-		}
 
-		// Reject on the CLIENT-REPORTED size first - so a caller announcing a
-		// huge upload is turned away before any bytes are read.
-		if ((int)($upload['size'] ?? 0) > self::MAX_SIZE) {
-			throw new InvalidInputException('File too large');
-		}
-
-		$tmpName = $upload['tmp_name'] ?? '';
-		if ($tmpName === '' || (!is_uploaded_file($tmpName) && !is_file($tmpName))) {
-			// In a real request PHP guarantees is_uploaded_file for a legit
-			// upload; the is_file fallback keeps the service unit-testable with a
-			// plain temp file. Anything else is a forged/absent tmp_name and must
-			// be rejected so we never read an arbitrary server path.
-			throw new InvalidInputException('No file uploaded');
-		}
-
-		// The authoritative size is the bytes actually on disk (a client may lie
-		// about `size`); re-check it against the cap.
-		$actualSize = @filesize($tmpName);
-		$size = $actualSize !== false ? $actualSize : (int)($upload['size'] ?? 0);
-		if ($size <= 0) {
-			throw new InvalidInputException('Empty file');
-		}
-		if ($size > self::MAX_SIZE) {
-			throw new InvalidInputException('File too large');
-		}
-		// Instance-wide storage cap, if an admin configured one. Checked BEFORE a
-		// single byte is written.
-		$this->assertStorageHeadroom($size);
-
-		$stream = @fopen($tmpName, 'rb');
-		if ($stream === false) {
-			throw new InvalidInputException('Could not read uploaded file');
-		}
-
-		// SERVER-GENERATED opaque object name - the client filename never touches
-		// the storage path.
-		$storageKey = $this->secureRandom->generate(
-			32,
-			ISecureRandom::CHAR_LOWER . ISecureRandom::CHAR_DIGITS
-		);
-		$folder = $this->cardFolder($cardId);
-		try {
-			$folder->newFile($storageKey, $stream);
-		} finally {
-			// newFile() may consume and close the stream itself; only close it if
-			// it is still an open resource (a double fclose would raise a warning
-			// that Nextcloud escalates to an exception).
-			/** @psalm-suppress TypeDoesNotContainType, RedundantCondition, DocblockTypeContradiction */
-			if (is_resource($stream)) {
-				fclose($stream);
+			$tmpName = $upload['tmp_name'] ?? '';
+			if ($tmpName === '' || (!is_uploaded_file($tmpName) && !is_file($tmpName))) {
+				// In a real request PHP guarantees is_uploaded_file for a legit
+				// upload; the is_file fallback keeps the service unit-testable with a
+				// plain temp file. Anything else is a forged/absent tmp_name and must
+				// be rejected so we never read an arbitrary server path.
+				throw new InvalidInputException('No file uploaded');
 			}
-		}
 
-		$attachment = new CardAttachment();
-		$attachment->setCardId($cardId);
-		$attachment->setBoardId($card->getBoardId());
-		$attachment->setFilename($this->sanitizeFilename((string)($upload['name'] ?? '')));
-		$attachment->setMime($this->sanitizeMime((string)($upload['type'] ?? '')));
-		$attachment->setSize($size);
-		$attachment->setStorageKey($storageKey);
-		$attachment->setUploadedBy($actorUid);
-		$attachment->setCreatedAt(time());
+			// The authoritative size is the bytes actually on disk (a client may lie
+			// about `size`); re-check it against the cap.
+			$actualSize = @filesize($tmpName);
+			$size = $actualSize !== false ? $actualSize : (int)($upload['size'] ?? 0);
+			if ($size <= 0) {
+				throw new InvalidInputException('Empty file');
+			}
+			if ($size > self::MAX_SIZE) {
+				throw new InvalidInputException('File too large');
+			}
+			// Instance-wide storage cap, if an admin configured one. Checked BEFORE a
+			// single byte is written.
+			$this->assertStorageHeadroom($size);
 
-		try {
+			$stream = @fopen($tmpName, 'rb');
+			if ($stream === false) {
+				throw new InvalidInputException('Could not read uploaded file');
+			}
+
+			// SERVER-GENERATED opaque object name - the client filename never touches
+			// the storage path.
+			$storageKey = $this->secureRandom->generate(
+				32,
+				ISecureRandom::CHAR_LOWER . ISecureRandom::CHAR_DIGITS
+			);
+			$folder = $this->cardFolder($cardId);
+			$this->cardMutation->afterRollback(fn () => $this->deleteObjectQuietly($cardId, $storageKey));
+			try {
+				$folder->newFile($storageKey, $stream);
+			} finally {
+				// newFile() may consume and close the stream itself; only close it if
+				// it is still an open resource (a double fclose would raise a warning
+				// that Nextcloud escalates to an exception).
+				/** @psalm-suppress TypeDoesNotContainType, RedundantCondition, DocblockTypeContradiction */
+				if (is_resource($stream)) {
+					fclose($stream);
+				}
+			}
+
+			$attachment = new CardAttachment();
+			$attachment->setCardId($cardId);
+			$attachment->setBoardId($card->getBoardId());
+			$attachment->setFilename($this->sanitizeFilename((string)($upload['name'] ?? '')));
+			$attachment->setMime($this->sanitizeMime((string)($upload['type'] ?? '')));
+			$attachment->setSize($size);
+			$attachment->setStorageKey($storageKey);
+			$attachment->setUploadedBy($actorUid);
+			$attachment->setCreatedAt(time());
+
 			$attachment = $this->attachmentMapper->insert($attachment);
-		} catch (\Throwable $e) {
-			// Roll back the orphaned object so a failed insert leaves no dangling
-			// bytes.
-			$this->deleteObjectQuietly($cardId, $storageKey);
-			throw $e;
-		}
 
-		$this->recordAttachmentChange($card, $attachment->getFilename(), $actorUid, Change::VERB_ATTACHMENT_ADDED);
+			$this->recordAttachmentChange($card, $attachment->getFilename(), $actorUid, Change::VERB_ATTACHMENT_ADDED);
 
-		return $attachment;
+			return $attachment;
+		});
 	}
 
 	/**
@@ -304,81 +301,79 @@ class CardAttachmentService {
 	 * @throws StorageLimitException if an admin-configured instance-wide storage cap has no room left
 	 */
 	public function attachFromFileNode(int $cardId, int $fileId, string $actorUid): CardAttachment {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		return $this->cardMutation->run($cardId, function () use ($cardId, $fileId, $actorUid): CardAttachment {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		// Resolve the node from the ACTOR'S OWN userfolder - the actor can only
-		// source a file they can already read. First match wins (a file can appear
-		// under several mount points for the same user).
-		try {
-			$userFolder = $this->rootFolder->getUserFolder($actorUid);
-		} catch (\Throwable $e) {
-			throw new InvalidInputException('File not found');
-		}
-		$nodes = $userFolder->getById($fileId);
-		$node = $nodes[0] ?? null;
-		if (!$node instanceof File) {
-			throw new InvalidInputException('File not found');
-		}
-
-		// The node's real size, capped BEFORE streaming (mirror the upload cap).
-		// getSize() is float|int for very large files; a cast is safe as the value
-		// is immediately range-checked against the cap.
-		$size = (int)$node->getSize();
-		if ($size <= 0) {
-			throw new InvalidInputException('Empty file');
-		}
-		if ($size > self::MAX_SIZE) {
-			throw new InvalidInputException('File too large');
-		}
-		// The SAME instance-wide storage cap as upload() - this path copies the
-		// same bytes into the same app-data, so leaving it out would just be the
-		// open door next to the closed one.
-		$this->assertStorageHeadroom($size);
-
-		$stream = $node->fopen('rb');
-		if ($stream === false) {
-			throw new InvalidInputException('Could not read file');
-		}
-
-		// SERVER-GENERATED opaque object name - the source filename never touches
-		// the storage path (identical to the upload path).
-		$storageKey = $this->secureRandom->generate(
-			32,
-			ISecureRandom::CHAR_LOWER . ISecureRandom::CHAR_DIGITS
-		);
-		$folder = $this->cardFolder($cardId);
-		try {
-			$folder->newFile($storageKey, $stream);
-		} finally {
-			/** @psalm-suppress TypeDoesNotContainType, RedundantCondition, DocblockTypeContradiction */
-			if (is_resource($stream)) {
-				fclose($stream);
+			// Resolve the node from the ACTOR'S OWN userfolder - the actor can only
+			// source a file they can already read. First match wins (a file can appear
+			// under several mount points for the same user).
+			try {
+				$userFolder = $this->rootFolder->getUserFolder($actorUid);
+			} catch (\Throwable $e) {
+				throw new InvalidInputException('File not found');
 			}
-		}
+			$nodes = $userFolder->getById($fileId);
+			$node = $nodes[0] ?? null;
+			if (!$node instanceof File) {
+				throw new InvalidInputException('File not found');
+			}
 
-		$attachment = new CardAttachment();
-		$attachment->setCardId($cardId);
-		$attachment->setBoardId($card->getBoardId());
-		$attachment->setFilename($this->sanitizeFilename($node->getName()));
-		$attachment->setMime($this->sanitizeMime($node->getMimetype()));
-		$attachment->setSize($size);
-		$attachment->setStorageKey($storageKey);
-		$attachment->setUploadedBy($actorUid);
-		$attachment->setCreatedAt(time());
+			// The node's real size, capped BEFORE streaming (mirror the upload cap).
+			// getSize() is float|int for very large files; a cast is safe as the value
+			// is immediately range-checked against the cap.
+			$size = (int)$node->getSize();
+			if ($size <= 0) {
+				throw new InvalidInputException('Empty file');
+			}
+			if ($size > self::MAX_SIZE) {
+				throw new InvalidInputException('File too large');
+			}
+			// The SAME instance-wide storage cap as upload() - this path copies the
+			// same bytes into the same app-data, so leaving it out would just be the
+			// open door next to the closed one.
+			$this->assertStorageHeadroom($size);
 
-		try {
+			$stream = $node->fopen('rb');
+			if ($stream === false) {
+				throw new InvalidInputException('Could not read file');
+			}
+
+			// SERVER-GENERATED opaque object name - the source filename never touches
+			// the storage path (identical to the upload path).
+			$storageKey = $this->secureRandom->generate(
+				32,
+				ISecureRandom::CHAR_LOWER . ISecureRandom::CHAR_DIGITS
+			);
+			$folder = $this->cardFolder($cardId);
+			$this->cardMutation->afterRollback(fn () => $this->deleteObjectQuietly($cardId, $storageKey));
+			try {
+				$folder->newFile($storageKey, $stream);
+			} finally {
+				/** @psalm-suppress TypeDoesNotContainType, RedundantCondition, DocblockTypeContradiction */
+				if (is_resource($stream)) {
+					fclose($stream);
+				}
+			}
+
+			$attachment = new CardAttachment();
+			$attachment->setCardId($cardId);
+			$attachment->setBoardId($card->getBoardId());
+			$attachment->setFilename($this->sanitizeFilename($node->getName()));
+			$attachment->setMime($this->sanitizeMime($node->getMimetype()));
+			$attachment->setSize($size);
+			$attachment->setStorageKey($storageKey);
+			$attachment->setUploadedBy($actorUid);
+			$attachment->setCreatedAt(time());
+
 			$attachment = $this->attachmentMapper->insert($attachment);
-		} catch (\Throwable $e) {
-			$this->deleteObjectQuietly($cardId, $storageKey);
-			throw $e;
-		}
 
-		$this->recordAttachmentChange($card, $attachment->getFilename(), $actorUid, Change::VERB_ATTACHMENT_ADDED);
+			$this->recordAttachmentChange($card, $attachment->getFilename(), $actorUid, Change::VERB_ATTACHMENT_ADDED);
 
-		return $attachment;
+			return $attachment;
+		});
 	}
 
 	/**
@@ -574,23 +569,25 @@ class CardAttachmentService {
 	 * @throws NotPermittedException if the actor may not edit the board
 	 */
 	public function delete(int $cardId, int $attachmentId, string $actorUid): void {
-		$card = $this->loadCard($cardId);
-		$board = $this->loadBoard($card->getBoardId());
-		$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
-		$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+		$this->cardMutation->run($cardId, function () use ($cardId, $attachmentId, $actorUid): void {
+			$card = $this->loadCard($cardId);
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
-		$attachment = $this->loadAttachmentOnCard($attachmentId, $cardId);
-		// Read the label BEFORE the row goes: after the delete it is the only
-		// surviving record of which file this was. (The column is NOT NULL, so the
-		// cast is for the entity's nullable property, never a real row.)
-		$filename = (string)$attachment->getFilename();
+			$attachment = $this->loadAttachmentOnCard($attachmentId, $cardId);
+			// Read the label BEFORE the row goes: after the delete it is the only
+			// surviving record of which file this was. (The column is NOT NULL, so the
+			// cast is for the entity's nullable property, never a real row.)
+			$filename = (string)$attachment->getFilename();
 
-		// Drop the row first (the source of truth for what's listed); then
-		// best-effort remove the bytes.
-		$this->attachmentMapper->delete($attachment);
-		$this->deleteObjectQuietly($cardId, $attachment->getStorageKey());
+			// Drop the row first (the source of truth for what's listed); then
+			// best-effort remove the bytes.
+			$this->attachmentMapper->delete($attachment);
+			$this->cardMutation->afterCommit(fn () => $this->deleteObjectQuietly($cardId, $attachment->getStorageKey()));
 
-		$this->recordAttachmentChange($card, $filename, $actorUid, Change::VERB_ATTACHMENT_REMOVED);
+			$this->recordAttachmentChange($card, $filename, $actorUid, Change::VERB_ATTACHMENT_REMOVED);
+		});
 	}
 
 	/**
@@ -611,21 +608,17 @@ class CardAttachmentService {
 	 */
 	public function deleteAllForCard(int $cardId): void {
 		$attachments = $this->attachmentMapper->findByCard($cardId);
-		foreach ($attachments as $attachment) {
-			// Best-effort per object - a failure on one must not strand the others.
-			$this->deleteObjectQuietly($cardId, $attachment->getStorageKey());
-		}
-
-		// Drop the whole per-card folder too, so nothing (including any object
-		// whose row was already gone) is left in app-data. Best-effort: a missing
-		// folder is fine.
-		try {
-			$this->appData->getFolder(self::FOLDER_PREFIX . $cardId)->delete();
-		} catch (\Throwable) {
-			// Nothing to clean up.
-		}
-
 		$this->attachmentMapper->deleteByCard($cardId);
+		$this->cardMutation->afterCommit(function () use ($cardId, $attachments): void {
+			foreach ($attachments as $attachment) {
+				$this->deleteObjectQuietly($cardId, $attachment->getStorageKey());
+			}
+			try {
+				$this->appData->getFolder(self::FOLDER_PREFIX . $cardId)->delete();
+			} catch (\Throwable) {
+				// Missing or unavailable storage must not prevent other cleanup.
+			}
+		});
 	}
 
 	/**

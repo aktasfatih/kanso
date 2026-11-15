@@ -52,7 +52,7 @@ globalThis.window = {
 // hoisted and evaluated BEFORE any statement in the module, so a static import
 // of the composable would reach @nextcloud/router before the stub above exists.
 const { createApp, effectScope, watchEffect, nextTick, ref } = await import('vue')
-const { QueryClient, VueQueryPlugin } = await import('@tanstack/vue-query')
+const { QueryClient, QueryObserver, VueQueryPlugin } = await import('@tanstack/vue-query')
 const axios = (await import('@nextcloud/axios')).default
 const { useCardProjects } = await import('../../src/composables/useProjects.js')
 const { TOGGLE_ALREADY_PENDING } = await import('../../src/composables/useToggleQueue.js')
@@ -94,7 +94,7 @@ after(() => {
  * @param {number} latency How long each membership write takes to answer.
  * @param {Array<object|null>} outcomes Per call: a rejection value, or null to succeed.
  */
-function harness(t, openCard, latency, outcomes = []) {
+function harness(t, openCard, latency, outcomes = [], reply) {
 	const app = createApp({})
 	// A SHORT gcTime, not TanStack's five-minute default, which parks a real
 	// timer and keeps `node --test` from ever exiting. retry:false so a refusal
@@ -134,6 +134,7 @@ function harness(t, openCard, latency, outcomes = []) {
 			cardId: Number(match[2]),
 		})
 		const outcome = outcomes[call++]
+		if (reply) await reply(writes.at(-1), call - 1)
 		if (latency > 0) await sleep(latency)
 		if (outcome) throw outcome
 		return { status: 200, statusText: 'OK', data: { ok: true }, headers: {}, config }
@@ -175,11 +176,6 @@ test('a project picked while another is on the wire is queued, not dropped', asy
 })
 
 test('the project picks are serialised, not fired in parallel', async (t) => {
-	// The three pickers share one queue, and for the other two serial is load
-	// bearing: overlapping optimistic patches are how a rollback resurrects a
-	// value a newer pick already replaced. This picker has no optimistic patch,
-	// so serial here is what keeps its settle invalidations — and so the ticks
-	// the user sees — in the order the picks were made.
 	const { enqueueToggle, writes } = harness(t, 222, 120)
 
 	const first = enqueueToggle({ cardId: 222, projectId: 1, assign: true })
@@ -330,3 +326,152 @@ test('un-picking a project sends the remove, and queues behind an add', async (t
 		{ method: 'DELETE', projectId: 2, cardId: 777 },
 	], 'the queued pick must keep its own direction')
 })
+
+function deferred() {
+	let resolve
+	const promise = new Promise((done) => { resolve = done })
+	return { promise, resolve }
+}
+
+function observeCard(t, queryClient, cardId, queryFn) {
+	const observer = new QueryObserver(queryClient, {
+		queryKey: ['card', String(cardId)],
+		queryFn,
+		staleTime: Infinity,
+	})
+	t.after(observer.subscribe(() => {}))
+}
+
+test('queued membership projects immediately and survives earlier reconciliation without patching feeds', async (t) => {
+	const gates = [deferred(), deferred()]
+	const started = [deferred(), deferred()]
+	const server = { id: 101, title: 'Current', projectIds: [] }
+	const h = harness(t, 101, 0, [], async (write, index) => {
+		started[index].resolve()
+		await gates[index].promise
+		server.projectIds = [...server.projectIds, write.projectId]
+	})
+	h.queryClient.setQueryData(['card', '101'], { ...server })
+	const feed = { cards: [] }
+	const projects = [{ id: 1, cardCount: 0 }, { id: 2, cardCount: 0 }]
+	h.queryClient.setQueryData(['project', '1'], feed)
+	h.queryClient.setQueryData(['projects'], projects)
+	observeCard(t, h.queryClient, 101, async () => ({ ...server }))
+	const ids = () => [...h.projectIdsFor('101', h.queryClient.getQueryData(['card', '101']).projectIds)]
+	const seen = []
+	h.scope.run(() => watchEffect(() => seen.push(ids())))
+	const first = h.enqueueToggle({ cardId: 101, projectId: 1, assign: true })
+	const second = h.enqueueToggle({ cardId: '101', projectId: 2, assign: true })
+	t.after(async () => {
+		for (const gate of gates) gate.resolve()
+		await Promise.allSettled([first, second])
+	})
+	assert.deepEqual(ids(), [1, 2])
+	assert.equal(h.writes.length, 0, 'both picks project before the queue starts')
+	await nextTick()
+	assert.deepEqual(seen, [[], [1, 2]], 'queued intentions repaint reactively')
+	await started[0].promise
+	assert.deepEqual(h.writes.map((write) => write.projectId), [1])
+	assert.deepEqual(h.queryClient.getQueryData(['card', '101']).projectIds, [])
+	assert.deepEqual(h.queryClient.getQueryData(['project', '1']), feed)
+	assert.deepEqual(h.queryClient.getQueryData(['projects']), projects)
+	gates[0].resolve()
+	await first
+	await started[1].promise
+	assert.deepEqual(h.queryClient.getQueryData(['card', '101']).projectIds, [1])
+	assert.deepEqual(ids(), [1, 2], 'the queued second tick survives the first authoritative read')
+	gates[1].resolve()
+	await second
+	assert.deepEqual(ids(), [1, 2])
+	assert.deepEqual(h.queryClient.getQueryData(['card', '101']).projectIds, [1, 2])
+	assert.deepEqual(h.queryClient.getQueryData(['project', '1']), feed)
+	assert.deepEqual(h.queryClient.getQueryData(['projects']), projects)
+})
+
+for (const assign of [true, false]) {
+	test(`a refused membership ${assign ? 'add' : 'remove'} drops only its intention before a blocked refetch`, async (t) => {
+		const gates = [deferred(), deferred()]
+		const started = [deferred(), deferred()]
+		const read = deferred()
+		const readStarted = deferred()
+		const openCard = ref(102)
+		const h = harness(t, openCard, 0, [new Error('Denied')], async (_write, index) => {
+			started[index].resolve()
+			await gates[index].promise
+		})
+		const key = ['card', '102']
+		h.queryClient.setQueryData(key, { id: 102, projectIds: assign ? [9] : [1, 9], title: 'Before' })
+		h.queryClient.setQueryData(['card', '103'], { id: 103, projectIds: [8] })
+		const feed = { cards: [{ id: 102 }] }
+		h.queryClient.setQueryData(['project', '1'], feed)
+		observeCard(t, h.queryClient, 102, async () => {
+			readStarted.resolve()
+			await read.promise
+			return h.queryClient.getQueryData(key)
+		})
+		const ids = () => [...h.projectIdsFor(102, h.queryClient.getQueryData(key).projectIds)]
+		const first = h.enqueueToggle({ cardId: 102, projectId: 1, assign })
+		const rejected = assert.rejects(first, /Denied/)
+		const second = h.enqueueToggle({ cardId: 102, projectId: 2, assign: true })
+		t.after(async () => {
+			for (const gate of gates) gate.resolve()
+			read.resolve()
+			await Promise.allSettled([first, second])
+		})
+		await started[0].promise
+		assert.equal(ids().includes(1), assign, 'the failed intention was visible before failure')
+		assert.equal(ids().includes(2), true, 'the second row projects while still queued')
+		assert.equal(await h.enqueueToggle({ cardId: '102', projectId: 1, assign: !assign }), TOGGLE_ALREADY_PENDING)
+		assert.equal(ids().includes(1), assign, 'a duplicate does not replace the accepted intention')
+		const latest = { id: 102, projectIds: assign ? [7] : [1, 7], title: 'Updated', labelIds: [44], assigneeIds: ['tester'] }
+		h.queryClient.setQueryData(key, latest)
+		openCard.value = 103
+		assert.deepEqual([...h.projectIdsFor(openCard.value, [8])], [8], 'old intentions stay off the newly opened card')
+		gates[0].resolve()
+		await readStarted.promise
+		assert.deepEqual(ids(), assign ? [7, 2] : [1, 7, 2], 'rollback preserves current authoritative membership and the queued row')
+		assert.deepEqual(h.queryClient.getQueryData(key), latest, 'no neighbouring detail fields or filtered memberships are restored')
+		assert.deepEqual(h.queryClient.getQueryData(['project', '1']), feed)
+		assert.deepEqual(h.writes.map((write) => write.projectId), [1])
+		read.resolve()
+		await rejected
+		await started[1].promise
+		gates[1].resolve()
+		await second
+		assert.deepEqual(h.writes.map((write) => write.cardId), [102, 102])
+		assert.deepEqual(h.queryClient.getQueryData(['card', '103']), { id: 103, projectIds: [8] })
+		assert.equal(h.invalidated.includes('card/103'), false)
+	})
+}
+
+for (const assign of [true, false]) {
+	test(`an acknowledged membership ${assign ? 'add' : 'remove'} survives a sibling cancelling reconciliation`, async (t) => {
+		const read = deferred()
+		const readStarted = deferred()
+		const h = harness(t, 104, 0)
+		const key = ['card', '104']
+		h.queryClient.setQueryData(key, { id: 104, projectIds: assign ? [7] : [1, 7], title: 'Before' })
+		observeCard(t, h.queryClient, 104, async () => {
+			readStarted.resolve()
+			await read.promise
+			return { id: 104, projectIds: [], title: 'Obsolete' }
+		})
+		const pick = h.enqueueToggle({ cardId: 104, projectId: 1, assign })
+		t.after(async () => {
+			read.resolve()
+			await pick
+		})
+		await readStarted.promise
+		assert.equal(h.isTogglePending(104, 1), true)
+		h.queryClient.setQueryData(key, (old) => ({ ...old, title: 'Updated', labelIds: [44] }))
+		await h.queryClient.cancelQueries({ queryKey: key })
+		await pick
+		assert.equal(h.isTogglePending(104, 1), false)
+		assert.deepEqual([...h.projectIdsFor(104, h.queryClient.getQueryData(key).projectIds)], assign ? [7, 1] : [7])
+		assert.equal(h.queryClient.getQueryData(key).title, 'Updated')
+		assert.deepEqual(h.queryClient.getQueryData(key).labelIds, [44])
+		read.resolve()
+		await nextTick()
+		assert.equal(h.queryClient.getQueryData(key).title, 'Updated', 'cancelled stale replies cannot overwrite acknowledgement')
+	})
+}

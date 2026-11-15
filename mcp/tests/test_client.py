@@ -209,6 +209,9 @@ async def test_update_card_serializes_all_fields():
     route = respx.patch(f"{BASE}/cards/100").mock(
         return_value=httpx.Response(200, json={"id": 100, "title": "T", "stackId": 11})
     )
+    respx.get(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json={"id": 100, "title": "T", "stackId": 11})
+    )
     async with _client() as c:
         card = await c.update_card(
             100,
@@ -255,12 +258,76 @@ async def test_update_card_drops_none():
     route = respx.patch(f"{BASE}/cards/100").mock(
         return_value=httpx.Response(200, json={"id": 100, "title": "T", "stackId": 11})
     )
+    respx.get(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json={"id": 100, "title": "T", "stackId": 11})
+    )
     async with _client() as c:
         await c.update_card(100, status="done")
     import json as _json
 
     # Every unset field (incl. the new ones) must be dropped; only status is sent.
     assert _json.loads(route.calls.last.request.content) == {"status": "done"}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_update_card_returns_refreshed_details():
+    respx.patch(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json={"id": 100, "title": "T"})
+    )
+    details = {
+        "id": 100,
+        "title": "T",
+        "description": "Updated",
+        "labelIds": [5],
+        "assigneeIds": ["bob"],
+        "assignees": [{"uid": "bob", "displayName": "Bob", "actorName": None}],
+        "relations": {
+            "blocks": [],
+            "blockedBy": [],
+            "duplicates": [],
+            "relates": [{"id": 9, "cardId": 200, "title": "Related"}],
+        },
+    }
+    respx.get(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json=details)
+    )
+    async with _client() as c:
+        card = await c.update_card(100, description="Updated")
+
+    assert [call.request.method for call in respx.calls] == ["PATCH", "GET"]
+    for call in respx.calls:
+        _assert_api_headers(call.request)
+    assert card.description == "Updated"
+    assert card.labelIds == [5]
+    assert card.assigneeIds == ["bob"]
+    assert card.assignees == details["assignees"]
+    assert card.relations == details["relations"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [403, 404, 503])
+async def test_update_card_surfaces_detail_read_failure_after_successful_patch(
+    status_code,
+):
+    patch = respx.patch(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json={"id": 100, "title": "Updated"})
+    )
+    read = respx.get(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(status_code, json={"error": "Details unavailable"})
+    )
+    async with _client() as c:
+        with pytest.raises(KansoApiError) as excinfo:
+            await c.update_card(100, title="Updated")
+
+    assert patch.call_count == 1
+    assert read.call_count == 1
+    assert [call.request.method for call in respx.calls] == ["PATCH", "GET"]
+    assert excinfo.value.method == "GET"
+    assert excinfo.value.path == "/cards/100"
+    assert excinfo.value.status_code == status_code
+    assert "GET /cards/100" in str(excinfo.value)
 
 
 @respx.mock
@@ -275,6 +342,20 @@ async def test_move_card_body_uses_targetStackId():
 
     # after_card_id=None is dropped; only targetStackId is sent.
     assert _json.loads(route.calls.last.request.content) == {"targetStackId": 12}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_move_card_preserves_sparse_response():
+    payload = {"id": 100, "title": "Moved", "stackId": 12}
+    respx.post(f"{BASE}/cards/100/move").mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+    async with _client() as c:
+        result = await c.move_card(100, target_stack_id=12)
+
+    assert result == payload
+    assert not {"labelIds", "assigneeIds", "assignees", "relations"} & result.keys()
 
 
 @respx.mock
@@ -942,6 +1023,7 @@ async def test_done_gate_403_surfaces_which_review_blocks():
     assert excinfo.value.status_code == 403
     assert "bob (review #12)" in excinfo.value.body
     assert "bob (review #12)" in str(excinfo.value)
+    assert [call.request.method for call in respx.calls] == ["PATCH"]
 
 
 @respx.mock
@@ -1229,6 +1311,33 @@ async def test_list_projects_parses():
     assert projects[0].title == "Launch"
     assert projects[0].color == "0082c9"
     assert projects[0].createdAt == 1700000000
+    assert projects[0].lead is None
+    assert projects[0].leadDisplayName is None
+    assert projects[0].lifecycleStatus == "planned"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_projects_keeps_lead_and_lifecycle():
+    respx.get(f"{BASE}/projects").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    **PROJECT,
+                    "lead": "alice",
+                    "leadDisplayName": "Alice",
+                    "lifecycleStatus": "in_progress",
+                }
+            ],
+        )
+    )
+    async with _client() as c:
+        project = (await c.list_projects())[0]
+
+    assert project.lead == "alice"
+    assert project.leadDisplayName == "Alice"
+    assert project.lifecycleStatus == "in_progress"
 
 
 @respx.mock
@@ -1262,12 +1371,64 @@ async def test_create_project_drops_unset_fields():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_create_project_with_lead_and_lifecycle():
+    route = respx.post(f"{BASE}/projects").mock(
+        return_value=httpx.Response(
+            200, json={**PROJECT, "lead": "alice", "lifecycleStatus": "in_progress"}
+        )
+    )
+    async with _client() as c:
+        project = await c.create_project(
+            "Launch", lead="alice", lifecycle_status="in_progress"
+        )
+
+    assert json.loads(route.calls.last.request.content) == {
+        "title": "Launch",
+        "lead": "alice",
+        "lifecycleStatus": "in_progress",
+    }
+    assert project.lead == "alice"
+    assert project.lifecycleStatus == "in_progress"
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("lead", ["alice", ""])
+@pytest.mark.parametrize("lifecycle_status", ["planned", "in_progress", "done"])
+async def test_update_project_sets_or_clears_metadata(lead, lifecycle_status):
+    route = respx.patch(f"{BASE}/projects/4").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                **PROJECT,
+                "lead": lead or None,
+                "lifecycleStatus": lifecycle_status,
+            },
+        )
+    )
+    async with _client() as c:
+        project = await c.update_project(
+            4, lead=lead, lifecycle_status=lifecycle_status
+        )
+
+    assert json.loads(route.calls.last.request.content) == {
+        "lead": lead,
+        "lifecycleStatus": lifecycle_status,
+    }
+    assert project.lead == (lead or None)
+    assert project.lifecycleStatus == lifecycle_status
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_update_project_patches_only_what_changed():
     route = respx.patch(f"{BASE}/projects/4").mock(
         return_value=httpx.Response(200, json={**PROJECT, "color": None})
     )
     async with _client() as c:
-        project = await c.update_project(4, color="")
+        project = await c.update_project(
+            4, color="", lead=None, lifecycle_status=None
+        )
     # "" is how the caller CLEARS the colour, so it must survive the None-filter.
     assert json.loads(route.calls.last.request.content) == {"color": ""}
     assert project.color is None
@@ -1440,3 +1601,16 @@ async def test_project_owner_gate_surfaces_as_kanso_api_error():
         with pytest.raises(KansoApiError) as excinfo:
             await c.list_project_cards(9)
     assert excinfo.value.status_code == 403
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("enabled", [True, False])
+async def test_update_board_sends_single_assignee_and_preserves_response(enabled):
+    route = respx.patch(f"{BASE}/boards/3").mock(
+        return_value=httpx.Response(200, json={"id": 3, "title": "B", "singleAssignee": enabled})
+    )
+    async with _client() as c:
+        board = await c.update_board(3, single_assignee=enabled)
+    assert json.loads(route.calls.last.request.content) == {"singleAssignee": enabled}
+    assert board.singleAssignee is enabled

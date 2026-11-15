@@ -180,6 +180,7 @@ class CardAttachmentServiceTest extends TestCase {
 			$this->config,
 			$this->createMock(LoggerInterface::class),
 			$this->boardAccess,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
 
@@ -1025,6 +1026,7 @@ class CardAttachmentServiceTest extends TestCase {
 			$this->config,
 			$this->createMock(LoggerInterface::class),
 			$this->boardAccess,
+			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 		$this->attachmentMapper->expects(self::once())->method('deleteByCard')->with(9);
 

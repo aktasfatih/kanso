@@ -75,6 +75,11 @@ test('unknown card resolves and retains page context while resolver errors fall 
 	assert.equal(await resolveCardRoute({ name: 'board', params: { id: '7' } }, null, null, () => { throw new Error('not a card route') }), undefined)
 })
 
+test('a resolved human reference switches to its destination board even when its numeric id already matches', async () => {
+	const result = await resolveCardRoute(modal, null, null, async () => ({ cardId: 9, boardId: 17 }))
+	assert.deepEqual(result, { name: 'card-modal', params: { id: 17, cardId: 9 }, query: modal.query, hash: modal.hash, replace: true })
+})
+
 test('navigation resolution is time bounded', async () => {
 	globalThis.window = { _oc_webroot: '', location: { href: 'http://localhost/' }, addEventListener() {}, removeEventListener() {} }
 	const axios = (await import('@nextcloud/axios')).default

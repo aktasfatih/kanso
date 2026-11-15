@@ -31,7 +31,10 @@ export function useBoards() {
 
 	const deleteBoard = useMutation({
 		mutationFn: (id) => apiDeleteBoard(id),
-		onSettled: () => queryClient.invalidateQueries({ queryKey: ['boards'] }),
+		onSettled: () => Promise.all([
+			queryClient.invalidateQueries({ queryKey: ['boards'] }),
+			queryClient.invalidateQueries({ queryKey: ['deleted-boards'] }),
+		]),
 	})
 
 	// Per-user board pinning (#3632). Optimistic: the board's `pinned` flag on the
