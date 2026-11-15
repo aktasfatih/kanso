@@ -11,6 +11,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.46.0](https://github.com/aktasfatih/kanso/compare/v0.45.1...v0.46.0) (2026-11-15)
+
+
+### Bug Fixes
+
+* **automation:** keep trigger and action labels readable ([f66b289](https://github.com/aktasfatih/kanso/commit/f66b28971a9d56525b2a6beb1de13de129de7e6e))
+* **calendar:** include cards with only a start date ([2f05156](https://github.com/aktasfatih/kanso/commit/2f05156ff618bbc618be7796d7cfe22c9ddf7ca9)), closes [#49](https://github.com/aktasfatih/kanso/issues/49)
+* **calendar:** preserve task reads and reject unsupported writes ([f1a9049](https://github.com/aktasfatih/kanso/commit/f1a9049d89765c1a5f102a90b3b0a90dee8780f8))
+* **cards:** complete parents after their final checklist step ([343d6a3](https://github.com/aktasfatih/kanso/commit/343d6a32351dfb792bd245f07a3b341c57aefa0f))
+* **cards:** preserve concurrent edits when moving cards between boards ([2b4744f](https://github.com/aktasfatih/kanso/commit/2b4744f0efadb88c3b7120263439bd021b14f09e))
+* **cards:** preserve moved references and prevent number reuse ([9120b1f](https://github.com/aktasfatih/kanso/commit/9120b1f0202f3a463c6009c37e96a0595b9cd0ba))
+* **cards:** preserve newer hierarchy edits when a move fails ([5716aca](https://github.com/aktasfatih/kanso/commit/5716aca5eac9db63aef32e5ee943d25f83c4227b))
+* **cards:** preserve newer state when archive or delete fails ([b8ce57c](https://github.com/aktasfatih/kanso/commit/b8ce57c4bca149750ff013e7b9b427323b7dfe92))
+* **cards:** prevent moved references opening unrelated cards ([d7d0fa6](https://github.com/aktasfatih/kanso/commit/d7d0fa6f1dc8cd3475ff01ae0fd86f1ef4a90f8d))
+* **cards:** retain available numbering history during upgrades ([029bff9](https://github.com/aktasfatih/kanso/commit/029bff97ee2b88409487e3ed7e34181465701b9c))
+* **checklist:** keep due dates and pickers within narrow cards ([ba8aca4](https://github.com/aktasfatih/kanso/commit/ba8aca4ce3b10a9fd751b12177f06bab2e465fe5))
+* collapse new-comment composer until focused ([87d5444](https://github.com/aktasfatih/kanso/commit/87d544495e56af703a3d9ddcd27777810db209ae))
+* **deps:** patch browser and MCP security dependencies ([1b0f8c5](https://github.com/aktasfatih/kanso/commit/1b0f8c56f0b6c0bc34df9267af59c30823659ab4))
+* **dev:** report database startup failures before install ([fdcf9c3](https://github.com/aktasfatih/kanso/commit/fdcf9c315a33d71ae5e443c54628e10e1d4f020d))
+* handle SQLite contention during card edits ([75ff0ef](https://github.com/aktasfatih/kanso/commit/75ff0efd43ed4d6f7275ac4b325f785c0ada37e8))
+* **hierarchy:** show archived sub-cards as resolved ([e26c0d9](https://github.com/aktasfatih/kanso/commit/e26c0d9974d25c8e12e95e93a8a10911d08e37fc))
+* keep public board attribution above the guest banner ([e4ef5ba](https://github.com/aktasfatih/kanso/commit/e4ef5badc70415cb2e074f5f718c190b56eb3af9))
+* let IME keyboards finish text before Enter saves ([14bbc8f](https://github.com/aktasfatih/kanso/commit/14bbc8f17855d57438205641a82ce6f4ff5128b7))
+* **mcp:** return current card details after updates ([52c1f3e](https://github.com/aktasfatih/kanso/commit/52c1f3ee84afe8ad45728bfc0ef1b9f72d1bfdee))
+* preserve project lead labels and respect settings permissions ([1808ab5](https://github.com/aktasfatih/kanso/commit/1808ab5f63749634ea32eeb6ecd0538a023f6064))
+* **projects:** preserve drafts when delayed writes finish after navigation ([bb5975a](https://github.com/aktasfatih/kanso/commit/bb5975a288d41aac8b6510d242745681a18da154))
+* **search:** exclude templates and their comments ([f4e6fd4](https://github.com/aktasfatih/kanso/commit/f4e6fd48e5b7b24239dce8e511662e5f9b02123a))
+* show accurate and bounded review errors ([dad60a2](https://github.com/aktasfatih/kanso/commit/dad60a299170a4b3cb0b93ecbe508c199c0f3e56))
+* show project membership changes immediately ([5ba6487](https://github.com/aktasfatih/kanso/commit/5ba6487cf7b851af9b08d67e3ad9acd464f87b1a))
+* **users:** clean up personal data after account deletion ([3faa3a9](https://github.com/aktasfatih/kanso/commit/3faa3a9c2a4f7f67845ebacc6850026c138c9a9d))
+* **webhooks:** keep signed deliveries available after invalid requests ([8b89e02](https://github.com/aktasfatih/kanso/commit/8b89e02282a742653b9daba5738aea194ec8f65f))
+
+
+### Features
+
+* **boards:** add optional single-assignee boards ([6e9a62b](https://github.com/aktasfatih/kanso/commit/6e9a62b8f832e0bbd15d67449b1cf39f13a9590d))
+* **boards:** restore deleted boards for 30 days ([16c6424](https://github.com/aktasfatih/kanso/commit/16c6424c910967ff9ba7a3c2b4fb8dcb06acb3a9))
+* **calendar:** filter personal calendars to assigned cards ([6aba31f](https://github.com/aktasfatih/kanso/commit/6aba31f73e01549a33d555c0a6d66166664e9fe1))
+* **projects:** add project leads and lifecycle status ([fee003e](https://github.com/aktasfatih/kanso/commit/fee003e4ef3041caea538dde6803afcb640407cb))
+* **sharing:** let members comment without editing cards ([b33e2e7](https://github.com/aktasfatih/kanso/commit/b33e2e7f984a41751fc039c32e7f5ca4449ed306))
+
 ## [0.45.1](https://github.com/aktasfatih/kanso/compare/v0.45.0...v0.45.1) (2026-11-11)
 
 
