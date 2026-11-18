@@ -39,11 +39,11 @@ globalThis.window = {
 }
 
 const { createApp, effectScope } = await import('vue')
-const { QueryClient, VueQueryPlugin } = await import('@tanstack/vue-query')
+const { QueryClient, QueryObserver, VueQueryPlugin } = await import('@tanstack/vue-query')
 const axios = (await import('@nextcloud/axios')).default
 const { useAcl } = await import('../../src/composables/useAcl.js')
 const { useAssignees } = await import('../../src/composables/useAssignees.js')
-const { participantsQueryKey } = await import('../../src/composables/queryKeys.js')
+const { boardQueryKey, participantsQueryKey } = await import('../../src/composables/queryKeys.js')
 
 // TanStack's focusManager reads document.visibilityState when it decides
 // whether to refetch, so it has to be present and 'visible'.
@@ -201,6 +201,39 @@ test('a permission change settles through the same invalidation', async (t) => {
 	// It is here so the three mutations cannot drift apart — the add is the one
 	// that was missed last time.
 	assert.equal(h.participantReads(), 2)
+})
+
+test('permission controls stay pending until the refreshed board reaches the cache', async (t) => {
+	const h = harness(t, 10672)
+	await flush()
+	const key = boardQueryKey(10672)
+	const permission = 1 | 16
+	h.queryClient.setQueryData(key, { acl: [{ id: 42, permission: 1 }] })
+	let release
+	const refreshed = new Promise((resolve) => { release = resolve })
+	const observer = new QueryObserver(h.queryClient, {
+		queryKey: key,
+		queryFn: () => refreshed,
+		staleTime: Infinity,
+	})
+	const unsubscribe = observer.subscribe(() => {})
+	t.after(() => {
+		release({ acl: [{ id: 42, permission }] })
+		unsubscribe()
+	})
+
+	let settled = false
+	const mutation = h.acl.patchAcl.mutateAsync({ aclId: 42, permission }).then(() => { settled = true })
+	await flush()
+	assert.equal(h.aclWrites(), 1)
+	assert.equal(h.acl.patchAcl.isPending.value, true)
+	assert.equal(settled, false)
+	assert.equal(h.queryClient.getQueryData(key).acl[0].permission, 1)
+
+	release({ acl: [{ id: 42, permission }] })
+	await mutation
+	assert.equal(h.acl.patchAcl.isPending.value, false)
+	assert.equal(h.queryClient.getQueryData(key).acl[0].permission, permission)
 })
 
 test('the participants key is spelled the same whichever end produces it', () => {
