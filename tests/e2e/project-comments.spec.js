@@ -47,7 +47,10 @@ test.describe('Project discussion log', () => {
 		// Post a comment carrying markdown (bold text).
 		const ta = composer.locator('.project-view__comment-textarea')
 		await ta.fill('First **note** in the log')
+		const response = page.waitForResponse((result) => result.request().method() === 'POST'
+			&& result.url().endsWith(`/projects/${state.projectId}/comments`))
 		await composer.getByRole('button', { name: /^Post$/ }).click()
+		expect((await response).ok()).toBe(true)
 
 		// The rendered comment body appears with the markdown turned into HTML.
 		const body = page.locator('.project-view__comment-body').first()
