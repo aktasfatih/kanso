@@ -56,8 +56,10 @@ export function useAcl(boardId) {
 	// useBoardDelta only consumes ENTITY_CARD rows, so a share still lands in
 	// their other tabs on the next full board read. That is its own change.
 	function invalidateAcl() {
-		queryClient.invalidateQueries({ queryKey: getBoardKey() })
-		queryClient.invalidateQueries({ queryKey: participantsQueryKey(rawBoardId()) })
+		return Promise.all([
+			queryClient.invalidateQueries({ queryKey: getBoardKey() }),
+			queryClient.invalidateQueries({ queryKey: participantsQueryKey(rawBoardId()) }),
+		])
 	}
 
 	const addAcl = useMutation({
