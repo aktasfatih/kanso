@@ -1253,15 +1253,25 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							class="card-modal__pill card-modal__pill--dashed card-modal__pill--sm"
 							data-pill="project"
 							:aria-expanded="openPicker === 'project'"
-							@click="togglePicker('project')">
+							@click="toggleProjectPicker">
 							<FolderMultipleOutlineIcon :size="12" />
 							{{ cardProjectIds.size > 0
 								? n('kanso', '%n project', '%n projects', cardProjectIds.size)
 								: t('kanso', 'Project') }}
 						</button>
 						<div v-if="openPicker === 'project'" class="card-modal__popover">
+							<input
+								ref="projectSearchInput"
+								v-model="projectQuery"
+								type="search"
+								class="card-modal__label-search"
+								:placeholder="t('kanso', 'Search projects…')"
+								:aria-label="t('kanso', 'Search projects')">
 							<div v-if="allProjects.length === 0" class="card-modal__popover-empty">
 								{{ t('kanso', 'No projects yet.') }}
+							</div>
+							<div v-else-if="filteredProjects.length === 0" class="card-modal__popover-empty">
+								{{ t('kanso', 'No projects match.') }}
 							</div>
 							<!-- Same rule as the assign and label rows above (#10705):
 							     `aria-busy`, never `disabled`. This picker was the last one
@@ -1276,7 +1286,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							     `.card-modal__label-toggle[aria-busy='true']` rule these rows
 							     already match. -->
 							<button
-								v-for="project in allProjects"
+								v-for="project in filteredProjects"
 								:key="project.id"
 								class="card-modal__label-toggle"
 								:class="{ 'card-modal__label-toggle--active': cardProjectIds.has(project.id) }"
@@ -1985,7 +1995,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<TimerOutlineIcon :size="14" class="card-modal__timer-running-icon" />
 								<span class="card-modal__timer-running-label">{{ t('kanso', 'Timer running') }}</span>
 								<ElapsedCounter class="card-modal__timer-running-elapsed" :started-at="cardData.runningTimer.startedAt" :format="formatDuration" />
+								<span v-if="cardData.runningTimer.actorName" class="card-modal__time-actor">
+									<RobotOutlineIcon :size="14" class="card-modal__ai-actor-icon" />
+									{{ cardData.runningTimer.actorName }}
+								</span>
 							</div>
+							<NcButton
+								v-if="canEdit"
+								type="secondary"
+								data-test="card-timer-toggle"
+								:disabled="timerPending"
+								:aria-busy="timerPending"
+								@click="handleToggleTimer">
+								<template #icon><TimerOutlineIcon :size="18" /></template>
+								{{ cardData?.runningTimer ? t('kanso', 'Stop timer') : t('kanso', 'Start timer') }}
+							</NcButton>
 
 							<form v-if="canEdit" class="card-modal__time-add" @submit.prevent="handleAddTimeEntry">
 								<input
@@ -2019,6 +2043,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 												:display-name="entry.createdBy || ''"
 												:size="16"
 												:disable-menu="true" />
+											<span v-if="entry.actorName" class="card-modal__time-actor" :title="entry.createdBy">
+												<RobotOutlineIcon :size="14" class="card-modal__ai-actor-icon" />
+												{{ entry.actorName }}
+											</span>
 											<span class="card-modal__activity-time">{{ relativeTime(entry.createdAt) }}</span>
 										</span>
 									</div>
@@ -2889,6 +2917,8 @@ import { useCardLinks, branchName } from '../composables/useCardLinks.js'
 import { useCardAttachments } from '../composables/useCardAttachments.js'
 import { useCardFileLinks } from '../composables/useCardFileLinks.js'
 import { useCardTimeEntries } from '../composables/useCardTimeEntries.js'
+import { useCommentViewport } from '../composables/useCommentViewport.js'
+import { formatDuration } from '../utils/duration.js'
 import { cardAttachmentUrl, cardAttachmentInlineUrl } from '../services/api.js'
 import { addCardRelation as apiAddCardRelation, removeCardRelation as apiRemoveCardRelation, getCardActivity as apiGetCardActivity, copyCard as apiCopyCard, moveCardToBoard as apiMoveCardToBoard, moveCard as apiMoveCard, fetchBoard as apiFetchBoard, resolveCardRef as apiResolveCardRef, setCardTemplate as apiSetCardTemplate } from '../services/api.js'
 import { useBoards } from '../composables/useBoards.js'
@@ -6730,7 +6760,8 @@ async function handleRemoveFileLink(linkId) {
 }
 
 // ── Time tracking (#3536) ────────────────────────────────────────────────────
-const { timeEntries: cardTimeEntriesData, addEntry, removeEntry } = useCardTimeEntries(computed(() => props.cardId))
+const { timeEntries: cardTimeEntriesData, addEntry, removeEntry, startTimer, stopTimer } = useCardTimeEntries(computed(() => props.cardId))
+const timerPending = computed(() => startTimer.isPending.value || stopTimer.isPending.value)
 const cardTimeEntries = computed(() => cardTimeEntriesData.value ?? [])
 const timeDurationInput = ref('')
 const timeNoteInput = ref('')
@@ -6739,21 +6770,6 @@ const timeEntryError = ref('')
 // The per-card total comes from the card DETAIL payload (kept off the board
 // summaries); the entries list only backs the breakdown and the delete buttons.
 const timeSpentTotal = computed(() => Number(cardData.value?.timeSpent) || 0)
-
-// Human-readable duration: 5400 → "1h 30m", 45 → "45s", 0 → "0m".
-function formatDuration(totalSeconds) {
-	const secs = Math.max(0, Math.floor(Number(totalSeconds) || 0))
-	if (secs === 0) return '0m'
-	const h = Math.floor(secs / 3600)
-	const m = Math.floor((secs % 3600) / 60)
-	const s = secs % 60
-	const parts = []
-	if (h > 0) parts.push(`${h}h`)
-	if (m > 0) parts.push(`${m}m`)
-	// Only surface bare seconds when there is no hour/minute component.
-	if (s > 0 && h === 0 && m === 0) parts.push(`${s}s`)
-	return parts.join(' ')
-}
 
 // Parses "1h 30m", "90m", "1.5h", "45s", or a bare number (minutes) into
 // seconds. Returns 0 for anything unparseable.
@@ -6786,11 +6802,9 @@ async function handleAddTimeEntry() {
 		return
 	}
 	try {
-		await addEntry.mutateAsync({ seconds, note: timeNoteInput.value.trim() || null })
+		await addEntry.mutateAsync({ cardId: props.cardId, boardId: boardId.value, seconds, note: timeNoteInput.value.trim() || null })
 		timeDurationInput.value = ''
 		timeNoteInput.value = ''
-		// Refresh the card detail so the total (timeSpent) reflects the new entry.
-		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
 	} catch (e) {
 		timeEntryError.value = e?.response?.data?.error || t('kanso', 'Failed to add time entry.')
 	}
@@ -6799,10 +6813,20 @@ async function handleAddTimeEntry() {
 async function handleRemoveTimeEntry(entryId) {
 	timeEntryError.value = ''
 	try {
-		await removeEntry.mutateAsync(entryId)
-		queryClient.invalidateQueries({ queryKey: ['card', props.cardId] })
+		await removeEntry.mutateAsync({ cardId: props.cardId, boardId: boardId.value, entryId })
 	} catch (e) {
 		timeEntryError.value = e?.response?.data?.error || t('kanso', 'Failed to remove time entry.')
+	}
+}
+
+async function handleToggleTimer() {
+	if (!canEdit.value || !cardFeatures.value.timeTracking || timerPending.value) return
+	timeEntryError.value = ''
+	const mutation = cardData.value?.runningTimer ? stopTimer : startTimer
+	try {
+		await mutation.mutateAsync({ cardId: props.cardId, boardId: boardId.value })
+	} catch (e) {
+		timeEntryError.value = e?.response?.data?.error || t('kanso', 'Failed to update timer.')
 	}
 }
 
@@ -7341,6 +7365,7 @@ const statusChipLabel = computed(() =>
 // One attribute-bar popover open at a time:
 // 'priority' | 'due' | 'estimate' | 'assign' | 'label' | 'review' | null
 const cardRoot = ref(null)
+useCommentViewport(cardRoot)
 const duePickerButton = ref(null)
 const openPicker = ref(null)
 const labelPickerButton = ref(null)
@@ -7357,6 +7382,14 @@ async function toggleLabelPicker() {
 	labelQuery.value = ''
 	await nextTick()
 	if (openPicker.value === 'label') labelSearchInput.value?.focus()
+}
+
+async function toggleProjectPicker() {
+	togglePicker('project')
+	if (openPicker.value !== 'project') return
+	projectQuery.value = ''
+	await nextTick()
+	if (openPicker.value === 'project') projectSearchInput.value?.focus()
 }
 
 // Attribute-bar display helpers
@@ -7385,6 +7418,12 @@ const descPasteError = ref('')
 // ── Projects membership ──────────────────────────────────────────────────────
 const { data: projectsData } = useProjects()
 const allProjects = computed(() => projectsData.value ?? [])
+const projectQuery = ref('')
+const projectSearchInput = ref(null)
+const filteredProjects = computed(() => {
+	const query = projectQuery.value.trim().toLocaleLowerCase()
+	return query ? allProjects.value.filter((project) => project.title.toLocaleLowerCase().includes(query)) : allProjects.value
+})
 
 // The card detail now returns projectIds: number[]; fall back to [] if absent.
 const cardProjectIds = computed(() => {
@@ -9808,14 +9847,15 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 .card-modal__ai-actor-icon {
 	vertical-align: -2px;
 	margin-right: 2px;
-	color: var(--color-primary);
+	color: inherit;
 }
 .card-modal__comment-author--ai,
 .card-modal__review-name--ai,
-.card-modal__assignee-name--ai {
+.card-modal__assignee-name--ai,
+.card-modal__time-actor {
 	display: inline-flex;
 	align-items: center;
-	color: var(--color-primary);
+	color: var(--color-main-text);
 }
 .card-modal__comment-time,
 .card-modal__comment-edited {
@@ -10426,6 +10466,10 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	/* Tab switching: show only the active pane */
 	.card-modal--tab-card .card-modal__discussion { display: none; }
 	.card-modal--tab-discussion .card-modal__content { display: none; }
+	.card-modal__comment-viewport :deep(.kanso-md-editor) {
+		max-height: max(90px, calc(var(--kanso-comment-visible-height) - 130px));
+		overflow: auto;
+	}
 	/* Larger touch targets on mobile */
 	.card-modal__checklist-item { min-height: 44px; }
 	.card-modal__checklist-checkbox { width: 18px; height: 18px; }

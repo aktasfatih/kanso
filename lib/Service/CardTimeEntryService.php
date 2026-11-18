@@ -22,9 +22,6 @@ use OCP\AppFramework\Db\DoesNotExistException;
  * is the SUM of these rows and lives only in the card DETAIL payload (never the
  * board/summary listings), so the "summaries only" board perf bet is preserved.
  *
- * MANUAL entries only - there is deliberately no running-timer state on the
- * server; a client stopwatch just POSTs a finished duration on stop.
- *
  * Gating mirrors {@see CardAttachmentService}: list requires READ, add/delete
  * require EDIT, and every mutation reuses the card's ENTITY_CARD / ACTION_UPDATE
  * change row so the existing realtime/delta-sync + ETag path reflects the new
@@ -80,12 +77,13 @@ class CardTimeEntryService {
 	 * @throws NotPermittedException if the actor may not edit the board
 	 * @throws InvalidInputException if the duration is zero/negative or absurdly large
 	 */
-	public function add(int $cardId, int $seconds, ?string $note, string $actorUid): CardTimeEntry {
-		return $this->cardMutation->run($cardId, function () use ($cardId, $seconds, $note, $actorUid): CardTimeEntry {
+	public function add(int $cardId, int $seconds, ?string $note, string $actorUid, ?string $actorName = null): CardTimeEntry {
+		return $this->cardMutation->run($cardId, function () use ($cardId, $seconds, $note, $actorUid, $actorName): CardTimeEntry {
 			$card = $this->loadCard($cardId);
 			$board = $this->loadBoard($card->getBoardId());
 			$this->permissionService->assertPermission($board, $actorUid, PermissionService::PERMISSION_EDIT);
 			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
+			$actorName = AiActorName::normalize($board, $actorName);
 
 			if ($seconds <= 0) {
 				throw new InvalidInputException('Duration must be greater than zero');
@@ -100,6 +98,7 @@ class CardTimeEntryService {
 			$entry->setSeconds($seconds);
 			$entry->setNote($this->sanitizeNote($note));
 			$entry->setCreatedBy($actorUid);
+			$entry->setActorName($actorName);
 			$entry->setCreatedAt(time());
 
 			$entry = $this->timeEntryMapper->insert($entry);

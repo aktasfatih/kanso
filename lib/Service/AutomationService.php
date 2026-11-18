@@ -13,15 +13,10 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLabelMapper;
-use OCA\Kanso\Db\CardRunningTimer;
-use OCA\Kanso\Db\CardRunningTimerMapper;
-use OCA\Kanso\Db\CardTimeEntry;
-use OCA\Kanso\Db\CardTimeEntryMapper;
 use OCA\Kanso\Db\Change;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCP\AppFramework\Db\DoesNotExistException;
-use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IDBConnection;
 
 /**
@@ -54,9 +49,7 @@ class AutomationService {
 		private CardLabelMapper $cardLabelMapper,
 		private ChangeNotifier $changeNotifier,
 		private IDBConnection $db,
-		private CardRunningTimerMapper $runningTimerMapper,
-		private CardTimeEntryMapper $timeEntryMapper,
-		private ITimeFactory $timeFactory,
+		private CardTimerService $timerService,
 		private CardMutationService $cardMutation,
 	) {
 	}
@@ -194,131 +187,11 @@ class AutomationService {
 			return;
 		}
 		if ($action === AutomationRule::ACTION_START_TIMER) {
-			$this->startTimer($card, $actorUid);
+			$this->timerService->startForCard($card, $actorUid);
 			return;
 		}
 		if ($action === AutomationRule::ACTION_STOP_TIMER) {
-			$this->stopTimer($card, $actorUid);
-		}
-	}
-
-	/**
-	 * Starts a running timer on the card if none is running (idempotent - a
-	 * second start while a timer is already running is a no-op). #73.
-	 */
-	private function startTimer(Card $card, string $actorUid): void {
-		if ($this->hasRunningTimer($card->getId())) {
-			return;
-		}
-		// Insert the running-timer row and record a card change atomically, then
-		// push — so the running indicator appears in real time (delta + notify_push)
-		// on every open client, symmetric with stopTimer. Without the change row the
-		// timer would only surface after a full board refetch.
-		$this->db->beginTransaction();
-		try {
-			$timer = new CardRunningTimer();
-			$timer->setCardId($card->getId());
-			$timer->setBoardId($card->getBoardId());
-			$timer->setStartedBy($actorUid);
-			$timer->setStartedAt($this->timeFactory->getTime());
-			$this->runningTimerMapper->insert($timer);
-
-			$this->changeNotifier->recordChange(
-				$card->getBoardId(),
-				Change::ENTITY_CARD,
-				$card->getId(),
-				Change::ACTION_UPDATE,
-				$actorUid,
-			);
-			$this->db->commit();
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
-		}
-		$this->changeNotifier->pushBoardChanged($card->getBoardId());
-	}
-
-	/**
-	 * Stops the card's running timer: writes the elapsed seconds as a finished
-	 * time-entry and drops the running row. A no-op if no timer is running; a
-	 * zero-second run persists no entry (only the running row is dropped). Either
-	 * way the running row's disappearance is logged as a card change, because
-	 * `timerRunning` rides the board payload. The entry insert + change row commit
-	 * atomically, mirroring add_label. #73.
-	 */
-	private function stopTimer(Card $card, string $actorUid): void {
-		try {
-			$timer = $this->runningTimerMapper->findByCard($card->getId());
-		} catch (DoesNotExistException) {
-			return;
-		}
-
-		$seconds = max(0, $this->timeFactory->getTime() - $timer->getStartedAt());
-		if ($seconds === 0) {
-			// No elapsed time worth persisting as an entry - but the running row
-			// still goes away, and `timerRunning` is a card-summary field
-			// ({@see CardSummaryService::serialize}). Dropping it without a change
-			// row leaves every OTHER open client rendering a timer that no longer
-			// exists, permanently: neither delta-sync (?since=) nor the board ETag
-			// would ever mention it. Symmetric with startTimer - delete and change
-			// row commit together, push after commit.
-			$this->db->beginTransaction();
-			try {
-				$this->runningTimerMapper->delete($timer);
-
-				$this->changeNotifier->recordChange(
-					$card->getBoardId(),
-					Change::ENTITY_CARD,
-					$card->getId(),
-					Change::ACTION_UPDATE,
-					$actorUid,
-				);
-				$this->db->commit();
-			} catch (\Throwable $e) {
-				$this->db->rollBack();
-				throw $e;
-			}
-			$this->changeNotifier->pushBoardChanged($card->getBoardId());
-			return;
-		}
-
-		$this->db->beginTransaction();
-		try {
-			$entry = new CardTimeEntry();
-			$entry->setCardId($card->getId());
-			$entry->setBoardId($card->getBoardId());
-			$entry->setSeconds($seconds);
-			$entry->setNote('Tracked automatically');
-			$entry->setCreatedBy($actorUid);
-			$entry->setCreatedAt($this->timeFactory->getTime());
-			$this->timeEntryMapper->insert($entry);
-
-			$this->runningTimerMapper->delete($timer);
-
-			$this->changeNotifier->recordChange(
-				$card->getBoardId(),
-				Change::ENTITY_CARD,
-				$card->getId(),
-				Change::ACTION_UPDATE,
-				$actorUid,
-			);
-			$this->db->commit();
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
-		}
-		$this->changeNotifier->pushBoardChanged($card->getBoardId());
-	}
-
-	/**
-	 * Whether the card currently has a running timer.
-	 */
-	private function hasRunningTimer(int $cardId): bool {
-		try {
-			$this->runningTimerMapper->findByCard($cardId);
-			return true;
-		} catch (DoesNotExistException) {
-			return false;
+			$this->timerService->stopForCard($card, $actorUid, 'Tracked automatically');
 		}
 	}
 

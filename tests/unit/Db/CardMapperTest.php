@@ -351,7 +351,7 @@ class CardMapperTest extends TestCase {
 	//
 	// Template cards (is_template = true) are ordinary rows with real priority,
 	// created_at, done_at, estimate and can be overdue - so every board/project
-	// stats aggregate must filter them out, exactly like archived/deleted cards,
+	// stats aggregate must filter them out, along with deleted cards,
 	// or a board that defines templates reports inflated counts/velocity/throughput.
 	// Each case asserts the aggregate emits the is_template WHERE clause; if a future
 	// change drops it from the shared pattern, the matching assertion fails.

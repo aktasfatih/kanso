@@ -29,8 +29,10 @@ from kanso_mcp.models import (
     ProjectCard,
     ProjectComment,
     RecurRule,
+    RunningTimer,
     SearchResults,
     Stack,
+    TimeEntry,
 )
 
 
@@ -371,6 +373,37 @@ class KansoClient:
             },
         )
         return Comment.model_validate(data)
+
+    # ------------------------------------------------------------ time tracking
+    async def list_time_entries(self, card_id: int) -> List[TimeEntry]:
+        data = await self._request("GET", f"/cards/{card_id}/time-entries")
+        return [TimeEntry.model_validate(entry) for entry in (data or [])]
+
+    async def add_time_entry(
+        self,
+        card_id: int,
+        seconds: int,
+        note: Optional[str] = None,
+        actor_name: Optional[str] = None,
+    ) -> TimeEntry:
+        data = await self._request(
+            "POST",
+            f"/cards/{card_id}/time-entries",
+            json={"seconds": seconds, "note": note, "actorName": actor_name},
+        )
+        return TimeEntry.model_validate(data)
+
+    async def start_timer(
+        self, card_id: int, actor_name: Optional[str] = None
+    ) -> RunningTimer:
+        data = await self._request(
+            "POST", f"/cards/{card_id}/timer", json={"actorName": actor_name}
+        )
+        return RunningTimer.model_validate(data)
+
+    async def stop_timer(self, card_id: int) -> Optional[TimeEntry]:
+        data = await self._request("DELETE", f"/cards/{card_id}/timer")
+        return TimeEntry.model_validate(data) if data else None
 
     # --------------------------------------------------------------- checklist
     async def list_checklist(self, card_id: int) -> List[ChecklistItem]:

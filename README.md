@@ -48,9 +48,10 @@ your work, on your own Nextcloud, laid out plainly.
   Kanso's own app storage, not in your personal Files.
 - **Custom fields** defined per board — text, number, date or a select list —
   and filled in on the card.
-- **Time tracking**: log time against a card, with a note, and see the total per
-  card. An automation rule can start and stop the timer as a card enters a
-  column, so the common case needs no clicking.
+- **Time tracking**: start and stop a card's timer, or log time manually with
+  a note. Automation rules can also control timers as cards enter columns.
+  Board analytics shows recorded time by user and AI actor for today, the last
+  week or month, or the current calendar month.
 - **Reminders**: nudge yourself about a card, or about a single comment —
   later today, tomorrow, next week, or a time you pick. Private to you, and
   delivered as a Nextcloud notification (so it needs cron).
@@ -194,6 +195,7 @@ your work, on your own Nextcloud, laid out plainly.
   status, a burn-up chart, estimates normalized across boards, blocked and
   overdue work grouped up top, and the project's cards on a timeline. Lifecycle
   is separate from forecast health; choosing a lead does not share the project.
+  Archived cards keep contributing to project progress and analytics.
 
 ### 📈 Analytics
 - **Estimates** on any scale, chosen per board: Fibonacci, planning poker,

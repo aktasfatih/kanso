@@ -26,8 +26,8 @@
 #   4. seeds real data through the API (dev/seed.sh)
 #   5. replaces the staging dir's contents with the branch build, in place
 #   6. runs `occ upgrade` — this is the step under test
-#   7. asserts the seeded data still reads back (dev/seed.sh verify) and that
-#      the schema/app-code smoke still passes (dev/smoke.sh)
+#   7. asserts the seeded data still reads back (dev/seed.sh verify), the legacy
+#      timer stops through the upgraded API, and the schema/app-code smoke passes
 #
 # Scope: ONE Nextcloud version and ONE database (NC 34 + postgres). This class
 # of bug is caught by one leg; multiplying it across the install matrix would
@@ -197,6 +197,7 @@ wait_for_api "after the upgrade"
 step "7. Assert the pre-existing data survived"
 # ---------------------------------------------------------------------------
 ./seed.sh verify || fail "seeded data did not survive the upgrade"
+./seed.sh verify-timer-stop || fail "the legacy timer could not be stopped after the upgrade"
 
 # And the usual post-install assertions, now on a populated database: every
 # migration recorded as applied (including the branch's new ones), the schema

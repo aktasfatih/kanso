@@ -360,7 +360,7 @@ msgstr[1] "%n Anhänge konnten nicht kopiert werden und fehlen auf dem neuen Boa
 #: src/components/BoardTileContent.vue:18
 #: src/views/BoardList.vue:222
 #: src/views/BoardList.vue:265
-#: src/views/BoardStats.vue:444
+#: src/views/BoardStats.vue:499
 #: src/views/ProjectStats.vue:347
 msgid "%n card"
 msgid_plural "%n cards"
@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n Datenzeile erkannt"
 msgstr[1] "%n Datenzeilen erkannt"
 
-#: src/components/CardDetail.vue:5117
+#: src/components/CardDetail.vue:5147
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "vor %n Tag"
@@ -415,7 +415,7 @@ msgid_plural "%n files"
 msgstr[0] "%n Datei"
 msgstr[1] "%n Dateien"
 
-#: src/components/CardDetail.vue:5115
+#: src/components/CardDetail.vue:5145
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "vor %n Stunde"
@@ -445,7 +445,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n Label wurde nicht erstellt und fehlt auf den importierten Karten: Nur Board-Manager können neue Labels anlegen. Bitte einen Manager, es anzulegen, und setze es dann auf den Karten."
 msgstr[1] "%n Labels wurden nicht erstellt und fehlen auf den importierten Karten: Nur Board-Manager können neue Labels anlegen. Bitte einen Manager, sie anzulegen, und setze sie dann auf den Karten."
 
-#: src/components/CardDetail.vue:5113
+#: src/components/CardDetail.vue:5143
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "vor %n Minute"
@@ -457,7 +457,7 @@ msgid_plural "%n need review"
 msgstr[0] "%n benötigt Review"
 msgstr[1] "%n benötigen Review"
 
-#: src/components/CardDetail.vue:3954
+#: src/components/CardDetail.vue:3984
 msgid "%n other reviewer"
 msgid_plural "%n other reviewers"
 msgstr[0] "%n weitere prüfende Person"
@@ -469,7 +469,7 @@ msgid_plural "%n overdue"
 msgstr[0] "%n überfällig"
 msgstr[1] "%n überfällig"
 
-#: src/views/BoardStats.vue:445
+#: src/views/BoardStats.vue:500
 msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n Punkt"
@@ -481,7 +481,7 @@ msgid_plural "%n projects"
 msgstr[0] "%n Projekt"
 msgstr[1] "%n Projekte"
 
-#: src/components/CardDetail.vue:2350
+#: src/components/CardDetail.vue:2378
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n Antwort"
@@ -712,6 +712,10 @@ msgstr "Nach N Wiederholungen"
 msgid "Aging (>{days}d)"
 msgstr "Veraltet (>{days}T)"
 
+#: src/views/BoardStats.vue
+msgid "AI actor"
+msgstr ""
+
 #: src/views/BoardList.vue
 #: src/views/BoardView.vue
 #: src/views/MyCardsView.vue
@@ -830,6 +834,7 @@ msgstr "Auswahl archivieren"
 #: src/components/CardDetail.vue
 #: src/views/ArchivedView.vue
 #: src/views/BoardList.vue
+#: src/views/ProjectView.vue
 msgid "Archived"
 msgstr "Archiviert"
 
@@ -1037,7 +1042,7 @@ msgstr "Blockiert"
 msgid "Blocked by"
 msgstr "Blockiert von"
 
-#: src/views/ProjectView.vue:304
+#: src/views/ProjectView.vue:305
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Blockiert durch {count} offene Karte"
@@ -2101,8 +2106,12 @@ msgstr "Gefahrenbereich"
 msgid "Date"
 msgstr "Datum"
 
+#: src/views/BoardStats.vue
+msgid "Date range (UTC)"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue:2346
-#: src/components/CardDetail.vue:5308
+#: src/components/CardDetail.vue:5338
 msgid "day"
 msgid_plural "days"
 msgstr[0] "Tag"
@@ -3008,6 +3017,10 @@ msgstr "GitHub-Webhook-Konfiguration konnte nicht geladen werden."
 msgid "Failed to load the public link config."
 msgstr "Konfiguration des öffentlichen Links konnte nicht geladen werden."
 
+#: src/views/BoardStats.vue
+msgid "Failed to load time analytics."
+msgstr ""
+
 #: src/views/TrashView.vue
 msgid "Failed to load trash."
 msgstr "Papierkorb konnte nicht geladen werden."
@@ -3303,6 +3316,10 @@ msgstr "Karte konnte nicht aktualisiert werden."
 #: src/components/ManageTemplatesModal.vue
 msgid "Failed to update the template."
 msgstr "Vorlage konnte nicht aktualisiert werden."
+
+#: src/components/CardDetail.vue
+msgid "Failed to update timer."
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Failed to update type."
@@ -3702,7 +3719,7 @@ msgstr "Zweck, Umfang oder Regeln. Alle auf diesem Board können sie über die S
 msgid "Jump to the discussion"
 msgstr "Zur Diskussion springen"
 
-#: src/components/CardDetail.vue:7194
+#: src/components/CardDetail.vue:7218
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Zur Diskussion springen (%n Kommentar)"
@@ -3839,6 +3856,14 @@ msgstr "Labels sind Board-spezifisch: Es werden nur Labels übernommen, die auf 
 #: src/components/BoardSettingsModal.vue
 msgid "Labels must be unique."
 msgstr "Labels müssen eindeutig sein."
+
+#: src/views/BoardStats.vue
+msgid "Last 30 days"
+msgstr ""
+
+#: src/views/BoardStats.vue
+msgid "Last 7 days"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Last checked: {when}"
@@ -4003,6 +4028,10 @@ msgstr "Statistiken werden geladen…"
 msgid "Loading tasks…"
 msgstr "Aufgaben werden geladen…"
 
+#: src/views/BoardStats.vue
+msgid "Loading time entries…"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "Loading your Deck boards…"
 msgstr "Deine Deck-Boards werden geladen…"
@@ -4098,7 +4127,7 @@ msgid "Mon"
 msgstr "Mo"
 
 #: src/components/BoardSettingsModal.vue:2348
-#: src/components/CardDetail.vue:5310
+#: src/components/CardDetail.vue:5340
 msgid "month"
 msgid_plural "months"
 msgstr[0] "Monat"
@@ -4521,6 +4550,10 @@ msgstr "Kein Eigentümer"
 msgid "No priority"
 msgstr "Keine Priorität"
 
+#: src/components/CardDetail.vue
+msgid "No projects match."
+msgstr ""
+
 #: src/views/ProjectsView.vue
 msgid "No projects yet"
 msgstr "Noch keine Projekte"
@@ -4582,6 +4615,10 @@ msgstr "Noch keine Vorlagen. Öffne eine Karte und wähle „Als Vorlage markier
 #: src/components/CardDetail.vue
 msgid "No threads yet. Everyone watching this card is notified when you start one."
 msgstr "Noch keine Threads. Alle Beobachter dieser Karte werden benachrichtigt, wenn du einen startest."
+
+#: src/views/BoardStats.vue
+msgid "No time recorded in this date range."
+msgstr ""
 
 #: src/composables/useSwimlanes.js
 msgid "No type"
@@ -5451,6 +5488,7 @@ msgid "Results"
 msgstr "Ergebnisse"
 
 #: src/components/CardDetail.vue
+#: src/views/BoardStats.vue
 #: src/views/BoardView.vue
 msgid "Retry"
 msgstr "Erneut versuchen"
@@ -5616,6 +5654,14 @@ msgstr "Labels suchen…"
 #: src/components/CardDetail.vue
 msgid "Search people…"
 msgstr "Personen suchen…"
+
+#: src/components/CardDetail.vue
+msgid "Search projects"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Search projects…"
+msgstr ""
 
 #: src/components/SearchBox.vue
 msgid "Search results"
@@ -5805,7 +5851,7 @@ msgstr "Diskussion unterhalb der Karte anzeigen"
 msgid "Show the discussion panel"
 msgstr "Diskussionsbereich anzeigen"
 
-#: src/components/CardDetail.vue:7200
+#: src/components/CardDetail.vue:7224
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Diskussionsbereich anzeigen (%n Kommentar)"
@@ -5952,6 +5998,10 @@ msgstr "Startdatum"
 msgid "Start the timer"
 msgstr "Timer starten"
 
+#: src/components/CardDetail.vue
+msgid "Start timer"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "Start with a template"
 msgstr "Mit einer Vorlage beginnen"
@@ -5987,6 +6037,10 @@ msgstr "Fälligkeitsdatum des Schritts"
 #: src/components/BoardSettingsModal.vue
 msgid "Stop the timer"
 msgstr "Timer stoppen"
+
+#: src/components/CardDetail.vue
+msgid "Stop timer"
+msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Stop watching this card"
@@ -6225,6 +6279,10 @@ msgstr "Dieser Link ist abgelaufen. Besuchern wird mitgeteilt, dass der Link abg
 msgid "This link is invalid or has been disabled."
 msgstr "Dieser Link ist ungültig oder wurde deaktiviert."
 
+#: src/views/BoardStats.vue
+msgid "This month"
+msgstr ""
+
 #: src/views/ProjectView.vue
 msgid "This project no longer exists, or you no longer have access to it."
 msgstr "Dieses Projekt existiert nicht mehr oder du hast keinen Zugriff mehr darauf."
@@ -6266,6 +6324,10 @@ msgstr "Durchsatz pro Tag"
 #: src/components/BoardSettingsModal.vue
 msgid "Thu"
 msgstr "Do"
+
+#: src/views/BoardStats.vue
+msgid "Time spent by user"
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/CardDetail.vue
@@ -6321,6 +6383,7 @@ msgstr "Um ein Board zurückzuholen, lade sein Backup herunter und importiere es
 msgid "today"
 msgstr "heute"
 
+#: src/views/BoardStats.vue
 #: src/views/MyCardsView.vue
 msgid "Today"
 msgstr "Heute"
@@ -6348,6 +6411,10 @@ msgstr "Spaltenanfang"
 #: src/composables/useBoardFilters.js
 msgid "Top-level"
 msgstr "Oberste Ebene"
+
+#: src/views/BoardStats.vue
+msgid "Total time: {duration}"
+msgstr ""
 
 #: src/views/TrashView.vue
 msgid "Trash"
@@ -6620,7 +6687,7 @@ msgid "Wed"
 msgstr "Mi"
 
 #: src/components/BoardSettingsModal.vue:2347
-#: src/components/CardDetail.vue:5309
+#: src/components/CardDetail.vue:5339
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "Woche"
@@ -6729,7 +6796,7 @@ msgid "wrote"
 msgstr "schrieb"
 
 #: src/components/BoardSettingsModal.vue:2349
-#: src/components/CardDetail.vue:5311
+#: src/components/CardDetail.vue:5341
 msgid "year"
 msgid_plural "years"
 msgstr[0] "Jahr"

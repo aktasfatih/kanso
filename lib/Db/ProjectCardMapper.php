@@ -206,12 +206,8 @@ class ProjectCardMapper extends QBMapper {
 	 * {@see CardMapper::findAssignedInBoards} with the planning fields the
 	 * project forecast and timeline read.
 	 *
-	 * Scope: deleted, ARCHIVED and TEMPLATE cards are all excluded - the same
-	 * open scope every board-side card query applies
-	 * ({@see CardMapper::findSummariesByBoard()}). Project stats aggregate over
-	 * exactly this id set, so anything looser made the project's numbers disagree
-	 * with the board's over the same cards - a template counted as work, an
-	 * archived card counted as outstanding.
+	 * Archived cards retain their project membership and progress. Deleted
+	 * cards and templates are excluded from both the list and project metrics.
 	 *
 	 * Visibility (#3743): the scope runs on the joined card, so a collected
 	 * card that is hidden from the viewer (e.g. someone else's private card
@@ -231,7 +227,7 @@ class ProjectCardMapper extends QBMapper {
 
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('c.id')
-			->addSelect('c.board_id', 'c.title', 'c.duedate', 'c.start_date', 'c.priority', 'c.done_at', 'c.started_at', 'c.stack_id', 'c.parent_card_id', 'c.sort_key', 'c.estimate', 'c.board_seq', 'c.created_at', 'pc.added_at')
+			->addSelect('c.board_id', 'c.title', 'c.archived', 'c.duedate', 'c.start_date', 'c.priority', 'c.done_at', 'c.started_at', 'c.stack_id', 'c.parent_card_id', 'c.sort_key', 'c.estimate', 'c.board_seq', 'c.created_at', 'pc.added_at')
 			->selectAlias('b.title', 'board_title')
 			->selectAlias('b.prefix', 'board_prefix')
 			->selectAlias('b.estimate_scale', 'estimate_scale')
@@ -245,7 +241,6 @@ class ProjectCardMapper extends QBMapper {
 			->where($qb->expr()->eq('pc.project_id', $qb->createNamedParameter($projectId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->in('c.board_id', $qb->createNamedParameter($boardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('c.is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->orderBy('board_title', 'ASC')
 			->addOrderBy('c.sort_key', 'ASC')
@@ -266,6 +261,7 @@ class ProjectCardMapper extends QBMapper {
 				'boardTitle' => (string)$row['board_title'],
 				'stackTitle' => $row['stack_title'] !== null ? (string)$row['stack_title'] : null,
 				'title' => (string)$row['title'],
+				'archived' => (bool)$row['archived'],
 				'duedate' => $due,
 				'priority' => (int)$row['priority'],
 				'doneAt' => (int)$row['done_at'],

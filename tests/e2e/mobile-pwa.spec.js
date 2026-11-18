@@ -987,3 +987,61 @@ test.describe('the bulk action bar at a phone width', () => {
 		})
 	})
 })
+
+test('comment and reply composers stay above a shrinking keyboard viewport', async ({ page }) => {
+	const board = await api.post('/boards', { title: 'Mobile comment viewport' })
+	try {
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'Todo' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Mobile comments' })
+		await api.post(`/cards/${card.id}/comments`, { body: 'Reply to this thread' })
+		await page.addInitScript(() => {
+			const viewport = Object.assign(new EventTarget(), { height: window.innerHeight, width: window.innerWidth, offsetTop: 0, offsetLeft: 0, pageTop: 0, pageLeft: 0, scale: 1 })
+			Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport })
+			window.setCommentKeyboard = (height, offsetTop = 0) => {
+				viewport.height = height
+				viewport.offsetTop = offsetTop
+				viewport.dispatchEvent(new Event('resize'))
+				viewport.dispatchEvent(new Event('scroll'))
+			}
+		})
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${board.id}/card/${card.id}`)
+		await page.locator('.card-modal__tab', { hasText: 'Discussion' }).click()
+		const composer = page.locator('.card-modal__composer')
+		const editor = composer.locator('[contenteditable=true]')
+		await expect(composer.locator('.card-modal__composer-actions')).toBeHidden()
+		await editor.fill('Visible draft')
+		await page.evaluate(() => window.setCommentKeyboard(360, 30))
+		await expect(composer).toHaveClass(/card-modal__comment-viewport/)
+		await editor.press('End')
+		await editor.pressSequentially(' keeps typing')
+		await expect(editor).toContainText('Visible draft keeps typing')
+		for (let line = 1; line <= 10; line++) {
+			await editor.press('Enter')
+			await editor.pressSequentially(`Additional line ${line}`)
+		}
+		const caretIsVisible = (editable) => editable.evaluate((element) => {
+			const selection = window.getSelection()
+			if (!selection?.rangeCount || !element.contains(selection.anchorNode)) return false
+			const range = selection.getRangeAt(0).getBoundingClientRect()
+			const caret = range.height > 0 ? range : element.lastElementChild?.getBoundingClientRect()
+			if (!caret) return false
+			const bounds = element.closest('.kanso-md-editor').getBoundingClientRect()
+			return caret.top >= Math.max(bounds.top, window.visualViewport.offsetTop)
+				&& caret.bottom <= Math.min(bounds.bottom, window.visualViewport.offsetTop + window.visualViewport.height)
+		})
+		await expect.poll(() => caretIsVisible(editor)).toBe(true)
+		await expect.poll(() => composer.getByRole('button', { name: 'Post', exact: true }).evaluate((button) => button.getBoundingClientRect().bottom)).toBeLessThanOrEqual(390)
+		await page.evaluate(() => window.setCommentKeyboard(window.innerHeight))
+		await page.locator('.card-modal__comment-link-btn', { hasText: 'Reply' }).first().click()
+		const reply = page.locator('.card-modal__reply-compose')
+		await reply.locator('[contenteditable=true]').fill('Visible reply')
+		await page.evaluate(() => window.setCommentKeyboard(360))
+		await expect(reply).toHaveClass(/card-modal__comment-viewport/)
+		await expect.poll(() => caretIsVisible(reply.locator('[contenteditable=true]'))).toBe(true)
+		await expect.poll(() => reply.getByRole('button', { name: 'Post reply', exact: true }).evaluate((button) => button.getBoundingClientRect().bottom)).toBeLessThanOrEqual(360)
+		await reply.getByRole('button', { name: 'Post reply', exact: true }).click()
+		await expect(page.locator('.card-modal__comment-body', { hasText: 'Visible reply' })).toBeVisible()
+	} finally {
+		await api.delete(`/boards/${board.id}`).catch(() => {})
+	}
+})

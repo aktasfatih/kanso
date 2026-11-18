@@ -1614,3 +1614,77 @@ async def test_update_board_sends_single_assignee_and_preserves_response(enabled
         board = await c.update_board(3, single_assignee=enabled)
     assert json.loads(route.calls.last.request.content) == {"singleAssignee": enabled}
     assert board.singleAssignee is enabled
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_add_time_entry_forwards_seconds_note_and_actor():
+    route = respx.post(f"{BASE}/cards/100/time-entries").mock(
+        return_value=httpx.Response(200, json={
+            "id": 1, "cardId": 100, "seconds": 90,
+            "createdBy": "admin", "actorName": "Codex",
+        })
+    )
+    async with _client() as c:
+        entry = await c.add_time_entry(100, 90, "Implementation", "Codex")
+    assert json.loads(route.calls.last.request.content) == {
+        "seconds": 90, "note": "Implementation", "actorName": "Codex",
+    }
+    assert entry.createdBy == "admin"
+    assert entry.actorName == "Codex"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_start_timer_and_stop_timer_preserve_ai_attribution():
+    start = respx.post(f"{BASE}/cards/100/timer").mock(
+        return_value=httpx.Response(200, json={
+            "id": 2, "cardId": 100, "startedBy": "admin",
+            "startedAt": 1000, "actorName": "Codex",
+        })
+    )
+    stop = respx.delete(f"{BASE}/cards/100/timer").mock(
+        return_value=httpx.Response(200, json={
+            "id": 3, "cardId": 100, "seconds": 90,
+            "createdBy": "admin", "actorName": "Codex",
+        })
+    )
+    async with _client() as c:
+        timer = await c.start_timer(100, "Codex")
+        entry = await c.stop_timer(100)
+    assert json.loads(start.calls.last.request.content) == {"actorName": "Codex"}
+    assert timer.startedAt == 1000
+    assert timer.actorName == "Codex"
+    assert entry.seconds == 90
+    assert entry.actorName == "Codex"
+    assert stop.called
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_stop_timer_without_elapsed_time_returns_none():
+    respx.delete(f"{BASE}/cards/100/timer").mock(
+        return_value=httpx.Response(200, json=None)
+    )
+    async with _client() as c:
+        assert await c.stop_timer(100) is None
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("timer", [
+    {"startedBy": "admin", "startedAt": 1000},
+    {"id": 2, "startedBy": "admin", "startedAt": 1000, "actorName": "Codex"},
+])
+async def test_get_card_accepts_running_timers_before_and_after_actor_attribution(timer):
+    respx.get(f"{BASE}/cards/100").mock(
+        return_value=httpx.Response(200, json={
+            "id": 100, "title": "Work", "timeSpent": 90,
+            "runningTimer": timer,
+        })
+    )
+    async with _client() as c:
+        card = await c.get_card(100)
+    assert card.runningTimer.actorName == timer.get("actorName")
+    assert card.runningTimer.id == timer.get("id")
+    assert card.runningTimer.startedAt == 1000

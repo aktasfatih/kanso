@@ -195,12 +195,12 @@ const relativeTime = computed(() => {
 .review-row__ai-actor-icon {
 	vertical-align: -2px;
 	margin-right: 2px;
-	color: var(--color-primary);
+	color: inherit;
 }
 .review-row__requested-by--ai {
 	display: inline-flex;
 	align-items: center;
-	color: var(--color-primary);
+	color: var(--color-main-text);
 }
 
 .review-row__actions {

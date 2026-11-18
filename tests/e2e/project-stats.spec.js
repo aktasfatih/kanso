@@ -6,7 +6,7 @@
 // cross-board CSS-bar stats page, which shows the priority distribution and the
 // at-a-glance / flow panels — WITHOUT the board-specific "Cards by stack" panel.
 
-import { test, expect, api, ncLogin, BASE } from './helpers.js'
+import { test, expect, api, ncLogin, BASE, me } from './helpers.js'
 
 test.describe('Project analytics — cross-board', () => {
 	const state = { boardA: 0, boardB: 0, projectId: 0 }
@@ -79,41 +79,78 @@ test.describe('Project analytics — cross-board', () => {
 		expect(stats.velocity.pointsPerWeek).toBeNull()
 	})
 
-	// #10070 — the project card set is resolved by ONE query that both the card
-	// list and the stats consume, so anything it lets through shows up as a
-	// project metric. It filtered deleted cards only, while every board-side
-	// query also drops archived and template cards: an archived card counted as
-	// outstanding work, and a template counted as a card at all. Both are now
-	// excluded, so the project's numbers agree with the board's over the same
-	// cards.
-	test('archived and template cards are excluded from the project card set and its stats', async () => {
+	test('archiving and restoring cards preserves project progress and analytics', async ({ page }) => {
+		let boardId = 0
+		let projectId = 0
+		try {
+			const board = await api.post('/boards', { title: `Archive progress ${Date.now()}` })
+			boardId = board.id
+			await api.patch(`/boards/${boardId}`, { estimateScale: 'fibonacci' })
+			const stack = await api.post('/stacks', { boardId, title: 'Tasks' })
+			const completed = await api.post('/cards', { stackId: stack.id, title: 'Completed project work' })
+			const unfinished = await api.post('/cards', { stackId: stack.id, title: 'Unfinished project work' })
+			await api.patch(`/cards/${completed.id}`, { estimate: '3', priority: 4 })
+			await api.patch(`/cards/${unfinished.id}`, { estimate: '5', duedate: '2020-01-01T00:00:00Z' })
+			await api.put(`/cards/${completed.id}/assignees/${me}`)
+			const label = await api.post('/labels', { boardId, title: 'Delivered', color: '0082c9' })
+			await api.put(`/cards/${completed.id}/labels/${label.id}`)
+			const item = await api.post(`/cards/${completed.id}/checklist`, { title: 'Verified' })
+			await api.patch(`/checklist/${item.id}`, { done: true })
+			await api.patch(`/cards/${completed.id}`, { done: true })
+			const project = await api.post('/projects', { title: `Archive progress project ${Date.now()}` })
+			projectId = project.id
+			for (const card of [completed, unfinished]) await api.put(`/projects/${projectId}/cards/${card.id}`)
+
+			const beforePlan = await api.get(`/projects/${projectId}/plan`)
+			const beforeStats = await api.get(`/projects/${projectId}/stats`)
+			expect(beforePlan).toMatchObject({ total: 2, done: 1, open: 1, points: { total: 8, done: 3 } })
+			expect(beforeStats).toMatchObject({ cardCount: 2, overdue: 1, checklist: { total: 1, done: 1 } })
+			expect(beforeStats.byAssignee).toContainEqual({ uid: me, count: 1 })
+			expect(beforeStats.byLabel).toContainEqual({ boardId, labelId: label.id, count: 1 })
+			expect(beforeStats.throughput.reduce((sum, day) => sum + day.count, 0)).toBe(1)
+
+			for (const card of [completed, unfinished]) await api.patch(`/cards/${card.id}`, { archived: true })
+			const cards = await api.get(`/projects/${projectId}/cards`)
+			expect(cards.map((card) => card.id).sort((a, b) => a - b)).toEqual([completed.id, unfinished.id])
+			expect(cards.every((card) => card.archived === true)).toBe(true)
+			const afterPlan = await api.get(`/projects/${projectId}/plan`)
+			for (const key of ['total', 'done', 'open', 'overdue', 'points', 'burnup', 'throughput']) {
+				expect(afterPlan[key]).toEqual(beforePlan[key])
+			}
+			expect(await api.get(`/projects/${projectId}/stats`)).toEqual(beforeStats)
+
+			await ncLogin(page)
+			await page.goto(`${BASE}/index.php/apps/kanso#/projects/${projectId}`)
+			await expect(page.locator('[data-test=project-progress]')).toHaveText('1 of 2 cards')
+			await page.locator('[data-test=project-group-done] > summary').click()
+			const completedRow = page.locator('.project-view__row', { hasText: completed.title })
+			await expect(completedRow).toBeVisible()
+			await expect(completedRow.locator('.project-view__badge', { hasText: 'Archived' })).toBeVisible()
+
+			for (const card of [completed, unfinished]) await api.patch(`/cards/${card.id}`, { archived: false })
+			expect((await api.get(`/projects/${projectId}/cards`)).every((card) => card.archived === false)).toBe(true)
+			expect(await api.get(`/projects/${projectId}/stats`)).toEqual(beforeStats)
+		} finally {
+			if (projectId) await api.delete(`/projects/${projectId}`).catch(() => {})
+			if (boardId) await api.delete(`/boards/${boardId}`).catch(() => {})
+		}
+	})
+
+	test('templates and deleted cards stay out of the project card set and its stats', async () => {
 		const board = await api.get(`/boards/${state.boardA}`)
 		const stackId = board.stacks[0].id
-
-		const archived = await api.post('/cards', { stackId, title: 'Archived stats task' })
 		const template = await api.post('/cards', { stackId, title: 'Template stats task' })
-		await api.put(`/projects/${state.projectId}/cards/${archived.id}`)
+		const deleted = await api.post('/cards', { stackId, title: 'Deleted stats task' })
 		await api.put(`/projects/${state.projectId}/cards/${template.id}`)
-
-		// Both are collected into the project while still live: the project sees
-		// four cards, exactly as the board does.
+		await api.put(`/projects/${state.projectId}/cards/${deleted.id}`)
 		expect((await api.get(`/projects/${state.projectId}/cards`)).length).toBe(4)
-		expect((await api.get(`/projects/${state.projectId}/stats`)).cardCount).toBe(4)
-
-		await api.patch(`/cards/${archived.id}`, { archived: true })
 		await api.put(`/cards/${template.id}/template`, { isTemplate: true })
+		await api.delete(`/cards/${deleted.id}`)
 
-		// The board's own open card set drops both...
-		const after = await api.get(`/boards/${state.boardA}`)
-		const boardOpen = after.cards.filter((c) => !c.archived).map((c) => c.id)
-		expect(boardOpen).not.toContain(archived.id)
-		expect(boardOpen).not.toContain(template.id)
-
-		// ...and so does the project's, so the two counts agree again.
 		const cards = await api.get(`/projects/${state.projectId}/cards`)
-		expect(cards.map((c) => c.id)).not.toContain(archived.id)
-		expect(cards.map((c) => c.id)).not.toContain(template.id)
-		expect(cards.length).toBe(2)
+		expect(cards.map((card) => card.id)).not.toContain(template.id)
+		expect(cards.map((card) => card.id)).not.toContain(deleted.id)
+		expect(cards).toHaveLength(2)
 		expect((await api.get(`/projects/${state.projectId}/stats`)).cardCount).toBe(2)
 	})
 })
