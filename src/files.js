@@ -6,7 +6,6 @@
 // Application.php), so it ships none of the board app - just the action + a small
 // board+card picker dialog mounted on demand.
 
-import '@nextcloud/dialogs/style.css'
 import { createApp } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import { registerFileAction, FileType, Permission } from '@nextcloud/files'
