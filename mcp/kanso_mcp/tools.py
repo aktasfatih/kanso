@@ -1365,9 +1365,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         """List the cards in one of your projects, ordered by board then board
         position.
 
-        Only live cards on boards you can still read come back: archived cards,
-        cards of an archived board and cards on a board you have lost access to
-        are left out, even though they stay members.
+        Archived cards on readable, active boards are included and continue to
+        count toward project progress. Deleted cards, templates, and cards on
+        archived or unreadable boards are left out, even though they stay members.
 
         Args:
             project_id: The numeric project id.

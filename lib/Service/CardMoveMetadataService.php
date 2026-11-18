@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Service;
 
+use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\CardContactMapper;
 use OCA\Kanso\Db\CardLink;
 use OCA\Kanso\Db\CardLinkMapper;
@@ -21,7 +22,14 @@ class CardMoveMetadataService {
 	) {
 	}
 
-	public function copy(int $sourceId, int $targetId, int $targetBoardId): void {
+	public function copy(int $sourceId, int $targetId, Board $targetBoard): void {
+		$entries = $this->timeEntries->findByCard($sourceId);
+		foreach ($entries as $entry) {
+			if ($entry->getActorName() !== null && $targetBoard->getAllowAiActors() !== true) {
+				throw new InvalidInputException('The destination board does not allow AI-attributed time entries');
+			}
+		}
+
 		foreach ($this->contacts->findContactsByCard($sourceId) as $contact) {
 			$this->contacts->insertLink($targetId, $contact['contactUri'], $contact['displayName']);
 		}
@@ -40,13 +48,14 @@ class CardMoveMetadataService {
 		}
 
 		// findByCard returns newest first; insert oldest first to retain that order.
-		foreach (array_reverse($this->timeEntries->findByCard($sourceId)) as $entry) {
+		foreach (array_reverse($entries) as $entry) {
 			$copy = new CardTimeEntry();
 			$copy->setCardId($targetId);
-			$copy->setBoardId($targetBoardId);
+			$copy->setBoardId($targetBoard->getId());
 			$copy->setSeconds($entry->getSeconds());
 			$copy->setNote($entry->getNote());
 			$copy->setCreatedBy($entry->getCreatedBy());
+			$copy->setActorName($entry->getActorName());
 			$copy->setCreatedAt($entry->getCreatedAt());
 			$this->timeEntries->insert($copy);
 		}

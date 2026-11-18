@@ -10,6 +10,7 @@ export function observeCommentViewport(root, view = window) {
 	if (!viewport) return () => {}
 	const doc = root.ownerDocument
 	let baselineHeight = view.innerHeight
+	let layoutWidth = view.innerWidth
 	let frame = null
 	let restoreContainer = null
 	let activeGroup = null
@@ -37,11 +38,16 @@ export function observeCommentViewport(root, view = window) {
 
 	function update() {
 		frame = null
+		if (view.innerWidth !== layoutWidth) {
+			layoutWidth = view.innerWidth
+			baselineHeight = view.innerHeight
+		} else {
+			baselineHeight = Math.max(baselineHeight, view.innerHeight)
+		}
 		const editor = doc.activeElement
 		const group = root.contains(editor) ? editor.closest(COMMENT_GROUP) : null
 		if (!group || view.innerWidth > 680 || viewport.scale > 1.05) {
 			clear()
-			baselineHeight = Math.max(baselineHeight, view.innerHeight)
 			return
 		}
 		if (baselineHeight - viewport.height < 80) {

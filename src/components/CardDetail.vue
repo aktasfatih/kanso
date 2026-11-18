@@ -4419,6 +4419,7 @@ watch(() => props.cardId, () => {
 	saveError.value = ''
 	statusError.value = ''
 	commentError.value = ''
+	timeEntryError.value = ''
 })
 
 // The editor that replaces the read-view when you start editing. Only needed to
@@ -6822,10 +6823,12 @@ async function handleRemoveTimeEntry(entryId) {
 async function handleToggleTimer() {
 	if (!canEdit.value || !cardFeatures.value.timeTracking || timerPending.value) return
 	timeEntryError.value = ''
+	const forCard = props.cardId
 	const mutation = cardData.value?.runningTimer ? stopTimer : startTimer
 	try {
-		await mutation.mutateAsync({ cardId: props.cardId, boardId: boardId.value })
+		await mutation.mutateAsync({ cardId: forCard, boardId: boardId.value })
 	} catch (e) {
+		if (!isStillCurrentCard(forCard)) return
 		timeEntryError.value = e?.response?.data?.error || t('kanso', 'Failed to update timer.')
 	}
 }

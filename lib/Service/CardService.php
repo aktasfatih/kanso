@@ -551,7 +551,7 @@ class CardService {
 						$newId = $moved->getId();
 						$data = $snapshots[$oldId];
 						$commentIds = $this->moveContentService->copy($card, $moved, $targetBoard, $attachmentIdsByCard, $cardIds);
-						$this->moveMetadataService->copy($oldId, $newId, $targetBoard->getId());
+						$this->moveMetadataService->copy($oldId, $newId, $targetBoard);
 						$this->moveFieldsService->copy($oldId, $newId, $sourceBoard->getId(), $targetBoard->getId());
 						$this->movePersonalService->transfer($card, $sourceBoard, $moved, $targetBoard, $commentIds);
 						$this->moveReviewService->transfer($oldId, $sourceBoard->getId(), $moved, $targetBoard);

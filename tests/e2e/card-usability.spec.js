@@ -30,7 +30,7 @@ test('the project picker accepts direct typing and preserves membership while fi
 		await expect(popover.getByText('No projects match.')).toBeVisible()
 		await search.fill('')
 		await expect(row).toHaveAttribute('aria-pressed', 'true')
-		expect((await api.get(`/cards/${card.id}`)).projectIds).toContain(projects[1].id)
+		await expect.poll(async () => (await api.get(`/cards/${card.id}`)).projectIds).toContain(projects[1].id)
 		await pill.click()
 		await pill.click()
 		await expect(search).toHaveValue('')
@@ -64,6 +64,55 @@ test('card timer buttons record time and reconcile the running state', async ({ 
 		expect(entries[0].seconds).toBeGreaterThan(0)
 		expect((await api.get(`/cards/${card.id}`)).runningTimer).toBeNull()
 	} finally {
+		await api.delete(`/boards/${board.id}`).catch(() => {})
+	}
+})
+
+test('a delayed timer failure stays with its source card and errors clear on navigation', async ({ page }) => {
+	const board = await api.post('/boards', { title: 'Timer error navigation' })
+	let release
+	const held = new Promise((resolve) => { release = resolve })
+	try {
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'Todo' })
+		const source = await api.post('/cards', { stackId: stack.id, title: 'Timer error source' })
+		const target = await api.post('/cards', { stackId: stack.id, title: 'Timer error destination' })
+		let arrived
+		const started = new Promise((resolve) => { arrived = resolve })
+		await page.route((url) => url.pathname.endsWith(`/cards/${source.id}/timer`), async (route) => {
+			if (route.request().method() !== 'POST') return route.continue()
+			arrived()
+			await held
+			await route.fulfill({ status: 503, json: { error: 'Source timer failed' } })
+		})
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/board/${board.id}/card/${source.id}`)
+		await expect(page.locator('.card-modal__title')).toHaveText(source.title)
+		await page.locator('.card-modal').evaluate((root) => { root.dataset.timerErrorInstance = 'reused' })
+		const toggle = page.locator('[data-test=card-timer-toggle]')
+		await toggle.click()
+		await started
+
+		await page.evaluate(({ boardId, cardId }) => { location.hash = `#/board/${boardId}/card/${cardId}` }, { boardId: board.id, cardId: target.id })
+		await expect(page.locator('.card-modal__title')).toHaveText(target.title)
+		await expect(page.locator('.card-modal')).toHaveAttribute('data-timer-error-instance', 'reused')
+		const failed = page.waitForResponse((response) => response.request().method() === 'POST'
+			&& response.url().endsWith(`/cards/${source.id}/timer`), { timeout: 15_000 })
+		release()
+		expect((await failed).status()).toBe(503)
+		await expect(toggle).toBeEnabled()
+		await expect(page.getByText('Source timer failed', { exact: true })).toHaveCount(0)
+
+		await page.route((url) => url.pathname.endsWith(`/cards/${target.id}/timer`), (route) => route.request().method() === 'POST'
+			? route.fulfill({ status: 503, json: { error: 'Current timer failed' } })
+			: route.continue())
+		await toggle.click()
+		await expect(page.getByText('Current timer failed', { exact: true })).toBeVisible()
+		await page.evaluate(({ boardId, cardId }) => { location.hash = `#/board/${boardId}/card/${cardId}` }, { boardId: board.id, cardId: source.id })
+		await expect(page.locator('.card-modal__title')).toHaveText(source.title)
+		await expect(page.getByText('Current timer failed', { exact: true })).toHaveCount(0)
+	} finally {
+		release()
+		await page.unrouteAll({ behavior: 'wait' })
 		await api.delete(`/boards/${board.id}`).catch(() => {})
 	}
 })
