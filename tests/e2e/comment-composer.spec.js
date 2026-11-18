@@ -284,7 +284,10 @@ test.describe('New comment composer', () => {
 		expect(posted).toBe(0)
 		await expect(prose).toContainText('Composition draft')
 		await prose.dispatchEvent('compositionend', { data: '' })
+		const response = page.waitForResponse((result) => result.request().method() === 'POST'
+			&& result.url().endsWith(`/cards/${state.cardId}/comments`))
 		await prose.press('Control+Enter')
+		expect((await response).ok()).toBe(true)
 		await expect(page.locator('.card-modal__comment-body').filter({ hasText: 'Composition draft' })).toBeVisible()
 		expect(posted).toBe(1)
 	})
