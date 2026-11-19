@@ -12,7 +12,7 @@ async function seedCard(title) {
 
 test('read-only descriptions and label chips keep their content without offering writes', async ({ browser, peer }) => {
 	const { board, card, url } = await seedCard('Read-only description')
-	const context = await browser.newContext()
+	const context = await browser.newContext({ storageState: { cookies: [], origins: [] } })
 	try {
 		await api.patch(`/cards/${card.id}`, { description: 'Read this [reference](https://example.com/guide).' })
 		const label = await api.post('/labels', { boardId: board.id, title: 'Keep visible', color: '0082c9' })
@@ -99,7 +99,7 @@ test('label chips remove by mouse and keyboard while another removal is pending,
 for (const width of [320, 375]) {
 	test(`the visibility selector fits ${width}px content for editors and disabled peers`, async ({ page, browser, peer }) => {
 		const { board, card, url } = await seedCard('Narrow visibility selector')
-		const context = await browser.newContext({ viewport: { width, height: 844 } })
+		const context = await browser.newContext({ viewport: { width, height: 844 }, storageState: { cookies: [], origins: [] } })
 		try {
 			await api.post(`/boards/${board.id}/acl`, { participant: peer.user, participantType: 'user', permission: 3 })
 			await page.setViewportSize({ width, height: 844 })
@@ -156,10 +156,12 @@ for (const allDay of [false, true]) {
 			await expect(input).toHaveValue('')
 			expect(await input.evaluate((element) => element.validity.badInput)).toBe(true)
 
+			await api.patch(`/cards/${card.id}`, { duedate: '' })
 			await page.reload()
 			await page.locator('[data-pill=due]').click()
 			await input.focus()
 			const previous = await input.inputValue()
+			expect(previous).toBe('')
 			await peer.api.patch(`/cards/${card.id}`, { duedate: '2032-07-21T12:00:00Z', title: 'Untouched date updated' })
 			await expect(page.locator('.card-modal__title')).toHaveText('Untouched date updated')
 			await expect(input).toBeFocused()
