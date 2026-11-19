@@ -1576,6 +1576,46 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</div>
 				</div>
 
+				<section class="automation__group" data-test="gitlab-settings">
+					<button
+						type="button"
+						class="automation__group-header"
+						:aria-expanded="automationGroups.gitlab ? 'true' : 'false'"
+						aria-controls="bs-automation-gitlab"
+						@click="toggleAutomationGroup('gitlab')">
+						<GitlabIcon :size="16" class="automation__group-icon" />
+						<span class="automation__group-title">{{ t('kanso', 'GitLab') }}</span>
+						<span v-if="gitlab.enabled" class="automation__group-badge">{{ t('kanso', 'Webhook active') }}</span>
+						<ChevronUpIcon v-if="automationGroups.gitlab" :size="16" class="automation__group-chevron" />
+						<ChevronDownIcon v-else :size="16" class="automation__group-chevron" />
+					</button>
+					<div v-show="automationGroups.gitlab" id="bs-automation-gitlab" class="automation__group-body">
+						<p v-if="!canManage" class="workflow__readonly-notice">{{ t('kanso', 'You need manage permission to configure the GitLab webhook.') }}</p>
+						<template v-else>
+							<p class="github-webhook__hint">{{ t('kanso', 'In GitLab Settings → Webhooks, paste this URL and secret token, and enable Issue events and Merge request events. Keep SSL verification enabled.') }}</p>
+							<p class="github-webhook__hint">{{ t('kanso', 'An opened merge request on a kanso-<id> branch or naming a card reference in its title moves matching cards to Review; merging moves them to Done. Linked issues move to Done when closed and In progress when reopened.') }}</p>
+							<p class="github-webhook__hint">{{ t('kanso', 'Kanso never contacts your instance — it only receives what the webhook sends. A link you paste stays without a status until a delivery mentions it.') }}</p>
+							<label class="github-webhook__label" for="bs-gitlab-url">{{ t('kanso', 'Payload URL') }}</label>
+							<div class="github-webhook__row">
+								<input id="bs-gitlab-url" class="github-webhook__input" type="text" readonly :value="gitlab.payloadUrl">
+								<NcButton :disabled="!gitlab.payloadUrl" @click="copyText(gitlab.payloadUrl)">{{ t('kanso', 'Copy') }}</NcButton>
+							</div>
+							<template v-if="revealedGitlabSecret">
+								<label class="github-webhook__label" for="bs-gitlab-secret">{{ t('kanso', 'Secret (copy it now, it is shown only once)') }}</label>
+								<div class="github-webhook__row">
+									<input id="bs-gitlab-secret" class="github-webhook__input" type="text" readonly :value="revealedGitlabSecret">
+									<NcButton @click="copyText(revealedGitlabSecret)">{{ t('kanso', 'Copy') }}</NcButton>
+								</div>
+							</template>
+							<div class="github-webhook__row">
+								<NcButton type="primary" :disabled="gitlabBusy" @click="handleRotateGitlabSecret">{{ gitlab.enabled ? t('kanso', 'Regenerate secret') : t('kanso', 'Enable & generate secret') }}</NcButton>
+								<NcButton v-if="gitlab.enabled" :disabled="gitlabBusy" @click="handleDisableGitlab">{{ t('kanso', 'Disable') }}</NcButton>
+							</div>
+							<span v-if="gitlabError" class="label-settings__error">{{ gitlabError }}</span>
+						</template>
+					</div>
+				</section>
+
 				<!-- Forgejo integration group -->
 				<div class="automation__group">
 					<button
@@ -2706,6 +2746,7 @@ import ViewColumnIcon from 'vue-material-design-icons/ViewColumn.vue'
 import ArchiveIcon from 'vue-material-design-icons/Archive.vue'
 import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
+import GitlabIcon from 'vue-material-design-icons/Gitlab.vue'
 // @mdi ships no Forgejo mark; a branch glyph is the closest neutral stand-in.
 import SourceBranchIcon from 'vue-material-design-icons/SourceBranch.vue'
 import LinkVariantIcon from 'vue-material-design-icons/LinkVariant.vue'
@@ -2737,6 +2778,9 @@ import {
 	rotateWebhookSecret as apiRotateWebhookSecret,
 	disableWebhook as apiDisableWebhook,
 	updateWebhookIntake as apiUpdateWebhookIntake,
+	fetchGitlabConfig,
+	rotateGitlabSecret as apiRotateGitlabSecret,
+	disableGitlab as apiDisableGitlab,
 	fetchForgejoConfig,
 	rotateForgejoSecret as apiRotateForgejoSecret,
 	disableForgejo as apiDisableForgejo,
@@ -3150,6 +3194,64 @@ async function copyText(text) {
 	}
 }
 
+const gitlab = ref({ enabled: false, payloadUrl: '' })
+const revealedGitlabSecret = ref('')
+const gitlabError = ref('')
+const gitlabBusy = ref(false)
+
+async function loadGitlabConfig() {
+	if (!canManage.value) return
+	const boardId = props.boardId
+	try {
+		const config = await fetchGitlabConfig(boardId)
+		if (props.boardId !== boardId) return
+		gitlab.value = config
+		if (config.enabled) automationGroups.value.gitlab = true
+	} catch (e) {
+		if (props.boardId === boardId) gitlabError.value = t('kanso', 'Failed to load the GitLab webhook config.')
+	}
+}
+
+async function handleRotateGitlabSecret() {
+	const boardId = props.boardId
+	gitlabError.value = ''
+	gitlabBusy.value = true
+	try {
+		const result = await apiRotateGitlabSecret(boardId)
+		if (props.boardId !== boardId) return
+		revealedGitlabSecret.value = result.secret
+		gitlab.value = { enabled: true, payloadUrl: result.payloadUrl }
+	} catch (e) {
+		if (props.boardId === boardId) gitlabError.value = e?.response?.data?.error || t('kanso', 'Could not generate the secret.')
+	} finally {
+		if (props.boardId === boardId) gitlabBusy.value = false
+	}
+}
+
+async function handleDisableGitlab() {
+	const boardId = props.boardId
+	gitlabError.value = ''
+	gitlabBusy.value = true
+	try {
+		await apiDisableGitlab(boardId)
+		if (props.boardId !== boardId) return
+		gitlab.value = { ...gitlab.value, enabled: false }
+		revealedGitlabSecret.value = ''
+	} catch (e) {
+		if (props.boardId === boardId) gitlabError.value = e?.response?.data?.error || t('kanso', 'Could not disable the webhook.')
+	} finally {
+		if (props.boardId === boardId) gitlabBusy.value = false
+	}
+}
+
+watch(() => props.boardId, () => {
+	gitlab.value = { enabled: false, payloadUrl: '' }
+	revealedGitlabSecret.value = ''
+	gitlabError.value = ''
+	gitlabBusy.value = false
+	loadGitlabConfig()
+})
+
 // ── Forgejo webhook config (MANAGE) ──────────────────────────────────────────
 // Mirrors the GitHub block above and is independent of it: a board may run
 // either webhook, both, or neither. There is no instance URL to configure -
@@ -3442,6 +3544,7 @@ async function disableCalendarFeed() {
 
 onMounted(loadWebhookConfig)
 onMounted(loadForgejoConfig)
+onMounted(loadGitlabConfig)
 onMounted(loadMailIntakeConfig)
 onMounted(loadPublicShareConfig)
 onMounted(loadCalendarFeedConfig)
@@ -3563,6 +3666,7 @@ const automationGroups = ref({
 	recurring: false,
 	github: false,
 	forgejo: false,
+	gitlab: false,
 	mailIntake: false,
 	publicLink: false,
 	calendarFeed: false,

@@ -9,6 +9,7 @@ namespace OCA\Kanso\Controller;
 
 use OCA\Kanso\Service\ForgejoWebhookService;
 use OCA\Kanso\Service\GithubWebhookService;
+use OCA\Kanso\Service\GitlabWebhookService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NonJsonWebhookBodyException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -23,10 +24,9 @@ use OCP\IRequest;
 use OCP\IUserSession;
 
 /**
- * Forge webhooks: one PUBLIC ingest endpoint per provider (HMAC-verified, no
+ * Forge webhooks: one PUBLIC authenticated ingest endpoint per provider (no
  * session) plus MANAGE-only config endpoints to generate/rotate/disable the
- * per-board secret. GitHub and Forgejo are independent - a board may run either,
- * both, or neither.
+ * per-board secret. Each provider has independent configuration.
  */
 class WebhookController extends Controller {
 	use ApiErrorTrait;
@@ -44,6 +44,7 @@ class WebhookController extends Controller {
 		private IUserSession $userSession,
 		private GithubWebhookService $webhookService,
 		private ForgejoWebhookService $forgejoService,
+		private GitlabWebhookService $gitlabService,
 	) {
 		parent::__construct($appName, $request);
 		$this->rawBody = file_get_contents('php://input') ?: '';
@@ -114,6 +115,38 @@ class WebhookController extends Controller {
 		} catch (DoesNotExistException $e) {
 			return new JSONResponse(['error' => 'not_found'], Http::STATUS_NOT_FOUND);
 		}
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function gitlab(int $id): JSONResponse {
+		try {
+			return new JSONResponse($this->gitlabService->handleWebhook($id, $this->request->getHeader('X-Gitlab-Token'), $this->rawBody));
+		} catch (NotPermittedException) {
+			return new JSONResponse(['error' => 'unauthorized'], Http::STATUS_UNAUTHORIZED);
+		} catch (InvalidInputException) {
+			return new JSONResponse(['error' => 'invalid_payload'], Http::STATUS_BAD_REQUEST);
+		} catch (DoesNotExistException) {
+			return new JSONResponse(['error' => 'not_found'], Http::STATUS_NOT_FOUND);
+		}
+	}
+
+	#[NoAdminRequired]
+	public function gitlabConfig(int $id): JSONResponse {
+		return $this->respond(fn (): JSONResponse => new JSONResponse($this->gitlabService->getConfig($id, $this->currentUserId())));
+	}
+
+	#[NoAdminRequired]
+	public function gitlabRotate(int $id): JSONResponse {
+		return $this->respond(fn (): JSONResponse => new JSONResponse($this->gitlabService->rotateSecret($id, $this->currentUserId())));
+	}
+
+	#[NoAdminRequired]
+	public function gitlabDisable(int $id): JSONResponse {
+		return $this->respond(function () use ($id): JSONResponse {
+			$this->gitlabService->disable($id, $this->currentUserId());
+			return new JSONResponse([]);
+		});
 	}
 
 	#[NoAdminRequired]

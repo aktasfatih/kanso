@@ -1854,9 +1854,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<li v-for="link in cardLinks" :key="link.id" class="card-modal__link-row">
 									<a :href="link.url" target="_blank" rel="noopener noreferrer" class="card-modal__link">
 										<GithubIcon
-											v-if="link.provider !== 'forgejo'"
+											v-if="!['forgejo', 'gitlab'].includes(link.provider)"
 											:size="14"
 											class="card-modal__link-provider" />
+										<GitlabIcon v-else-if="link.provider === 'gitlab'" :size="14" class="card-modal__link-provider" />
 										<SourceBranchIcon v-else :size="14" class="card-modal__link-provider" />
 										<span class="card-modal__link-badge" :class="`card-modal__link-badge--${link.state}`">
 											{{ linkStateLabel(link.state) }}
@@ -2829,6 +2830,7 @@ import RepeatIcon from 'vue-material-design-icons/Repeat.vue'
 import InformationOutlineIcon from 'vue-material-design-icons/InformationOutline.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import GithubIcon from 'vue-material-design-icons/Github.vue'
+import GitlabIcon from 'vue-material-design-icons/Gitlab.vue'
 // @mdi ships no Forgejo mark; a branch glyph stands in for self-hosted forges.
 import SourceBranchIcon from 'vue-material-design-icons/SourceBranch.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
@@ -6586,7 +6588,7 @@ async function handleAddLink() {
 		await addLink.mutateAsync(value)
 		newLinkUrl.value = ''
 	} catch (e) {
-		linkError.value = e?.response?.data?.error || t('kanso', 'Only https://github.com links are supported')
+		linkError.value = e?.response?.data?.error || t('kanso', 'Use a GitHub, GitLab or enabled Forgejo link.')
 	}
 }
 
