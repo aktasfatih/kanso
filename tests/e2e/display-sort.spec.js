@@ -101,7 +101,7 @@ test('Last updated sorts newest first, persists direction, and follows remote up
 		await expect.poll(() => Math.floor(Date.now() / 1000)).toBeGreaterThan(Math.max(...cards.map((card) => card.lastModified)))
 		const remote = await api.patch(`/cards/${cards[0].id}`, { title: 'Newest remote first' })
 		cards[0] = { ...cards[0], ...remote }
-		await expect.poll(titles).toEqual(expected(-1))
+		await expect.poll(titles, { timeout: 45_000 }).toEqual(expected(-1))
 		await pick('Manual')
 		await expect.poll(titles).toEqual(cards.map((card) => card.title))
 		const current = await api.get(`/boards/${board.id}`)

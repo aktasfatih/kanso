@@ -5,7 +5,7 @@
 <!-- An input that commits on blur/change: model changes flow in, but never over what the user is typing.
      Uncontrolled on purpose - a `:value` binding would be re-applied on every re-render. -->
 <template>
-	<input ref="input" @input="markDateInteraction" @keydown="onKeydown" @blur="dateInteracted = false">
+	<input ref="input" @input="onInput" @keydown="onKeydown" @blur="onBlur">
 </template>
 
 <script setup>
@@ -19,9 +19,22 @@ const text = (v) => (v == null ? '' : String(v))
 const input = ref(null)
 let synced = text(props.modelValue)
 let dateInteracted = false
+let dateInputChanged = false
 
 function markDateInteraction() {
 	if (['date', 'datetime-local'].includes(input.value?.type)) dateInteracted = true
+}
+
+function onInput() {
+	markDateInteraction()
+	if (dateInteracted) dateInputChanged = true
+}
+
+function onBlur() {
+	const el = input.value
+	if (el && dateInteracted && !dateInputChanged && !el.validity.badInput) el.value = synced
+	dateInteracted = false
+	dateInputChanged = false
 }
 
 function onKeydown(event) {

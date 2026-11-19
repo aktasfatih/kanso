@@ -136,6 +136,38 @@ for (const width of [320, 375]) {
 }
 
 for (const allDay of [false, true]) {
+	test(`a no-op in an empty ${allDay ? 'date' : 'datetime'} follows the remote value on blur and preserves a later user commit`, async ({ page, peer }) => {
+		const { board, card, url } = await seedCard('No-op date interaction')
+		try {
+			await api.patch(`/cards/${card.id}`, { allDay })
+			await api.post(`/boards/${board.id}/acl`, { participant: peer.user, participantType: 'user', permission: 3 })
+			await ncLogin(page)
+			await page.goto(url)
+			await page.locator('[data-pill=due]').click()
+			const input = page.locator('[data-date=end]')
+			await input.focus()
+			await input.press('Backspace')
+			await expect(input).toHaveValue('')
+			expect(await input.evaluate((element) => element.validity.badInput)).toBe(false)
+			const remote = '2031-06-20T11:00:00Z'
+			const updated = await peer.api.patch(`/cards/${card.id}`, { duedate: remote, title: 'No-op remote date arrived' })
+			await expect(page.locator('.card-modal__title')).toHaveText('No-op remote date arrived')
+			await expect(input).toBeFocused()
+			await input.blur()
+			await expect(input).toHaveValue(/^2031-06-20/)
+			expect(new Date((await api.get(`/cards/${card.id}`)).duedate).getTime()).toBe(new Date(updated.duedate).getTime())
+
+			const value = allDay ? '2033-08-22' : '2033-08-22T09:30'
+			const expected = await page.evaluate((date) => new Date(date).getTime(), value)
+			await input.fill(value)
+			await input.blur()
+			await expect.poll(async () => new Date((await api.get(`/cards/${card.id}`)).duedate).getTime()).toBe(expected)
+			await expect(input).toHaveValue(value)
+		} finally {
+			await api.delete(`/boards/${board.id}`).catch(() => {})
+		}
+	})
+
 	test(`a partial empty ${allDay ? 'date' : 'datetime'} survives a remote date change while untouched focus follows it`, async ({ page, peer }) => {
 		const { board, card, url } = await seedCard('Collaborative date draft')
 		try {
@@ -172,3 +204,23 @@ for (const allDay of [false, true]) {
 		}
 	})
 }
+
+test('clearing a custom date field is committed through the existing change consumer', async ({ page }) => {
+	const { board, card, url } = await seedCard('Clear custom date')
+	try {
+		const field = await api.post('/card-fields', { boardId: board.id, name: 'Release date', type: 'date' })
+		await api.put(`/cards/${card.id}/fields/${field.id}`, { value: '2035-01-02' })
+		await ncLogin(page)
+		await page.goto(url)
+		const input = page.locator(`[data-test=cf-input-${field.id}]`)
+		await expect(input).toHaveValue('2035-01-02')
+		await input.fill('')
+		await input.blur()
+		await expect.poll(async () => (await api.get(`/cards/${card.id}`)).fieldValues.find((value) => value.fieldId === field.id)?.value ?? '').toBe('')
+		await expect(input).toHaveValue('')
+		await page.reload()
+		await expect(input).toHaveValue('')
+	} finally {
+		await api.delete(`/boards/${board.id}`).catch(() => {})
+	}
+})
