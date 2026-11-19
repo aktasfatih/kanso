@@ -4,10 +4,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-globalThis.window = { _oc_webroot: '', location: { href: 'http://localhost/' }, addEventListener() {}, removeEventListener() {} }
+globalThis.window = Object.assign(new EventTarget(), { _oc_webroot: '', location: { href: 'http://localhost/' } })
 const { effectScope, ref } = await import('vue')
 const axios = (await import('@nextcloud/axios')).default
 const { useResolvedCardReferences } = await import('../../src/composables/useResolvedCardReferences.js')
+globalThis.document = Object.assign(new EventTarget(), { visibilityState: 'visible' })
 
 function harness(t, adapter, tokens = ['OLD-1']) {
 	axios.defaults.adapter = adapter
@@ -81,4 +82,48 @@ test('lookups have a fixed request bound and bounded concurrent reads', async (t
 	assert.equal(h.resolved.value.size, 50)
 	h.scope.stop()
 	assert.ok(pending.every((item) => item.config.signal.aborted))
+})
+
+test('refresh bursts discard pre-change replies and coalesce until the active batch finishes', async (t) => {
+	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] })
+	const pending = []
+	const h = harness(t, (config) => new Promise((resolve) => pending.push({ config, resolve })))
+	await flush()
+	for (let i = 0; i < 10; i++) window.dispatchEvent(new Event('focus'))
+	pending[0].resolve(response(pending[0].config, 91, 'Pre-change private title'))
+	await flush()
+	assert.equal(h.resolved.value.size, 0)
+	t.mock.timers.tick(999)
+	await flush()
+	assert.equal(pending.length, 1)
+	t.mock.timers.tick(1)
+	await flush()
+	assert.equal(pending.length, 2)
+	pending[1].resolve(response(pending[1].config, 92, 'Revalidated title'))
+	await flush()
+	assert.equal(h.resolved.value.get('OLD-1').title, 'Revalidated title')
+	h.scope.stop()
+	window.dispatchEvent(new Event('focus'))
+	t.mock.timers.tick(60_000)
+	await flush()
+	assert.equal(pending.length, 2)
+})
+
+test('the polling backstop skips hidden tabs and catches up on visibility restoration', async (t) => {
+	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] })
+	let requests = 0
+	const h = harness(t, async (config) => { requests++; return response(config) })
+	await flush()
+	document.visibilityState = 'hidden'
+	t.after(() => { document.visibilityState = 'visible' })
+	t.mock.timers.tick(30_000)
+	await flush()
+	assert.equal(requests, 1)
+	document.visibilityState = 'visible'
+	document.dispatchEvent(new Event('visibilitychange'))
+	assert.equal(h.resolved.value.size, 0)
+	t.mock.timers.tick(1000)
+	await flush()
+	assert.equal(requests, 2)
+	assert.equal(h.resolved.value.size, 1)
 })

@@ -74,9 +74,11 @@ test('moved reference titles obey destination access and private card visibility
 		await api.post(`/boards/${f.boards[1]}/acl`, { participant: peer.user, participantType: 'user', permission: 1, role: 'external' })
 		await page.reload()
 		await expect(page.locator('.card-modal__desc-rendered a.kanso-cardref')).toHaveText(f.target.title)
+		const revalidated = page.waitForResponse((response) => response.status() === 404
+			&& response.url().endsWith(`/boards/${f.boards[0]}/cards/by-ref/${f.reference}`), { timeout: 45_000 })
 		await api.patch(`/cards/${moved.id}`, { visibility: 'private' })
-		await page.reload()
-		await expect(page.locator('.card-modal__desc-rendered')).toContainText(`See ${f.reference}.`)
+		expect((await revalidated).status()).toBe(404)
+		await expect(page.locator('.card-modal__desc-rendered')).toContainText(`See ${f.reference}.`, { timeout: 45_000 })
 		await expect(page.locator('.card-modal__desc-rendered a.kanso-cardref')).toHaveCount(0)
 	} finally { await context.close(); await f.cleanup() }
 })
