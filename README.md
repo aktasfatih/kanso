@@ -197,6 +197,9 @@ your work, on your own Nextcloud, laid out plainly.
   overdue work grouped up top, and the project's cards on a timeline. Lifecycle
   is separate from forecast health; choosing a lead does not share the project.
   Archived cards keep contributing to project progress and analytics.
+  Archive and restore projects to keep the active list tidy without changing
+  their cards, discussion, sharing or progress. Archived projects remain
+  available through the archived-projects view and existing links.
 
 ### 📈 Analytics
 - **Estimates** on any scale, chosen per board: Fibonacci, planning poker,

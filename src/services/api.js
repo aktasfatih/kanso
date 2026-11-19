@@ -841,8 +841,8 @@ export const deleteSavedFilter = (boardId, name) =>
 	axios.delete(url(`/api/boards/${boardId}/saved-filters/${encodeURIComponent(name)}`)).then((r) => r.data)
 
 // Projects (cross-board card collections)
-export const getProjects = () =>
-	axios.get(url('/api/projects')).then((r) => r.data)
+export const getProjects = ({ includeArchived = false } = {}) =>
+	axios.get(url('/api/projects'), { params: includeArchived ? { includeArchived: true } : {} }).then((r) => r.data)
 
 export const createProject = (data) =>
 	axios.post(url('/api/projects'), data).then((r) => r.data)

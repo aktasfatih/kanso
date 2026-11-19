@@ -1,0 +1,81 @@
+// SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+import { test, expect, api, ncLogin, BASE } from './helpers.js'
+
+test('archiving and restoring a project preserves its cards, discussion, sharing and progress', async ({ page, peer }) => {
+	const board = await api.post('/boards', { title: `Project archive board ${Date.now()}` })
+	let project
+	try {
+		const stack = await api.post('/stacks', { boardId: board.id, title: 'Work' })
+		const card = await api.post('/cards', { stackId: stack.id, title: 'Preserved archived project work' })
+		await api.patch(`/cards/${card.id}`, { done: true })
+		project = await api.post('/projects', { title: `Archive project ${Date.now()}`, description: 'Preserved project history', lifecycleStatus: 'done' })
+		await api.put(`/projects/${project.id}/cards/${card.id}`)
+		await api.put(`/projects/${project.id}/pin`)
+		await api.post(`/projects/${project.id}/shares`, { participant: peer.user, participantType: 'user', permission: 1 })
+		const comment = await api.post(`/projects/${project.id}/comments`, { body: 'Preserved discussion' })
+		const beforePlan = await api.get(`/projects/${project.id}/plan`)
+		const beforeShares = await api.get(`/projects/${project.id}/shares`)
+		await ncLogin(page)
+		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${project.id}`)
+		const pinned = page.locator('[data-test=nav-pinned-project]', { hasText: project.title })
+		await expect(pinned).toBeVisible()
+		await page.locator('.project-view__header-actions .action-item__menutoggle').last().click()
+		await page.getByRole('menuitem', { name: 'Archive project', exact: true }).click()
+		await expect(page.locator('[data-test=project-archived]')).toBeVisible()
+		await expect(pinned).toBeHidden()
+		await expect(page.locator('[data-test=project-progress]')).toHaveText('1 of 1 cards')
+		await expect.poll(async () => (await api.get('/projects')).some((p) => p.id === project.id)).toBe(false)
+		const archived = (await api.get('/projects?includeArchived=true')).find((p) => p.id === project.id)
+		expect(archived).toMatchObject({ archived: true, description: project.description, lifecycleStatus: 'done', pinned: true })
+		expect((await api.get(`/projects/${project.id}/cards`)).map((row) => row.id)).toEqual([card.id])
+		expect((await api.get(`/projects/${project.id}/comments`)).map((row) => row.id)).toEqual([comment.id])
+		expect(await api.get(`/projects/${project.id}/shares`)).toEqual(beforeShares)
+		const afterPlan = await api.get(`/projects/${project.id}/plan`)
+		for (const key of ['total', 'done', 'open', 'points', 'burnup', 'throughput']) expect(afterPlan[key]).toEqual(beforePlan[key])
+		expect((await api.get(`/cards/${card.id}`)).doneAt).toBeGreaterThan(0)
+		await page.reload()
+		await expect(page.locator('[data-test=project-archived]')).toBeVisible()
+		await expect(page.locator('.project-view__title')).toHaveText(project.title)
+		await page.goto(`${BASE}/index.php/apps/kanso#/projects/${project.id}/stats`)
+		await expect(page.locator('.board-stats__body')).toBeVisible()
+		await expect(page.locator('.board-stats__back')).toContainText(project.title)
+		await page.goto(`${BASE}/index.php/apps/kanso#/projects`)
+		const tile = page.locator(`[data-test=project-tile-${project.id}]`)
+		await expect(tile).toBeHidden()
+		await page.locator('[data-test=projects-archive-toggle]').click()
+		await expect(tile).toBeVisible()
+		await tile.click()
+		await page.locator('.project-view__header-actions .action-item__menutoggle').last().click()
+		await page.getByRole('menuitem', { name: 'Restore project', exact: true }).click()
+		await expect(page.locator('[data-test=project-archived]')).toBeHidden()
+		await expect(pinned).toBeVisible()
+		await expect.poll(async () => (await api.get('/projects')).find((p) => p.id === project.id)?.archived).toBe(false)
+		expect(await api.get(`/projects/${project.id}/shares`)).toEqual(beforeShares)
+	} finally {
+		if (project) await api.delete(`/projects/${project.id}`).catch(() => {})
+		await api.delete(`/boards/${board.id}`).catch(() => {})
+	}
+})
+
+test('project archiving honors the existing edit permission and does not grant access', async ({ peer }) => {
+	const project = await api.post('/projects', { title: `Archive permissions ${Date.now()}` })
+	try {
+		expect((await peer.api.raw('PATCH', `/projects/${project.id}`, { archived: true })).status).toBe(404)
+		const share = await api.post(`/projects/${project.id}/shares`, { participant: peer.user, participantType: 'user', permission: 1 })
+		expect((await peer.api.raw('PATCH', `/projects/${project.id}`, { archived: true })).status).toBe(403)
+		await api.patch(`/projects/${project.id}`, { archived: true })
+		expect((await peer.api.get('/projects')).some((p) => p.id === project.id)).toBe(false)
+		expect((await peer.api.get('/projects?includeArchived=true')).find((p) => p.id === project.id)?.archived).toBe(true)
+		expect((await peer.api.raw('PATCH', `/projects/${project.id}`, { archived: false })).status).toBe(403)
+		await api.patch(`/projects/${project.id}/shares/${share.id}`, { permission: 3 })
+		expect(await peer.api.patch(`/projects/${project.id}`, { archived: false })).toMatchObject({ id: project.id, archived: false })
+		expect(await peer.api.patch(`/projects/${project.id}`, { archived: true })).toMatchObject({ id: project.id, archived: true })
+		await api.delete(`/projects/${project.id}/shares/${share.id}`)
+		expect((await peer.api.get('/projects?includeArchived=true')).some((p) => p.id === project.id)).toBe(false)
+		expect((await peer.api.raw('GET', `/projects/${project.id}/plan`)).status).toBe(404)
+	} finally {
+		await api.delete(`/projects/${project.id}`).catch(() => {})
+	}
+})

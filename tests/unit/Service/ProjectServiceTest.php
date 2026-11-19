@@ -168,6 +168,47 @@ class ProjectServiceTest extends TestCase {
 		self::assertSame([false, true], array_column($this->service->findMine('alice'), 'pinned'));
 	}
 
+	public function testFindMineIncludesArchivedProjectsOnlyWhenRequested(): void {
+		$archived = $this->project();
+		$archived->setArchived(true);
+		$this->projectMapper->expects(self::exactly(2))->method('findAccessible')
+			->willReturnCallback(static fn (string $uid, bool $includeArchived): array => $includeArchived ? [$archived] : []);
+
+		self::assertSame([], $this->service->findMine('alice'));
+		self::assertTrue($this->service->findMine('alice', true)[0]['archived']);
+	}
+
+	public function testArchivingAndRestoringPreserveProjectMetadataAndCollections(): void {
+		$project = $this->project();
+		$project->setDescription('Project history');
+		$project->setLifecycleStatus('done');
+		$this->projectMapper->method('find')->willReturn($project);
+		$this->projectMapper->expects(self::exactly(2))->method('update')->willReturnArgument(0);
+		$this->projectCardMapper->expects(self::never())->method('deleteByProject');
+		$this->shareMapper->expects(self::never())->method('deleteByProject');
+		$this->commentMapper->expects(self::never())->method('deleteByProject');
+
+		self::assertTrue($this->service->update(5, 'alice', null, null, null, archived: true)->getArchived());
+		$restored = $this->service->update(5, 'alice', null, null, null, archived: false)->jsonSerialize();
+		self::assertFalse($restored['archived']);
+		self::assertSame('Q3 initiative', $restored['title']);
+		self::assertSame('Project history', $restored['description']);
+		self::assertSame('done', $restored['lifecycleStatus']);
+	}
+
+	public function testReadOnlyProjectShareCannotArchive(): void {
+		$this->sharedWithBob(PermissionService::PERMISSION_READ);
+		$this->projectMapper->expects(self::never())->method('update');
+		$this->expectException(NotPermittedException::class);
+		$this->service->update(5, 'bob', null, null, null, archived: true);
+	}
+
+	public function testProjectEditorCanArchive(): void {
+		$this->sharedWithBob(self::EDIT);
+		$this->projectMapper->expects(self::once())->method('update')->willReturnArgument(0);
+		self::assertTrue($this->service->update(5, 'bob', null, null, null, archived: true)->getArchived());
+	}
+
 	public function testFindMineReportsAViewersAccess(): void {
 		$this->projectMapper->method('findAccessible')->with('bob')->willReturn([$this->project('alice')]);
 		$this->shareMapper->method('findByProjects')->with([5])->willReturn([$this->share('bob', PermissionService::PERMISSION_READ)]);

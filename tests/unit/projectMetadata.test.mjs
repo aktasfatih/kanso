@@ -43,13 +43,14 @@ function harness(t) {
 		return { status: 200, statusText: 'OK', data: result, headers: {}, config }
 	}
 	const scope = effectScope()
-	const { update } = app.runWithContext(() => scope.run(() => useProjects()))
+	const { update, data: active } = app.runWithContext(() => scope.run(() => useProjects()))
+	const { data: all } = app.runWithContext(() => scope.run(() => useProjects({ includeArchived: true })))
 	t.after(() => {
 		scope.stop()
 		client.unmount()
 		client.clear()
 	})
-	return { client, update, started: started.promise, finish: outcome.resolve, initial, other }
+	return { client, update, active, all, started: started.promise, finish: outcome.resolve, initial, other }
 }
 
 test('a changed lead never shows the previous lead name while the server is unavailable', async (t) => {
@@ -89,4 +90,29 @@ test('a denied lead change restores the previous lead and display name', async (
 	rig.finish(new Error('Permission denied'))
 	await assert.rejects(write, /Permission denied/)
 	assert.deepEqual(rig.client.getQueryData(['projects']), [rig.initial, rig.other])
+})
+
+test('archiving hides a project from active consumers while retaining its detail record and rolls back denial', async (t) => {
+	const rig = harness(t)
+	const write = rig.update.mutateAsync({ id: 1, archived: true })
+	await rig.started
+	assert.deepEqual(rig.active.value, [rig.other])
+	assert.deepEqual(rig.all.value, [{ ...rig.initial, archived: true }, rig.other])
+
+	rig.finish(new Error('Permission denied'))
+	await assert.rejects(write, /Permission denied/)
+	assert.deepEqual(rig.active.value, [rig.initial, rig.other])
+	assert.deepEqual(rig.all.value, [rig.initial, rig.other])
+})
+
+test('restoring a project puts its existing record back in every active consumer', async (t) => {
+	const rig = harness(t)
+	rig.client.setQueryData(['projects'], [{ ...rig.initial, archived: true }, rig.other])
+	assert.deepEqual(rig.active.value, [rig.other])
+	const write = rig.update.mutateAsync({ id: 1, archived: false })
+	await rig.started
+	assert.deepEqual(rig.active.value, [{ ...rig.initial, archived: false }, rig.other])
+	assert.equal(rig.all.value.length, 2)
+	rig.finish({ ...rig.initial, archived: false })
+	await write
 })
