@@ -23,12 +23,14 @@ use OCP\Http\Client\IClientService;
  *
  *  - `github`: refreshed best-effort by an UNAUTHENTICATED GitHub API poll,
  *    throttled per link. No credentials are stored or sent.
+ *  - `gitlab`: never polled; issue and merge request states come from webhooks.
  *  - `forgejo`: NEVER polled. The instance is self-hosted, so there is no host
  *    to pin and no stored token (a private repo would 404 anyway); state comes
  *    from the board's webhook deliveries instead. A link pasted for something
  *    that never changes again therefore stays `unknown`.
  *
- * A non-github.com URL is accepted only when the board has its Forgejo webhook
+ * GitLab issue/merge-request URLs are recognized by their /-/ path. Other
+ * non-github.com URLs are accepted only when the board has its Forgejo webhook
  * enabled - that opt-in is the sole signal that the board talks to a forge at
  * all, since Kanso stores no instance URL.
  *
@@ -101,6 +103,9 @@ class CardLinkService {
 			$this->visibilityGuard->assertVisible($board, $card, $actorUid);
 
 			[$kind, $provider] = $this->resolveLink($url, $board);
+			if ($provider === CardLink::PROVIDER_GITLAB) {
+				[, $url] = self::parseGitlabUrl($url);
+			}
 			foreach ($this->cardLinkMapper->findByCard($cardId) as $existing) {
 				if ($existing->getUrl() === $url) {
 					return $existing;
@@ -239,29 +244,65 @@ class CardLinkService {
 	}
 
 	/**
-	 * Resolves a pasted URL to [kind, provider].
+	 * GitLab resource URLs never trigger outbound requests. Other non-GitHub
+	 * forge URLs require the board's Forgejo opt-in.
 	 *
-	 * github.com is always accepted. Any other host is accepted ONLY when the
-	 * board has its Forgejo webhook enabled - that opt-in is what tells us the
-	 * board actually talks to a forge at that address, and it keeps the strict
-	 * github.com-only rejection for every board that has not opted in. Kanso
-	 * stores no instance URL, so the board's own webhook is the only signal
-	 * available, and a Forgejo link would be stuck on `unknown` without the
-	 * deliveries anyway.
-	 *
-	 * @return array{0: string, 1: string} [kind, provider]
-	 * @throws InvalidInputException if the URL is not acceptable for this board
+	 * @return array{0: string, 1: string}
 	 */
 	private function resolveLink(string $url, Board $board): array {
 		try {
+			[$kind] = self::parseGitlabUrl($url);
+			return [$kind, CardLink::PROVIDER_GITLAB];
+		} catch (InvalidInputException) {
+		}
+		try {
 			[$kind] = self::parseGitHubUrl($url);
 			return [$kind, CardLink::PROVIDER_GITHUB];
-		} catch (InvalidInputException $e) {
+		} catch (InvalidInputException) {
 			if (($board->getForgejoWebhookSecret() ?? '') === '') {
-				throw $e;
+				throw new InvalidInputException('Use a GitHub link or a GitLab issue or merge request URL; enable the Forgejo webhook for other forge links');
 			}
 		}
 		return [self::forgeKindFromUrl($url), CardLink::PROVIDER_FORGEJO];
+	}
+
+	/** @return array{0: string, 1: string} */
+	public static function parseGitlabUrl(string $url): array {
+		$parts = parse_url(trim($url));
+		$host = $parts === false ? '' : ($parts['host'] ?? '');
+		if ($parts === false || ($parts['scheme'] ?? '') !== 'https' || $host === ''
+			|| isset($parts['user']) || isset($parts['pass'])
+			|| preg_match('#^/([A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+)/-/(issues|merge_requests)/([1-9][0-9]*)/?$#', $parts['path'] ?? '', $m) !== 1) {
+			throw new InvalidInputException('Use an https GitLab issue or merge request URL');
+		}
+		foreach (explode('/', $m[1]) as $segment) {
+			if ($segment === '.' || $segment === '..') {
+				throw new InvalidInputException('Invalid GitLab project path');
+			}
+		}
+		$kind = $m[2] === 'merge_requests' ? CardLink::KIND_PR : CardLink::KIND_ISSUE;
+		$port = isset($parts['port']) && $parts['port'] !== 443 ? ':' . $parts['port'] : '';
+		$canonical = 'https://' . strtolower($host) . $port . '/' . $m[1] . '/-/' . $m[2] . '/' . $m[3];
+		return [$kind, $canonical];
+	}
+
+	public function updateFromWebhook(CardLink $link, string $state, ?string $title): void {
+		$this->cardMutation->run($link->getCardId(), function () use ($link, $state, $title): void {
+			$card = $this->loadCard($link->getCardId());
+			$board = $this->loadBoard($card->getBoardId());
+			$this->permissionService->assertPermission($board, $board->getOwner(), PermissionService::PERMISSION_EDIT);
+			$this->visibilityGuard->assertVisible($board, $card, $board->getOwner());
+			if ($link->getState() === $state && ($title === null || $link->getTitle() === $title)) {
+				return;
+			}
+			$link->setState($state);
+			if ($title !== null) {
+				$link->setTitle($title);
+			}
+			$link->setLastPolled(time());
+			$this->cardLinkMapper->update($link);
+			$this->changeNotifier->notify($card->getBoardId(), Change::ENTITY_CARD, $card->getId(), Change::ACTION_UPDATE, $board->getOwner());
+		});
 	}
 
 	/**

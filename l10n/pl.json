@@ -1250,7 +1250,6 @@
         "Once a day, Kanso saves a copy of every board as a zip file.": "Raz dziennie Kanso zapisuje kopię każdej tablicy jako plik zip.",
         "Only administrators can download them, and they can never be shared by a link.": "Mogą je pobierać tylko administratorzy i nigdy nie da się ich udostępnić odnośnikiem.",
         "Only archived": "Tylko zarchiwizowane",
-        "Only https://github.com links are supported": "Obsługiwane są tylko odnośniki https://github.com",
         "Only issues with a label": "Tylko zgłoszenia z etykietą",
         "Only loaded tasks are shown.": "Wyświetlane są tylko wczytane zadania.",
         "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list.": "Wczytywanych jest tylko pierwszych {count} przypisanych kart, więc niektórych zadań brakuje na tej liście.",

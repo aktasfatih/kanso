@@ -158,6 +158,20 @@ your work, on your own Nextcloud, laid out plainly.
   Ingress limits or Nextcloud rate-limit overrides may still reject deliveries.
   Check the forge's delivery log for `401` responses when diagnosing a wrong
   secret; rotate and update the secret on both sides if needed.
+- **GitLab webhooks**: attach GitLab issue and merge-request links, including
+  nested groups and self-managed instances. In board settings → Automation →
+  GitLab, generate a secret and copy the payload URL. In your GitLab project's
+  Settings → Webhooks, paste that URL and the generated value into **Secret
+  token**, enable **Issue events** and **Merge request events**, and keep SSL
+  verification enabled. An opened merge request on a `kanso-<id>` branch or
+  naming a card reference in its title moves matching cards to Review; merging
+  moves them to Done. Linked issues move to Done when closed and back to In
+  progress when reopened. GitLab is receive-only: link status stays unknown
+  until a delivery arrives, and no API token, polling, issue intake or OAuth is
+  required. GitLab secrets are independent of GitHub and Forgejo; regeneration
+  invalidates the previous secret immediately. See the
+  [GitLab webhook setup](https://docs.gitlab.com/user/project/integrations/webhooks/)
+  and [event payload documentation](https://docs.gitlab.com/user/project/integrations/webhook_events/).
 - **MCP server (AI access)**: an optional
   [Model Context Protocol](https://modelcontextprotocol.io) server (under
   [`mcp/`](mcp/README.md)) lets Claude and other MCP clients read and manage
