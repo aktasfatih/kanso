@@ -2927,7 +2927,8 @@ import { apiAnswerStatus } from '../services/apiErrors.js'
 import { cssColor, LABEL_COLOR_PRESETS, readableColor } from '../services/color.js'
 import { humanId } from '../services/humanId.js'
 import { normalizeCardFeatures } from '../services/cardFeatures.js'
-import { renderMarkdown, buildCardRefMap } from '../services/markdown.js'
+import { renderMarkdown, buildCardRefMap, findCardReferences } from '../services/markdown.js'
+import { useResolvedCardReferences } from '../composables/useResolvedCardReferences.js'
 import { useEditorPrefs } from '../composables/useEditorPrefs.js'
 import { useCardPrefs } from '../composables/useCardPrefs.js'
 import { relationPicker, beginRelationPick, clearRelationPick, navigateRelationPick } from '../services/relationPicker.js'
@@ -4338,14 +4339,9 @@ const cardTitle = computed(() => cardData.value?.title ?? '')
 // name; the page uses it for the breadcrumb / document title). Emitted rather than
 // exposed so binding stays declarative in both shells.
 watch(cardTitle, (title) => emit('update:title', title), { immediate: true })
-// Board-scoped PREFIX-<seq> → {cardId, title} map for cross-references, built
-// from the already-cached board cards + prefix (no extra request). Drives the
-// title-link rendering of `KAN-123` in the description and comments.
-const cardRefMap = computed(() =>
+const cachedCardRefMap = computed(() =>
 	buildCardRefMap(boardData.value?.cards ?? [], boardData.value?.board?.prefix),
 )
-const renderedDescription = computed(() =>
-	renderMarkdown(cardData.value?.description || '', { refs: cardRefMap.value }))
 
 // ── Title editing ─────────────────────────────────────────────────────────────
 const editingTitle = ref(false)
@@ -5617,6 +5613,20 @@ watch(
 	},
 	{ immediate: true },
 )
+const referenceContext = computed(() => {
+	const board = boardData.value
+	const card = cardData.value
+	if (!isOpen.value || isError.value || !card || Number(card.id) !== Number(props.cardId)
+		|| Number(board?.board?.id) !== Number(boardId.value) || Number(card.boardId) !== Number(boardId.value)) return null
+	return JSON.stringify([getCurrentUser()?.uid, props.cardId, boardId.value, route.fullPath,
+		board.permissions, board.role, board.etag ?? board.cursor])
+})
+const renderedReferences = computed(() => [cardData.value?.description, ...flatComments.value.map((comment) => comment.body)]
+	.flatMap((body) => findCardReferences(body)))
+const cardRefMap = useResolvedCardReferences(boardId, referenceContext, renderedReferences, cachedCardRefMap)
+const renderedDescription = computed(() =>
+	renderMarkdown(cardData.value?.description || '', { refs: cardRefMap.value }))
+
 // Memoized per-comment rendered markdown, keyed by comment id. renderMarkdown is
 // expensive; rendering inline in-template re-ran it on any modal re-render. This
 // map only recomputes when the comments data actually changes.
