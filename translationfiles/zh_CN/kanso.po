@@ -788,7 +788,7 @@ msgstr "立即归档"
 
 #: src/views/ProjectView.vue
 msgid "Archive project"
-msgstr ""
+msgstr "归档项目"
 
 #: src/components/BulkActionBar.vue
 msgid "Archive selected"
@@ -3838,7 +3838,7 @@ msgstr "上次运行：%1$s"
 
 #: src/views/BoardView.vue
 msgid "Last updated"
-msgstr ""
+msgstr "最后更新"
 
 #: src/services/projectStatus.js
 msgid "Late"
@@ -4319,7 +4319,7 @@ msgstr "没有与“{query}”匹配的已归档卡片。"
 
 #: src/views/ProjectsView.vue
 msgid "No archived projects"
-msgstr ""
+msgstr "没有已归档的项目"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "No attachments yet"
@@ -5439,7 +5439,7 @@ msgstr "还原面板大小"
 
 #: src/views/ProjectView.vue
 msgid "Restore project"
-msgstr ""
+msgstr "恢复项目"
 
 #: src/views/ArchivedView.vue
 #: src/views/TrashView.vue
@@ -5790,11 +5790,11 @@ msgstr "显示/隐藏此快捷键浮层"
 
 #: src/views/ProjectsView.vue
 msgid "Show active projects"
-msgstr ""
+msgstr "显示活动项目"
 
 #: src/views/ProjectsView.vue
 msgid "Show archived projects"
-msgstr ""
+msgstr "显示已归档项目"
 
 #: src/components/CardDetail.vue
 msgid "Show changes"

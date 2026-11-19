@@ -828,7 +828,7 @@ msgstr "Nu archiveren"
 
 #: src/views/ProjectView.vue
 msgid "Archive project"
-msgstr ""
+msgstr "Project archiveren"
 
 #: src/components/BulkActionBar.vue
 msgid "Archive selected"
@@ -3888,7 +3888,7 @@ msgstr "Laatste keer: %1$s"
 
 #: src/views/BoardView.vue
 msgid "Last updated"
-msgstr ""
+msgstr "Laatst bijgewerkt"
 
 #: src/services/projectStatus.js
 msgid "Late"
@@ -4370,7 +4370,7 @@ msgstr "Er zijn geen gearchiveerde kaarten die overeenkomen met “{query}”."
 
 #: src/views/ProjectsView.vue
 msgid "No archived projects"
-msgstr ""
+msgstr "Geen gearchiveerde projecten"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "No attachments yet"
@@ -5490,7 +5490,7 @@ msgstr "Paneelgrootte herstellen"
 
 #: src/views/ProjectView.vue
 msgid "Restore project"
-msgstr ""
+msgstr "Project herstellen"
 
 #: src/views/ArchivedView.vue
 #: src/views/TrashView.vue
@@ -5843,11 +5843,11 @@ msgstr "Dit sneltoetsoverzicht tonen / verbergen"
 
 #: src/views/ProjectsView.vue
 msgid "Show active projects"
-msgstr ""
+msgstr "Actieve projecten tonen"
 
 #: src/views/ProjectsView.vue
 msgid "Show archived projects"
-msgstr ""
+msgstr "Gearchiveerde projecten tonen"
 
 #: src/components/CardDetail.vue
 msgid "Show changes"

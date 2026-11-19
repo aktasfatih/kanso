@@ -828,7 +828,7 @@ msgstr "Arquivar agora"
 
 #: src/views/ProjectView.vue
 msgid "Archive project"
-msgstr ""
+msgstr "Arquivar projeto"
 
 #: src/components/BulkActionBar.vue
 msgid "Archive selected"
@@ -3888,7 +3888,7 @@ msgstr "Última execução: %1$s"
 
 #: src/views/BoardView.vue
 msgid "Last updated"
-msgstr ""
+msgstr "Última atualização"
 
 #: src/services/projectStatus.js
 msgid "Late"
@@ -4370,7 +4370,7 @@ msgstr "Nenhum cartão arquivado corresponde a “{query}”."
 
 #: src/views/ProjectsView.vue
 msgid "No archived projects"
-msgstr ""
+msgstr "Nenhum projeto arquivado"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "No attachments yet"
@@ -5490,7 +5490,7 @@ msgstr "Restaurar o tamanho do painel"
 
 #: src/views/ProjectView.vue
 msgid "Restore project"
-msgstr ""
+msgstr "Restaurar projeto"
 
 #: src/views/ArchivedView.vue
 #: src/views/TrashView.vue
@@ -5843,11 +5843,11 @@ msgstr "Mostrar / ocultar esta lista de atalhos"
 
 #: src/views/ProjectsView.vue
 msgid "Show active projects"
-msgstr ""
+msgstr "Mostrar projetos ativos"
 
 #: src/views/ProjectsView.vue
 msgid "Show archived projects"
-msgstr ""
+msgstr "Mostrar projetos arquivados"
 
 #: src/components/CardDetail.vue
 msgid "Show changes"

@@ -868,7 +868,7 @@ msgstr "Архивировать сейчас"
 
 #: src/views/ProjectView.vue
 msgid "Archive project"
-msgstr ""
+msgstr "Архивировать проект"
 
 #: src/components/BulkActionBar.vue
 msgid "Archive selected"
@@ -3938,7 +3938,7 @@ msgstr "Последний запуск: %1$s"
 
 #: src/views/BoardView.vue
 msgid "Last updated"
-msgstr ""
+msgstr "Последнее обновление"
 
 #: src/services/projectStatus.js
 msgid "Late"
@@ -4421,7 +4421,7 @@ msgstr "Нет архивных карточек по запросу «{query}»
 
 #: src/views/ProjectsView.vue
 msgid "No archived projects"
-msgstr ""
+msgstr "Архивных проектов нет"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "No attachments yet"
@@ -5541,7 +5541,7 @@ msgstr "Восстановить размер панели"
 
 #: src/views/ProjectView.vue
 msgid "Restore project"
-msgstr ""
+msgstr "Восстановить проект"
 
 #: src/views/ArchivedView.vue
 #: src/views/TrashView.vue
@@ -5896,11 +5896,11 @@ msgstr "Показать / скрыть эту подсказку по соче�
 
 #: src/views/ProjectsView.vue
 msgid "Show active projects"
-msgstr ""
+msgstr "Показать активные проекты"
 
 #: src/views/ProjectsView.vue
 msgid "Show archived projects"
-msgstr ""
+msgstr "Показать архивные проекты"
 
 #: src/components/CardDetail.vue
 msgid "Show changes"

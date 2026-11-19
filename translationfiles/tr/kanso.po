@@ -828,7 +828,7 @@ msgstr "Şimdi arşivle"
 
 #: src/views/ProjectView.vue
 msgid "Archive project"
-msgstr ""
+msgstr "Projeyi arşivle"
 
 #: src/components/BulkActionBar.vue
 msgid "Archive selected"
@@ -3888,7 +3888,7 @@ msgstr "Son çalışma: %1$s"
 
 #: src/views/BoardView.vue
 msgid "Last updated"
-msgstr ""
+msgstr "Son güncelleme"
 
 #: src/services/projectStatus.js
 msgid "Late"
@@ -4370,7 +4370,7 @@ msgstr "“{query}” ile eşleşen arşivlenmiş kart yok."
 
 #: src/views/ProjectsView.vue
 msgid "No archived projects"
-msgstr ""
+msgstr "Arşivlenmiş proje yok"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "No attachments yet"
@@ -5490,7 +5490,7 @@ msgstr "Panel boyutunu geri yükle"
 
 #: src/views/ProjectView.vue
 msgid "Restore project"
-msgstr ""
+msgstr "Projeyi geri yükle"
 
 #: src/views/ArchivedView.vue
 #: src/views/TrashView.vue
@@ -5843,11 +5843,11 @@ msgstr "Bu kısayol katmanını göster / gizle"
 
 #: src/views/ProjectsView.vue
 msgid "Show active projects"
-msgstr ""
+msgstr "Etkin projeleri göster"
 
 #: src/views/ProjectsView.vue
 msgid "Show archived projects"
-msgstr ""
+msgstr "Arşivlenmiş projeleri göster"
 
 #: src/components/CardDetail.vue
 msgid "Show changes"

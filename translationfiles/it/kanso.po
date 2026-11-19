@@ -828,7 +828,7 @@ msgstr "Archivia ora"
 
 #: src/views/ProjectView.vue
 msgid "Archive project"
-msgstr ""
+msgstr "Archivia progetto"
 
 #: src/components/BulkActionBar.vue
 msgid "Archive selected"
@@ -3888,7 +3888,7 @@ msgstr "Ultima esecuzione: %1$s"
 
 #: src/views/BoardView.vue
 msgid "Last updated"
-msgstr ""
+msgstr "Ultimo aggiornamento"
 
 #: src/services/projectStatus.js
 msgid "Late"
@@ -4370,7 +4370,7 @@ msgstr "Nessuna scheda archiviata corrisponde a «{query}»."
 
 #: src/views/ProjectsView.vue
 msgid "No archived projects"
-msgstr ""
+msgstr "Nessun progetto archiviato"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "No attachments yet"
@@ -5490,7 +5490,7 @@ msgstr "Ripristina la dimensione del pannello"
 
 #: src/views/ProjectView.vue
 msgid "Restore project"
-msgstr ""
+msgstr "Ripristina progetto"
 
 #: src/views/ArchivedView.vue
 #: src/views/TrashView.vue
@@ -5843,11 +5843,11 @@ msgstr "Mostra / nascondi questo riquadro delle scorciatoie"
 
 #: src/views/ProjectsView.vue
 msgid "Show active projects"
-msgstr ""
+msgstr "Mostra i progetti attivi"
 
 #: src/views/ProjectsView.vue
 msgid "Show archived projects"
-msgstr ""
+msgstr "Mostra i progetti archiviati"
 
 #: src/components/CardDetail.vue
 msgid "Show changes"
