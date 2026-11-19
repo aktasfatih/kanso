@@ -17,4 +17,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			<directory>tests/unit</directory>
 		</testsuite>
 	</testsuites>
+	<php>
+		<ini name="memory_limit" value="512M"/>
+	</php>
 </phpunit>
