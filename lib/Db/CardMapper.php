@@ -1873,6 +1873,39 @@ class CardMapper extends QBMapper {
 		return $map;
 	}
 
+	/** @return list<array{uid: string, actorName: ?string, seconds: int}> */
+	public function timeSpentByUser(int $boardId, int $since, int $until, ViewerContext $viewer): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('te.created_by', 'te.actor_name')
+			->selectAlias($qb->func()->sum('te.seconds'), 'total_seconds')
+			->from('kanso_card_time_entries', 'te')
+			->innerJoin('te', $this->getTableName(), 'c', $qb->expr()->eq('te.card_id', 'c.id'))
+			->where($qb->expr()->eq('te.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.board_id', $qb->createNamedParameter($boardId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('c.is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->gte('te.created_at', $qb->createNamedParameter($since, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->lt('te.created_at', $qb->createNamedParameter($until, IQueryBuilder::PARAM_INT)))
+			->groupBy('te.created_by')
+			->addGroupBy('te.actor_name')
+			->orderBy('total_seconds', 'DESC')
+			->addOrderBy('te.created_by', 'ASC')
+			->addOrderBy('te.actor_name', 'ASC');
+		$this->visibilityScope->applyForViewer($qb, 'c', $viewer);
+
+		$result = $qb->executeQuery();
+		$rows = [];
+		while (($row = $result->fetch()) !== false) {
+			$rows[] = [
+				'uid' => (string)$row['created_by'],
+				'actorName' => $row['actor_name'] !== null ? (string)$row['actor_name'] : null,
+				'seconds' => (int)$row['total_seconds'],
+			];
+		}
+		$result->closeCursor();
+		return $rows;
+	}
+
 	// ── Card-id-set variants (project analytics) ──────────────────────────────
 	//
 	// These mirror the board-scoped aggregates above but key on an explicit card
@@ -1887,7 +1920,7 @@ class CardMapper extends QBMapper {
 	// NOT duplicated - a per-stack roll-up is meaningless across boards.
 
 	/**
-	 * Open (non-deleted, non-archived) card counts grouped by priority over an
+	 * Non-deleted card counts, including archived cards, grouped by priority over an
 	 * explicit card id set - the project-analytics twin of {@see self::countByPriority()}.
 	 *
 	 * @param int[] $cardIds the viewer's ACL-resolved project card ids (empty → [])
@@ -1905,7 +1938,6 @@ class CardMapper extends QBMapper {
 			->from($this->getTableName())
 			->where($qb->expr()->in('id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->groupBy('priority');
 
@@ -1937,7 +1969,6 @@ class CardMapper extends QBMapper {
 			->where($qb->expr()->in('id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->lte('created_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_INT)));
 
@@ -1966,7 +1997,6 @@ class CardMapper extends QBMapper {
 			->where($qb->expr()->in('id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->eq('done_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('is_template', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->isNotNull('duedate'))
 			->andWhere($qb->expr()->lt('duedate', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATETIME_MUTABLE)));

@@ -18,6 +18,7 @@ use OCA\Kanso\Db\CardContactMapper;
 use OCA\Kanso\Db\CardFieldValueMapper;
 use OCA\Kanso\Db\CardLabelMapper;
 use OCA\Kanso\Db\CardMapper;
+use OCA\Kanso\Db\CardRunningTimer;
 use OCA\Kanso\Db\CardRunningTimerMapper;
 use OCA\Kanso\Db\CardTimeEntryMapper;
 use OCA\Kanso\Db\ChecklistItemMapper;
@@ -67,6 +68,7 @@ class CardControllerTest extends TestCase {
 	private BoardAccess&MockObject $boardAccess;
 	private CardVisibilityGuard&MockObject $visibilityGuard;
 	private RecurRuleMapper&MockObject $recurRuleMapper;
+	private CardRunningTimerMapper&MockObject $runningTimerMapper;
 	private IRequest&MockObject $request;
 	private IUserSession&MockObject $userSession;
 	private CardController $controller;
@@ -119,6 +121,8 @@ class CardControllerTest extends TestCase {
 		// No recurrence rule by default; the recurring-indicator tests override this.
 		$this->recurRuleMapper = $this->createMock(RecurRuleMapper::class);
 		$this->recurRuleMapper->method('hasEnabledRuleForCard')->willReturn(false);
+		$this->runningTimerMapper = $this->createMock(CardRunningTimerMapper::class);
+		$this->runningTimerMapper->method('findByCard')->willThrowException(new DoesNotExistException('No timer'));
 
 		$this->request = $this->createMock(IRequest::class);
 		$user = $this->createMock(IUser::class);
@@ -159,7 +163,7 @@ class CardControllerTest extends TestCase {
 			$this->boardAccess,
 			$this->visibilityGuard,
 			$this->recurRuleMapper,
-			$this->createMock(CardRunningTimerMapper::class),
+			$this->runningTimerMapper,
 		);
 	}
 
@@ -284,6 +288,33 @@ class CardControllerTest extends TestCase {
 
 		$data = $this->controller->show(9)->getData();
 		self::assertFalse($data['recurring']);
+	}
+
+	public function testShowPreservesTheRunningTimerIdentityAndActor(): void {
+		$timer = new CardRunningTimer();
+		$timer->setId(17);
+		$timer->setCardId(9);
+		$timer->setStartedAt(1000);
+		$timer->setStartedBy('alice');
+		$timer->setActorName('Codex');
+		$this->runningTimerMapper = $this->createMock(CardRunningTimerMapper::class);
+		$this->runningTimerMapper->expects(self::once())->method('findByCard')->with(9)->willReturn($timer);
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($this->card());
+		$this->rebuildController();
+
+		self::assertSame([
+			'id' => 17,
+			'cardId' => 9,
+			'startedBy' => 'alice',
+			'startedAt' => 1000,
+			'actorName' => 'Codex',
+		], $this->controller->show(9)->getData()['runningTimer']);
+	}
+
+	public function testShowReportsNoRunningTimerWhenStopped(): void {
+		$this->cardService->method('find')->with(9, 'alice')->willReturn($this->card());
+
+		self::assertNull($this->controller->show(9)->getData()['runningTimer']);
 	}
 
 	public function testResolveRefReturnsCardIdAndTitle(): void {

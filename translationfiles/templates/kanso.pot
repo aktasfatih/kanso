@@ -359,7 +359,7 @@ msgstr[1] ""
 #: src/components/BoardTileContent.vue:18
 #: src/views/BoardList.vue:222
 #: src/views/BoardList.vue:265
-#: src/views/BoardStats.vue:444
+#: src/views/BoardStats.vue:499
 #: src/views/ProjectStats.vue:347
 msgid "%n card"
 msgid_plural "%n cards"
@@ -396,7 +396,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:5117
+#: src/components/CardDetail.vue:5148
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
@@ -414,7 +414,7 @@ msgid_plural "%n files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:5115
+#: src/components/CardDetail.vue:5146
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
@@ -444,7 +444,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:5113
+#: src/components/CardDetail.vue:5144
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -456,7 +456,7 @@ msgid_plural "%n need review"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3954
+#: src/components/CardDetail.vue:3984
 msgid "%n other reviewer"
 msgid_plural "%n other reviewers"
 msgstr[0] ""
@@ -468,7 +468,7 @@ msgid_plural "%n overdue"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/views/BoardStats.vue:445
+#: src/views/BoardStats.vue:500
 msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] ""
@@ -480,7 +480,7 @@ msgid_plural "%n projects"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:2350
+#: src/components/CardDetail.vue:2378
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -711,6 +711,10 @@ msgstr ""
 msgid "Aging (>{days}d)"
 msgstr ""
 
+#: src/views/BoardStats.vue
+msgid "AI actor"
+msgstr ""
+
 #: src/views/BoardList.vue
 #: src/views/BoardView.vue
 #: src/views/MyCardsView.vue
@@ -829,6 +833,7 @@ msgstr ""
 #: src/components/CardDetail.vue
 #: src/views/ArchivedView.vue
 #: src/views/BoardList.vue
+#: src/views/ProjectView.vue
 msgid "Archived"
 msgstr ""
 
@@ -1036,7 +1041,7 @@ msgstr ""
 msgid "Blocked by"
 msgstr ""
 
-#: src/views/ProjectView.vue:304
+#: src/views/ProjectView.vue:305
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] ""
@@ -2100,8 +2105,12 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
+#: src/views/BoardStats.vue
+msgid "Date range (UTC)"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue:2346
-#: src/components/CardDetail.vue:5308
+#: src/components/CardDetail.vue:5339
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -3007,6 +3016,10 @@ msgstr ""
 msgid "Failed to load the public link config."
 msgstr ""
 
+#: src/views/BoardStats.vue
+msgid "Failed to load time analytics."
+msgstr ""
+
 #: src/views/TrashView.vue
 msgid "Failed to load trash."
 msgstr ""
@@ -3301,6 +3314,10 @@ msgstr ""
 
 #: src/components/ManageTemplatesModal.vue
 msgid "Failed to update the template."
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Failed to update timer."
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -3701,7 +3718,7 @@ msgstr ""
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:7194
+#: src/components/CardDetail.vue:7221
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3837,6 +3854,14 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Labels must be unique."
+msgstr ""
+
+#: src/views/BoardStats.vue
+msgid "Last 30 days"
+msgstr ""
+
+#: src/views/BoardStats.vue
+msgid "Last 7 days"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -4002,6 +4027,10 @@ msgstr ""
 msgid "Loading tasks…"
 msgstr ""
 
+#: src/views/BoardStats.vue
+msgid "Loading time entries…"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "Loading your Deck boards…"
 msgstr ""
@@ -4097,7 +4126,7 @@ msgid "Mon"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2348
-#: src/components/CardDetail.vue:5310
+#: src/components/CardDetail.vue:5341
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -4520,6 +4549,10 @@ msgstr ""
 msgid "No priority"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "No projects match."
+msgstr ""
+
 #: src/views/ProjectsView.vue
 msgid "No projects yet"
 msgstr ""
@@ -4580,6 +4613,10 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "No threads yet. Everyone watching this card is notified when you start one."
+msgstr ""
+
+#: src/views/BoardStats.vue
+msgid "No time recorded in this date range."
 msgstr ""
 
 #: src/composables/useSwimlanes.js
@@ -5450,6 +5487,7 @@ msgid "Results"
 msgstr ""
 
 #: src/components/CardDetail.vue
+#: src/views/BoardStats.vue
 #: src/views/BoardView.vue
 msgid "Retry"
 msgstr ""
@@ -5614,6 +5652,14 @@ msgstr ""
 
 #: src/components/CardDetail.vue
 msgid "Search people…"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Search projects"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Search projects…"
 msgstr ""
 
 #: src/components/SearchBox.vue
@@ -5804,7 +5850,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr ""
 
-#: src/components/CardDetail.vue:7200
+#: src/components/CardDetail.vue:7227
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] ""
@@ -5951,6 +5997,10 @@ msgstr ""
 msgid "Start the timer"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Start timer"
+msgstr ""
+
 #: src/views/BoardList.vue
 msgid "Start with a template"
 msgstr ""
@@ -5985,6 +6035,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Stop the timer"
+msgstr ""
+
+#: src/components/CardDetail.vue
+msgid "Stop timer"
 msgstr ""
 
 #: src/components/CardDetail.vue
@@ -6224,6 +6278,10 @@ msgstr ""
 msgid "This link is invalid or has been disabled."
 msgstr ""
 
+#: src/views/BoardStats.vue
+msgid "This month"
+msgstr ""
+
 #: src/views/ProjectView.vue
 msgid "This project no longer exists, or you no longer have access to it."
 msgstr ""
@@ -6264,6 +6322,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Thu"
+msgstr ""
+
+#: src/views/BoardStats.vue
+msgid "Time spent by user"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -6320,6 +6382,7 @@ msgstr ""
 msgid "today"
 msgstr ""
 
+#: src/views/BoardStats.vue
 #: src/views/MyCardsView.vue
 msgid "Today"
 msgstr ""
@@ -6346,6 +6409,10 @@ msgstr ""
 
 #: src/composables/useBoardFilters.js
 msgid "Top-level"
+msgstr ""
+
+#: src/views/BoardStats.vue
+msgid "Total time: {duration}"
 msgstr ""
 
 #: src/views/TrashView.vue
@@ -6619,7 +6686,7 @@ msgid "Wed"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2347
-#: src/components/CardDetail.vue:5309
+#: src/components/CardDetail.vue:5340
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -6728,7 +6795,7 @@ msgid "wrote"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2349
-#: src/components/CardDetail.vue:5311
+#: src/components/CardDetail.vue:5342
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

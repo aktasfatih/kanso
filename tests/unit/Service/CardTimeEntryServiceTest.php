@@ -158,6 +158,29 @@ class CardTimeEntryServiceTest extends TestCase {
 		self::assertNull($captured->getNote());
 	}
 
+	public function testAddPreservesTokenOwnerAlongsideAiAttribution(): void {
+		$board = $this->expectCardLoaded();
+		$board->setAllowAiActors(true);
+		$this->timeEntryMapper->method('insert')->willReturnArgument(0);
+
+		$entry = $this->service->add(9, 60, null, 'bob', '  Codex  ');
+		self::assertSame('bob', $entry->getCreatedBy());
+		self::assertSame('Codex', $entry->getActorName());
+	}
+
+	public function testAddRejectsAiAttributionWhenBoardDisallowsIt(): void {
+		$this->expectCardLoaded();
+		$this->timeEntryMapper->expects(self::never())->method('insert');
+		$this->expectException(InvalidInputException::class);
+		$this->service->add(9, 60, null, 'bob', 'Codex');
+	}
+
+	public function testAddNormalizesBlankActorNameToNull(): void {
+		$this->expectCardLoaded();
+		$this->timeEntryMapper->method('insert')->willReturnArgument(0);
+		self::assertNull($this->service->add(9, 60, null, 'bob', '  ')->getActorName());
+	}
+
 	public function testAddRejectsZeroSeconds(): void {
 		$this->expectCardLoaded();
 		$this->timeEntryMapper->expects(self::never())->method('insert');

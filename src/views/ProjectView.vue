@@ -298,6 +298,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										<span class="project-view__stack">{{ card.stackTitle }}</span>
 									</span>
 								</div>
+								<span v-if="card.archived" class="project-view__badge">{{ t('kanso', 'Archived') }}</span>
 								<span
 									v-if="card.blockers > 0 && !card.doneAt"
 									class="project-view__badge project-view__badge--warning"

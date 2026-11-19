@@ -200,13 +200,9 @@ class CardController extends Controller {
 			// repeat icon for ALL viewers - matching the board tile. The rrule/rule
 			// object stays out; it loads via the manager-only rules fetch.
 			+ ['recurring' => $this->recurRuleMapper->hasEnabledRuleForCard($id)]
-			// Running timer (#73): null when none is active, or {startedAt, startedBy}
-			// when the card's timer is ticking - powers the live elapsed counter in the
-			// card detail and the board-tile badge via the board summary timerRunning bool.
 			+ ['runningTimer' => (function () use ($id): ?array {
 				try {
-					$t = $this->runningTimerMapper->findByCard($id);
-					return ['startedAt' => (int)$t->getStartedAt(), 'startedBy' => (string)$t->getStartedBy()];
+					return $this->runningTimerMapper->findByCard($id)->jsonSerialize();
 				} catch (DoesNotExistException) {
 					return null;
 				}

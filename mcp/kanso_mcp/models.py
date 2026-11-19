@@ -175,6 +175,24 @@ class CardSummary(_Base):
     assigneeIds: List[str] = Field(default_factory=list)
 
 
+class TimeEntry(_Base):
+    id: int
+    cardId: Optional[int] = None
+    seconds: int = 0
+    note: Optional[str] = None
+    createdBy: Optional[str] = None
+    createdAt: int = 0
+    actorName: Optional[str] = None
+
+
+class RunningTimer(_Base):
+    id: Optional[int] = None
+    cardId: Optional[int] = None
+    startedBy: Optional[str] = None
+    startedAt: int = 0
+    actorName: Optional[str] = None
+
+
 class Card(CardSummary):
     """A full card (``GET /cards/{id}``): summary + description + detail arrays."""
 
@@ -187,6 +205,7 @@ class Card(CardSummary):
     commentCount: int = 0
     attachmentCount: int = 0
     timeSpent: int = 0
+    runningTimer: Optional[RunningTimer] = None
     projectIds: List[int] = Field(default_factory=list)
     fieldValues: List[Any] = Field(default_factory=list)
     relations: Optional[Any] = None
@@ -326,6 +345,7 @@ class ProjectCard(_Base):
     boardTitle: Optional[str] = None
     stackTitle: Optional[str] = None
     title: str
+    archived: bool = False
     duedate: Optional[str] = None
     priority: int = 0
     doneAt: int = 0

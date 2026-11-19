@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Kanso\Tests\Unit\Service;
 
+use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\CardContact;
 use OCA\Kanso\Db\CardContactMapper;
 use OCA\Kanso\Db\CardLink;
@@ -14,6 +15,8 @@ use OCA\Kanso\Db\CardLinkMapper;
 use OCA\Kanso\Db\CardTimeEntry;
 use OCA\Kanso\Db\CardTimeEntryMapper;
 use OCA\Kanso\Service\CardMoveMetadataService;
+use OCA\Kanso\Service\InvalidInputException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 class CardMoveMetadataServiceTest extends TestCase {
@@ -49,6 +52,7 @@ class CardMoveMetadataServiceTest extends TestCase {
 		});
 
 		$newest = $this->timeEntry(600, 'newest', 20);
+		$newest->setActorName('Codex');
 		$oldest = $this->timeEntry(300, 'oldest', 10);
 		$timeEntries->expects(self::once())->method('findByCard')->with(9)->willReturn([$newest, $oldest]);
 		$copiedEntries = [];
@@ -57,7 +61,10 @@ class CardMoveMetadataServiceTest extends TestCase {
 			return $entry;
 		});
 
-		$service->copy(9, 42, 7);
+		$board = new Board();
+		$board->setId(7);
+		$board->setAllowAiActors(true);
+		$service->copy(9, 42, $board);
 
 		foreach ($copiedLinks as $i => $link) {
 			self::assertSame(42, $link->getCardId());
@@ -71,12 +78,61 @@ class CardMoveMetadataServiceTest extends TestCase {
 		}
 		self::assertSame(['oldest', 'newest'], array_map(static fn (CardTimeEntry $entry): ?string => $entry->getNote(), $copiedEntries));
 		self::assertSame([300, 600], array_map(static fn (CardTimeEntry $entry): int => $entry->getSeconds(), $copiedEntries));
+		self::assertSame([null, 'Codex'], array_map(static fn (CardTimeEntry $entry): ?string => $entry->getActorName(), $copiedEntries));
 		foreach ($copiedEntries as $i => $entry) {
 			self::assertSame(42, $entry->getCardId());
 			self::assertSame(7, $entry->getBoardId());
 			self::assertSame('alice', $entry->getCreatedBy());
 			self::assertSame($i === 0 ? 10 : 20, $entry->getCreatedAt());
 		}
+	}
+
+	public static function disabledAiSettings(): array {
+		return [[false], [null]];
+	}
+
+	#[DataProvider('disabledAiSettings')]
+	public function testRejectsAiTimeEntriesBeforeCopyingMetadataWhenDestinationDisallowsAiActors(?bool $allowAiActors): void {
+		$contacts = $this->createMock(CardContactMapper::class);
+		$links = $this->createMock(CardLinkMapper::class);
+		$timeEntries = $this->createMock(CardTimeEntryMapper::class);
+		$entry = $this->timeEntry(60, 'Tracked work', 20);
+		$entry->setActorName('Codex');
+		$timeEntries->method('findByCard')->with(9)->willReturn([$entry]);
+		$contacts->expects(self::never())->method('insertLink');
+		$links->expects(self::never())->method('insert');
+		$timeEntries->expects(self::never())->method('insert');
+		$board = new Board();
+		$board->setId(7);
+		$board->setAllowAiActors($allowAiActors);
+		$service = new CardMoveMetadataService($contacts, $links, $timeEntries);
+
+		$this->expectException(InvalidInputException::class);
+		$this->expectExceptionMessage('The destination board does not allow AI-attributed time entries');
+		$service->copy(9, 42, $board);
+	}
+
+	public function testCopiesHumanTimeEntriesWhenDestinationDisallowsAiActors(): void {
+		$timeEntries = $this->createMock(CardTimeEntryMapper::class);
+		$timeEntries->method('findByCard')->with(9)->willReturn([$this->timeEntry(30, 'Human work', 20)]);
+		$timeEntries->expects(self::once())->method('insert')->willReturnCallback(function (CardTimeEntry $entry): CardTimeEntry {
+			self::assertSame(42, $entry->getCardId());
+			self::assertSame(7, $entry->getBoardId());
+			self::assertSame('alice', $entry->getCreatedBy());
+			self::assertSame(30, $entry->getSeconds());
+			self::assertNull($entry->getActorName());
+			return $entry;
+		});
+		$board = new Board();
+		$board->setId(7);
+		$board->setAllowAiActors(false);
+		$service = new CardMoveMetadataService(
+			$this->createMock(CardContactMapper::class),
+			$this->createMock(CardLinkMapper::class),
+			$timeEntries,
+		);
+
+		$service->copy(9, 42, $board);
 	}
 
 	private function timeEntry(int $seconds, string $note, int $createdAt): CardTimeEntry {

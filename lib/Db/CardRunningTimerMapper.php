@@ -39,6 +39,14 @@ class CardRunningTimerMapper extends QBMapper {
 		return $this->findEntity($qb);
 	}
 
+	public function deleteIfCurrent(int $timerId, int $cardId): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($timerId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('card_id', $qb->createNamedParameter($cardId, IQueryBuilder::PARAM_INT)));
+		return $qb->executeStatement();
+	}
+
 	/**
 	 * Card ids on the board that currently have a running timer - powers the
 	 * tile "timer running" badge in one board-scoped query (no N+1). Mirrors

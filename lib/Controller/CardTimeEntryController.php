@@ -17,7 +17,7 @@ use OCP\IUserSession;
 
 /**
  * Card time-tracking endpoints (#3536): list (READ), add a manual entry (EDIT)
- * and delete an entry (EDIT). Manual entries only - no running-timer state.
+ * and delete an entry (EDIT).
  */
 class CardTimeEntryController extends Controller {
 	use ApiErrorTrait;
@@ -41,10 +41,10 @@ class CardTimeEntryController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function create(int $cardId, int $seconds = 0, ?string $note = null): JSONResponse {
-		return $this->respond(function () use ($cardId, $seconds, $note): JSONResponse {
+	public function create(int $cardId, int $seconds = 0, ?string $note = null, ?string $actorName = null): JSONResponse {
+		return $this->respond(function () use ($cardId, $seconds, $note, $actorName): JSONResponse {
 			return new JSONResponse(
-				$this->timeEntryService->add($cardId, $seconds, $note, $this->currentUserId())
+				$this->timeEntryService->add($cardId, $seconds, $note, $this->currentUserId(), $actorName)
 			);
 		});
 	}

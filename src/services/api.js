@@ -494,11 +494,20 @@ export const cardAttachmentInlineUrl = (cardId, attachmentId) =>
 export const fetchCardTimeEntries = (cardId) =>
 	axios.get(url(`/api/cards/${cardId}/time-entries`)).then((r) => r.data)
 
-export const addCardTimeEntry = (cardId, seconds, note) =>
-	axios.post(url(`/api/cards/${cardId}/time-entries`), { seconds, note }).then((r) => r.data)
+export const addCardTimeEntry = (cardId, seconds, note, actorName = null) =>
+	axios.post(url(`/api/cards/${cardId}/time-entries`), { seconds, note, actorName }).then((r) => r.data)
 
 export const deleteCardTimeEntry = (cardId, entryId) =>
 	axios.delete(url(`/api/cards/${cardId}/time-entries/${entryId}`)).then((r) => r.data)
+
+export const startCardTimer = (cardId, actorName = null) =>
+	axios.post(url(`/api/cards/${cardId}/timer`), { actorName }).then((r) => r.data)
+
+export const stopCardTimer = (cardId) =>
+	axios.delete(url(`/api/cards/${cardId}/timer`)).then((r) => r.data)
+
+export const getBoardTimeStats = (boardId, from, to) =>
+	axios.get(url(`/api/boards/${boardId}/time-stats`), { params: { from, to } }).then((r) => r.data)
 
 // Deck import
 export const fetchDeckImportBoards = () =>

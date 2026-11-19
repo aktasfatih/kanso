@@ -356,15 +356,17 @@ class ProjectCardMapperTest extends TestCase {
 		self::assertSame([], $mapper->findCardsInProjectAndBoards(4, [], 'alice', []));
 	}
 
-	/**
-	 * The project card row carries the board's `prefix` (as `boardPrefix`)
-	 * alongside the card's `boardSeq` - the two halves of the card's human
-	 * reference (e.g. KANSO-359) that the project view renders on each row.
-	 * A row without a per-board number maps to a null boardSeq (a
-	 * pre-migration card), so the client hides the chip rather than render a
-	 * broken id.
-	 */
-	public function testFindCardsInProjectAndBoardsCarriesTheBoardPrefixForTheCardReference(): void {
+	public function testProjectCardSetIncludesArchivedCardsAndExcludesDeletedCardsAndTemplates(): void {
+		$predicates = $this->recordQuery(
+			fn (ProjectCardMapper $m) => $m->findCardsInProjectAndBoards(4, [7], 'alice', [7 => ViewerContext::ROLE_INTERNAL])
+		);
+
+		self::assertSame([], self::boundValues($predicates, 'eq', 'c.archived'));
+		self::assertSame([0], self::boundValues($predicates, 'eq', 'c.deleted_at'));
+		self::assertSame([false], self::boundValues($predicates, 'eq', 'c.is_template'));
+	}
+
+	public function testFindCardsInProjectAndBoardsCarriesTheBoardPrefixAndArchiveState(): void {
 		$qb = $this->createMock(IQueryBuilder::class);
 		foreach ([
 			'select', 'selectAlias', 'addSelect', 'from', 'innerJoin', 'leftJoin',
@@ -391,6 +393,7 @@ class ProjectCardMapperTest extends TestCase {
 			'board_seq' => '359',
 			'stack_title' => 'To do',
 			'title' => 'Ship it',
+			'archived' => '1',
 			'duedate' => null,
 			'start_date' => null,
 			'priority' => '0',
@@ -419,6 +422,7 @@ class ProjectCardMapperTest extends TestCase {
 		self::assertSame(359, $rows[0]['boardSeq'], 'the per-board number rides the project card row');
 		self::assertSame('Kanban', $rows[0]['boardTitle']);
 		self::assertSame('To do', $rows[0]['stackTitle']);
+		self::assertTrue($rows[0]['archived']);
 	}
 
 	public function testOpenBlockerCountsOnlyCountsOpenBlockersTheViewerCanSee(): void {

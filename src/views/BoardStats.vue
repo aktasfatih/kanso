@@ -56,6 +56,45 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				</div>
 			</section>
 
+			<section v-if="timeTrackingEnabled" class="board-stats__section" data-test="board-time-stats">
+				<div class="board-stats__time-header">
+					<h2 class="board-stats__section-title">{{ t('kanso', 'Time spent by user') }}</h2>
+					<label class="board-stats__time-range">
+						{{ t('kanso', 'Date range (UTC)') }}
+						<select v-model="timePreset" data-test="board-time-range">
+							<option value="today">{{ t('kanso', 'Today') }}</option>
+							<option value="week">{{ t('kanso', 'Last 7 days') }}</option>
+							<option value="month30">{{ t('kanso', 'Last 30 days') }}</option>
+							<option value="month">{{ t('kanso', 'This month') }}</option>
+						</select>
+					</label>
+				</div>
+				<p v-if="timeLoading" role="status">{{ t('kanso', 'Loading time entries…') }}</p>
+				<div v-else-if="timeError" role="alert">
+					<p>{{ t('kanso', 'Failed to load time analytics.') }}</p>
+					<NcButton @click="refetchTimeStats()">{{ t('kanso', 'Retry') }}</NcButton>
+				</div>
+				<template v-else-if="timeStats">
+					<p class="board-stats__time-total" data-test="board-time-total">
+						{{ t('kanso', 'Total time: {duration}', { duration: formatDuration(timeStats.totalSeconds) }) }}
+						<span>{{ timeStats.from }} – {{ timeStats.to }}</span>
+					</p>
+					<ul v-if="timeStats.byUser.length" class="board-stats__bar-list" :aria-label="t('kanso', 'Time spent by user')">
+						<li v-for="row in timeStats.byUser" :key="JSON.stringify([row.uid, row.actorName])" class="board-stats__bar-row" data-test="board-time-user">
+							<span class="board-stats__bar-label board-stats__time-person" :title="row.actorName ? row.actorName + ' · ' + row.displayName : row.displayName">
+								<RobotOutlineIcon v-if="row.actorName" :size="16" :title="t('kanso', 'AI actor')" />
+								<span>{{ row.actorName || row.displayName }}<small v-if="row.actorName">{{ row.displayName }}</small></span>
+							</span>
+							<div class="board-stats__bar-track">
+								<div class="board-stats__bar-fill" :style="{ width: pct(row.seconds, maxTimeSpent) + '%' }" />
+							</div>
+							<span class="board-stats__bar-count board-stats__time-duration">{{ formatDuration(row.seconds) }}</span>
+						</li>
+					</ul>
+					<p v-else>{{ t('kanso', 'No time recorded in this date range.') }}</p>
+				</template>
+			</section>
+
 			<!-- ── Cards by stack ─────────────────────────────────────────── -->
 			<section v-if="stats.byStack?.length" class="board-stats__section">
 				<h2 class="board-stats__section-title">{{ t('kanso', 'Cards by stack') }}</h2>
@@ -298,15 +337,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
+import RobotOutlineIcon from 'vue-material-design-icons/RobotOutline.vue'
 import { useBoard } from '../composables/useBoard.js'
 import { useBoardStats } from '../composables/useBoardStats.js'
+import { useBoardTimeStats } from '../composables/useBoardTimeStats.js'
+import { useTimeStatsRange } from '../composables/useTimeStatsRange.js'
 import { usePageTitle } from '../composables/usePageTitle.js'
 import { PRIORITY_LEVELS } from '../composables/usePriority.js'
+import { normalizeCardFeatures } from '../services/cardFeatures.js'
+import { formatDuration } from '../utils/duration.js'
 
 const props = defineProps({
 	id: {
@@ -346,6 +390,17 @@ const isLoading = computed(() => statsLoading.value || boardLoading.value)
 const isError = computed(() => statsError.value || boardError.value)
 
 const boardTitle = computed(() => boardData.value?.board?.title ?? '')
+const timeTrackingEnabled = computed(() => !!boardData.value?.board
+	&& normalizeCardFeatures(boardData.value.board.cardFeatures).timeTracking)
+const timePreset = ref('month30')
+const timeRange = useTimeStatsRange(timePreset)
+const {
+	data: timeStats,
+	isPending: timeLoading,
+	isError: timeError,
+	refetch: refetchTimeStats,
+} = useBoardTimeStats(boardId, timeRange, timeTrackingEnabled)
+const maxTimeSpent = computed(() => Math.max(1, ...(timeStats.value?.byUser ?? []).map((row) => row.seconds)))
 
 // Browser tab title (#125): which board's analytics this is. Empty while the
 // board query is in flight, which leaves the bare app name rather than a
@@ -565,6 +620,49 @@ function goBack() {
 .board-stats__stat-label {
 	font-size: 0.8rem;
 	color: var(--color-text-maxcontrast);
+}
+
+.board-stats__time-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.board-stats__time-header .board-stats__section-title {
+	margin: 0;
+}
+
+.board-stats__time-range {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.875rem;
+}
+
+.board-stats__time-total {
+	margin: 0 0 16px;
+	font-weight: 600;
+}
+
+.board-stats__time-total > span,
+.board-stats__time-person small {
+	display: block;
+	font-size: 0.8rem;
+	font-weight: 400;
+	color: var(--color-text-maxcontrast);
+}
+
+.board-stats__time-person > span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.board-stats__bar-count.board-stats__time-duration {
+	width: auto;
+	min-width: 64px;
 }
 
 /* ── Bar list ────────────────────────────────────────────────────────────────── */

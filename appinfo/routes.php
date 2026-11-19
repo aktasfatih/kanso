@@ -327,6 +327,9 @@ return [
 		['name' => 'cardTimeEntry#index', 'url' => '/api/cards/{cardId}/time-entries', 'verb' => 'GET'],
 		['name' => 'cardTimeEntry#create', 'url' => '/api/cards/{cardId}/time-entries', 'verb' => 'POST'],
 		['name' => 'cardTimeEntry#destroy', 'url' => '/api/cards/{cardId}/time-entries/{entryId}', 'verb' => 'DELETE'],
+		['name' => 'cardTimer#start', 'url' => '/api/cards/{cardId}/timer', 'verb' => 'POST'],
+		['name' => 'cardTimer#stop', 'url' => '/api/cards/{cardId}/timer', 'verb' => 'DELETE'],
+		['name' => 'boardTimeStats#show', 'url' => '/api/boards/{id}/time-stats', 'verb' => 'GET'],
 
 		['name' => 'cardRelation#index', 'url' => '/api/cards/{cardId}/relations', 'verb' => 'GET'],
 		['name' => 'cardRelation#create', 'url' => '/api/cards/{cardId}/relations', 'verb' => 'POST'],

@@ -63,6 +63,41 @@ def _tools() -> Tuple[Dict[str, Callable[..., Any]], KansoClient]:
     return registry.tools, client
 
 
+@respx.mock
+@pytest.mark.asyncio
+async def test_time_tools_forward_ai_actor_and_keep_token_owner():
+    add = respx.post(f"{BASE}/cards/100/time-entries").mock(
+        return_value=httpx.Response(200, json={
+            "id": 1, "seconds": 60, "createdBy": "admin", "actorName": "Codex",
+        })
+    )
+    start = respx.post(f"{BASE}/cards/100/timer").mock(
+        return_value=httpx.Response(200, json={
+            "id": 2, "startedBy": "admin", "startedAt": 1000, "actorName": "Codex",
+        })
+    )
+    respx.delete(f"{BASE}/cards/100/timer").mock(
+        return_value=httpx.Response(200, json=None)
+    )
+    respx.get(f"{BASE}/cards/100/time-entries").mock(
+        return_value=httpx.Response(200, json=[{"id": 1, "seconds": 60, "actorName": "Codex"}])
+    )
+    tools, client = _tools()
+    try:
+        entry = await tools["kanso_add_time_entry"](100, 60, actor_name="Codex")
+        timer = await tools["kanso_start_timer"](100, "Codex")
+        assert await tools["kanso_stop_timer"](100) is None
+        entries = await tools["kanso_list_time_entries"](100)
+        assert entry["createdBy"] == "admin"
+        assert entry["actorName"] == "Codex"
+        assert timer["startedBy"] == "admin"
+        assert entries[0]["actorName"] == "Codex"
+        assert json.loads(add.calls.last.request.content) == {"seconds": 60, "actorName": "Codex"}
+        assert json.loads(start.calls.last.request.content) == {"actorName": "Codex"}
+    finally:
+        await client.aclose()
+
+
 # A board mixing archived and active cards, plus an archived STACK whose own
 # card is not archived (that card must still be returned).
 BOARD_PAYLOAD = {

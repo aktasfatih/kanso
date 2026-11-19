@@ -13,6 +13,7 @@ use OCA\Kanso\Db\Board;
 use OCA\Kanso\Db\BoardMapper;
 use OCA\Kanso\Db\Card;
 use OCA\Kanso\Db\CardLabelMapper;
+use OCA\Kanso\Db\CardMapper;
 use OCA\Kanso\Db\CardRunningTimer;
 use OCA\Kanso\Db\CardRunningTimerMapper;
 use OCA\Kanso\Db\CardTimeEntry;
@@ -22,6 +23,8 @@ use OCA\Kanso\Db\Label;
 use OCA\Kanso\Db\LabelMapper;
 use OCA\Kanso\Db\Stack;
 use OCA\Kanso\Service\AutomationService;
+use OCA\Kanso\Service\CardTimerService;
+use OCA\Kanso\Service\CardVisibilityGuard;
 use OCA\Kanso\Service\ChangeNotifier;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -72,9 +75,17 @@ class AutomationServiceTest extends TestCase {
 			$this->cardLabelMapper,
 			$this->changeNotifier,
 			$this->db,
-			$this->runningTimerMapper,
-			$this->timeEntryMapper,
-			$this->timeFactory,
+			new CardTimerService(
+				$this->runningTimerMapper,
+				$this->timeEntryMapper,
+				$this->createMock(CardMapper::class),
+				$this->boardMapper,
+				$this->permissionService,
+				$this->createMock(CardVisibilityGuard::class),
+				$this->changeNotifier,
+				new \OCA\Kanso\Tests\Stubs\CardMutationService($this->db, true),
+				$this->timeFactory,
+			),
 			new \OCA\Kanso\Tests\Stubs\CardMutationService(),
 		);
 	}
@@ -314,6 +325,7 @@ class AutomationServiceTest extends TestCase {
 		$timer->setCardId(99);
 		$timer->setBoardId(self::BOARD_ID);
 		$timer->setStartedAt(1000);
+		$timer->setStartedBy(self::ACTOR);
 		$this->runningTimerMapper->method('findByCard')->with(99)->willReturn($timer);
 		// 1000 -> 1090 = 90 elapsed seconds.
 		$this->timeFactory->method('getTime')->willReturn(1090);
@@ -330,7 +342,7 @@ class AutomationServiceTest extends TestCase {
 					&& $e->getCreatedBy() === self::ACTOR;
 			}))
 			->willReturnArgument(0);
-		$this->runningTimerMapper->expects($this->once())->method('delete')->with($timer);
+		$this->runningTimerMapper->expects($this->once())->method('deleteIfCurrent')->with(3, 99)->willReturn(1);
 		$this->changeNotifier->expects($this->once())
 			->method('recordChange')
 			->with(self::BOARD_ID, Change::ENTITY_CARD, 99, Change::ACTION_UPDATE, self::ACTOR);
@@ -351,7 +363,7 @@ class AutomationServiceTest extends TestCase {
 			->willThrowException(new DoesNotExistException('none'));
 
 		$this->timeEntryMapper->expects($this->never())->method('insert');
-		$this->runningTimerMapper->expects($this->never())->method('delete');
+		$this->runningTimerMapper->expects($this->never())->method('deleteIfCurrent');
 		$this->changeNotifier->expects($this->never())->method('recordChange');
 		$this->changeNotifier->expects($this->never())->method('pushBoardChanged');
 
@@ -367,6 +379,7 @@ class AutomationServiceTest extends TestCase {
 		$timer->setCardId(99);
 		$timer->setBoardId(self::BOARD_ID);
 		$timer->setStartedAt(1000);
+		$timer->setStartedBy(self::ACTOR);
 		$this->runningTimerMapper->method('findByCard')->with(99)->willReturn($timer);
 		// Same instant -> 0 elapsed seconds.
 		$this->timeFactory->method('getTime')->willReturn(1000);
@@ -379,7 +392,7 @@ class AutomationServiceTest extends TestCase {
 		// startTimer - delete + row in one transaction, push after commit.
 		$this->db->expects($this->once())->method('beginTransaction');
 		$this->db->expects($this->once())->method('commit');
-		$this->runningTimerMapper->expects($this->once())->method('delete')->with($timer);
+		$this->runningTimerMapper->expects($this->once())->method('deleteIfCurrent')->with(3, 99)->willReturn(1);
 		$this->changeNotifier->expects($this->once())
 			->method('recordChange')
 			->with(self::BOARD_ID, Change::ENTITY_CARD, 99, Change::ACTION_UPDATE, self::ACTOR);

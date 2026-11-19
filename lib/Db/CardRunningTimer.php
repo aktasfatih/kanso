@@ -35,18 +35,22 @@ use OCP\DB\Types;
  * @method void setStartedBy(string $startedBy)
  * @method int getStartedAt()
  * @method void setStartedAt(int $startedAt)
+ * @method string|null getActorName()
+ * @method void setActorName(?string $actorName)
  */
 class CardRunningTimer extends Entity implements \JsonSerializable {
 	protected ?int $cardId = null;
 	protected ?int $boardId = null;
 	protected ?string $startedBy = null;
 	protected ?int $startedAt = null;
+	protected ?string $actorName = null;
 
 	public function __construct() {
 		$this->addType('cardId', Types::INTEGER);
 		$this->addType('boardId', Types::INTEGER);
 		$this->addType('startedBy', Types::STRING);
 		$this->addType('startedAt', Types::INTEGER);
+		$this->addType('actorName', Types::STRING);
 	}
 
 	/**
@@ -59,6 +63,7 @@ class CardRunningTimer extends Entity implements \JsonSerializable {
 			'cardId' => $this->getCardId(),
 			'startedBy' => $this->getStartedBy(),
 			'startedAt' => $this->getStartedAt(),
+			'actorName' => $this->getActorName(),
 		];
 	}
 }

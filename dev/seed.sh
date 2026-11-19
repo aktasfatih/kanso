@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Seed a Kanso instance with realistic pre-existing data, and verify that same
-# data still reads back later. Two modes:
+# data still reads back later. Three modes:
 #
 #   ./seed.sh seed     create the data, remember the ids in a state file
 #   ./seed.sh verify   read every seeded entity back and assert it survived
+#   ./seed.sh verify-timer-stop   stop the legacy timer through the upgraded API
 #
 # WHY THIS EXISTS
 # ---------------
@@ -40,14 +41,16 @@
 #   kanso_checklist_items   1 item
 #   kanso_attachments       1 uploaded text attachment (bytes asserted on verify)
 #   kanso_card_relations    1 `relates` edge between two cards
-#   kanso_time_entries      1 time entry
+#   kanso_card_time_entries 1 finished entry without AI attribution
+#   kanso_card_running_timers 1 timer started through a legacy automation
+#   kanso_automation_rules  1 start-timer rule
 #   kanso_recur_rules       1 weekly recurrence rule
 #   kanso_changes           the change-log rows all of the above generate, with
 #                           this board's rows aged 8 days (see backdate_changes)
 #
 # NOT covered yet (a migration touching these is NOT protected by this job):
 #   projects, board groups, saved filters, views, ACL/shares, public shares,
-#   calendar feeds, automation/archive rules, custom card fields, reminders,
+#   calendar feeds, archive rules, custom card fields, reminders,
 #   reviews, subscriptions, webhooks, trash.
 # Extend the list above together with the seeding, so the next reader can trust
 # it. Do NOT turn this into a general-purpose fixtures framework.
@@ -112,6 +115,8 @@ expect_200() {
 
 # First "id" in a JSON object response is the created entity's own id.
 created_id() { grep -o '"id":[0-9]*' "$API_BODY" | head -1 | cut -d: -f2; }
+
+json_response() { docker exec -i "$CONTAINER" php -r "$@" < "$API_BODY"; }
 
 # Minimal JSON string escaping for the literals above: backslash, quote, newline.
 # They are fixed constants in this file, never external input.
@@ -234,6 +239,28 @@ do_seed() {
 
 	api POST "/api/cards/${SEED_CARD}/time-entries" '{"seconds":5400,"note":"seeded work"}'
 	expect_200 'POST time entry'
+	SEED_TIME_ENTRY="$(created_id)"
+
+	api PATCH "/api/stacks/${SEED_STACK}" '{"role":3}'
+	expect_200 'PATCH stack role for timer automation'
+	api POST "/api/boards/${SEED_BOARD}/automation-rules" \
+		'{"trigger":"card_entered_role","action":"start_timer","params":{"role":3}}'
+	expect_200 'POST timer automation'
+	SEED_TIMER_RULE="$(created_id)"
+	api POST "/api/cards/${SEED_CARD2}/move" "{\"targetStackId\":${SEED_STACK}}"
+	expect_200 'POST card move to start legacy timer'
+	api GET "/api/cards/${SEED_CARD2}"
+	expect_200 'GET legacy running timer'
+	TIMER_STATE="$(json_response '
+		$card = json_decode(stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR);
+		$timer = $card["runningTimer"] ?? null;
+		if (!is_array($timer) || empty($timer["startedBy"]) || ($timer["startedAt"] ?? 0) <= 0) {
+			throw new RuntimeException("The legacy automation did not start a timer");
+		}
+		foreach (["SEED_TIMER_STARTED_BY" => $timer["startedBy"], "SEED_TIMER_STARTED_AT" => $timer["startedAt"]] as $key => $value) {
+			printf("%s=%s\n", $key, escapeshellarg((string)$value));
+		}
+	')" || fail 'could not capture the legacy running timer'
 
 	api POST "/api/boards/${SEED_BOARD}/recur-rules" \
 		"{\"templateCardId\":${SEED_TEMPLATE},\"targetStackId\":${SEED_STACK},\"mode\":0,\"rrule\":\"FREQ=WEEKLY;BYDAY=MO\",\"duedatePolicy\":0,\"duedateOffsetSeconds\":0,\"skipWhileOpen\":true}"
@@ -254,8 +281,11 @@ do_seed() {
 		SEED_REPLY=${SEED_REPLY}
 		SEED_CHECKLIST=${SEED_CHECKLIST}
 		SEED_ATTACHMENT=${SEED_ATTACHMENT}
+		SEED_TIME_ENTRY=${SEED_TIME_ENTRY}
+		SEED_TIMER_RULE=${SEED_TIMER_RULE}
 		SEED_RULE=${SEED_RULE}
 	STATEEOF
+	printf '%s\n' "$TIMER_STATE" >> "$STATE"
 
 	echo "SEEDED: board=${SEED_BOARD} cards=${SEED_CARD},${SEED_TEMPLATE},${SEED_CARD2}"
 	echo "        comments=${SEED_COMMENT}(+reply ${SEED_REPLY}) attachment=${SEED_ATTACHMENT} rule=${SEED_RULE}"
@@ -339,8 +369,32 @@ do_verify() {
 
 	api GET "/api/cards/${SEED_CARD}/time-entries"
 	expect_200 'GET time entries'
-	grep -q '5400' "$API_BODY" || fail 'the time entry is gone'
-	echo "  ok: time entry"
+	json_response '
+		$entries = json_decode(stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR);
+		$entry = array_values(array_filter($entries, static fn (array $entry): bool => $entry["id"] === (int)$argv[1]))[0] ?? null;
+		if ($entry === null || $entry["seconds"] !== 5400 || $entry["note"] !== "seeded work"
+			|| !array_key_exists("actorName", $entry) || $entry["actorName"] !== null) {
+			throw new RuntimeException("The legacy finished entry or its null AI attribution changed");
+		}
+	' "$SEED_TIME_ENTRY" || fail 'the finished time entry did not survive'
+	echo "  ok: legacy finished entry with null AI attribution"
+
+	api GET "/api/cards/${SEED_CARD2}"
+	expect_200 'GET running timer after upgrade'
+	json_response '
+		$card = json_decode(stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR);
+		$timer = $card["runningTimer"] ?? null;
+		if (!is_array($timer) || $timer["startedBy"] !== $argv[1] || $timer["startedAt"] !== (int)$argv[2]
+			|| !array_key_exists("actorName", $timer) || $timer["actorName"] !== null) {
+			throw new RuntimeException("The legacy timer changed across the upgrade");
+		}
+	' "$SEED_TIMER_STARTED_BY" "$SEED_TIMER_STARTED_AT" || fail 'the running timer did not survive'
+	echo "  ok: legacy timer starter, timestamp and null AI attribution"
+
+	api GET "/api/boards/${SEED_BOARD}/automation-rules"
+	expect_200 'GET timer automation'
+	grep -q "\"id\":${SEED_TIMER_RULE}[,}]" "$API_BODY" || fail 'the timer automation is gone'
+	echo "  ok: timer automation"
 
 	api GET "/api/boards/${SEED_BOARD}/recur-rules"
 	expect_200 'GET recurrence rules'
@@ -367,8 +421,50 @@ do_verify() {
 	echo "VERIFY OK: every seeded entity still reads back."
 }
 
+do_verify_timer_stop() {
+	[ -f "$STATE" ] || fail "no state file at $(pwd)/${STATE} - run './seed.sh seed' first"
+	# shellcheck disable=SC1090
+	. "./$STATE"
+
+	api POST "/api/cards/${SEED_CARD2}/timer"
+	expect_200 'POST existing timer through upgraded API'
+	TIMER_ID="$(created_id)"
+	[ -n "$TIMER_ID" ] || fail 'the upgraded timer API returned no timer id'
+	api POST "/api/cards/${SEED_CARD2}/timer"
+	expect_200 'POST existing timer again'
+	json_response '
+		$timer = json_decode(stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR);
+		if ($timer["id"] !== (int)$argv[1] || $timer["cardId"] !== (int)$argv[2]
+			|| $timer["startedBy"] !== $argv[3] || $timer["startedAt"] !== (int)$argv[4]
+			|| !array_key_exists("actorName", $timer) || $timer["actorName"] !== null) {
+			throw new RuntimeException("Starting an existing legacy timer changed its identity or attribution");
+		}
+	' "$TIMER_ID" "$SEED_CARD2" "$SEED_TIMER_STARTED_BY" "$SEED_TIMER_STARTED_AT" \
+		|| fail 'the upgraded start endpoint did not preserve the existing timer'
+
+	api DELETE "/api/cards/${SEED_CARD2}/timer"
+	expect_200 'DELETE legacy timer through upgraded API'
+	json_response '
+		$entry = json_decode(stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR);
+		if (!is_array($entry) || $entry["cardId"] !== (int)$argv[1] || $entry["createdBy"] !== $argv[2]
+			|| $entry["seconds"] <= 0 || !array_key_exists("actorName", $entry) || $entry["actorName"] !== null) {
+			throw new RuntimeException("Stopping the legacy timer lost its duration or starter attribution");
+		}
+	' "$SEED_CARD2" "$SEED_TIMER_STARTED_BY" || fail 'the upgraded stop endpoint did not record the legacy timer'
+	api GET "/api/cards/${SEED_CARD2}"
+	expect_200 'GET card after stopping legacy timer'
+	json_response '
+		$card = json_decode(stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR);
+		if (!array_key_exists("runningTimer", $card) || $card["runningTimer"] !== null) {
+			throw new RuntimeException("The stopped legacy timer is still running");
+		}
+	' || fail 'the upgraded stop endpoint left the timer running'
+	echo "VERIFY OK: the legacy timer stops through the upgraded API with starter attribution."
+}
+
 case "$MODE" in
 	seed)   do_seed ;;
 	verify) do_verify ;;
-	*) echo "usage: $0 [seed|verify]" >&2; exit 2 ;;
+	verify-timer-stop) do_verify_timer_stop ;;
+	*) echo "usage: $0 [seed|verify|verify-timer-stop]" >&2; exit 2 ;;
 esac

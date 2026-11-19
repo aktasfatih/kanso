@@ -208,6 +208,13 @@ limited to capabilities the acting user holds, including managers.
 - `kanso_add_checklist_item` — add a checklist item to a card
 - `kanso_toggle_checklist_item` — mark an item done / not done
 
+**Time tracking**
+
+- `kanso_list_time_entries` / `kanso_add_time_entry` — read or record a duration
+  in seconds, with an optional note and `actor_name` when the board permits AI attribution
+- `kanso_start_timer` / `kanso_stop_timer` — start or stop the card's timer;
+  recorded time belongs to the starting user and optional AI actor
+
 **Recurrence (repeating cards)**
 
 Recurrence is board automation, not a card field: a rule is anchored on a
@@ -250,8 +257,9 @@ never promoted.
 - `kanso_get_project` — one project's record plus its member cards
 - `kanso_create_project` / `kanso_update_project` (title, description, color, start and target date, lead and lifecycle) / `kanso_delete_project`
   (memberships go, the cards stay)
-- `kanso_list_project_cards` — the member cards, with `boardTitle` + `stackTitle`; archived cards and
-  cards on boards you can no longer read are left out
+- `kanso_list_project_cards` — the member cards, with `boardTitle`, `stackTitle`, and `archived`;
+  archived cards retain their project progress. Deleted cards, templates, and cards
+  on archived or unreadable boards are left out
 - `kanso_get_project_stats` — the board analytics panels over the project's cards
 - `kanso_get_project_plan` — progress, pace, forecast date range and on-track status against the target date
 - `kanso_add_card_to_project` / `kanso_remove_card_from_project` — idempotent membership changes;

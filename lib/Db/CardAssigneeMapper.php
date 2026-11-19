@@ -157,7 +157,6 @@ class CardAssigneeMapper extends QBMapper {
 			->innerJoin('ca', 'kanso_cards', 'c', $qb->expr()->eq('ca.card_id', 'c.id'))
 			->where($qb->expr()->in('c.id', $qb->createNamedParameter($cardIds, IQueryBuilder::PARAM_INT_ARRAY)))
 			->andWhere($qb->expr()->eq('c.deleted_at', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->eq('c.archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)))
 			->andWhere($qb->expr()->eq('ca.type', $qb->createNamedParameter(CardAssignee::TYPE_USER, IQueryBuilder::PARAM_INT)))
 			->groupBy('ca.participant');
 

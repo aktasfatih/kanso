@@ -571,6 +571,60 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         await client.unassign_user(card_id, user_id)
         return {"unassigned": True, "cardId": card_id, "userId": user_id}
 
+    @mcp.tool(
+        title="List a Kanso card's recorded time",
+        annotations={"readOnlyHint": True},
+    )
+    async def kanso_list_time_entries(card_id: int) -> List[dict]:
+        """Read finished time entries, newest first, including user and AI attribution.
+
+        Args:
+            card_id: The numeric card id.
+        """
+        return [entry.model_dump() for entry in await client.list_time_entries(card_id)]
+
+    @mcp.tool(title="Record time on a Kanso card")
+    async def kanso_add_time_entry(
+        card_id: int,
+        seconds: int,
+        note: Optional[str] = None,
+        actor_name: Optional[str] = None,
+    ) -> dict:
+        """Record a finished duration on a card. Requires edit access.
+
+        Args:
+            card_id: The numeric card id.
+            seconds: Duration in seconds, from 1 through 3,600,000.
+            note: Optional description of the work.
+            actor_name: Optional AI attribution; requires the board's
+                allow_ai_actors setting. The authenticated user owns the entry.
+        """
+        return (await client.add_time_entry(card_id, seconds, note, actor_name)).model_dump()
+
+    @mcp.tool(title="Start a Kanso card timer")
+    async def kanso_start_timer(card_id: int, actor_name: Optional[str] = None) -> dict:
+        """Start the card's timer. Idempotent when one is already running.
+
+        Args:
+            card_id: The numeric card id. Requires edit access.
+            actor_name: Optional AI attribution; requires the board's
+                allow_ai_actors setting. The authenticated user owns the timer.
+        """
+        return (await client.start_timer(card_id, actor_name)).model_dump()
+
+    @mcp.tool(title="Stop a Kanso card timer")
+    async def kanso_stop_timer(card_id: int) -> Optional[dict]:
+        """Stop the timer and record elapsed time for its starter and AI actor.
+
+        Returns the finished entry, or null if no timer was running or no
+        elapsed second was recorded. Repeated stops do not create extra entries.
+
+        Args:
+            card_id: The numeric card id. Requires edit access.
+        """
+        entry = await client.stop_timer(card_id)
+        return entry.model_dump() if entry else None
+
     # ----------------------------------------------------------------- reviews
     @mcp.tool(title="Request a review of a Kanso card")
     async def kanso_request_review(
@@ -1311,9 +1365,9 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         """List the cards in one of your projects, ordered by board then board
         position.
 
-        Only live cards on boards you can still read come back: archived cards,
-        cards of an archived board and cards on a board you have lost access to
-        are left out, even though they stay members.
+        Archived cards on readable, active boards are included and continue to
+        count toward project progress. Deleted cards, templates, and cards on
+        archived or unreadable boards are left out, even though they stay members.
 
         Args:
             project_id: The numeric project id.
