@@ -42,6 +42,7 @@ class CardLink extends Entity implements \JsonSerializable {
 	public const PROVIDER_GITHUB = 'github';
 	/** Never polled - self-hosted, so state comes from webhook deliveries only. */
 	public const PROVIDER_FORGEJO = 'forgejo';
+	public const PROVIDER_GITLAB = 'gitlab';
 
 	public const STATE_OPEN = 'open';
 	public const STATE_CLOSED = 'closed';

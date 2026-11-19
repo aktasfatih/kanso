@@ -397,4 +397,77 @@ class CardLinkServiceTest extends TestCase {
 
 		$this->service->deleteLink(9, 5, 'bob');
 	}
+	public function testGitlabNestedProjectsAreCanonicalizedAndNeverPolled(): void {
+		$this->expectCardLoaded();
+		$this->client->expects(self::never())->method('get');
+		$this->cardLinkMapper->method('findByCard')->willReturn([]);
+		$this->cardLinkMapper->method('insert')->willReturnCallback(static fn (CardLink $link): CardLink => $link);
+		$link = $this->service->addLink(9, 'https://GIT.EXAMPLE.ORG/team/subgroup/app/-/merge_requests/42/?view=inline#note_1', 'alice');
+		self::assertSame(CardLink::PROVIDER_GITLAB, $link->getProvider());
+		self::assertSame(CardLink::KIND_PR, $link->getKind());
+		self::assertSame('https://git.example.org/team/subgroup/app/-/merge_requests/42', $link->getUrl());
+	}
+
+	public function testGitlabAndForgejoDoNotShareIssueNumberSemantics(): void {
+		$board = $this->expectCardLoaded();
+		$board->setForgejoWebhookSecret('forgejo');
+		$this->cardLinkMapper->method('findByCard')->willReturn([]);
+		$this->cardLinkMapper->method('insert')->willReturnCallback(static fn (CardLink $link): CardLink => $link);
+		$link = $this->service->addLink(9, 'https://git.example.org/team/app/-/issues/42', 'alice');
+		self::assertSame(CardLink::PROVIDER_GITLAB, $link->getProvider());
+		self::assertSame(CardLink::KIND_ISSUE, $link->getKind());
+	}
+
+	public function testGitlabCanonicalLinksAreIdempotent(): void {
+		$this->expectCardLoaded();
+		$link = new CardLink();
+		$link->setUrl('https://gitlab.com/team/app/-/issues/3');
+		$this->cardLinkMapper->method('findByCard')->willReturn([$link]);
+		$this->cardLinkMapper->expects(self::never())->method('insert');
+		self::assertSame($link, $this->service->addLink(9, 'https://gitlab.com/team/app/-/issues/3/#note_1', 'alice'));
+	}
+
+	public function testGitlabWebhookStateRefreshNotifiesOnlyForActualChanges(): void {
+		$board = $this->expectCardLoaded();
+		$board->setOwner('alice');
+		$link = new CardLink();
+		$link->setCardId(9);
+		$link->setState(CardLink::STATE_OPEN);
+		$link->setTitle('An issue');
+		$this->cardLinkMapper->expects(self::once())->method('update')->with($link);
+		$this->changeNotifier->expects(self::once())->method('notify')->with(1, \OCA\Kanso\Db\Change::ENTITY_CARD, 9, \OCA\Kanso\Db\Change::ACTION_UPDATE, 'alice');
+		$this->service->updateFromWebhook($link, CardLink::STATE_CLOSED, 'An issue');
+		$this->service->updateFromWebhook($link, CardLink::STATE_CLOSED, 'An issue');
+	}
+
+	public function testGitlabWebhookRefreshKeepsCardVisibilityGate(): void {
+		$board = $this->expectCardLoaded();
+		$board->setOwner('alice');
+		$link = new CardLink();
+		$link->setCardId(9);
+		$this->visibilityGuard->method('assertVisible')->willThrowException(new NotPermittedException('hidden'));
+		$this->cardLinkMapper->expects(self::never())->method('update');
+		$this->changeNotifier->expects(self::never())->method('notify');
+		$this->expectException(NotPermittedException::class);
+		$this->service->updateFromWebhook($link, CardLink::STATE_CLOSED, null);
+	}
+
+	public function testGitlabParserRejectsUnsafeAndMalformedUrls(): void {
+		foreach ([
+			'http://git.example.org/team/app/-/issues/3',
+			'https://user:password@git.example.org/team/app/-/issues/3',
+			'https://git.example.org/team/../app/-/issues/3',
+			'https://git.example.org/app/-/issues/3',
+			'https://git.example.org/team/app/-/issues/0',
+			'https://git.example.org/team/app/-/merge_requests/not-a-number',
+		] as $url) {
+			try {
+				CardLinkService::parseGitlabUrl($url);
+				self::fail('Accepted invalid URL: ' . $url);
+			} catch (InvalidInputException) {
+				self::assertTrue(true);
+			}
+		}
+	}
+
 }

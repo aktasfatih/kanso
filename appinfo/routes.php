@@ -276,6 +276,10 @@ return [
 		['name' => 'webhook#intake', 'url' => '/api/boards/{id}/webhook/intake', 'verb' => 'PUT'],
 		['name' => 'webhook#disable', 'url' => '/api/boards/{id}/webhook', 'verb' => 'DELETE'],
 
+		['name' => 'webhook#gitlab', 'url' => '/api/boards/{id}/gitlab-webhook', 'verb' => 'POST'],
+		['name' => 'webhook#gitlabConfig', 'url' => '/api/boards/{id}/gitlab', 'verb' => 'GET'],
+		['name' => 'webhook#gitlabRotate', 'url' => '/api/boards/{id}/gitlab/rotate', 'verb' => 'POST'],
+		['name' => 'webhook#gitlabDisable', 'url' => '/api/boards/{id}/gitlab', 'verb' => 'DELETE'],
 		// Forgejo runs alongside the GitHub webhook, with its own secret and
 		// intake config. Delivery-only: no instance URL is stored, so there is
 		// nothing here to configure a host with.

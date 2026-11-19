@@ -14,7 +14,7 @@ msgstr ""
 msgid "— none —"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:5006
+#: src/components/BoardSettingsModal.vue:5125
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] ""
@@ -396,7 +396,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:5157
+#: src/components/CardDetail.vue:5159
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
@@ -414,7 +414,7 @@ msgid_plural "%n files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:5155
+#: src/components/CardDetail.vue:5157
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
@@ -444,7 +444,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:5153
+#: src/components/CardDetail.vue:5155
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -456,7 +456,7 @@ msgid_plural "%n need review"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3993
+#: src/components/CardDetail.vue:3995
 msgid "%n other reviewer"
 msgid_plural "%n other reviewers"
 msgstr[0] ""
@@ -480,7 +480,7 @@ msgid_plural "%n projects"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:2384
+#: src/components/CardDetail.vue:2385
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -748,6 +748,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Allow AI actors"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "An opened merge request on a kanso-<id> branch or naming a card reference in its title moves matching cards to Review; merging moves them to Done. Linked issues move to Done when closed and In progress when reopened."
 msgstr ""
 
 #: src/views/BoardStats.vue
@@ -2114,8 +2118,8 @@ msgstr ""
 msgid "Date range (UTC)"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2346
-#: src/components/CardDetail.vue:5348
+#: src/components/BoardSettingsModal.vue:2386
+#: src/components/CardDetail.vue:5350
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -2686,7 +2690,7 @@ msgstr ""
 msgid "Every card in this project is done."
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:4986
+#: src/components/BoardSettingsModal.vue:5105
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] ""
@@ -2696,19 +2700,19 @@ msgstr[1] ""
 msgid "Every estimate needs a label."
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:4996
+#: src/components/BoardSettingsModal.vue:5115
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:4988
+#: src/components/BoardSettingsModal.vue:5107
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/BoardSettingsModal.vue:4998
+#: src/components/BoardSettingsModal.vue:5117
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] ""
@@ -3015,6 +3019,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the GitHub webhook config."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Failed to load the GitLab webhook config."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -3512,6 +3520,10 @@ msgstr ""
 msgid "GitHub label name"
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "GitLab"
+msgstr ""
+
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
 msgid "Go to boards"
@@ -3647,6 +3659,10 @@ msgstr ""
 msgid "In a Files folder a pruned backup moves to that account's trashbin and keeps using its quota until that empties; inside Kanso it is freed at once."
 msgstr ""
 
+#: src/components/BoardSettingsModal.vue
+msgid "In GitLab Settings → Webhooks, paste this URL and secret token, and enable Issue events and Merge request events. Keep SSL verification enabled."
+msgstr ""
+
 #: src/components/BoardListView.vue
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTimelineView.vue
@@ -3723,7 +3739,7 @@ msgstr ""
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:7244
+#: src/components/CardDetail.vue:7246
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -4134,8 +4150,8 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2348
-#: src/components/CardDetail.vue:5350
+#: src/components/BoardSettingsModal.vue:2388
+#: src/components/CardDetail.vue:5352
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -4772,10 +4788,6 @@ msgstr ""
 
 #: src/composables/useBoardFilters.js
 msgid "Only archived"
-msgstr ""
-
-#: src/components/CardDetail.vue
-msgid "Only https://github.com links are supported"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
@@ -5876,7 +5888,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr ""
 
-#: src/components/CardDetail.vue:7250
+#: src/components/CardDetail.vue:7252
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] ""
@@ -6616,6 +6628,10 @@ msgstr ""
 msgid "Urgent"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Use a GitHub, GitLab or enabled Forgejo link."
+msgstr ""
+
 #: src/views/ProjectView.vue
 msgid "Use the Add card button above to collect cards from any board."
 msgstr ""
@@ -6711,8 +6727,8 @@ msgstr ""
 msgid "Wed"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2347
-#: src/components/CardDetail.vue:5349
+#: src/components/BoardSettingsModal.vue:2387
+#: src/components/CardDetail.vue:5351
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -6820,8 +6836,8 @@ msgstr ""
 msgid "wrote"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2349
-#: src/components/CardDetail.vue:5351
+#: src/components/BoardSettingsModal.vue:2389
+#: src/components/CardDetail.vue:5353
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""
@@ -6890,6 +6906,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure the GitHub webhook."
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "You need manage permission to configure the GitLab webhook."
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue

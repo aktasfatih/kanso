@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— brak —"
 
-#: src/components/BoardSettingsModal.vue:5006
+#: src/components/BoardSettingsModal.vue:5125
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n raz"
@@ -417,7 +417,7 @@ msgstr[0] "Wykryto %n wiersz danych"
 msgstr[1] "Wykryto %n wiersze danych"
 msgstr[2] "Wykryto %n wierszy danych"
 
-#: src/components/CardDetail.vue:5157
+#: src/components/CardDetail.vue:5159
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dzień temu"
@@ -438,7 +438,7 @@ msgstr[0] "%n plik"
 msgstr[1] "%n pliki"
 msgstr[2] "%n plików"
 
-#: src/components/CardDetail.vue:5155
+#: src/components/CardDetail.vue:5157
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n godzinę temu"
@@ -473,7 +473,7 @@ msgstr[0] "%n etykieta nie została utworzona i brakuje jej na zaimportowanych k
 msgstr[1] "%n etykiety nie zostały utworzone i brakuje ich na zaimportowanych kartach: tylko osoby zarządzające tablicą mogą dodawać nowe etykiety. Poproś taką osobę, aby je dodała, a potem ustaw je na kartach."
 msgstr[2] "%n etykiet nie zostało utworzonych i brakuje ich na zaimportowanych kartach: tylko osoby zarządzające tablicą mogą dodawać nowe etykiety. Poproś taką osobę, aby je dodała, a potem ustaw je na kartach."
 
-#: src/components/CardDetail.vue:5153
+#: src/components/CardDetail.vue:5155
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minutę temu"
@@ -487,7 +487,7 @@ msgstr[0] "%n do recenzji"
 msgstr[1] "%n do recenzji"
 msgstr[2] "%n do recenzji"
 
-#: src/components/CardDetail.vue:3993
+#: src/components/CardDetail.vue:3995
 msgid "%n other reviewer"
 msgid_plural "%n other reviewers"
 msgstr[0] "%n inny recenzent"
@@ -515,7 +515,7 @@ msgstr[0] "%n projekt"
 msgstr[1] "%n projekty"
 msgstr[2] "%n projektów"
 
-#: src/components/CardDetail.vue:2384
+#: src/components/CardDetail.vue:2385
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n odpowiedź"
@@ -787,6 +787,10 @@ msgstr "Wszystkie statusy"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Allow AI actors"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "An opened merge request on a kanso-<id> branch or naming a card reference in its title moves matching cards to Review; merging moves them to Done. Linked issues move to Done when closed and In progress when reopened."
 msgstr ""
 
 #: src/views/BoardStats.vue
@@ -2158,8 +2162,8 @@ msgstr "Data"
 msgid "Date range (UTC)"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2346
-#: src/components/CardDetail.vue:5348
+#: src/components/BoardSettingsModal.vue:2386
+#: src/components/CardDetail.vue:5350
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dzień"
@@ -2731,7 +2735,7 @@ msgstr "Co"
 msgid "Every card in this project is done."
 msgstr "Wszystkie karty w tym projekcie są ukończone."
 
-#: src/components/BoardSettingsModal.vue:4986
+#: src/components/BoardSettingsModal.vue:5105
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Codziennie"
@@ -2742,21 +2746,21 @@ msgstr[2] "Co %n dni"
 msgid "Every estimate needs a label."
 msgstr "Każde oszacowanie musi mieć etykietę."
 
-#: src/components/BoardSettingsModal.vue:4996
+#: src/components/BoardSettingsModal.vue:5115
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Co miesiąc"
 msgstr[1] "Co %n miesiące"
 msgstr[2] "Co %n miesięcy"
 
-#: src/components/BoardSettingsModal.vue:4988
+#: src/components/BoardSettingsModal.vue:5107
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Co tydzień"
 msgstr[1] "Co %n tygodnie"
 msgstr[2] "Co %n tygodni"
 
-#: src/components/BoardSettingsModal.vue:4998
+#: src/components/BoardSettingsModal.vue:5117
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Co rok"
@@ -3065,6 +3069,10 @@ msgstr "Nie udało się wczytać konfiguracji webhooka Forgejo."
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the GitHub webhook config."
 msgstr "Nie udało się wczytać konfiguracji webhooka GitHub."
+
+#: src/components/BoardSettingsModal.vue
+msgid "Failed to load the GitLab webhook config."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the public link config."
@@ -3561,6 +3569,10 @@ msgstr "GitHub"
 msgid "GitHub label name"
 msgstr "Nazwa etykiety GitHub"
 
+#: src/components/BoardSettingsModal.vue
+msgid "GitLab"
+msgstr ""
+
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
 msgid "Go to boards"
@@ -3697,6 +3709,10 @@ msgstr "W folderze w Plikach"
 msgid "In a Files folder a pruned backup moves to that account's trashbin and keeps using its quota until that empties; inside Kanso it is freed at once."
 msgstr "W folderze w Plikach kopia zapasowa usunięta przez rotację trafia do kosza tego konta i zajmuje jego limit, dopóki kosz nie zostanie opróżniony; w Kanso miejsce zwalnia się od razu."
 
+#: src/components/BoardSettingsModal.vue
+msgid "In GitLab Settings → Webhooks, paste this URL and secret token, and enable Issue events and Merge request events. Keep SSL verification enabled."
+msgstr ""
+
 #: src/components/BoardListView.vue
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTimelineView.vue
@@ -3773,7 +3789,7 @@ msgstr "Cel, zakres lub zasady. Każdy użytkownik tej tablicy może je przeczyt
 msgid "Jump to the discussion"
 msgstr "Przejdź do dyskusji"
 
-#: src/components/CardDetail.vue:7244
+#: src/components/CardDetail.vue:7246
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Przejdź do dyskusji (%n komentarz)"
@@ -4185,8 +4201,8 @@ msgstr "Tryb"
 msgid "Mon"
 msgstr "Pn"
 
-#: src/components/BoardSettingsModal.vue:2348
-#: src/components/CardDetail.vue:5350
+#: src/components/BoardSettingsModal.vue:2388
+#: src/components/CardDetail.vue:5352
 msgid "month"
 msgid_plural "months"
 msgstr[0] "miesiąc"
@@ -4825,10 +4841,6 @@ msgstr ""
 #: src/composables/useBoardFilters.js
 msgid "Only archived"
 msgstr "Tylko zarchiwizowane"
-
-#: src/components/CardDetail.vue
-msgid "Only https://github.com links are supported"
-msgstr "Obsługiwane są tylko odnośniki https://github.com"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Only issues with a label"
@@ -5930,7 +5942,7 @@ msgstr "Pokaż dyskusję pod kartą"
 msgid "Show the discussion panel"
 msgstr "Pokaż panel dyskusji"
 
-#: src/components/CardDetail.vue:7250
+#: src/components/CardDetail.vue:7252
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Pokaż panel dyskusji (%n komentarz)"
@@ -6671,6 +6683,10 @@ msgstr "Przesyłanie…"
 msgid "Urgent"
 msgstr "Pilny"
 
+#: src/components/CardDetail.vue
+msgid "Use a GitHub, GitLab or enabled Forgejo link."
+msgstr ""
+
 #: src/views/ProjectView.vue
 msgid "Use the Add card button above to collect cards from any board."
 msgstr "Użyj przycisku „Dodaj kartę” powyżej, aby zebrać karty z dowolnej tablicy."
@@ -6766,8 +6782,8 @@ msgstr "Webhook aktywny"
 msgid "Wed"
 msgstr "Śr"
 
-#: src/components/BoardSettingsModal.vue:2347
-#: src/components/CardDetail.vue:5349
+#: src/components/BoardSettingsModal.vue:2387
+#: src/components/CardDetail.vue:5351
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "tydzień"
@@ -6876,8 +6892,8 @@ msgstr "Zapisano"
 msgid "wrote"
 msgstr "napisał"
 
-#: src/components/BoardSettingsModal.vue:2349
-#: src/components/CardDetail.vue:5351
+#: src/components/BoardSettingsModal.vue:2389
+#: src/components/CardDetail.vue:5353
 msgid "year"
 msgid_plural "years"
 msgstr[0] "rok"
@@ -6948,6 +6964,10 @@ msgstr "Do konfigurowania webhooka Forgejo potrzebne jest uprawnienie do zarząd
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure the GitHub webhook."
 msgstr "Do konfigurowania webhooka GitHub potrzebne jest uprawnienie do zarządzania."
+
+#: src/components/BoardSettingsModal.vue
+msgid "You need manage permission to configure the GitLab webhook."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure the public link."

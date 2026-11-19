@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— 无 —"
 
-#: src/components/BoardSettingsModal.vue:5006
+#: src/components/BoardSettingsModal.vue:5125
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n 次"
@@ -377,7 +377,7 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:5157
+#: src/components/CardDetail.vue:5159
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
@@ -392,7 +392,7 @@ msgid "%n file"
 msgid_plural "%n files"
 msgstr[0] "%n 个文件"
 
-#: src/components/CardDetail.vue:5155
+#: src/components/CardDetail.vue:5157
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
@@ -417,7 +417,7 @@ msgid "%n label was not created and is missing from the imported cards: only boa
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
 msgstr[0] "有 %n 个标签未能创建，导入的卡片中缺少它们：只有看板管理者才能添加新标签。请让管理者添加，然后在卡片上设置它们。"
 
-#: src/components/CardDetail.vue:5153
+#: src/components/CardDetail.vue:5155
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -427,7 +427,7 @@ msgid "%n need review"
 msgid_plural "%n need review"
 msgstr[0] "%n 张待评审"
 
-#: src/components/CardDetail.vue:3993
+#: src/components/CardDetail.vue:3995
 msgid "%n other reviewer"
 msgid_plural "%n other reviewers"
 msgstr[0] "%n 位其他评审者"
@@ -447,7 +447,7 @@ msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
 
-#: src/components/CardDetail.vue:2384
+#: src/components/CardDetail.vue:2385
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n 条回复"
@@ -711,6 +711,10 @@ msgstr "所有状态"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Allow AI actors"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "An opened merge request on a kanso-<id> branch or naming a card reference in its title moves matching cards to Review; merging moves them to Done. Linked issues move to Done when closed and In progress when reopened."
 msgstr ""
 
 #: src/views/BoardStats.vue
@@ -2072,8 +2076,8 @@ msgstr "日期"
 msgid "Date range (UTC)"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue:2346
-#: src/components/CardDetail.vue:5348
+#: src/components/BoardSettingsModal.vue:2386
+#: src/components/CardDetail.vue:5350
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -2643,7 +2647,7 @@ msgstr "每"
 msgid "Every card in this project is done."
 msgstr "此项目中的所有卡片均已完成。"
 
-#: src/components/BoardSettingsModal.vue:4986
+#: src/components/BoardSettingsModal.vue:5105
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "每 %n 天"
@@ -2652,17 +2656,17 @@ msgstr[0] "每 %n 天"
 msgid "Every estimate needs a label."
 msgstr "每个估算值都需要一个标签。"
 
-#: src/components/BoardSettingsModal.vue:4996
+#: src/components/BoardSettingsModal.vue:5115
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "每 %n 个月"
 
-#: src/components/BoardSettingsModal.vue:4988
+#: src/components/BoardSettingsModal.vue:5107
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "每 %n 周"
 
-#: src/components/BoardSettingsModal.vue:4998
+#: src/components/BoardSettingsModal.vue:5117
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "每 %n 年"
@@ -2969,6 +2973,10 @@ msgstr "加载 Forgejo webhook 配置失败。"
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the GitHub webhook config."
 msgstr "加载 GitHub webhook 配置失败。"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Failed to load the GitLab webhook config."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Failed to load the public link config."
@@ -3465,6 +3473,10 @@ msgstr "GitHub"
 msgid "GitHub label name"
 msgstr "GitHub 标签名称"
 
+#: src/components/BoardSettingsModal.vue
+msgid "GitLab"
+msgstr ""
+
 #: src/components/CardDetail.vue
 #: src/views/BoardView.vue
 msgid "Go to boards"
@@ -3599,6 +3611,10 @@ msgstr "在“文件”的文件夹中"
 msgid "In a Files folder a pruned backup moves to that account's trashbin and keeps using its quota until that empties; inside Kanso it is freed at once."
 msgstr "在“文件”的文件夹中，被清理掉的备份会进入该账号的回收站，并继续占用其配额，直到回收站被清空；保存在 Kanso 内部时则会立即释放。"
 
+#: src/components/BoardSettingsModal.vue
+msgid "In GitLab Settings → Webhooks, paste this URL and secret token, and enable Issue events and Merge request events. Keep SSL verification enabled."
+msgstr ""
+
 #: src/components/BoardListView.vue
 #: src/components/BoardSettingsModal.vue
 #: src/components/BoardTimelineView.vue
@@ -3675,7 +3691,7 @@ msgstr "看板的用途、范围或协作约定。看板中的所有人都可以
 msgid "Jump to the discussion"
 msgstr "跳转到讨论"
 
-#: src/components/CardDetail.vue:7244
+#: src/components/CardDetail.vue:7246
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "跳转到讨论（%n 条评论）"
@@ -4085,8 +4101,8 @@ msgstr "模式"
 msgid "Mon"
 msgstr "周一"
 
-#: src/components/BoardSettingsModal.vue:2348
-#: src/components/CardDetail.vue:5350
+#: src/components/BoardSettingsModal.vue:2388
+#: src/components/CardDetail.vue:5352
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -4723,10 +4739,6 @@ msgstr ""
 #: src/composables/useBoardFilters.js
 msgid "Only archived"
 msgstr "仅已归档"
-
-#: src/components/CardDetail.vue
-msgid "Only https://github.com links are supported"
-msgstr "仅支持 https://github.com 链接"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Only issues with a label"
@@ -5824,7 +5836,7 @@ msgstr "在卡片下方显示讨论"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:7250
+#: src/components/CardDetail.vue:7252
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -6563,6 +6575,10 @@ msgstr "上传中…"
 msgid "Urgent"
 msgstr "紧急"
 
+#: src/components/CardDetail.vue
+msgid "Use a GitHub, GitLab or enabled Forgejo link."
+msgstr ""
+
 #: src/views/ProjectView.vue
 msgid "Use the Add card button above to collect cards from any board."
 msgstr "使用上方的“添加卡片”按钮，从任意看板中收集卡片。"
@@ -6658,8 +6674,8 @@ msgstr "Webhook 已启用"
 msgid "Wed"
 msgstr "周三"
 
-#: src/components/BoardSettingsModal.vue:2347
-#: src/components/CardDetail.vue:5349
+#: src/components/BoardSettingsModal.vue:2387
+#: src/components/CardDetail.vue:5351
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -6766,8 +6782,8 @@ msgstr "写入时间"
 msgid "wrote"
 msgstr "写道"
 
-#: src/components/BoardSettingsModal.vue:2349
-#: src/components/CardDetail.vue:5351
+#: src/components/BoardSettingsModal.vue:2389
+#: src/components/CardDetail.vue:5353
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"
@@ -6836,6 +6852,10 @@ msgstr "配置 Forgejo webhook 需要管理权限。"
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure the GitHub webhook."
 msgstr "配置 GitHub webhook 需要管理权限。"
+
+#: src/components/BoardSettingsModal.vue
+msgid "You need manage permission to configure the GitLab webhook."
+msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "You need manage permission to configure the public link."

@@ -22,6 +22,7 @@ use OCA\Kanso\Service\BoardService;
 use OCA\Kanso\Service\CardMutationService;
 use OCA\Kanso\Service\ForgejoWebhookService;
 use OCA\Kanso\Service\GithubWebhookService;
+use OCA\Kanso\Service\GitlabWebhookService;
 use OCA\Kanso\Service\StackService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\BruteForceProtection;
@@ -93,7 +94,7 @@ function requestFor(string $ip, string $provider, string $signature): Request {
 function deliver(object $container, string $ip, string $provider, int $boardId, string $body, string $signature): Response {
 	$request = requestFor($ip, $provider, $signature);
 	$controller = new WebhookController('kanso', $request, Server::get(IUserSession::class),
-		$container->get(GithubWebhookService::class), $container->get(ForgejoWebhookService::class));
+		$container->get(GithubWebhookService::class), $container->get(ForgejoWebhookService::class), $container->get(GitlabWebhookService::class));
 	(new \ReflectionProperty($controller, 'rawBody'))->setValue($controller, $body);
 	return dispatch($controller, $provider, $boardId, $request);
 }
@@ -199,7 +200,7 @@ try {
 		}
 		check(snapshot($container, $a['id']) === $before, 'Rejected signatures changed cards, links or activity');
 		$request = requestFor($ip, $provider, '');
-		$controller = new WebhookController('kanso', $request, $userSession, $services['github'], $services['forgejo']);
+		$controller = new WebhookController('kanso', $request, $userSession, $services['github'], $services['forgejo'], $container->get(GitlabWebhookService::class));
 		foreach ($provider === 'github' ? ['config', 'rotate', 'intake', 'disable'] : ['forgejoConfig', 'forgejoRotate', 'forgejoIntake', 'forgejoDisable'] as $method) {
 			check($controller->$method($a['id'])->getStatus() === 403, 'Anonymous webhook settings access was permitted');
 		}

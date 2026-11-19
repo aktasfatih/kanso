@@ -36,6 +36,8 @@ use OCP\DB\Types;
  * @method void setWebhookIntakeStackId(?int $webhookIntakeStackId)
  * @method string|null getWebhookIntakeLabel()
  * @method void setWebhookIntakeLabel(?string $webhookIntakeLabel)
+ * @method string|null getGitlabWebhookSecret()
+ * @method void setGitlabWebhookSecret(?string $gitlabWebhookSecret)
  * @method string|null getForgejoWebhookSecret()
  * @method void setForgejoWebhookSecret(?string $forgejoWebhookSecret)
  * @method int|null getForgejoIntakeStackId()
@@ -98,6 +100,7 @@ class Board extends Entity implements \JsonSerializable {
 	// deliberately no instance URL: deliveries are inbound only, so Kanso never
 	// needs to know where the instance lives.
 	protected ?string $forgejoWebhookSecret = null;
+	protected ?string $gitlabWebhookSecret = null;
 	protected ?int $forgejoIntakeStackId = null;
 	protected ?string $forgejoIntakeLabel = null;
 	protected ?string $estimateScale = null;
@@ -172,6 +175,7 @@ class Board extends Entity implements \JsonSerializable {
 		$this->addType('webhookIntakeStackId', Types::INTEGER);
 		$this->addType('webhookIntakeLabel', Types::STRING);
 		$this->addType('forgejoWebhookSecret', Types::STRING);
+		$this->addType('gitlabWebhookSecret', Types::STRING);
 		$this->addType('forgejoIntakeStackId', Types::INTEGER);
 		$this->addType('forgejoIntakeLabel', Types::STRING);
 		$this->addType('estimateScale', Types::STRING);

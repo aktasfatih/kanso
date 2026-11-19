@@ -1054,7 +1054,6 @@ OC.L10N.register(
     "Once a day, Kanso saves a copy of every board as a zip file." : "Una vez al día, Kanso guarda una copia de cada tablero como archivo zip.",
     "Only administrators can download them, and they can never be shared by a link." : "Solo los administradores pueden descargarlas, y nunca se pueden compartir mediante un enlace.",
     "Only archived" : "Solo archivados",
-    "Only https://github.com links are supported" : "Solo se admiten enlaces de https://github.com",
     "Only issues with a label" : "Solo las incidencias con una etiqueta",
     "Only loaded tasks are shown." : "Solo se muestran las tareas cargadas.",
     "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list." : "Solo se cargan las primeras {count} tarjetas asignadas, así que faltan algunas de tus tareas en esta lista.",

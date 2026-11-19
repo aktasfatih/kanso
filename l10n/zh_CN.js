@@ -1054,7 +1054,6 @@ OC.L10N.register(
     "Once a day, Kanso saves a copy of every board as a zip file." : "Kanso 每天一次把每个看板保存为一个 zip 文件的副本。",
     "Only administrators can download them, and they can never be shared by a link." : "只有管理员可以下载它们，并且它们永远无法通过链接共享。",
     "Only archived" : "仅已归档",
-    "Only https://github.com links are supported" : "仅支持 https://github.com 链接",
     "Only issues with a label" : "仅带指定标签的 issue",
     "Only loaded tasks are shown." : "仅显示已加载的任务。",
     "Only the first {count} assigned cards are loaded, so some of your tasks are missing from this list." : "仅加载前 {count} 张分配的卡片，因此此列表中缺少你的部分任务。",

@@ -10,6 +10,7 @@ namespace OCA\Kanso\Tests\Unit\Controller;
 use OCA\Kanso\Controller\WebhookController;
 use OCA\Kanso\Service\ForgejoWebhookService;
 use OCA\Kanso\Service\GithubWebhookService;
+use OCA\Kanso\Service\GitlabWebhookService;
 use OCA\Kanso\Service\InvalidInputException;
 use OCA\Kanso\Service\NonJsonWebhookBodyException;
 use OCA\Kanso\Service\NotPermittedException;
@@ -29,6 +30,7 @@ class WebhookControllerTest extends TestCase {
 	private IUserSession&MockObject $userSession;
 	private GithubWebhookService&MockObject $webhookService;
 	private ForgejoWebhookService&MockObject $forgejoService;
+	private GitlabWebhookService&MockObject $gitlabService;
 	private WebhookController $controller;
 
 	protected function setUp(): void {
@@ -37,12 +39,14 @@ class WebhookControllerTest extends TestCase {
 		$this->userSession = $this->createMock(IUserSession::class);
 		$this->webhookService = $this->createMock(GithubWebhookService::class);
 		$this->forgejoService = $this->createMock(ForgejoWebhookService::class);
+		$this->gitlabService = $this->createMock(GitlabWebhookService::class);
 		$this->controller = new WebhookController(
 			'kanso',
 			$this->request,
 			$this->userSession,
 			$this->webhookService,
 			$this->forgejoService,
+			$this->gitlabService,
 		);
 	}
 
@@ -51,6 +55,7 @@ class WebhookControllerTest extends TestCase {
 		return [
 			'GitHub' => ['github'],
 			'Forgejo' => ['forgejo'],
+			'GitLab' => ['gitlab'],
 		];
 	}
 
@@ -97,7 +102,11 @@ class WebhookControllerTest extends TestCase {
 
 	#[DataProvider('providers')]
 	public function testInvalidSignatureIs401WithoutSharedThrottling(string $provider): void {
-		$service = $provider === 'github' ? $this->webhookService : $this->forgejoService;
+		$service = match ($provider) {
+			'github' => $this->webhookService,
+			'forgejo' => $this->forgejoService,
+			'gitlab' => $this->gitlabService,
+		};
 		$service->method('handleWebhook')
 			->willThrowException(new NotPermittedException('Invalid webhook signature'));
 
@@ -110,7 +119,11 @@ class WebhookControllerTest extends TestCase {
 
 	#[DataProvider('providers')]
 	public function testAcceptedDeliveryReturnsItsResultWithoutThrottling(string $provider): void {
-		$service = $provider === 'github' ? $this->webhookService : $this->forgejoService;
+		$service = match ($provider) {
+			'github' => $this->webhookService,
+			'forgejo' => $this->forgejoService,
+			'gitlab' => $this->gitlabService,
+		};
 		$result = ['handled' => true, 'cardId' => 42, 'moved' => true];
 		$service->method('handleWebhook')->willReturn($result);
 
@@ -123,7 +136,11 @@ class WebhookControllerTest extends TestCase {
 
 	#[DataProvider('providers')]
 	public function testAcceptedNoopStillReturns200(string $provider): void {
-		$service = $provider === 'github' ? $this->webhookService : $this->forgejoService;
+		$service = match ($provider) {
+			'github' => $this->webhookService,
+			'forgejo' => $this->forgejoService,
+			'gitlab' => $this->gitlabService,
+		};
 		$service->method('handleWebhook')->willReturn(['handled' => false]);
 
 		$response = $this->controller->$provider(1);
@@ -135,7 +152,11 @@ class WebhookControllerTest extends TestCase {
 
 	#[DataProvider('providers')]
 	public function testUnknownBoardIs404(string $provider): void {
-		$service = $provider === 'github' ? $this->webhookService : $this->forgejoService;
+		$service = match ($provider) {
+			'github' => $this->webhookService,
+			'forgejo' => $this->forgejoService,
+			'gitlab' => $this->gitlabService,
+		};
 		$service->method('handleWebhook')
 			->willThrowException(new DoesNotExistException('gone'));
 
@@ -148,7 +169,11 @@ class WebhookControllerTest extends TestCase {
 
 	#[DataProvider('providers')]
 	public function testMissingSignatureIsStillVerifiedAndRejected(string $provider): void {
-		$service = $provider === 'github' ? $this->webhookService : $this->forgejoService;
+		$service = match ($provider) {
+			'github' => $this->webhookService,
+			'forgejo' => $this->forgejoService,
+			'gitlab' => $this->gitlabService,
+		};
 		$service->expects(self::once())->method('handleWebhook')->with(1, '', '')
 			->willThrowException(new NotPermittedException('Invalid webhook signature'));
 
@@ -163,6 +188,7 @@ class WebhookControllerTest extends TestCase {
 	public static function signatureHeaders(): array {
 		return [
 			'GitHub' => ['github', ['X-Hub-Signature-256' => 'sha256=github'], 'sha256=github'],
+			'GitLab' => ['gitlab', ['X-Gitlab-Token' => 'gitlab-token'], 'gitlab-token'],
 			'Forgejo first' => ['forgejo', [
 				'X-Forgejo-Signature' => 'forgejo',
 				'X-Gitea-Signature' => 'gitea',
@@ -177,7 +203,11 @@ class WebhookControllerTest extends TestCase {
 	#[DataProvider('signatureHeaders')]
 	public function testSignatureHeadersReachOnlyTheMatchingProvider(string $provider, array $headers, string $signature): void {
 		$this->request->method('getHeader')->willReturnCallback(static fn (string $header): string => $headers[$header] ?? '');
-		$service = $provider === 'github' ? $this->webhookService : $this->forgejoService;
+		$service = match ($provider) {
+			'github' => $this->webhookService,
+			'forgejo' => $this->forgejoService,
+			'gitlab' => $this->gitlabService,
+		};
 		$otherService = $provider === 'github' ? $this->forgejoService : $this->webhookService;
 		$service->expects(self::once())->method('handleWebhook')->with(1, $signature, '')
 			->willReturn(['handled' => false]);
@@ -185,4 +215,9 @@ class WebhookControllerTest extends TestCase {
 
 		self::assertSame(Http::STATUS_OK, $this->controller->$provider(1)->getStatus());
 	}
+	public function testGitlabInvalidJsonGets400(): void {
+		$this->gitlabService->method('handleWebhook')->willThrowException(new NonJsonWebhookBodyException('not JSON'));
+		self::assertSame(Http::STATUS_BAD_REQUEST, $this->controller->gitlab(1)->getStatus());
+	}
+
 }

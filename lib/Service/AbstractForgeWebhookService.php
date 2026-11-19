@@ -1051,6 +1051,9 @@ abstract class AbstractForgeWebhookService {
 			if ($target === null) {
 				return [false, self::REASON_NO_TARGET_STACK];
 			}
+			if ($this->cardMapper->find($cardId)->getStackId() === $target->getId()) {
+				return [false, ''];
+			}
 			$this->cardService->move($cardId, $target->getId(), null, $actorUid);
 			return [true, ''];
 		} catch (\Throwable) {
@@ -1094,6 +1097,9 @@ abstract class AbstractForgeWebhookService {
 		}
 
 		try {
+			if ($this->cardMapper->find($cardId)->getStackId() === $target->getId()) {
+				return [false, ''];
+			}
 			$this->cardService->move($cardId, $target->getId(), null, $actorUid);
 			return [true, ''];
 		} catch (\Throwable) {

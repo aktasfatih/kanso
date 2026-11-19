@@ -564,6 +564,15 @@ export const disableWebhook = (boardId) =>
 export const updateWebhookIntake = (boardId, stackId, label) =>
 	axios.put(url(`/api/boards/${boardId}/webhook/intake`), { stackId, label }).then((r) => r.data)
 
+export const fetchGitlabConfig = (boardId) =>
+	axios.get(url(`/api/boards/${boardId}/gitlab`)).then((r) => r.data)
+
+export const rotateGitlabSecret = (boardId) =>
+	axios.post(url(`/api/boards/${boardId}/gitlab/rotate`)).then((r) => r.data)
+
+export const disableGitlab = (boardId) =>
+	axios.delete(url(`/api/boards/${boardId}/gitlab`)).then((r) => r.data)
+
 // Forgejo webhook config (board-level, MANAGE). Independent of the GitHub one -
 // a board may run either, both, or neither. There is no instance URL to set:
 // deliveries are inbound only, so Kanso never calls the instance.
