@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n fila de datos detectada"
 msgstr[1] "%n filas de datos detectadas"
 
-#: src/components/CardDetail.vue:5148
+#: src/components/CardDetail.vue:5157
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "hace %n día"
@@ -415,13 +415,13 @@ msgid_plural "%n files"
 msgstr[0] "%n archivo"
 msgstr[1] "%n archivos"
 
-#: src/components/CardDetail.vue:5146
+#: src/components/CardDetail.vue:5155
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "hace %n hora"
 msgstr[1] "hace %n horas"
 
-#: src/views/BoardView.vue:2753
+#: src/views/BoardView.vue:2760
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n identificador copiado."
@@ -445,7 +445,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etiqueta no se ha creado y falta en las tarjetas importadas: solo quienes pueden gestionar el tablero pueden añadir etiquetas nuevas. Pide a un gestor que la añada y luego ponla en las tarjetas."
 msgstr[1] "%n etiquetas no se han creado y faltan en las tarjetas importadas: solo quienes pueden gestionar el tablero pueden añadir etiquetas nuevas. Pide a un gestor que las añada y luego ponlas en las tarjetas."
 
-#: src/components/CardDetail.vue:5144
+#: src/components/CardDetail.vue:5153
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "hace %n minuto"
@@ -457,7 +457,7 @@ msgid_plural "%n need review"
 msgstr[0] "%n pendiente de revisión"
 msgstr[1] "%n pendientes de revisión"
 
-#: src/components/CardDetail.vue:3984
+#: src/components/CardDetail.vue:3993
 msgid "%n other reviewer"
 msgid_plural "%n other reviewers"
 msgstr[0] "%n revisor más"
@@ -475,13 +475,13 @@ msgid_plural "%n points"
 msgstr[0] "%n punto"
 msgstr[1] "%n puntos"
 
-#: src/components/CardDetail.vue:1259
+#: src/components/CardDetail.vue:1264
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n proyecto"
 msgstr[1] "%n proyectos"
 
-#: src/components/CardDetail.vue:2378
+#: src/components/CardDetail.vue:2384
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n respuesta"
@@ -826,6 +826,10 @@ msgstr "Archivar las tarjetas terminadas hace más de {n} días"
 msgid "Archive now"
 msgstr "Archivar ahora"
 
+#: src/views/ProjectView.vue
+msgid "Archive project"
+msgstr ""
+
 #: src/components/BulkActionBar.vue
 msgid "Archive selected"
 msgstr "Archivar la selección"
@@ -835,6 +839,7 @@ msgstr "Archivar la selección"
 #: src/views/ArchivedView.vue
 #: src/views/BoardList.vue
 #: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
 msgid "Archived"
 msgstr "Archivados"
 
@@ -1042,7 +1047,7 @@ msgstr "Bloqueada"
 msgid "Blocked by"
 msgstr "Bloqueada por"
 
-#: src/views/ProjectView.vue:305
+#: src/views/ProjectView.vue:318
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Bloqueada por {count} tarjeta abierta"
@@ -2111,7 +2116,7 @@ msgid "Date range (UTC)"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2346
-#: src/components/CardDetail.vue:5339
+#: src/components/CardDetail.vue:5348
 msgid "day"
 msgid_plural "days"
 msgstr[0] "día"
@@ -3719,7 +3724,7 @@ msgstr "Su propósito, alcance o normas. Cualquier miembro del tablero puede lee
 msgid "Jump to the discussion"
 msgstr "Ir a la conversación"
 
-#: src/components/CardDetail.vue:7221
+#: src/components/CardDetail.vue:7244
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Ir a la conversación (%n comentario)"
@@ -3880,6 +3885,10 @@ msgstr "Última ejecución: {when}"
 #: templates/admin-backup.php
 msgid "Last run: %1$s"
 msgstr "Última ejecución: %1$s"
+
+#: src/views/BoardView.vue
+msgid "Last updated"
+msgstr ""
 
 #: src/services/projectStatus.js
 msgid "Late"
@@ -4127,7 +4136,7 @@ msgid "Mon"
 msgstr "Lun"
 
 #: src/components/BoardSettingsModal.vue:2348
-#: src/components/CardDetail.vue:5341
+#: src/components/CardDetail.vue:5350
 msgid "month"
 msgid_plural "months"
 msgstr[0] "mes"
@@ -4358,6 +4367,10 @@ msgstr "No hay tarjetas archivadas"
 #: src/views/ArchivedView.vue
 msgid "No archived cards match “{query}”."
 msgstr "Ninguna tarjeta archivada coincide con «{query}»."
+
+#: src/views/ProjectsView.vue
+msgid "No archived projects"
+msgstr ""
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "No attachments yet"
@@ -5282,6 +5295,7 @@ msgid "Remove label"
 msgstr "Quitar la etiqueta"
 
 #: src/components/BulkActionBar.vue
+#: src/components/CardDetail.vue
 msgid "Remove label {label}"
 msgstr "Quitar la etiqueta {label}"
 
@@ -5473,6 +5487,10 @@ msgstr ""
 #: src/components/BoardSettingsModal.vue
 msgid "Restore panel size"
 msgstr "Restaurar el tamaño del panel"
+
+#: src/views/ProjectView.vue
+msgid "Restore project"
+msgstr ""
 
 #: src/views/ArchivedView.vue
 #: src/views/TrashView.vue
@@ -5823,6 +5841,14 @@ msgstr "Mostrar"
 msgid "Show / hide this shortcuts overlay"
 msgstr "Mostrar u ocultar esta lista de atajos"
 
+#: src/views/ProjectsView.vue
+msgid "Show active projects"
+msgstr ""
+
+#: src/views/ProjectsView.vue
+msgid "Show archived projects"
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Show changes"
 msgstr "Mostrar los cambios"
@@ -5851,7 +5877,7 @@ msgstr "Mostrar la conversación debajo de la tarjeta"
 msgid "Show the discussion panel"
 msgstr "Mostrar el panel de conversación"
 
-#: src/components/CardDetail.vue:7227
+#: src/components/CardDetail.vue:7250
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Mostrar el panel de conversación (%n comentario)"
@@ -6687,7 +6713,7 @@ msgid "Wed"
 msgstr "Mié"
 
 #: src/components/BoardSettingsModal.vue:2347
-#: src/components/CardDetail.vue:5340
+#: src/components/CardDetail.vue:5349
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "semana"
@@ -6796,7 +6822,7 @@ msgid "wrote"
 msgstr "escribió"
 
 #: src/components/BoardSettingsModal.vue:2349
-#: src/components/CardDetail.vue:5342
+#: src/components/CardDetail.vue:5351
 msgid "year"
 msgid_plural "years"
 msgstr[0] "año"

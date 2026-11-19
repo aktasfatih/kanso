@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n gegevensrij gevonden"
 msgstr[1] "%n gegevensrijen gevonden"
 
-#: src/components/CardDetail.vue:5148
+#: src/components/CardDetail.vue:5157
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n dag geleden"
@@ -415,13 +415,13 @@ msgid_plural "%n files"
 msgstr[0] "%n bestand"
 msgstr[1] "%n bestanden"
 
-#: src/components/CardDetail.vue:5146
+#: src/components/CardDetail.vue:5155
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n uur geleden"
 msgstr[1] "%n uur geleden"
 
-#: src/views/BoardView.vue:2753
+#: src/views/BoardView.vue:2760
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n ID gekopieerd."
@@ -445,7 +445,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n label is niet aangemaakt en ontbreekt op de geïmporteerde kaarten: alleen bordbeheerders kunnen nieuwe labels toevoegen. Vraag een beheerder om het toe te voegen en stel het daarna in op de kaarten."
 msgstr[1] "%n labels zijn niet aangemaakt en ontbreken op de geïmporteerde kaarten: alleen bordbeheerders kunnen nieuwe labels toevoegen. Vraag een beheerder om ze toe te voegen en stel ze daarna in op de kaarten."
 
-#: src/components/CardDetail.vue:5144
+#: src/components/CardDetail.vue:5153
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n minuut geleden"
@@ -457,7 +457,7 @@ msgid_plural "%n need review"
 msgstr[0] "%n heeft review nodig"
 msgstr[1] "%n hebben review nodig"
 
-#: src/components/CardDetail.vue:3984
+#: src/components/CardDetail.vue:3993
 msgid "%n other reviewer"
 msgid_plural "%n other reviewers"
 msgstr[0] "%n andere beoordelaar"
@@ -475,13 +475,13 @@ msgid_plural "%n points"
 msgstr[0] "%n punt"
 msgstr[1] "%n punten"
 
-#: src/components/CardDetail.vue:1259
+#: src/components/CardDetail.vue:1264
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n project"
 msgstr[1] "%n projecten"
 
-#: src/components/CardDetail.vue:2378
+#: src/components/CardDetail.vue:2384
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n antwoord"
@@ -826,6 +826,10 @@ msgstr "Kaarten archiveren die al meer dan {n} dagen klaar zijn"
 msgid "Archive now"
 msgstr "Nu archiveren"
 
+#: src/views/ProjectView.vue
+msgid "Archive project"
+msgstr ""
+
 #: src/components/BulkActionBar.vue
 msgid "Archive selected"
 msgstr "Selectie archiveren"
@@ -835,6 +839,7 @@ msgstr "Selectie archiveren"
 #: src/views/ArchivedView.vue
 #: src/views/BoardList.vue
 #: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
 msgid "Archived"
 msgstr "Gearchiveerd"
 
@@ -1042,7 +1047,7 @@ msgstr "Geblokkeerd"
 msgid "Blocked by"
 msgstr "Geblokkeerd door"
 
-#: src/views/ProjectView.vue:305
+#: src/views/ProjectView.vue:318
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Geblokkeerd door {count} open kaart"
@@ -2111,7 +2116,7 @@ msgid "Date range (UTC)"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2346
-#: src/components/CardDetail.vue:5339
+#: src/components/CardDetail.vue:5348
 msgid "day"
 msgid_plural "days"
 msgstr[0] "dag"
@@ -3719,7 +3724,7 @@ msgstr "Het doel, de afbakening of de afspraken. Iedereen op dit bord kan het le
 msgid "Jump to the discussion"
 msgstr "Naar de discussie springen"
 
-#: src/components/CardDetail.vue:7221
+#: src/components/CardDetail.vue:7244
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Naar de discussie springen (%n reactie)"
@@ -3880,6 +3885,10 @@ msgstr "Laatste keer: {when}"
 #: templates/admin-backup.php
 msgid "Last run: %1$s"
 msgstr "Laatste keer: %1$s"
+
+#: src/views/BoardView.vue
+msgid "Last updated"
+msgstr ""
 
 #: src/services/projectStatus.js
 msgid "Late"
@@ -4127,7 +4136,7 @@ msgid "Mon"
 msgstr "ma"
 
 #: src/components/BoardSettingsModal.vue:2348
-#: src/components/CardDetail.vue:5341
+#: src/components/CardDetail.vue:5350
 msgid "month"
 msgid_plural "months"
 msgstr[0] "maand"
@@ -4358,6 +4367,10 @@ msgstr "Geen gearchiveerde kaarten"
 #: src/views/ArchivedView.vue
 msgid "No archived cards match “{query}”."
 msgstr "Er zijn geen gearchiveerde kaarten die overeenkomen met “{query}”."
+
+#: src/views/ProjectsView.vue
+msgid "No archived projects"
+msgstr ""
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "No attachments yet"
@@ -5282,6 +5295,7 @@ msgid "Remove label"
 msgstr "Label verwijderen"
 
 #: src/components/BulkActionBar.vue
+#: src/components/CardDetail.vue
 msgid "Remove label {label}"
 msgstr "Label {label} verwijderen"
 
@@ -5473,6 +5487,10 @@ msgstr ""
 #: src/components/BoardSettingsModal.vue
 msgid "Restore panel size"
 msgstr "Paneelgrootte herstellen"
+
+#: src/views/ProjectView.vue
+msgid "Restore project"
+msgstr ""
 
 #: src/views/ArchivedView.vue
 #: src/views/TrashView.vue
@@ -5823,6 +5841,14 @@ msgstr "Tonen"
 msgid "Show / hide this shortcuts overlay"
 msgstr "Dit sneltoetsoverzicht tonen / verbergen"
 
+#: src/views/ProjectsView.vue
+msgid "Show active projects"
+msgstr ""
+
+#: src/views/ProjectsView.vue
+msgid "Show archived projects"
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Show changes"
 msgstr "Wijzigingen tonen"
@@ -5851,7 +5877,7 @@ msgstr "De discussie onder de kaart tonen"
 msgid "Show the discussion panel"
 msgstr "Het discussiepaneel tonen"
 
-#: src/components/CardDetail.vue:7227
+#: src/components/CardDetail.vue:7250
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Het discussiepaneel tonen (%n reactie)"
@@ -6687,7 +6713,7 @@ msgid "Wed"
 msgstr "wo"
 
 #: src/components/BoardSettingsModal.vue:2347
-#: src/components/CardDetail.vue:5340
+#: src/components/CardDetail.vue:5349
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "week"
@@ -6796,7 +6822,7 @@ msgid "wrote"
 msgstr "schreef"
 
 #: src/components/BoardSettingsModal.vue:2349
-#: src/components/CardDetail.vue:5342
+#: src/components/CardDetail.vue:5351
 msgid "year"
 msgid_plural "years"
 msgstr[0] "jaar"
