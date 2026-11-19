@@ -172,7 +172,8 @@ your work, on your own Nextcloud, laid out plainly.
   your own browser — not lanes you create and maintain.
 - **Saved filters**: name the filter you're looking at and come back to it.
   Private to you, per board.
-- **Display sort**: order cards by priority, due date or title. View-only: your
+- **Display sort**: order cards by priority, due date, title, estimate or last
+  updated time, with a saved ascending/descending direction. View-only: your
   manual drag order is always preserved.
 
 <img src="docs/kanso-timeline.png" alt="Kanso Timeline (Gantt) view: cards plotted on a date axis by start → due, with a due-only card shown as a milestone" width="900">

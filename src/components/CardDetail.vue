@@ -1135,17 +1135,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					<span class="card-modal__attr-divider" />
 
 					<!-- Labels -->
-					<span
+					<component
+						:is="canEdit ? 'button' : 'span'"
 						v-for="label in assignedLabels"
 						:key="label.id"
+						:type="canEdit ? 'button' : undefined"
 						class="card-modal__label-chip"
-						:class="{ 'card-modal__label-chip--no-color': !label.color }"
-						:style="label.color ? { background: cssColor(label.color), color: readableColor(label.color) } : {}">
+						:class="{ 'card-modal__label-chip--no-color': !label.color, 'card-modal__label-chip--editable': canEdit }"
+						:aria-label="canEdit ? t('kanso', 'Remove label {label}', { label: label.title }) : undefined"
+						:title="canEdit ? t('kanso', 'Remove label {label}', { label: label.title }) : undefined"
+						:aria-busy="canEdit && isLabelTogglePending(label.id) ? 'true' : undefined"
+						:style="label.color ? { background: cssColor(label.color), color: readableColor(label.color) } : {}"
+						@click.stop="canEdit && handleToggleLabel(label)">
 						{{ label.title }}
-					</span>
-					<!-- The chips above stay for everyone - they are the card's labels.
-					     The picker is the write half, so it follows the same rule as the
-					     assign control (#10703): editors only. -->
+					</component>
+					<!-- Read-only viewers keep the labels without removal controls. -->
 					<div v-if="canEdit" class="card-modal__attr">
 						<button
 							class="card-modal__pill card-modal__pill--dashed card-modal__pill--sm"
@@ -1190,7 +1194,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								@click="handleToggleLabel(label)">
 								{{ label.title }}
 							</button>
-							<span v-if="labelToggleError" class="card-modal__save-error">{{ labelToggleError }}</span>
 
 							<!-- Inline create (label creation is board management → MANAGE-gated) -->
 							<div v-if="canManage" class="card-modal__label-create">
@@ -1243,6 +1246,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<span v-if="createLabelError" class="card-modal__save-error">{{ createLabelError }}</span>
 						</div>
 					</div>
+
+					<span v-if="canEdit && labelToggleError" class="card-modal__save-error">{{ labelToggleError }}</span>
 
 					<!-- Not gated on the card's canEdit: collecting a card needs edit
 					     rights on the project and only read access to the card. -->
@@ -1439,7 +1444,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							<div class="card-modal__section-head">
 								<span class="card-modal__eyebrow">{{ t('kanso', 'Description') }}</span>
 								<button
-									v-if="!editingDescription && cardData.description"
+									v-if="canEdit && !editingDescription && cardData.description"
 									class="card-modal__ghost-btn"
 									@click="startDescriptionEdit">
 									<PencilIcon :size="14" />
@@ -1453,11 +1458,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 										ref="descriptionEditorRef"
 										v-model="draftDescription"
 										:placeholder="t('kanso', 'Add a description…')"
-										:disabled="isSaving"
+										:disabled="isSaving || !canEdit"
 										:autofocus="true"
 										min-height="160px"
 										:participants="participantList"
-										:upload-image="(file) => uploadAttachment.mutateAsync(file)"
+										:upload-image="canEdit ? (file) => uploadAttachment.mutateAsync(file) : null"
 										:inline-url="(id) => cardAttachmentInlineUrl(props.cardId, id)"
 										:show-toolbar="!editorToolbarHidden"
 										:sticky-toolbar="true"
@@ -1469,7 +1474,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									</template>
 								</Suspense>
 								<div class="card-modal__desc-actions">
-									<NcButton type="primary" :disabled="isSaving" @click="saveDescription">
+									<NcButton type="primary" :disabled="isSaving || !canEdit" @click="saveDescription">
 										{{ t('kanso', 'Save') }}
 									</NcButton>
 									<NcButton @click="cancelDescriptionEdit">
@@ -1491,7 +1496,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									</p>
 									<pre class="card-modal__desc-conflict-theirs">{{ descriptionConflict.description || t('kanso', '(empty)') }}</pre>
 									<div class="card-modal__desc-conflict-actions">
-										<NcButton type="primary" :disabled="isSaving" @click="overwriteDescription">
+										<NcButton type="primary" :disabled="isSaving || !canEdit" @click="overwriteDescription">
 											{{ t('kanso', 'Keep my version') }}
 										</NcButton>
 										<NcButton :disabled="isSaving" @click="useTheirDescription">
@@ -1505,12 +1510,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								<div
 									v-if="cardData.description"
 									class="card-modal__desc-view"
+									:class="{ 'card-modal__desc-view--editable': canEdit }"
 									@click="startDescriptionEdit">
 									<!-- eslint-disable-next-line vue/no-v-html — renderMarkdown sanitises via DOMPurify -->
 									<div class="card-modal__desc-rendered kanso-md" v-html="renderedDescription" @click="handleRefClick" />
 								</div>
 								<button
-									v-else
+									v-else-if="canEdit"
 									class="card-modal__desc-placeholder"
 									@click="startDescriptionEdit">
 									{{ t('kanso', 'Add a description…') }}
@@ -3285,11 +3291,13 @@ function isLabelTogglePending(labelId) {
 // makes adding three labels three clicks and, before the queue, lost one of the
 // three on a local link and two of the three with the write delayed 800ms.
 async function handleToggleLabel(label) {
+	if (!canEdit.value) return
+	const cardId = Number(props.cardId)
 	const assign = !cardLabelIds.value.has(label.id)
 	labelToggleError.value = ''
 	try {
 		const result = await enqueueLabelToggle({
-			cardId: Number(props.cardId),
+			cardId,
 			labelId: label.id,
 			assign,
 		})
@@ -3300,7 +3308,7 @@ async function handleToggleLabel(label) {
 			? t('kanso', 'Label {label} added', { label: label.title }, { escape: false, sanitize: false })
 			: t('kanso', 'Label {label} removed', { label: label.title }, { escape: false, sanitize: false }))
 	} catch (err) {
-		labelToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update label.')
+		if (Number(props.cardId) === cardId) labelToggleError.value = err?.response?.data?.error || t('kanso', 'Failed to update label.')
 	}
 }
 
@@ -4416,6 +4424,7 @@ watch(() => props.cardId, () => {
 	statusError.value = ''
 	commentError.value = ''
 	timeEntryError.value = ''
+	labelToggleError.value = ''
 })
 
 // The editor that replaces the read-view when you start editing. Only needed to
@@ -4472,6 +4481,7 @@ async function scrollDescriptionEditorIntoView() {
 }
 
 async function startDescriptionEdit() {
+	if (!canEdit.value) return
 	draftDescription.value = cardData.value?.description || ''
 	descriptionBaseText.value = draftDescription.value
 	// `descriptionRevision` rides on the DETAIL payload only (it is deliberately
@@ -4517,6 +4527,7 @@ function cancelDescriptionEdit() {
  * @param {boolean} allowRetry whether a provably-spurious 409 may be retried
  */
 async function pushDescription(baseVersion, allowRetry) {
+	if (!canEdit.value) return
 	try {
 		const saved = await updateCard.mutateAsync({
 			data: { description: draftDescription.value, baseDescriptionRevision: baseVersion },
@@ -4543,6 +4554,7 @@ async function pushDescription(baseVersion, allowRetry) {
 }
 
 async function saveDescription() {
+	if (!canEdit.value || isSaving.value) return
 	isSaving.value = true
 	saveError.value = ''
 	descriptionConflict.value = null
@@ -4555,6 +4567,7 @@ async function saveDescription() {
 
 /** Conflict resolution: the user's draft wins over the version shown to them. */
 async function overwriteDescription() {
+	if (!canEdit.value || isSaving.value) return
 	const base = descriptionConflict.value?.revision ?? null
 	isSaving.value = true
 	saveError.value = ''
@@ -8115,6 +8128,14 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	border: 0;
+}
+.card-modal__label-chip--editable {
+	cursor: pointer;
+}
+.card-modal__label-chip--editable:focus-visible {
+	outline: 2px solid var(--color-main-text);
+	outline-offset: 2px;
 }
 .card-modal__label-chip--no-color {
 	background: var(--color-background-dark);
@@ -8749,7 +8770,7 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 	padding: 2px 4px;
 	margin-left: -4px;
 }
-.card-modal__desc-view:hover {
+.card-modal__desc-view--editable:hover {
 	background: var(--color-background-hover);
 }
 .card-modal__desc-rendered :deep(p) { margin: 0 0 0.7em; }
@@ -9515,7 +9536,8 @@ async function handleToggleProject({ id: projectId, canEdit }) {
 
 .card-modal__visibility-select {
 	margin-inline-start: auto;
-	max-width: 320px;
+	min-width: 0;
+	max-width: min(320px, 100%);
 }
 
 .card-modal__relation-title--done {
