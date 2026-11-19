@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— geen —"
 
-#: src/components/BoardSettingsModal.vue:5110
+#: src/components/BoardSettingsModal.vue:5125
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n keer"
@@ -2686,7 +2686,7 @@ msgstr "Elke"
 msgid "Every card in this project is done."
 msgstr "Alle kaarten in dit project zijn klaar."
 
-#: src/components/BoardSettingsModal.vue:5090
+#: src/components/BoardSettingsModal.vue:5105
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Elke dag"
@@ -2696,19 +2696,19 @@ msgstr[1] "Elke %n dagen"
 msgid "Every estimate needs a label."
 msgstr "Elke schatting heeft een label nodig."
 
-#: src/components/BoardSettingsModal.vue:5100
+#: src/components/BoardSettingsModal.vue:5115
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Elke maand"
 msgstr[1] "Elke %n maanden"
 
-#: src/components/BoardSettingsModal.vue:5092
+#: src/components/BoardSettingsModal.vue:5107
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Elke week"
 msgstr[1] "Elke %n weken"
 
-#: src/components/BoardSettingsModal.vue:5102
+#: src/components/BoardSettingsModal.vue:5117
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Elk jaar"

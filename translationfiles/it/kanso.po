@@ -15,7 +15,7 @@ msgstr ""
 msgid "— none —"
 msgstr "— nessuno —"
 
-#: src/components/BoardSettingsModal.vue:5110
+#: src/components/BoardSettingsModal.vue:5125
 msgid "· %n time"
 msgid_plural "· %n times"
 msgstr[0] "· %n volta"
@@ -2686,7 +2686,7 @@ msgstr "Ogni"
 msgid "Every card in this project is done."
 msgstr "Tutte le schede di questo progetto sono completate."
 
-#: src/components/BoardSettingsModal.vue:5090
+#: src/components/BoardSettingsModal.vue:5105
 msgid "Every day"
 msgid_plural "Every %n days"
 msgstr[0] "Ogni giorno"
@@ -2696,19 +2696,19 @@ msgstr[1] "Ogni %n giorni"
 msgid "Every estimate needs a label."
 msgstr "Ogni stima deve avere un'etichetta."
 
-#: src/components/BoardSettingsModal.vue:5100
+#: src/components/BoardSettingsModal.vue:5115
 msgid "Every month"
 msgid_plural "Every %n months"
 msgstr[0] "Ogni mese"
 msgstr[1] "Ogni %n mesi"
 
-#: src/components/BoardSettingsModal.vue:5092
+#: src/components/BoardSettingsModal.vue:5107
 msgid "Every week"
 msgid_plural "Every %n weeks"
 msgstr[0] "Ogni settimana"
 msgstr[1] "Ogni %n settimane"
 
-#: src/components/BoardSettingsModal.vue:5102
+#: src/components/BoardSettingsModal.vue:5117
 msgid "Every year"
 msgid_plural "Every %n years"
 msgstr[0] "Ogni anno"

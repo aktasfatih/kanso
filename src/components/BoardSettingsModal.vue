@@ -3198,58 +3198,73 @@ const gitlab = ref({ enabled: false, payloadUrl: '' })
 const revealedGitlabSecret = ref('')
 const gitlabError = ref('')
 const gitlabBusy = ref(false)
+let gitlabGeneration = 0
+let gitlabDisposed = false
+
+function isCurrentGitlabOperation(boardId, generation) {
+	return !gitlabDisposed && canManage.value && props.boardId === boardId && gitlabGeneration === generation
+}
 
 async function loadGitlabConfig() {
 	if (!canManage.value) return
 	const boardId = props.boardId
+	const generation = ++gitlabGeneration
 	try {
 		const config = await fetchGitlabConfig(boardId)
-		if (props.boardId !== boardId) return
+		if (!isCurrentGitlabOperation(boardId, generation)) return
 		gitlab.value = config
 		if (config.enabled) automationGroups.value.gitlab = true
 	} catch (e) {
-		if (props.boardId === boardId) gitlabError.value = t('kanso', 'Failed to load the GitLab webhook config.')
+		if (isCurrentGitlabOperation(boardId, generation)) gitlabError.value = t('kanso', 'Failed to load the GitLab webhook config.')
 	}
 }
 
 async function handleRotateGitlabSecret() {
 	const boardId = props.boardId
+	const generation = ++gitlabGeneration
 	gitlabError.value = ''
 	gitlabBusy.value = true
 	try {
 		const result = await apiRotateGitlabSecret(boardId)
-		if (props.boardId !== boardId) return
+		if (!isCurrentGitlabOperation(boardId, generation)) return
 		revealedGitlabSecret.value = result.secret
 		gitlab.value = { enabled: true, payloadUrl: result.payloadUrl }
 	} catch (e) {
-		if (props.boardId === boardId) gitlabError.value = e?.response?.data?.error || t('kanso', 'Could not generate the secret.')
+		if (isCurrentGitlabOperation(boardId, generation)) gitlabError.value = e?.response?.data?.error || t('kanso', 'Could not generate the secret.')
 	} finally {
-		if (props.boardId === boardId) gitlabBusy.value = false
+		if (isCurrentGitlabOperation(boardId, generation)) gitlabBusy.value = false
 	}
 }
 
 async function handleDisableGitlab() {
 	const boardId = props.boardId
+	const generation = ++gitlabGeneration
 	gitlabError.value = ''
 	gitlabBusy.value = true
 	try {
 		await apiDisableGitlab(boardId)
-		if (props.boardId !== boardId) return
+		if (!isCurrentGitlabOperation(boardId, generation)) return
 		gitlab.value = { ...gitlab.value, enabled: false }
 		revealedGitlabSecret.value = ''
 	} catch (e) {
-		if (props.boardId === boardId) gitlabError.value = e?.response?.data?.error || t('kanso', 'Could not disable the webhook.')
+		if (isCurrentGitlabOperation(boardId, generation)) gitlabError.value = e?.response?.data?.error || t('kanso', 'Could not disable the webhook.')
 	} finally {
-		if (props.boardId === boardId) gitlabBusy.value = false
+		if (isCurrentGitlabOperation(boardId, generation)) gitlabBusy.value = false
 	}
 }
 
-watch(() => props.boardId, () => {
+watch(() => [props.boardId, canManage.value], () => {
+	gitlabGeneration++
 	gitlab.value = { enabled: false, payloadUrl: '' }
 	revealedGitlabSecret.value = ''
 	gitlabError.value = ''
 	gitlabBusy.value = false
 	loadGitlabConfig()
+}, { flush: 'sync' })
+
+onUnmounted(() => {
+	gitlabDisposed = true
+	gitlabGeneration++
 })
 
 // ── Forgejo webhook config (MANAGE) ──────────────────────────────────────────

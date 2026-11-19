@@ -144,4 +144,54 @@ test.describe('GitLab webhook integration', () => {
 		await expect(group.locator('#bs-gitlab-secret')).toHaveCount(0)
 		expect((await api.get(`/boards/${boardId}/gitlab`)).enabled).toBe(false)
 	})
+	for (const operation of ['rotation', 'disable']) {
+		test(`a delayed configuration read cannot undo ${operation}`, async ({ page }) => {
+			if (operation === 'rotation') await api.delete(`/boards/${boardId}/gitlab`)
+			let releaseRead
+			let readArrived
+			const held = new Promise((resolve) => { releaseRead = resolve })
+			const started = new Promise((resolve) => { readArrived = resolve })
+			await page.route((url) => url.pathname.endsWith(`/boards/${boardId}/gitlab`), async (route) => {
+				if (route.request().method() !== 'GET') return route.continue()
+				const response = await route.fetch()
+				readArrived()
+				await held
+				await route.fulfill({ response })
+			})
+			try {
+				await ncLogin(page)
+				await page.goto(`${BASE}/index.php/apps/kanso#/board/${boardId}`)
+				await page.getByRole('button', { name: 'More', exact: true }).click()
+				await page.getByRole('menuitem', { name: /board settings/i }).click()
+				const settings = page.getByRole('dialog', { name: 'Board settings' })
+				await started
+				await settings.getByRole('tab', { name: 'Automation', exact: true }).click()
+				const group = settings.locator('[data-test=gitlab-settings]')
+				await group.getByRole('button', { name: 'GitLab', exact: true }).click()
+				await group.getByRole('button', { name: 'Enable & generate secret', exact: true }).click()
+				await expect(group.locator('#bs-gitlab-secret')).toHaveValue(/.+/)
+				const newSecret = await group.locator('#bs-gitlab-secret').inputValue()
+				if (operation === 'disable') {
+					await group.getByRole('button', { name: 'Disable', exact: true }).click()
+					await expect(group.locator('#bs-gitlab-secret')).toHaveCount(0)
+				}
+				const completed = page.waitForResponse((response) => response.request().method() === 'GET'
+					&& new URL(response.url()).pathname.endsWith(`/boards/${boardId}/gitlab`), { timeout: 15_000 })
+				releaseRead()
+				await (await completed).finished()
+				await page.waitForLoadState('networkidle')
+				if (operation === 'rotation') {
+					await expect(group.getByRole('button', { name: 'Disable', exact: true })).toBeVisible()
+					await expect(group.locator('#bs-gitlab-secret')).toHaveValue(newSecret)
+				} else {
+					await expect(group.getByRole('button', { name: 'Enable & generate secret', exact: true })).toBeVisible()
+					await expect(group.getByRole('button', { name: 'Disable', exact: true })).toHaveCount(0)
+				}
+			} finally {
+				releaseRead()
+				await page.unrouteAll({ behavior: 'wait' })
+			}
+		})
+	}
+
 })
