@@ -282,7 +282,7 @@ class SearchService {
 			$page[$index]['stackTitle'] = $stackId !== null ? ($titles[$stackId] ?? null) : null;
 		}
 
-		return array_values($page);
+		return $page;
 	}
 
 	/**
