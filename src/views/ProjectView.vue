@@ -46,7 +46,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</span>
 				</div>
 
-				<div class="project-view__header-actions">
+				<div ref="headerActionsRef" class="project-view__header-actions">
 					<button
 						class="project-view__analytics-btn"
 						:title="t('kanso', 'Project analytics')"
@@ -513,6 +513,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			v-if="showEditDialog"
 			:name="t('kanso', 'Edit project')"
 			:open="showEditDialog"
+			:set-return-focus="projectActionTrigger"
 			@closing="closeEditDialog">
 			<div class="project-view__form">
 				<label class="project-view__form-label" for="edit-project-title">
@@ -1097,6 +1098,7 @@ function onInlineDescKeydown(event) {
 
 // ── Edit project dialog ──────────────────────────────────────────────────────
 const showEditDialog = ref(false)
+const headerActionsRef = ref(null)
 const editTitle = ref('')
 const editDescription = ref('')
 const editColor = ref('')
@@ -1136,6 +1138,14 @@ function openEditDialog() {
 
 function closeEditDialog() {
 	showEditDialog.value = false
+	nextTick(() => {
+		const trigger = projectActionTrigger()
+		if (trigger) trigger.focus()
+	})
+}
+
+function projectActionTrigger() {
+	return headerActionsRef.value?.querySelector('.action-item__menutoggle') ?? false
 }
 
 async function submitEdit() {
