@@ -11,6 +11,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.47.0](https://github.com/aktasfatih/kanso/compare/v0.46.0...v0.47.0) (2026-11-19)
+
+
+### Bug Fixes
+
+* **deps:** bump @nextcloud/dialogs from 7.5.0 to 8.0.0 ([699d1ae](https://github.com/aktasfatih/kanso/commit/699d1aef8824fc0f08e48b5630ad371717be1917))
+* **deps:** bump the npm-production group with 8 updates ([259f6b5](https://github.com/aktasfatih/kanso/commit/259f6b53f3a98f858a58cdd09ad8ddf29e70d73b))
+* **deps:** migrate dialogs to version 8 ([bba0c97](https://github.com/aktasfatih/kanso/commit/bba0c9707b12e188536469818a6e333dae721a28))
+* preserve time attribution and stabilize card interactions ([97a3e1a](https://github.com/aktasfatih/kanso/commit/97a3e1a6e08d4547b80d33bfe5a255b55ac2821d))
+* **sharing:** refresh permissions before enabling the next change ([302096d](https://github.com/aktasfatih/kanso/commit/302096d5fea1aeb8183bd2a056550f62b356d7c9))
+* **sharing:** refresh permissions before enabling the next change ([77e4797](https://github.com/aktasfatih/kanso/commit/77e479760661f4e40cec3261227bd6516ca8e193))
+* **sharing:** refresh permissions before enabling the next change ([e20065a](https://github.com/aktasfatih/kanso/commit/e20065aad0aa2f80ed6476c492dbc9e8a1a0af80))
+* **sharing:** refresh permissions before enabling the next change ([57fb8cd](https://github.com/aktasfatih/kanso/commit/57fb8cdd3eecfe95a1efc2a58e33e22418137576))
+
+
+### Features
+
+* improve project progress, time tracking, and card usability ([0241214](https://github.com/aktasfatih/kanso/commit/0241214d8945dac9789bea54e5dfbba419690cdd))
+
 # [0.46.0](https://github.com/aktasfatih/kanso/compare/v0.45.1...v0.46.0) (2026-11-15)
 
 
