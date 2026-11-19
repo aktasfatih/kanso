@@ -267,7 +267,7 @@ run `occ upgrade`.
 </details>
 
 <details>
-<summary><b>Install from source</b> (needs Node 20+, Composer, shell access)</summary>
+<summary><b>Install from source</b> (needs Node 22.18+, Composer, shell access)</summary>
 
 ```sh
 # 1. Clone into your Nextcloud "custom apps" directory
