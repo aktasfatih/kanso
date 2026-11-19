@@ -1314,6 +1314,34 @@ async def test_list_projects_parses():
     assert projects[0].lead is None
     assert projects[0].leadDisplayName is None
     assert projects[0].lifecycleStatus == "planned"
+    assert projects[0].archived is False
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_projects_can_include_archived_projects():
+    route = respx.get(f"{BASE}/projects", params={"includeArchived": "true"}).mock(
+        return_value=httpx.Response(200, json=[{**PROJECT, "archived": True}])
+    )
+    async with _client() as c:
+        projects = await c.list_projects(include_archived=True)
+
+    assert route.called
+    assert projects[0].archived is True
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("archived", [True, False])
+async def test_update_project_archives_and_restores_without_changing_other_fields(archived):
+    route = respx.patch(f"{BASE}/projects/4").mock(
+        return_value=httpx.Response(200, json={**PROJECT, "archived": archived})
+    )
+    async with _client() as c:
+        project = await c.update_project(4, archived=archived)
+
+    assert json.loads(route.calls.last.request.content) == {"archived": archived}
+    assert project.archived is archived
 
 
 @respx.mock

@@ -34,6 +34,8 @@ use OCP\DB\Types;
  * @method void setLead(?string $lead)
  * @method string|null getLifecycleStatus()
  * @method void setLifecycleStatus(string $lifecycleStatus)
+ * @method bool|null getArchived()
+ * @method void setArchived(bool $archived)
  */
 class Project extends Entity implements \JsonSerializable {
 	// Properties default to null (not to the column defaults): Entity::setter()
@@ -48,13 +50,15 @@ class Project extends Entity implements \JsonSerializable {
 	protected ?string $targetDate = null;
 	protected ?string $lead = null;
 	protected ?string $lifecycleStatus = null;
+	protected ?bool $archived = null;
 
 	public function __construct() {
 		$this->addType('createdAt', Types::INTEGER);
+		$this->addType('archived', Types::BOOLEAN);
 	}
 
 	/**
-	 * @return array{id: int, title: string, description: ?string, color: ?string, owner: string, createdAt: int, startDate: ?string, targetDate: ?string, lead: ?string, lifecycleStatus: string}
+	 * @return array{id: int, title: string, description: ?string, color: ?string, owner: string, createdAt: int, startDate: ?string, targetDate: ?string, lead: ?string, lifecycleStatus: string, archived: bool}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -69,6 +73,7 @@ class Project extends Entity implements \JsonSerializable {
 			'targetDate' => $this->getTargetDate(),
 			'lead' => $this->getLead(),
 			'lifecycleStatus' => $this->getLifecycleStatus() ?? 'planned',
+			'archived' => (bool)$this->getArchived(),
 		];
 	}
 }

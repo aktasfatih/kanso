@@ -396,7 +396,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:5150
+#: src/components/CardDetail.vue:5159
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] ""
@@ -414,13 +414,13 @@ msgid_plural "%n files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:5148
+#: src/components/CardDetail.vue:5157
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/views/BoardView.vue:2753
+#: src/views/BoardView.vue:2760
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] ""
@@ -444,7 +444,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:5146
+#: src/components/CardDetail.vue:5155
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] ""
@@ -456,7 +456,7 @@ msgid_plural "%n need review"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:3986
+#: src/components/CardDetail.vue:3995
 msgid "%n other reviewer"
 msgid_plural "%n other reviewers"
 msgstr[0] ""
@@ -474,13 +474,13 @@ msgid_plural "%n points"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:1259
+#: src/components/CardDetail.vue:1264
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/components/CardDetail.vue:2379
+#: src/components/CardDetail.vue:2385
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] ""
@@ -829,6 +829,10 @@ msgstr ""
 msgid "Archive now"
 msgstr ""
 
+#: src/views/ProjectView.vue
+msgid "Archive project"
+msgstr ""
+
 #: src/components/BulkActionBar.vue
 msgid "Archive selected"
 msgstr ""
@@ -838,6 +842,7 @@ msgstr ""
 #: src/views/ArchivedView.vue
 #: src/views/BoardList.vue
 #: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
 msgid "Archived"
 msgstr ""
 
@@ -1045,7 +1050,7 @@ msgstr ""
 msgid "Blocked by"
 msgstr ""
 
-#: src/views/ProjectView.vue:305
+#: src/views/ProjectView.vue:318
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] ""
@@ -2114,7 +2119,7 @@ msgid "Date range (UTC)"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2386
-#: src/components/CardDetail.vue:5341
+#: src/components/CardDetail.vue:5350
 msgid "day"
 msgid_plural "days"
 msgstr[0] ""
@@ -3734,7 +3739,7 @@ msgstr ""
 msgid "Jump to the discussion"
 msgstr ""
 
-#: src/components/CardDetail.vue:7223
+#: src/components/CardDetail.vue:7246
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] ""
@@ -3894,6 +3899,10 @@ msgstr ""
 
 #: templates/admin-backup.php
 msgid "Last run: %1$s"
+msgstr ""
+
+#: src/views/BoardView.vue
+msgid "Last updated"
 msgstr ""
 
 #: src/services/projectStatus.js
@@ -4142,7 +4151,7 @@ msgid "Mon"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2388
-#: src/components/CardDetail.vue:5343
+#: src/components/CardDetail.vue:5352
 msgid "month"
 msgid_plural "months"
 msgstr[0] ""
@@ -4372,6 +4381,10 @@ msgstr ""
 
 #: src/views/ArchivedView.vue
 msgid "No archived cards match “{query}”."
+msgstr ""
+
+#: src/views/ProjectsView.vue
+msgid "No archived projects"
 msgstr ""
 
 #: src/components/BoardAttachmentsModal.vue
@@ -5293,6 +5306,7 @@ msgid "Remove label"
 msgstr ""
 
 #: src/components/BulkActionBar.vue
+#: src/components/CardDetail.vue
 msgid "Remove label {label}"
 msgstr ""
 
@@ -5483,6 +5497,10 @@ msgstr ""
 
 #: src/components/BoardSettingsModal.vue
 msgid "Restore panel size"
+msgstr ""
+
+#: src/views/ProjectView.vue
+msgid "Restore project"
 msgstr ""
 
 #: src/views/ArchivedView.vue
@@ -5834,6 +5852,14 @@ msgstr ""
 msgid "Show / hide this shortcuts overlay"
 msgstr ""
 
+#: src/views/ProjectsView.vue
+msgid "Show active projects"
+msgstr ""
+
+#: src/views/ProjectsView.vue
+msgid "Show archived projects"
+msgstr ""
+
 #: src/components/CardDetail.vue
 msgid "Show changes"
 msgstr ""
@@ -5862,7 +5888,7 @@ msgstr ""
 msgid "Show the discussion panel"
 msgstr ""
 
-#: src/components/CardDetail.vue:7229
+#: src/components/CardDetail.vue:7252
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] ""
@@ -6702,7 +6728,7 @@ msgid "Wed"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2387
-#: src/components/CardDetail.vue:5342
+#: src/components/CardDetail.vue:5351
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] ""
@@ -6811,7 +6837,7 @@ msgid "wrote"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2389
-#: src/components/CardDetail.vue:5344
+#: src/components/CardDetail.vue:5353
 msgid "year"
 msgid_plural "years"
 msgstr[0] ""

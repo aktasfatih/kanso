@@ -48,13 +48,19 @@ class ProjectMapper extends QBMapper {
 	 * @return Project[]
 	 * @throws Exception
 	 */
-	public function findAccessible(string $uid): array {
+	public function findAccessible(string $uid, bool $includeArchived = false): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
 			->orderBy('title', 'ASC')
 			->addOrderBy('id', 'ASC');
 		$this->projectAccess->restrict($qb, '', $uid);
+		if (!$includeArchived) {
+			$qb->andWhere($qb->expr()->orX(
+				$qb->expr()->isNull('archived'),
+				$qb->expr()->eq('archived', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)),
+			));
+		}
 
 		return $this->findEntities($qb);
 	}

@@ -106,6 +106,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 				<NcActionRadio :model-value="sortMode" value="title" name="kanso-sort" @update:model-value="setSortMode">
 					{{ t('kanso', 'Title') }}
 				</NcActionRadio>
+				<NcActionRadio :model-value="sortMode" value="updated" name="kanso-sort" @update:model-value="setSortMode">
+					{{ t('kanso', 'Last updated') }}
+				</NcActionRadio>
 				<NcActionRadio
 					v-if="visibleEstimateScale !== 'none'"
 					:model-value="sortMode"
@@ -824,12 +827,12 @@ const viewModeLabel = computed(() => ({
 // rewrites sort keys; 'manual' is the persisted fractional order. Persisted per
 // board per user. While a non-manual sort is active, card drag-reorder is
 // suppressed (see the card onDrop guard) so manual order is preserved.
-const SORT_MODES = ['manual', 'priority', 'due', 'title', 'estimate']
+const SORT_MODES = ['manual', 'priority', 'due', 'title', 'updated', 'estimate']
 // Each non-manual mode has a "natural" default direction (the intuitive first
 // orientation): priority urgent-first, due soonest-first, title A→Z, estimate
 // biggest-first. Selecting a mode resets to its natural direction; the user can
 // then flip it. 'manual' has no direction (it IS the persisted fractional order).
-const NATURAL_SORT_DIR = { priority: 'desc', due: 'asc', title: 'asc', estimate: 'desc' }
+const NATURAL_SORT_DIR = { priority: 'desc', due: 'asc', title: 'asc', updated: 'desc', estimate: 'desc' }
 const storedSortMode = ref('manual')
 // A saved estimate sort falls back to manual while the board hides estimates.
 const sortMode = computed(() => (storedSortMode.value === 'estimate' && visibleEstimateScale.value === 'none'
@@ -865,6 +868,7 @@ const sortModeLabel = computed(() => ({
 	priority: t('kanso', 'Priority'),
 	due: t('kanso', 'Due date'),
 	title: t('kanso', 'Title'),
+	updated: t('kanso', 'Last updated'),
 	estimate: t('kanso', 'Estimate'),
 }[sortMode.value] ?? t('kanso', 'Manual')))
 // Menu-name suffix: an arrow so the active direction is visible on the toolbar
@@ -990,6 +994,9 @@ function sortCards(cards) {
 	} else if (sortMode.value === 'title') {
 		valueOf = (c) => String(c.title ?? '')
 		compare = (a, b) => a.localeCompare(b)
+	} else if (sortMode.value === 'updated') {
+		valueOf = (c) => Number(c.lastModified ?? 0)
+		compare = (a, b) => a - b
 	} else if (sortMode.value === 'estimate') {
 		// Rank by the token's value on the board's scale. Unestimated / off-scale
 		// tokens are "missing" → sorted last in both directions.

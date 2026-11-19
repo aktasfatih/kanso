@@ -417,7 +417,7 @@ msgstr[0] "Обнаружена %n строка данных"
 msgstr[1] "Обнаружено %n строки данных"
 msgstr[2] "Обнаружено %n строк данных"
 
-#: src/components/CardDetail.vue:5150
+#: src/components/CardDetail.vue:5159
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n день назад"
@@ -438,14 +438,14 @@ msgstr[0] "%n файл"
 msgstr[1] "%n файла"
 msgstr[2] "%n файлов"
 
-#: src/components/CardDetail.vue:5148
+#: src/components/CardDetail.vue:5157
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n час назад"
 msgstr[1] "%n часа назад"
 msgstr[2] "%n часов назад"
 
-#: src/views/BoardView.vue:2753
+#: src/views/BoardView.vue:2760
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "Скопирован %n идентификатор."
@@ -473,7 +473,7 @@ msgstr[0] "%n метка не была создана и отсутствует 
 msgstr[1] "%n метки не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 msgstr[2] "%n меток не были созданы и отсутствуют на импортированных карточках: добавлять новые метки могут только те, кто управляет доской. Попросите их добавить эти метки, а затем проставьте их на карточках."
 
-#: src/components/CardDetail.vue:5146
+#: src/components/CardDetail.vue:5155
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n минуту назад"
@@ -487,7 +487,7 @@ msgstr[0] "%n ждет проверки"
 msgstr[1] "%n ждут проверки"
 msgstr[2] "%n ждут проверки"
 
-#: src/components/CardDetail.vue:3986
+#: src/components/CardDetail.vue:3995
 msgid "%n other reviewer"
 msgid_plural "%n other reviewers"
 msgstr[0] "%n другой рецензент"
@@ -508,14 +508,14 @@ msgstr[0] "%n балл"
 msgstr[1] "%n балла"
 msgstr[2] "%n баллов"
 
-#: src/components/CardDetail.vue:1259
+#: src/components/CardDetail.vue:1264
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n проект"
 msgstr[1] "%n проекта"
 msgstr[2] "%n проектов"
 
-#: src/components/CardDetail.vue:2379
+#: src/components/CardDetail.vue:2385
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n ответ"
@@ -870,6 +870,10 @@ msgstr "Архивировать карточки, завершенные бол
 msgid "Archive now"
 msgstr "Архивировать сейчас"
 
+#: src/views/ProjectView.vue
+msgid "Archive project"
+msgstr "Архивировать проект"
+
 #: src/components/BulkActionBar.vue
 msgid "Archive selected"
 msgstr "Архивировать выбранные"
@@ -879,6 +883,7 @@ msgstr "Архивировать выбранные"
 #: src/views/ArchivedView.vue
 #: src/views/BoardList.vue
 #: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
 msgid "Archived"
 msgstr "Архив"
 
@@ -1087,7 +1092,7 @@ msgstr "Заблокирована"
 msgid "Blocked by"
 msgstr "Блокируется"
 
-#: src/views/ProjectView.vue:305
+#: src/views/ProjectView.vue:318
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "Заблокирована {count} открытой карточкой"
@@ -2158,7 +2163,7 @@ msgid "Date range (UTC)"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2386
-#: src/components/CardDetail.vue:5341
+#: src/components/CardDetail.vue:5350
 msgid "day"
 msgid_plural "days"
 msgstr[0] "день"
@@ -3784,7 +3789,7 @@ msgstr "Назначение, границы или правила. Любой �
 msgid "Jump to the discussion"
 msgstr "Перейти к обсуждению"
 
-#: src/components/CardDetail.vue:7223
+#: src/components/CardDetail.vue:7246
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Перейти к обсуждению (%n комментарий)"
@@ -3946,6 +3951,10 @@ msgstr "Последний запуск: {when}"
 #: templates/admin-backup.php
 msgid "Last run: %1$s"
 msgstr "Последний запуск: %1$s"
+
+#: src/views/BoardView.vue
+msgid "Last updated"
+msgstr "Последнее обновление"
 
 #: src/services/projectStatus.js
 msgid "Late"
@@ -4193,7 +4202,7 @@ msgid "Mon"
 msgstr "Пн"
 
 #: src/components/BoardSettingsModal.vue:2388
-#: src/components/CardDetail.vue:5343
+#: src/components/CardDetail.vue:5352
 msgid "month"
 msgid_plural "months"
 msgstr[0] "месяц"
@@ -4425,6 +4434,10 @@ msgstr "Архивных карточек нет"
 #: src/views/ArchivedView.vue
 msgid "No archived cards match “{query}”."
 msgstr "Нет архивных карточек по запросу «{query}»."
+
+#: src/views/ProjectsView.vue
+msgid "No archived projects"
+msgstr "Архивных проектов нет"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "No attachments yet"
@@ -5345,6 +5358,7 @@ msgid "Remove label"
 msgstr "Убрать метку"
 
 #: src/components/BulkActionBar.vue
+#: src/components/CardDetail.vue
 msgid "Remove label {label}"
 msgstr "Убрать метку {label}"
 
@@ -5536,6 +5550,10 @@ msgstr ""
 #: src/components/BoardSettingsModal.vue
 msgid "Restore panel size"
 msgstr "Восстановить размер панели"
+
+#: src/views/ProjectView.vue
+msgid "Restore project"
+msgstr "Восстановить проект"
 
 #: src/views/ArchivedView.vue
 #: src/views/TrashView.vue
@@ -5888,6 +5906,14 @@ msgstr "Показать"
 msgid "Show / hide this shortcuts overlay"
 msgstr "Показать / скрыть эту подсказку по сочетаниям клавиш"
 
+#: src/views/ProjectsView.vue
+msgid "Show active projects"
+msgstr "Показать активные проекты"
+
+#: src/views/ProjectsView.vue
+msgid "Show archived projects"
+msgstr "Показать архивные проекты"
+
 #: src/components/CardDetail.vue
 msgid "Show changes"
 msgstr "Показать изменения"
@@ -5916,7 +5942,7 @@ msgstr "Показывать обсуждение под карточкой"
 msgid "Show the discussion panel"
 msgstr "Показать панель обсуждения"
 
-#: src/components/CardDetail.vue:7229
+#: src/components/CardDetail.vue:7252
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Показать панель обсуждения (%n комментарий)"
@@ -6757,7 +6783,7 @@ msgid "Wed"
 msgstr "Ср"
 
 #: src/components/BoardSettingsModal.vue:2387
-#: src/components/CardDetail.vue:5342
+#: src/components/CardDetail.vue:5351
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "неделя"
@@ -6867,7 +6893,7 @@ msgid "wrote"
 msgstr "написал"
 
 #: src/components/BoardSettingsModal.vue:2389
-#: src/components/CardDetail.vue:5344
+#: src/components/CardDetail.vue:5353
 msgid "year"
 msgid_plural "years"
 msgstr[0] "год"

@@ -1107,6 +1107,51 @@ async def test_get_project_merges_the_record_and_its_cards():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_get_project_still_reads_an_archived_project():
+    route = respx.get(f"{BASE}/projects", params={"includeArchived": "true"}).mock(
+        return_value=httpx.Response(200, json=[{**PROJECTS[0], "archived": True}])
+    )
+    respx.get(f"{BASE}/projects/4/cards").mock(return_value=httpx.Response(200, json=PROJECT_CARDS))
+    tools, client = _tools()
+    async with client:
+        project = await tools["kanso_get_project"](4)
+
+    assert route.called
+    assert project["archived"] is True
+    assert [c["id"] for c in project["cards"]] == [100, 200]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_projects_tool_can_include_archived_projects():
+    route = respx.get(f"{BASE}/projects", params={"includeArchived": "true"}).mock(
+        return_value=httpx.Response(200, json=[{**PROJECTS[0], "archived": True}])
+    )
+    tools, client = _tools()
+    async with client:
+        projects = await tools["kanso_list_projects"](include_archived=True)
+
+    assert route.called
+    assert projects[0]["archived"] is True
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("archived", [True, False])
+async def test_update_project_tool_archives_and_restores(archived):
+    route = respx.patch(f"{BASE}/projects/4").mock(
+        return_value=httpx.Response(200, json={**PROJECTS[0], "archived": archived})
+    )
+    tools, client = _tools()
+    async with client:
+        project = await tools["kanso_update_project"](4, archived=archived)
+
+    assert json.loads(route.calls.last.request.content) == {"archived": archived}
+    assert project["archived"] is archived
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_get_project_rejects_an_unknown_id_without_fetching_cards():
     respx.get(f"{BASE}/projects").mock(return_value=httpx.Response(200, json=PROJECTS))
     cards_route = respx.get(f"{BASE}/projects/99/cards").mock(

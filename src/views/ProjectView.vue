@@ -37,6 +37,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						class="project-view__dot"
 						:style="{ background: '#' + project.color }" />
 					<h1 class="project-view__title">{{ project?.title ?? t('kanso', 'Project') }}</h1>
+					<span v-if="project?.archived" class="project-view__shared" data-test="project-archived">{{ t('kanso', 'Archived') }}</span>
 					<span
 						v-if="project?.shared"
 						class="project-view__shared"
@@ -45,7 +46,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 					</span>
 				</div>
 
-				<div class="project-view__header-actions">
+				<div ref="headerActionsRef" class="project-view__header-actions">
 					<button
 						class="project-view__analytics-btn"
 						:title="t('kanso', 'Project analytics')"
@@ -87,6 +88,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 							{{ t('kanso', 'Edit project') }}
 						</NcActionButton>
 						<NcActionSeparator v-if="isOwner || project?.canLeave" />
+						<NcActionButton
+							v-if="canEdit"
+							:close-after-click="true"
+							:disabled="updateMutation.isPending.value"
+							:data-test="project.archived ? 'project-restore' : 'project-archive'"
+							@click="toggleArchived">
+							<template #icon>
+								<ArchiveArrowUpOutlineIcon v-if="project.archived" :size="20" />
+								<ArchiveOutlineIcon v-else :size="20" />
+							</template>
+							{{ project.archived ? t('kanso', 'Restore project') : t('kanso', 'Archive project') }}
+						</NcActionButton>
 						<NcActionButton
 							v-if="project?.canLeave"
 							:close-after-click="true"
@@ -500,6 +513,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 			v-if="showEditDialog"
 			:name="t('kanso', 'Edit project')"
 			:open="showEditDialog"
+			:set-return-focus="projectActionTrigger"
 			@closing="closeEditDialog">
 			<div class="project-view__form">
 				<label class="project-view__form-label" for="edit-project-title">
@@ -634,6 +648,8 @@ import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import LogoutIcon from 'vue-material-design-icons/Logout.vue'
 import ShareVariantIcon from 'vue-material-design-icons/ShareVariant.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
+import ArchiveOutlineIcon from 'vue-material-design-icons/ArchiveOutline.vue'
+import ArchiveArrowUpOutlineIcon from 'vue-material-design-icons/ArchiveArrowUpOutline.vue'
 import TrashCanIcon from 'vue-material-design-icons/TrashCan.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
@@ -702,7 +718,7 @@ const {
 	update: updateMutation,
 	remove: removeMutation,
 	togglePin,
-} = useProjects({ refetchInterval: MY_WORK_POLL_INTERVAL })
+} = useProjects({ refetchInterval: MY_WORK_POLL_INTERVAL, includeArchived: true })
 const project = computed(() => (projectsData.value ?? []).find((p) => String(p.id) === String(props.id)) ?? null)
 
 const isOwner = computed(() => project.value?.isOwner === true)
@@ -923,6 +939,18 @@ async function handleRemoveCard(cardId) {
 // ── Delete project ───────────────────────────────────────────────────────────
 const actionError = ref('')
 
+async function toggleArchived() {
+	if (!canEdit.value || updateMutation.isPending.value) return
+	actionError.value = ''
+	const generation = projectGeneration
+	try {
+		await updateMutation.mutateAsync({ id: Number(props.id), archived: !project.value.archived })
+	} catch (err) {
+		if (generation !== projectGeneration) return
+		actionError.value = err?.response?.data?.error || t('kanso', 'Failed to update project.')
+	}
+}
+
 async function handleDelete() {
 	actionError.value = ''
 	leavingPage.value = true
@@ -1070,6 +1098,7 @@ function onInlineDescKeydown(event) {
 
 // ── Edit project dialog ──────────────────────────────────────────────────────
 const showEditDialog = ref(false)
+const headerActionsRef = ref(null)
 const editTitle = ref('')
 const editDescription = ref('')
 const editColor = ref('')
@@ -1109,6 +1138,14 @@ function openEditDialog() {
 
 function closeEditDialog() {
 	showEditDialog.value = false
+	nextTick(() => {
+		const trigger = projectActionTrigger()
+		if (trigger) trigger.focus()
+	})
+}
+
+function projectActionTrigger() {
+	return headerActionsRef.value?.querySelector('.action-item__menutoggle') ?? false
 }
 
 async function submitEdit() {

@@ -149,11 +149,10 @@ export const unpinBoard = (id) =>
 	axios.delete(url(`/api/boards/${id}/pin`)).then((r) => r.data)
 
 // Resolve a board-scoped PREFIX-<board_seq> human reference (e.g. "KAN-123") to
-// { cardId, title } (#3611). Used to open a card by its human id from a URL when
-// the board cache is not already loaded; the in-app renderer resolves from cache
-// without a request. Rejects (404) for an unknown/mismatched reference.
-export const resolveCardRef = (boardId, ref) =>
-	axios.get(url(`/api/boards/${boardId}/cards/by-ref/${encodeURIComponent(ref)}`)).then((r) => r.data)
+// { cardId, title }. Also resolves moved references missing from the board cache.
+// Rejects (404) for an unknown, inaccessible or mismatched reference.
+export const resolveCardRef = (boardId, ref, options = {}) =>
+	axios.get(url(`/api/boards/${boardId}/cards/by-ref/${encodeURIComponent(ref)}`), options).then((r) => r.data)
 
 // Stacks
 export const createStack = (data) =>
@@ -851,8 +850,8 @@ export const deleteSavedFilter = (boardId, name) =>
 	axios.delete(url(`/api/boards/${boardId}/saved-filters/${encodeURIComponent(name)}`)).then((r) => r.data)
 
 // Projects (cross-board card collections)
-export const getProjects = () =>
-	axios.get(url('/api/projects')).then((r) => r.data)
+export const getProjects = ({ includeArchived = false } = {}) =>
+	axios.get(url('/api/projects'), { params: includeArchived ? { includeArchived: true } : {} }).then((r) => r.data)
 
 export const createProject = (data) =>
 	axios.post(url('/api/projects'), data).then((r) => r.data)
