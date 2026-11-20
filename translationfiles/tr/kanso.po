@@ -1223,7 +1223,7 @@ msgstr "Takvim akışı"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Can comment"
-msgstr ""
+msgstr "Yorum yapabilir"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue

@@ -255,6 +255,7 @@ OC.L10N.register(
     "by {user}" : "{user} tarafından",
     "By default the discussion sits beside the card. Move it below and it becomes part of the card you scroll down to." : "Tartışma varsayılan olarak kartın yanında durur. Aşağı taşırsan kartın bir parçası olur ve ona kaydırarak ulaşırsın.",
     "Calendar feed" : "Takvim akışı",
+    "Can comment" : "Yorum yapabilir",
     "Can edit" : "Düzenleyebilir",
     "Can manage" : "Yönetebilir",
     "Can share" : "Paylaşabilir",

@@ -255,6 +255,7 @@ OC.L10N.register(
     "by {user}" : "par {user}",
     "By default the discussion sits beside the card. Move it below and it becomes part of the card you scroll down to." : "Par défaut, la discussion se place à côté de la carte. Déplacez-la en dessous et elle fait partie de la carte, accessible en faisant défiler.",
     "Calendar feed" : "Flux de calendrier",
+    "Can comment" : "Peut commenter",
     "Can edit" : "Peut modifier",
     "Can manage" : "Peut gérer",
     "Can share" : "Peut partager",

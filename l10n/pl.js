@@ -255,6 +255,7 @@ OC.L10N.register(
     "by {user}" : "przez {user}",
     "By default the discussion sits beside the card. Move it below and it becomes part of the card you scroll down to." : "Domyślnie dyskusja znajduje się obok karty. Przenieś ją pod spód, a stanie się częścią karty, do której przewijasz w dół.",
     "Calendar feed" : "Kanał kalendarza",
+    "Can comment" : "Może komentować",
     "Can edit" : "Może edytować",
     "Can manage" : "Może zarządzać",
     "Can share" : "Może udostępniać",

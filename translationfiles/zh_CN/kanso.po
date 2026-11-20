@@ -1181,7 +1181,7 @@ msgstr "日历订阅"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Can comment"
-msgstr ""
+msgstr "可评论"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue

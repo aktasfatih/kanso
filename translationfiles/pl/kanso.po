@@ -1265,7 +1265,7 @@ msgstr "Kanał kalendarza"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Can comment"
-msgstr ""
+msgstr "Może komentować"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue

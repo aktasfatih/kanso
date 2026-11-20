@@ -255,6 +255,7 @@ OC.L10N.register(
     "by {user}" : "door {user}",
     "By default the discussion sits beside the card. Move it below and it becomes part of the card you scroll down to." : "Standaard staat de discussie naast de kaart. Zet je hem eronder, dan wordt hij onderdeel van de kaart waar je naartoe scrolt.",
     "Calendar feed" : "Agendafeed",
+    "Can comment" : "Mag opmerkingen plaatsen",
     "Can edit" : "Kan bewerken",
     "Can manage" : "Kan beheren",
     "Can share" : "Kan delen",

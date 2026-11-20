@@ -1223,7 +1223,7 @@ msgstr "Flux de calendrier"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Can comment"
-msgstr ""
+msgstr "Peut commenter"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue

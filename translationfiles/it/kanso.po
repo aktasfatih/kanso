@@ -1223,7 +1223,7 @@ msgstr "Feed del calendario"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Can comment"
-msgstr ""
+msgstr "Può commentare"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue

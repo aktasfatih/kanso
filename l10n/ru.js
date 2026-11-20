@@ -255,6 +255,7 @@ OC.L10N.register(
     "by {user}" : "от {user}",
     "By default the discussion sits beside the card. Move it below and it becomes part of the card you scroll down to." : "По умолчанию обсуждение располагается рядом с карточкой. Переместите его вниз — и оно станет частью карточки, к которой нужно прокрутить.",
     "Calendar feed" : "Календарная лента",
+    "Can comment" : "Может комментировать",
     "Can edit" : "Может редактировать",
     "Can manage" : "Может управлять",
     "Can share" : "Может делиться",

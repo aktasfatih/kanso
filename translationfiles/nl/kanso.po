@@ -1223,7 +1223,7 @@ msgstr "Agendafeed"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Can comment"
-msgstr ""
+msgstr "Mag opmerkingen plaatsen"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue

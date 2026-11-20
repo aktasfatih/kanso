@@ -1265,7 +1265,7 @@ msgstr "Календарная лента"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Can comment"
-msgstr ""
+msgstr "Может комментировать"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue
