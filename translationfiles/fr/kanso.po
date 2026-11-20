@@ -1734,7 +1734,6 @@ msgstr "Palette de commandes"
 msgid "comment"
 msgstr "commentaire"
 
-#: src/components/BoardSettingsModal.vue
 #: src/components/SearchBox.vue
 msgid "Comment"
 msgstr "Commentaire"
@@ -4802,7 +4801,6 @@ msgstr "Uniquement en cas d'échec d'une sauvegarde"
 msgid "open"
 msgstr "ouvrir"
 
-#: src/components/CardDetail.vue
 #: src/components/CardPreview.vue
 #: src/utils/cardCreatedToast.js
 msgid "Open"
@@ -6046,6 +6044,10 @@ msgstr "Statut"
 msgid "Step due date"
 msgstr "Échéance de l'étape"
 
+#: src/components/CardDetail.vue
+msgid "Still open"
+msgstr "Toujours ouvert"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Stop the timer"
 msgstr "Arrêter le chronomètre"
@@ -6615,6 +6617,10 @@ msgstr "Utilisez le bouton Ajouter une carte ci-dessus pour regrouper des cartes
 #: src/components/ProjectShareDialog.vue
 msgid "User"
 msgstr "Utilisateur"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Value name"
+msgstr "Nom de la valeur"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Value of {label}"

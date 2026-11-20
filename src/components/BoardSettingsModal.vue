@@ -1112,7 +1112,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 									:checked="hasBit(effectivePermissions(entry.permission), PERM_COMMENT)"
 									:disabled="!canToggleBit(entry, PERM_COMMENT) || patchingAclId === entry.id"
 									@change="togglePerm(entry, PERM_COMMENT, $event.target.checked)" />
-								{{ t('kanso', 'Comment') }}
+								{{ t('kanso', 'Can comment') }}
 							</label>
 							<label
 								class="sharing__perm-label"
@@ -1352,7 +1352,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 								class="estimate-custom__label"
 								type="text"
 								maxlength="24"
-								:placeholder="t('kanso', 'Label')"
+								:placeholder="t('kanso', 'Value name')"
 								:aria-label="t('kanso', 'Label {position}', { position: index + 1 })"
 								:disabled="!canManage || estimateScaleSaving"
 								data-test="estimate-custom-label">

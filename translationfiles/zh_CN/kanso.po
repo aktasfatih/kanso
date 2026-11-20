@@ -1691,7 +1691,6 @@ msgstr "命令面板"
 msgid "comment"
 msgstr "评论"
 
-#: src/components/BoardSettingsModal.vue
 #: src/components/SearchBox.vue
 msgid "Comment"
 msgstr "评论"
@@ -4751,7 +4750,6 @@ msgstr "仅在备份失败时"
 msgid "open"
 msgstr "打开"
 
-#: src/components/CardDetail.vue
 #: src/components/CardPreview.vue
 #: src/utils/cardCreatedToast.js
 msgid "Open"
@@ -5992,6 +5990,10 @@ msgstr "状态"
 msgid "Step due date"
 msgstr "步骤截止日期"
 
+#: src/components/CardDetail.vue
+msgid "Still open"
+msgstr "仍未关闭"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Stop the timer"
 msgstr "停止计时器"
@@ -6561,6 +6563,10 @@ msgstr "使用上方的“添加卡片”按钮，从任意看板中收集卡片
 #: src/components/ProjectShareDialog.vue
 msgid "User"
 msgstr "用户"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Value name"
+msgstr "数值名称"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Value of {label}"
