@@ -229,8 +229,8 @@ const POT = [
 	'',
 ].join('\n')
 
-/** The ten languages the i18n sprint ships, and the rule each one needs. */
 const EXPECTED_PLURAL_FORMS = {
+	cs: 'nplurals=3; plural=(n == 1 ? 0 : n >= 2 && n <= 4 ? 1 : 2);',
 	de: 'nplurals=2; plural=(n != 1);',
 	es: 'nplurals=2; plural=(n != 1);',
 	it: 'nplurals=2; plural=(n != 1);',
@@ -247,11 +247,11 @@ test('every shipped language maps to its own Plural-Forms rule', () => {
 	for (const [lang, form] of Object.entries(EXPECTED_PLURAL_FORMS)) {
 		assert.equal(pluralFormFor(lang), form, `wrong Plural-Forms for ${lang}`)
 	}
-	// Chinese has one form, Russian and Polish three — not everyone is German.
 	assert.equal(npluralsOf(pluralFormFor('zh_CN')), 1)
 	assert.equal(npluralsOf(pluralFormFor('ru')), 3)
 	assert.equal(npluralsOf(pluralFormFor('pl')), 3)
 	assert.equal(npluralsOf(pluralFormFor('fr')), 2)
+	assert.equal(npluralsOf(pluralFormFor('cs')), 3)
 })
 
 test('an unknown language code keeps the 2-form default instead of erroring', () => {

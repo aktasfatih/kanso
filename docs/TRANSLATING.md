@@ -44,9 +44,9 @@ locale used only for date formatting).
 
    `init` stamps the right `Plural-Forms` header for the language and writes
    exactly that many `msgstr[n]` slots — one for Chinese, two for German or
-   French, three for Polish or Russian. A language code the tool doesn't know
-   gets the two-form default; correct its `Plural-Forms` header by hand and then
-   run the sync below to re-slot the plural entries.
+   French, and three for Czech, Polish or Russian. Unlisted languages
+   get the two-form default. Correct their `Plural-Forms` header and run sync
+   to update the plural slots.
 
    For an existing language, merge new template strings into the `.po`:
 
@@ -68,8 +68,9 @@ locale used only for date formatting).
    `%n`, `%1$s` — you may move them within a sentence but never rename or
    translate them. Fill in every `msgstr[n]` slot a plural entry has — how many
    there are is your language's business (`msgstr[0]` only for Chinese,
-   `msgstr[0..1]` for German or French, `msgstr[0..2]` for Polish or Russian),
-   and `init` already wrote the right number.
+   `msgstr[0..1]` for German or French, `msgstr[0..2]` for Czech, Polish or
+   Russian), and `init` already wrote the right number. In Czech, use wording
+   that also reads correctly with fractions for statistics that can show them.
 
 4. Compile and check it in:
 
@@ -104,13 +105,13 @@ browser profile) picks up the new `l10n/<lang>.js`.
   your working tree. Commit the generated files before pushing.
 
   **Don't skip the sync step.** `extract` only refreshes the template; nothing
-  else copies a new string into the <!-- l10n:count -->ten<!-- /l10n:count -->
+  else copies a new string into the <!-- l10n:count -->eleven<!-- /l10n:count -->
   catalogues. Skip it and the template looks current, `compile` has nothing new
   to emit, and the string silently falls back to English in every language.
 
   `sync` adds the new msgids with an **empty** `msgstr`, and that's a finished
   state as far as CI is concerned — you don't have to translate your string into
-  <!-- l10n:count -->ten<!-- /l10n:count --> languages to merge it. The check
+  <!-- l10n:count -->eleven<!-- /l10n:count --> languages to merge it. The check
   asks only that the catalogues know the string exists; an empty `msgstr`
   renders the English source (see step 3 above).
 - **`appinfo/info.xml` is outside this pipeline.** Its `<summary>` and
