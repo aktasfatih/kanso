@@ -1223,7 +1223,7 @@ msgstr "Agendafeed"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Can comment"
-msgstr ""
+msgstr "Mag opmerkingen plaatsen"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue
@@ -1734,7 +1734,6 @@ msgstr "Opdrachtenpalet"
 msgid "comment"
 msgstr "reactie"
 
-#: src/components/BoardSettingsModal.vue
 #: src/components/SearchBox.vue
 msgid "Comment"
 msgstr "Reactie"
@@ -4802,7 +4801,6 @@ msgstr "Alleen als een back-up mislukt"
 msgid "open"
 msgstr "openen"
 
-#: src/components/CardDetail.vue
 #: src/components/CardPreview.vue
 #: src/utils/cardCreatedToast.js
 msgid "Open"
@@ -6046,6 +6044,10 @@ msgstr "Status"
 msgid "Step due date"
 msgstr "Einddatum van de stap"
 
+#: src/components/CardDetail.vue
+msgid "Still open"
+msgstr "Nog open"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Stop the timer"
 msgstr "De timer stoppen"
@@ -6615,6 +6617,10 @@ msgstr "Gebruik de knop Kaart toevoegen hierboven om kaarten van elk bord te ver
 #: src/components/ProjectShareDialog.vue
 msgid "User"
 msgstr "Gebruiker"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Value name"
+msgstr "Naam van de waarde"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Value of {label}"

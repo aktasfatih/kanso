@@ -1223,7 +1223,7 @@ msgstr "Takvim akışı"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Can comment"
-msgstr ""
+msgstr "Yorum yapabilir"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue
@@ -1734,7 +1734,6 @@ msgstr "Komut paleti"
 msgid "comment"
 msgstr "yorum"
 
-#: src/components/BoardSettingsModal.vue
 #: src/components/SearchBox.vue
 msgid "Comment"
 msgstr "Yorum"
@@ -4802,7 +4801,6 @@ msgstr "Yalnızca bir yedekleme başarısız olduğunda"
 msgid "open"
 msgstr "aç"
 
-#: src/components/CardDetail.vue
 #: src/components/CardPreview.vue
 #: src/utils/cardCreatedToast.js
 msgid "Open"
@@ -6046,6 +6044,10 @@ msgstr "Durum"
 msgid "Step due date"
 msgstr "Adım bitiş tarihi"
 
+#: src/components/CardDetail.vue
+msgid "Still open"
+msgstr "Hâlâ açık"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Stop the timer"
 msgstr "Zamanlayıcıyı durdur"
@@ -6615,6 +6617,10 @@ msgstr "Herhangi bir panodan kart toplamak için yukarıdaki Kart ekle düğmesi
 #: src/components/ProjectShareDialog.vue
 msgid "User"
 msgstr "Kullanıcı"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Value name"
+msgstr "Değer adı"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Value of {label}"

@@ -1223,7 +1223,7 @@ msgstr "Feed de calendário"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Can comment"
-msgstr ""
+msgstr "Pode comentar"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue
@@ -1734,7 +1734,6 @@ msgstr "Paleta de comandos"
 msgid "comment"
 msgstr "comentário"
 
-#: src/components/BoardSettingsModal.vue
 #: src/components/SearchBox.vue
 msgid "Comment"
 msgstr "Comentário"
@@ -4802,7 +4801,6 @@ msgstr "Somente quando um backup falha"
 msgid "open"
 msgstr "abrir"
 
-#: src/components/CardDetail.vue
 #: src/components/CardPreview.vue
 #: src/utils/cardCreatedToast.js
 msgid "Open"
@@ -6046,6 +6044,10 @@ msgstr "Status"
 msgid "Step due date"
 msgstr "Data de vencimento da etapa"
 
+#: src/components/CardDetail.vue
+msgid "Still open"
+msgstr "Ainda aberto"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Stop the timer"
 msgstr "Parar o cronômetro"
@@ -6615,6 +6617,10 @@ msgstr "Use o botão Adicionar cartão acima para reunir cartões de qualquer qu
 #: src/components/ProjectShareDialog.vue
 msgid "User"
 msgstr "Usuário"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Value name"
+msgstr "Nome do valor"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Value of {label}"
