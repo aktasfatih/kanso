@@ -8,6 +8,7 @@
 	<id>kanso</id>
 	<name>Kanso</name>
 	<summary>Fast open-source kanban boards with reviews, projects and realtime sync</summary>
+	<summary lang="cs">Rychlé open-source kanbanové nástěnky s kontrolami, projekty a synchronizací v reálném čase</summary>
 	<summary lang="de">Schnelle Open-Source-Kanban-Boards mit Reviews, Projekten und Echtzeit-Synchronisierung</summary>
 	<summary lang="es">Tableros kanban rápidos y de código abierto, con revisiones, proyectos y sincronización en tiempo real</summary>
 	<summary lang="fr">Tableaux kanban open source et rapides, avec revues, projets et synchronisation en temps réel</summary>
@@ -47,6 +48,43 @@ and webhooks keep cards in step with pull requests and issues. One-click Import
 from Deck, import from a Trello JSON export or a CSV, board export and re-import
 as a zip with attachments, board duplication, and scheduled periodic backups of
 every board for administrators.
+	]]></description>
+	<description lang="cs"><![CDATA[
+Kanso je aplikace s kanbanovými nástěnkami pro Nextcloud. Karty přesouváte
+přetažením a změny se v rozhraní projeví hned, ještě před potvrzením serverem.
+Velikost přenášených dat je přizpůsobena i nástěnkám s více než 2 000 kartami.
+Změny se doručují v reálném čase přes notify_push. Pokud služba není dostupná,
+Kanso se na změny dotazuje pravidelně.
+
+Karty mají popisy v Markdownu, štítky, termíny, řešitele, priority, kontrolní
+seznamy a podkarty. Diskuse podporují vlákna, zmínky pomocí @ a sledující.
+Přidat můžete přílohy do 100 MiB na soubor. Pro každou nástěnku lze nastavit
+vlastní pole s textem, číslem, datem nebo výběrem ze seznamu. Čas se měří
+a sčítá pro každou kartu. Soukromou připomínku lze nastavit ke kartě
+i ke konkrétnímu komentáři. Přístup k nástěnce lze nastavit po uživatelích
+a skupinách. Volitelný veřejný odkaz slouží jen ke čtení a funguje i bez
+účtu Nextcloud.
+
+O kontrolu karty lze požádat, schválit ji nebo vyžádat změny. Typy kontrol
+si můžete nastavit a dokončení karty podmínit jejich schválením. Přehled
+Moje práce zobrazuje vaše úkoly, kontroly a příchozí položky napříč
+nástěnkami. Projekty mohou sdružovat karty z více nástěnek. Statistiku
+tempa, doby zpracování a množství dokončené práce lze zobrazit po nástěnkách
+i projektech. K dispozici je zobrazení nástěnky, seznamu a časové osy
+(Ganttův diagram), seskupení karet do pruhů, uložené filtry a řazení.
+
+Karty se mohou opakovat podle pravidel RRULE. Nastavit lze automatické
+archivování, limity rozpracovanosti, role sloupců a šablony karet. Paleta
+příkazů obsahuje fulltextové hledání a smazané položky lze obnovit z koše.
+
+Každá nástěnka, ke které máte přístup, se zobrazí i jako seznam úkolů
+CalDAV pouze ke čtení. Zahrnuje karty s termínem a lze zapnout i samostatný
+zdroj .ics. Příjem e-mailů vytváří karty ze zpráv ve složce IMAP ve
+vybraném sloupci. Odkazy a webhooky GitHubu a Forgejo propojují karty
+s požadavky na sloučení a úlohami. Nástěnky lze importovat z Decku jedním
+kliknutím, ze souboru JSON z Trella nebo ze souboru CSV. Lze je také
+duplikovat, exportovat s přílohami do ZIP a znovu importovat. Správci
+mohou nastavit pravidelné zálohy všech nástěnek.
 	]]></description>
 	<description lang="de"><![CDATA[
 Kanso ist eine Kanban-Board-App für Nextcloud, entwickelt für Geschwindigkeit.
