@@ -4,6 +4,7 @@
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import { isInlineAttachmentSrc, publicInlineSrcRule } from './inlineAttachmentSrc.js'
+import { cardReferenceRule, collectCardReferences } from './cardReferenceRule.js'
 
 const md = new MarkdownIt({
 	html: false,
@@ -46,65 +47,11 @@ md.renderer.rules.kanso_mention = (tokens, idx) => {
 	return `<span class="kanso-mention" data-kanso-mention="${uid}">@${uid}</span>`
 }
 
-// `PREFIX-123` card cross-references → a link showing the target card's TITLE
-// (like GitHub #123 / Jira PROJ-123). This mirrors the mention rule: the token
-// is detected here but RESOLVED cosmetically - the referenced card's id + title
-// are looked up from a caller-supplied `refs` map (built from the board cache;
-// see the third arg to md.render below). Board-scoped (per-board prefixes), so a
-// reference is only resolvable within the board whose text is being rendered.
-// An unresolved reference (unknown card, no map, cross-board) renders as the
-// plain raw text, never a broken link. Clicking a resolved ref is handled by a
-// delegated click listener on the render container (it reads data-kanso-card-id),
-// so the anchor itself carries no javascript: href.
-//
-// PREFIX = an uppercase letter then uppercase letters/digits (mirrors the server
-// BoardPrefix charset), then '-', then digits. The `(?<!\w)`/`(?!\w)` boundaries
-// keep it from firing mid-word (e.g. the tail of an identifier like "FOOKAN-1"
-// or a version like "KAN-1A"). Uppercase letters are ordinary text to
-// markdown-it's inline tokenizer (unlike `@`, which the mention rule can hook as
-// an inline rule), so a card reference is matched by a CORE post-processor that
-// splits already-tokenized `text` tokens - the established markdown-it pattern
-// for word-shaped tokens. It runs on plain text only, so it never rewrites
-// inside code spans, links, or fenced blocks (those are separate token types).
-const CARD_REF_RE = /(?<!\w)([A-Z][A-Z0-9]*-\d+)(?!\w)/g
+md.core.ruler.push('kanso_cardref', cardReferenceRule)
 
-md.core.ruler.push('kanso_cardref', (state) => {
-	for (const blockToken of state.tokens) {
-		if (blockToken.type !== 'inline' || !blockToken.children) continue
-		const children = blockToken.children
-		for (let i = children.length - 1; i >= 0; i--) {
-			const token = children[i]
-			if (token.type !== 'text') continue
-			const text = token.content
-			CARD_REF_RE.lastIndex = 0
-			if (!CARD_REF_RE.test(text)) continue
-
-			// Split the text token into alternating text / kanso_cardref tokens.
-			const nodes = []
-			let last = 0
-			CARD_REF_RE.lastIndex = 0
-			let m
-			while ((m = CARD_REF_RE.exec(text)) !== null) {
-				if (m.index > last) {
-					const t = new state.Token('text', '', 0)
-					t.content = text.slice(last, m.index)
-					nodes.push(t)
-				}
-				const ref = new state.Token('kanso_cardref', '', 0)
-				ref.content = m[1]
-				ref.markup = m[1]
-				nodes.push(ref)
-				last = m.index + m[0].length
-			}
-			if (last < text.length) {
-				const t = new state.Token('text', '', 0)
-				t.content = text.slice(last)
-				nodes.push(t)
-			}
-			children.splice(i, 1, ...nodes)
-		}
-	}
-})
+export function findCardReferences(src) {
+	return src ? collectCardReferences(md.parse(src, {})) : []
+}
 
 md.renderer.rules.kanso_cardref = (tokens, idx, options, env) => {
 	const ref = tokens[idx].content
@@ -270,8 +217,8 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
  * @param {Map<string, {cardId: number, title: string}>|Record<string, {cardId: number, title: string}>} [options.refs]
  *   Board-scoped card cross-reference map keyed by uppercase `PREFIX-<seq>`
  *   (e.g. "KAN-123"). A hit renders the reference as a title link; a miss (or an
- *   omitted map) renders the raw reference text. The caller builds this from the
- *   already-cached board cards + prefix so rendering needs no extra request.
+ *   omitted map) renders the raw reference text. The caller supplies authorized
+ *   board summaries and any permission-checked moved references.
  * @param {string} [options.publicToken]
  *   The 64-char share token, on a PUBLIC-SHARE page ONLY (src/views/PublicBoard.vue).
  *   With it, an inline card-attachment src/href is re-pointed at the share's own

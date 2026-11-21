@@ -37,9 +37,9 @@ class ProjectController extends Controller {
 	 * The projects the current user owns or was shared, in title order.
 	 */
 	#[NoAdminRequired]
-	public function index(): JSONResponse {
-		return $this->respond(function (): JSONResponse {
-			return new JSONResponse($this->projectService->findMine($this->currentUserId()));
+	public function index(bool $includeArchived = false): JSONResponse {
+		return $this->respond(function () use ($includeArchived): JSONResponse {
+			return new JSONResponse($this->projectService->findMine($this->currentUserId(), $includeArchived));
 		});
 	}
 
@@ -53,10 +53,10 @@ class ProjectController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function update(int $id, ?string $title = null, ?string $description = null, ?string $color = null, ?string $startDate = null, ?string $targetDate = null, ?string $lead = null, ?string $lifecycleStatus = null): JSONResponse {
-		return $this->respond(function () use ($id, $title, $description, $color, $startDate, $targetDate, $lead, $lifecycleStatus): JSONResponse {
+	public function update(int $id, ?string $title = null, ?string $description = null, ?string $color = null, ?string $startDate = null, ?string $targetDate = null, ?string $lead = null, ?string $lifecycleStatus = null, ?bool $archived = null): JSONResponse {
+		return $this->respond(function () use ($id, $title, $description, $color, $startDate, $targetDate, $lead, $lifecycleStatus, $archived): JSONResponse {
 			return new JSONResponse(
-				$this->projectService->update($id, $this->currentUserId(), $title, $description, $color, $startDate, $targetDate, $lead, $lifecycleStatus)->jsonSerialize()
+				$this->projectService->update($id, $this->currentUserId(), $title, $description, $color, $startDate, $targetDate, $lead, $lifecycleStatus, $archived)->jsonSerialize()
 			);
 		});
 	}

@@ -6,12 +6,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 	<div class="projects-view">
 		<div class="projects-view__header">
 			<h1 class="projects-view__title">{{ t('kanso', 'Projects') }}</h1>
-			<NcButton type="primary" @click="openCreateDialog">
-				<template #icon>
-					<PlusIcon :size="18" />
-				</template>
-				{{ t('kanso', 'New project') }}
-			</NcButton>
+			<div class="projects-view__header-actions">
+				<NcButton :aria-pressed="showArchived" data-test="projects-archive-toggle" @click="showArchived = !showArchived">
+					{{ showArchived ? t('kanso', 'Show active projects') : t('kanso', 'Show archived projects') }}
+				</NcButton>
+				<NcButton type="primary" @click="openCreateDialog">
+					<template #icon>
+						<PlusIcon :size="18" />
+					</template>
+					{{ t('kanso', 'New project') }}
+				</NcButton>
+			</div>
 		</div>
 
 		<!-- Loading state -->
@@ -28,7 +33,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 		<!-- Empty state -->
 		<NcEmptyContent
 			v-else-if="!projects.length"
-			:name="t('kanso', 'No projects yet')"
+			:name="showArchived ? t('kanso', 'No archived projects') : t('kanso', 'No projects yet')"
 			:description="t('kanso', 'Projects let you collect cards from any board into a single view.')">
 			<template #icon>
 				<FolderMultipleOutlineIcon :size="64" />
@@ -51,6 +56,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 						:style="project.color ? { background: '#' + project.color } : {}"
 						:class="{ 'projects-view__dot--default': !project.color }" />
 					<span class="projects-view__project-title">{{ project.title }}</span>
+					<span v-if="project.archived" class="projects-view__meta">{{ t('kanso', 'Archived') }}</span>
 					<button
 						type="button"
 						class="projects-view__pin"
@@ -216,9 +222,10 @@ const COLOR_PRESETS = [
 ]
 
 const router = useRouter()
-const { data, isLoading, isError, create, togglePin } = useProjects()
+const { data, isLoading, isError, create, togglePin } = useProjects({ includeArchived: true })
 
-const projects = computed(() => data.value ?? [])
+const showArchived = ref(false)
+const projects = computed(() => (data.value ?? []).filter((project) => !!project.archived === showArchived.value))
 
 const planQueries = useQueries({
 	queries: computed(() => projects.value.map((project) => ({
@@ -323,6 +330,14 @@ function openProject(project) {
 	align-items: center;
 	justify-content: space-between;
 	margin-bottom: 24px;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.projects-view__header-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
 }
 
 .projects-view__title {

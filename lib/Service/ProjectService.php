@@ -72,9 +72,9 @@ class ProjectService {
 	 *
 	 * @return list<array<string, mixed>>
 	 */
-	public function findMine(string $uid): array {
+	public function findMine(string $uid, bool $includeArchived = false): array {
 		$pinned = $this->projectPinMapper->pinnedMap($uid);
-		$projects = $this->projectMapper->findAccessible($uid);
+		$projects = $this->projectMapper->findAccessible($uid, $includeArchived);
 
 		$shares = [];
 		foreach ($this->shareMapper->findByProjects(array_map(static fn (Project $project): int => $project->getId(), $projects)) as $share) {
@@ -155,6 +155,7 @@ class ProjectService {
 		$project->setTargetDate($this->parseDate($targetDate));
 		$project->setLead($this->resolveLead($lead, $uid));
 		$project->setLifecycleStatus($this->validateLifecycleStatus($lifecycleStatus));
+		$project->setArchived(false);
 		$this->assertDateOrder($project);
 		$project->setOwner($uid);
 		$project->setCreatedAt(time());
@@ -170,7 +171,7 @@ class ProjectService {
 	 * @throws InvalidInputException on an empty or over-long title, a changed description
 	 *                               over the cap, or a malformed date
 	 */
-	public function update(int $id, string $uid, ?string $title, ?string $description, ?string $color, ?string $startDate = null, ?string $targetDate = null, ?string $lead = null, ?string $lifecycleStatus = null): Project {
+	public function update(int $id, string $uid, ?string $title, ?string $description, ?string $color, ?string $startDate = null, ?string $targetDate = null, ?string $lead = null, ?string $lifecycleStatus = null, ?bool $archived = null): Project {
 		$project = $this->loadProject($id, $uid, PermissionService::PERMISSION_EDIT);
 
 		if ($title !== null) {
@@ -204,6 +205,9 @@ class ProjectService {
 		}
 		if ($lifecycleStatus !== null) {
 			$project->setLifecycleStatus($this->validateLifecycleStatus($lifecycleStatus));
+		}
+		if ($archived !== null) {
+			$project->setArchived($archived);
 		}
 		$this->assertDateOrder($project);
 

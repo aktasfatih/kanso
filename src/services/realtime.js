@@ -18,6 +18,12 @@ import { listen } from '@nextcloud/notify_push'
  */
 
 const EVENT_NAME = 'kanso_board_changed'
+const boardChangeListeners = new Set()
+
+export function onBoardChanged(listener) {
+	boardChangeListeners.add(listener)
+	return () => boardChangeListeners.delete(listener)
+}
 
 // initRealtime is called once from main.js module top-level; if it ever
 // moves into a component's setup it needs an idempotency guard.
@@ -63,6 +69,9 @@ export function initRealtime(onBoardChanged) {
 		confirmed = true
 		const boardId = body?.boardId
 		if (boardId !== undefined && boardId !== null) {
+			for (const listener of boardChangeListeners) {
+				try { listener(boardId) } catch { /* Preserve the main delta-sync listener. */ }
+			}
 			onBoardChanged(boardId)
 		}
 	})

@@ -377,7 +377,7 @@ msgid "%n data row detected"
 msgid_plural "%n data rows detected"
 msgstr[0] "检测到 %n 行数据"
 
-#: src/components/CardDetail.vue:5150
+#: src/components/CardDetail.vue:5159
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n 天前"
@@ -392,12 +392,12 @@ msgid "%n file"
 msgid_plural "%n files"
 msgstr[0] "%n 个文件"
 
-#: src/components/CardDetail.vue:5148
+#: src/components/CardDetail.vue:5157
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n 小时前"
 
-#: src/views/BoardView.vue:2753
+#: src/views/BoardView.vue:2760
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "已复制 %n 个 ID。"
@@ -417,7 +417,7 @@ msgid "%n label was not created and is missing from the imported cards: only boa
 msgid_plural "%n labels were not created and are missing from the imported cards: only board managers can add new labels. Ask a manager to add them, then set them on the cards."
 msgstr[0] "有 %n 个标签未能创建，导入的卡片中缺少它们：只有看板管理者才能添加新标签。请让管理者添加，然后在卡片上设置它们。"
 
-#: src/components/CardDetail.vue:5146
+#: src/components/CardDetail.vue:5155
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n 分钟前"
@@ -427,7 +427,7 @@ msgid "%n need review"
 msgid_plural "%n need review"
 msgstr[0] "%n 张待评审"
 
-#: src/components/CardDetail.vue:3986
+#: src/components/CardDetail.vue:3995
 msgid "%n other reviewer"
 msgid_plural "%n other reviewers"
 msgstr[0] "%n 位其他评审者"
@@ -442,12 +442,12 @@ msgid "%n point"
 msgid_plural "%n points"
 msgstr[0] "%n 点"
 
-#: src/components/CardDetail.vue:1259
+#: src/components/CardDetail.vue:1264
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n 个项目"
 
-#: src/components/CardDetail.vue:2379
+#: src/components/CardDetail.vue:2385
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n 条回复"
@@ -790,6 +790,10 @@ msgstr "归档已完成超过 {n} 天的卡片"
 msgid "Archive now"
 msgstr "立即归档"
 
+#: src/views/ProjectView.vue
+msgid "Archive project"
+msgstr "归档项目"
+
 #: src/components/BulkActionBar.vue
 msgid "Archive selected"
 msgstr "归档所选卡片"
@@ -799,6 +803,7 @@ msgstr "归档所选卡片"
 #: src/views/ArchivedView.vue
 #: src/views/BoardList.vue
 #: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
 msgid "Archived"
 msgstr "已归档"
 
@@ -1005,7 +1010,7 @@ msgstr "被阻塞"
 msgid "Blocked by"
 msgstr "被阻塞于"
 
-#: src/views/ProjectView.vue:305
+#: src/views/ProjectView.vue:318
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "被 {count} 张未完成的卡片阻塞"
@@ -2072,7 +2077,7 @@ msgid "Date range (UTC)"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2386
-#: src/components/CardDetail.vue:5341
+#: src/components/CardDetail.vue:5350
 msgid "day"
 msgid_plural "days"
 msgstr[0] "天"
@@ -3686,7 +3691,7 @@ msgstr "看板的用途、范围或协作约定。看板中的所有人都可以
 msgid "Jump to the discussion"
 msgstr "跳转到讨论"
 
-#: src/components/CardDetail.vue:7223
+#: src/components/CardDetail.vue:7246
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "跳转到讨论（%n 条评论）"
@@ -3846,6 +3851,10 @@ msgstr "上次运行：{when}"
 #: templates/admin-backup.php
 msgid "Last run: %1$s"
 msgstr "上次运行：%1$s"
+
+#: src/views/BoardView.vue
+msgid "Last updated"
+msgstr "最后更新"
 
 #: src/services/projectStatus.js
 msgid "Late"
@@ -4093,7 +4102,7 @@ msgid "Mon"
 msgstr "周一"
 
 #: src/components/BoardSettingsModal.vue:2388
-#: src/components/CardDetail.vue:5343
+#: src/components/CardDetail.vue:5352
 msgid "month"
 msgid_plural "months"
 msgstr[0] "个月"
@@ -4323,6 +4332,10 @@ msgstr "没有已归档的卡片"
 #: src/views/ArchivedView.vue
 msgid "No archived cards match “{query}”."
 msgstr "没有与“{query}”匹配的已归档卡片。"
+
+#: src/views/ProjectsView.vue
+msgid "No archived projects"
+msgstr "没有已归档的项目"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "No attachments yet"
@@ -5243,6 +5256,7 @@ msgid "Remove label"
 msgstr "移除标签"
 
 #: src/components/BulkActionBar.vue
+#: src/components/CardDetail.vue
 msgid "Remove label {label}"
 msgstr "移除标签 {label}"
 
@@ -5434,6 +5448,10 @@ msgstr ""
 #: src/components/BoardSettingsModal.vue
 msgid "Restore panel size"
 msgstr "还原面板大小"
+
+#: src/views/ProjectView.vue
+msgid "Restore project"
+msgstr "恢复项目"
 
 #: src/views/ArchivedView.vue
 #: src/views/TrashView.vue
@@ -5782,6 +5800,14 @@ msgstr "显示"
 msgid "Show / hide this shortcuts overlay"
 msgstr "显示/隐藏此快捷键浮层"
 
+#: src/views/ProjectsView.vue
+msgid "Show active projects"
+msgstr "显示活动项目"
+
+#: src/views/ProjectsView.vue
+msgid "Show archived projects"
+msgstr "显示已归档项目"
+
 #: src/components/CardDetail.vue
 msgid "Show changes"
 msgstr "显示改动"
@@ -5810,7 +5836,7 @@ msgstr "在卡片下方显示讨论"
 msgid "Show the discussion panel"
 msgstr "显示讨论面板"
 
-#: src/components/CardDetail.vue:7229
+#: src/components/CardDetail.vue:7252
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "显示讨论面板（%n 条评论）"
@@ -6649,7 +6675,7 @@ msgid "Wed"
 msgstr "周三"
 
 #: src/components/BoardSettingsModal.vue:2387
-#: src/components/CardDetail.vue:5342
+#: src/components/CardDetail.vue:5351
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "周"
@@ -6757,7 +6783,7 @@ msgid "wrote"
 msgstr "写道"
 
 #: src/components/BoardSettingsModal.vue:2389
-#: src/components/CardDetail.vue:5344
+#: src/components/CardDetail.vue:5353
 msgid "year"
 msgid_plural "years"
 msgstr[0] "年"

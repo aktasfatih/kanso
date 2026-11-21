@@ -325,6 +325,7 @@ class Project(_Base):
     targetDate: Optional[str] = None
     lead: Optional[str] = None
     lifecycleStatus: str = "planned"
+    archived: bool = False
     # Only `GET /api/projects` carries these; None means "not reported here".
     isOwner: Optional[bool] = None
     canEdit: Optional[bool] = None

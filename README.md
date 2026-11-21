@@ -186,7 +186,8 @@ your work, on your own Nextcloud, laid out plainly.
   your own browser — not lanes you create and maintain.
 - **Saved filters**: name the filter you're looking at and come back to it.
   Private to you, per board.
-- **Display sort**: order cards by priority, due date or title. View-only: your
+- **Display sort**: order cards by priority, due date, title, estimate or last
+  updated time, with a saved ascending/descending direction. View-only: your
   manual drag order is always preserved.
 
 <img src="docs/kanso-timeline.png" alt="Kanso Timeline (Gantt) view: cards plotted on a date axis by start → due, with a due-only card shown as a milestone" width="900">
@@ -210,6 +211,9 @@ your work, on your own Nextcloud, laid out plainly.
   overdue work grouped up top, and the project's cards on a timeline. Lifecycle
   is separate from forecast health; choosing a lead does not share the project.
   Archived cards keep contributing to project progress and analytics.
+  Archive and restore projects to keep the active list tidy without changing
+  their cards, discussion, sharing or progress. Archived projects remain
+  available through the archived-projects view and existing links.
 
 ### 📈 Analytics
 - **Estimates** on any scale, chosen per board: Fibonacci, planning poker,

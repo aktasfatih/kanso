@@ -260,7 +260,7 @@ const projectId = computed(() => props.id)
 const { data: stats, isLoading, isError } = useProjectStats(projectId)
 
 // Resolve the project title from the already-cached projects list query.
-const { data: projectsData } = useProjects()
+const { data: projectsData } = useProjects({ includeArchived: true })
 const projectTitle = computed(() =>
 	(projectsData.value ?? []).find((p) => String(p.id) === String(props.id))?.title ?? '',
 )

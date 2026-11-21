@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Fatih AKTAS <akfatih2@gmail.com>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import {
 	getProjects as apiGetProjects,
@@ -21,13 +21,14 @@ import { createToggleQueue } from './useToggleQueue.js'
  *
  * @param {object} [options]
  * @param {number|false} [options.refetchInterval] poll interval, for a view that must notice access changes
+ * @param {boolean} [options.includeArchived] include archived projects in the returned list
  */
-export function useProjects({ refetchInterval = false } = {}) {
+export function useProjects({ refetchInterval = false, includeArchived = false } = {}) {
 	const queryClient = useQueryClient()
 
 	const query = useQuery({
 		queryKey: ['projects'],
-		queryFn: apiGetProjects,
+		queryFn: () => apiGetProjects({ includeArchived: true }),
 		refetchInterval,
 	})
 
@@ -108,6 +109,7 @@ export function useProjects({ refetchInterval = false } = {}) {
 
 	return {
 		...query,
+		data: computed(() => includeArchived ? query.data.value : query.data.value?.filter((project) => !project.archived)),
 		create,
 		update,
 		remove,

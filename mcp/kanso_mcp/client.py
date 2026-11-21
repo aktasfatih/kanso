@@ -598,8 +598,10 @@ class KansoClient:
     # ---------------------------------------------------------------- projects
     # A project the authenticated user cannot reach, or that does not exist,
     # answers 404; a write or owner action their share does not allow answers 403.
-    async def list_projects(self) -> List[Project]:
-        data = await self._request("GET", "/projects")
+    async def list_projects(self, include_archived: bool = False) -> List[Project]:
+        data = await self._request(
+            "GET", "/projects", params={"includeArchived": "true"} if include_archived else None
+        )
         return [Project.model_validate(p) for p in (data or [])]
 
     async def create_project(
@@ -638,6 +640,7 @@ class KansoClient:
         target_date: Optional[str] = None,
         lead: Optional[str] = None,
         lifecycle_status: Optional[str] = None,
+        archived: Optional[bool] = None,
     ) -> Project:
         # None fields are dropped; an empty color, date or lead clears it.
         data = await self._request(
@@ -651,6 +654,7 @@ class KansoClient:
                 "targetDate": target_date,
                 "lead": lead,
                 "lifecycleStatus": lifecycle_status,
+                "archived": archived,
             },
         )
         return Project.model_validate(data)

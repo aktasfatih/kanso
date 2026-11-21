@@ -397,7 +397,7 @@ msgid_plural "%n data rows detected"
 msgstr[0] "%n veri satırı bulundu"
 msgstr[1] "%n veri satırı bulundu"
 
-#: src/components/CardDetail.vue:5150
+#: src/components/CardDetail.vue:5159
 msgid "%n day ago"
 msgid_plural "%n days ago"
 msgstr[0] "%n gün önce"
@@ -415,13 +415,13 @@ msgid_plural "%n files"
 msgstr[0] "%n dosya"
 msgstr[1] "%n dosya"
 
-#: src/components/CardDetail.vue:5148
+#: src/components/CardDetail.vue:5157
 msgid "%n hour ago"
 msgid_plural "%n hours ago"
 msgstr[0] "%n saat önce"
 msgstr[1] "%n saat önce"
 
-#: src/views/BoardView.vue:2753
+#: src/views/BoardView.vue:2760
 msgid "%n ID copied."
 msgid_plural "%n IDs copied."
 msgstr[0] "%n kimlik kopyalandı."
@@ -445,7 +445,7 @@ msgid_plural "%n labels were not created and are missing from the imported cards
 msgstr[0] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 msgstr[1] "%n etiket oluşturulmadı ve içe aktarılan kartlarda eksik: yeni etiketleri yalnızca pano yöneticileri ekleyebilir. Bir yöneticiden eklemesini iste, sonra kartlara ata."
 
-#: src/components/CardDetail.vue:5146
+#: src/components/CardDetail.vue:5155
 msgid "%n minute ago"
 msgid_plural "%n minutes ago"
 msgstr[0] "%n dakika önce"
@@ -457,7 +457,7 @@ msgid_plural "%n need review"
 msgstr[0] "%n inceleme bekliyor"
 msgstr[1] "%n inceleme bekliyor"
 
-#: src/components/CardDetail.vue:3986
+#: src/components/CardDetail.vue:3995
 msgid "%n other reviewer"
 msgid_plural "%n other reviewers"
 msgstr[0] "%n diğer inceleyen"
@@ -475,13 +475,13 @@ msgid_plural "%n points"
 msgstr[0] "%n puan"
 msgstr[1] "%n puan"
 
-#: src/components/CardDetail.vue:1259
+#: src/components/CardDetail.vue:1264
 msgid "%n project"
 msgid_plural "%n projects"
 msgstr[0] "%n proje"
 msgstr[1] "%n proje"
 
-#: src/components/CardDetail.vue:2379
+#: src/components/CardDetail.vue:2385
 msgid "%n reply"
 msgid_plural "%n replies"
 msgstr[0] "%n yanıt"
@@ -830,6 +830,10 @@ msgstr "{n} günden uzun süredir tamamlanmış kartları arşivle"
 msgid "Archive now"
 msgstr "Şimdi arşivle"
 
+#: src/views/ProjectView.vue
+msgid "Archive project"
+msgstr "Projeyi arşivle"
+
 #: src/components/BulkActionBar.vue
 msgid "Archive selected"
 msgstr "Seçilenleri arşivle"
@@ -839,6 +843,7 @@ msgstr "Seçilenleri arşivle"
 #: src/views/ArchivedView.vue
 #: src/views/BoardList.vue
 #: src/views/ProjectView.vue
+#: src/views/ProjectsView.vue
 msgid "Archived"
 msgstr "Arşivlendi"
 
@@ -1046,7 +1051,7 @@ msgstr "Engellendi"
 msgid "Blocked by"
 msgstr "Engelleyen"
 
-#: src/views/ProjectView.vue:305
+#: src/views/ProjectView.vue:318
 msgid "Blocked by {count} open card"
 msgid_plural "Blocked by {count} open cards"
 msgstr[0] "{count} açık kart tarafından engellendi"
@@ -2115,7 +2120,7 @@ msgid "Date range (UTC)"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue:2386
-#: src/components/CardDetail.vue:5341
+#: src/components/CardDetail.vue:5350
 msgid "day"
 msgid_plural "days"
 msgstr[0] "gün"
@@ -3735,7 +3740,7 @@ msgstr "Amacı, kapsamı veya kuralları. Panodaki herkes pano adının yanında
 msgid "Jump to the discussion"
 msgstr "Tartışmaya atla"
 
-#: src/components/CardDetail.vue:7223
+#: src/components/CardDetail.vue:7246
 msgid "Jump to the discussion (%n comment)"
 msgid_plural "Jump to the discussion (%n comments)"
 msgstr[0] "Tartışmaya atla (%n yorum)"
@@ -3896,6 +3901,10 @@ msgstr "Son çalışma: {when}"
 #: templates/admin-backup.php
 msgid "Last run: %1$s"
 msgstr "Son çalışma: %1$s"
+
+#: src/views/BoardView.vue
+msgid "Last updated"
+msgstr "Son güncelleme"
 
 #: src/services/projectStatus.js
 msgid "Late"
@@ -4143,7 +4152,7 @@ msgid "Mon"
 msgstr "Pzt"
 
 #: src/components/BoardSettingsModal.vue:2388
-#: src/components/CardDetail.vue:5343
+#: src/components/CardDetail.vue:5352
 msgid "month"
 msgid_plural "months"
 msgstr[0] "ay"
@@ -4374,6 +4383,10 @@ msgstr "Arşivlenmiş kart yok"
 #: src/views/ArchivedView.vue
 msgid "No archived cards match “{query}”."
 msgstr "“{query}” ile eşleşen arşivlenmiş kart yok."
+
+#: src/views/ProjectsView.vue
+msgid "No archived projects"
+msgstr "Arşivlenmiş proje yok"
 
 #: src/components/BoardAttachmentsModal.vue
 msgid "No attachments yet"
@@ -5294,6 +5307,7 @@ msgid "Remove label"
 msgstr "Etiketi kaldır"
 
 #: src/components/BulkActionBar.vue
+#: src/components/CardDetail.vue
 msgid "Remove label {label}"
 msgstr "{label} etiketini kaldır"
 
@@ -5485,6 +5499,10 @@ msgstr ""
 #: src/components/BoardSettingsModal.vue
 msgid "Restore panel size"
 msgstr "Panel boyutunu geri yükle"
+
+#: src/views/ProjectView.vue
+msgid "Restore project"
+msgstr "Projeyi geri yükle"
 
 #: src/views/ArchivedView.vue
 #: src/views/TrashView.vue
@@ -5835,6 +5853,14 @@ msgstr "Göster"
 msgid "Show / hide this shortcuts overlay"
 msgstr "Bu kısayol katmanını göster / gizle"
 
+#: src/views/ProjectsView.vue
+msgid "Show active projects"
+msgstr "Etkin projeleri göster"
+
+#: src/views/ProjectsView.vue
+msgid "Show archived projects"
+msgstr "Arşivlenmiş projeleri göster"
+
 #: src/components/CardDetail.vue
 msgid "Show changes"
 msgstr "Değişiklikleri göster"
@@ -5863,7 +5889,7 @@ msgstr "Tartışmayı kartın altında göster"
 msgid "Show the discussion panel"
 msgstr "Tartışma panelini göster"
 
-#: src/components/CardDetail.vue:7229
+#: src/components/CardDetail.vue:7252
 msgid "Show the discussion panel (%n comment)"
 msgid_plural "Show the discussion panel (%n comments)"
 msgstr[0] "Tartışma panelini göster (%n yorum)"
@@ -6703,7 +6729,7 @@ msgid "Wed"
 msgstr "Çar"
 
 #: src/components/BoardSettingsModal.vue:2387
-#: src/components/CardDetail.vue:5342
+#: src/components/CardDetail.vue:5351
 msgid "week"
 msgid_plural "weeks"
 msgstr[0] "hafta"
@@ -6812,7 +6838,7 @@ msgid "wrote"
 msgstr "yazdı"
 
 #: src/components/BoardSettingsModal.vue:2389
-#: src/components/CardDetail.vue:5344
+#: src/components/CardDetail.vue:5353
 msgid "year"
 msgid_plural "years"
 msgstr[0] "yıl"

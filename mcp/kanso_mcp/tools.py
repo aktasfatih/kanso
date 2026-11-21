@@ -1131,7 +1131,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         title="List my Kanso projects",
         annotations={"readOnlyHint": True},
     )
-    async def kanso_list_projects() -> List[dict]:
+    async def kanso_list_projects(include_archived: bool = False) -> List[dict]:
         """List the projects the current user owns or has been shared, in title
         order.
 
@@ -1143,8 +1143,11 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         `lead` (user id), `leadDisplayName`, `lifecycleStatus`, and
         the viewer's access: `isOwner`, `canEdit`, `canLeave`, `shared` and
         `ownerDisplayName`.
+
+        Archived projects are excluded by default. Pass `include_archived=True`
+        to include them; archiving preserves their cards, discussion and progress.
         """
-        projects = await client.list_projects()
+        projects = await client.list_projects(include_archived=include_archived)
         return [p.model_dump() for p in projects]
 
     @mcp.tool(
@@ -1164,7 +1167,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         Args:
             project_id: The numeric project id (from `kanso_list_projects`).
         """
-        projects = await client.list_projects()
+        projects = await client.list_projects(include_archived=True)
         project = next((p for p in projects if p.id == project_id), None)
         if project is None:
             known = ", ".join(f"{p.id} ({p.title})" for p in projects)
@@ -1215,6 +1218,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         target_date: Optional[str] = None,
         lead: Optional[str] = None,
         lifecycle_status: Optional[Literal["planned", "in_progress", "done"]] = None,
+        archived: Optional[bool] = None,
     ) -> dict:
         """Update a project you own or can edit. Only the fields you pass are changed.
 
@@ -1231,6 +1235,8 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
             lead: New Nextcloud user id; "" clears it. Does not grant access.
             lifecycle_status: planned, in_progress or done; separate from the
                 calculated forecast-health status.
+            archived: Archive (true) or restore (false) the project without
+                changing its cards, discussion or progress.
         """
         return (
             await client.update_project(
@@ -1242,6 +1248,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
                 target_date=target_date,
                 lead=lead,
                 lifecycle_status=lifecycle_status,
+                archived=archived,
             )
         ).model_dump()
 
@@ -1349,7 +1356,7 @@ def register_tools(mcp: FastMCP, client: KansoClient) -> None:
         """
         await client.leave_project(project_id)
         try:
-            projects = await client.list_projects()
+            projects = await client.list_projects(include_archived=True)
         except (KansoApiError, httpx.HTTPError, ValidationError):
             return {"left": True, "stillHasAccess": None}
         return {
