@@ -11,6 +11,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 This file is generated from Conventional Commits by semantic-release — do not edit by hand.
 
+# [0.48.0](https://github.com/aktasfatih/kanso/compare/v0.47.0...v0.48.0) (2026-11-21)
+
+
+### Bug Fixes
+
+* keep moved card references linked in descriptions and comments ([ece2ff2](https://github.com/aktasfatih/kanso/commit/ece2ff2190353a9cdae96201056070a66b02365a))
+* **l10n:** translate project archive and updated sort controls ([dbdcd5c](https://github.com/aktasfatih/kanso/commit/dbdcd5c99d6fb0f8f260ea6e128c6830d2235498))
+* preserve GitLab settings after delayed configuration reads ([94cbe97](https://github.com/aktasfatih/kanso/commit/94cbe9709fee28c88b99cf8e1e7f3f37126d2c86))
+* refresh moved references when destination access changes ([8fc07c1](https://github.com/aktasfatih/kanso/commit/8fc07c180f20b239cbf06e143e1fee52ea8be173))
+* restore keyboard focus after closing the project editor ([9374bb4](https://github.com/aktasfatih/kanso/commit/9374bb44bb6fede81ba75cbd9b1d5208ecd8d177))
+* restore remote dates after unchanged input blur ([fc28d9c](https://github.com/aktasfatih/kanso/commit/fc28d9c41560adce3038984f3df037be83f749aa))
+
+
+### Features
+
+* add GitLab issue and merge request webhooks ([13e4ae2](https://github.com/aktasfatih/kanso/commit/13e4ae27a782cad6f3e62a8c0187b19add52148e))
+* archive and restore projects while preserving their history ([0a29cb6](https://github.com/aktasfatih/kanso/commit/0a29cb64597797703576827583898cb3e468f70b))
+* improve card editing and sort by last update ([965c3c0](https://github.com/aktasfatih/kanso/commit/965c3c0ca5af88443845998a1e883b4e40fbf09d))
+
 # [0.47.0](https://github.com/aktasfatih/kanso/compare/v0.46.0...v0.47.0) (2026-11-19)
 
 
