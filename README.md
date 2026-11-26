@@ -238,7 +238,7 @@ your work, on your own Nextcloud, laid out plainly.
 
 ### 🌍 Localization
 - **Follows your Nextcloud language** automatically. Kanso ships translations for
-  <!-- l10n:languages -->German, Spanish, French, Italian, Dutch, Polish, Brazilian Portuguese, Russian, Turkish and Simplified Chinese<!-- /l10n:languages -->.
+  <!-- l10n:languages -->Czech, German, Spanish, French, Italian, Dutch, Polish, Brazilian Portuguese, Russian, Turkish and Simplified Chinese<!-- /l10n:languages -->.
   More languages are welcome — see [docs/TRANSLATING.md](docs/TRANSLATING.md)
   (no code required).
 

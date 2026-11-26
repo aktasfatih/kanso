@@ -46,6 +46,8 @@ const PLURAL_FORM = 'nplurals=2; plural=(n != 1);'
 // translator can then correct by hand) rather than erroring — `init xx` must
 // keep working for a language nobody has added here yet.
 const PLURAL_FORMS = {
+	// Match the three forms selected for Czech by the Nextcloud runtimes.
+	cs: 'nplurals=3; plural=(n == 1 ? 0 : n >= 2 && n <= 4 ? 1 : 2);',
 	de: 'nplurals=2; plural=(n != 1);',
 	es: 'nplurals=2; plural=(n != 1);',
 	it: 'nplurals=2; plural=(n != 1);',
@@ -77,6 +79,7 @@ function pluralFormFor(lang) {
 
 /** Nextcloud language code → the English name the README uses. */
 const LANGUAGE_NAMES = {
+	cs: 'Czech',
 	de: 'German',
 	es: 'Spanish',
 	fr: 'French',
