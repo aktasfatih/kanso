@@ -6596,7 +6596,7 @@ const branchCopied = ref(false)
 
 function linkStateLabel(state) {
 	switch (state) {
-	case 'open': return t('kanso', 'Open')
+	case 'open': return t('kanso', 'Still open')
 	case 'merged': return t('kanso', 'Merged')
 	case 'closed': return t('kanso', 'Closed')
 	default: return t('kanso', 'Link')

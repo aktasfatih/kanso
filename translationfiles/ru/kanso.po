@@ -1270,7 +1270,7 @@ msgstr "Календарная лента"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Can comment"
-msgstr ""
+msgstr "Может комментировать"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue
@@ -1782,7 +1782,6 @@ msgstr "Командная палитра"
 msgid "comment"
 msgstr "комментарий"
 
-#: src/components/BoardSettingsModal.vue
 #: src/components/SearchBox.vue
 msgid "Comment"
 msgstr "Комментарий"
@@ -4866,7 +4865,6 @@ msgstr "Только при сбое резервного копирования
 msgid "open"
 msgstr "открыть"
 
-#: src/components/CardDetail.vue
 #: src/components/CardPreview.vue
 #: src/utils/cardCreatedToast.js
 msgid "Open"
@@ -6126,6 +6124,10 @@ msgstr "Статус"
 msgid "Step due date"
 msgstr "Срок пункта"
 
+#: src/components/CardDetail.vue
+msgid "Still open"
+msgstr "Всё ещё открыто"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Stop the timer"
 msgstr "Остановить таймер"
@@ -6695,6 +6697,10 @@ msgstr "Используйте кнопку «Добавить карточку�
 #: src/components/ProjectShareDialog.vue
 msgid "User"
 msgstr "Пользователь"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Value name"
+msgstr "Название значения"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Value of {label}"

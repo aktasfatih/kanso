@@ -1270,7 +1270,7 @@ msgstr "Kanał kalendarza"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Can comment"
-msgstr ""
+msgstr "Może komentować"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue
@@ -1782,7 +1782,6 @@ msgstr "Paleta poleceń"
 msgid "comment"
 msgstr "komentarz"
 
-#: src/components/BoardSettingsModal.vue
 #: src/components/SearchBox.vue
 msgid "Comment"
 msgstr "Komentarz"
@@ -4866,7 +4865,6 @@ msgstr "Tylko gdy kopia zapasowa się nie powiedzie"
 msgid "open"
 msgstr "otwórz"
 
-#: src/components/CardDetail.vue
 #: src/components/CardPreview.vue
 #: src/utils/cardCreatedToast.js
 msgid "Open"
@@ -6126,6 +6124,10 @@ msgstr "Status"
 msgid "Step due date"
 msgstr "Termin kroku"
 
+#: src/components/CardDetail.vue
+msgid "Still open"
+msgstr "Nadal otwarte"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Stop the timer"
 msgstr "Zatrzymaj stoper"
@@ -6695,6 +6697,10 @@ msgstr "Użyj przycisku „Dodaj kartę” powyżej, aby zebrać karty z dowolne
 #: src/components/ProjectShareDialog.vue
 msgid "User"
 msgstr "Użytkownik"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Value name"
+msgstr "Nazwa wartości"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Value of {label}"

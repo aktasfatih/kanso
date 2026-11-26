@@ -1228,7 +1228,7 @@ msgstr "Kalender-Feed"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Can comment"
-msgstr ""
+msgstr "Kann kommentieren"
 
 #: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue
@@ -1739,7 +1739,6 @@ msgstr "Befehlspalette"
 msgid "comment"
 msgstr "Kommentar"
 
-#: src/components/BoardSettingsModal.vue
 #: src/components/SearchBox.vue
 msgid "Comment"
 msgstr "Kommentar"
@@ -4815,7 +4814,6 @@ msgstr "Nur wenn ein Backup fehlschlägt"
 msgid "open"
 msgstr "öffnen"
 
-#: src/components/CardDetail.vue
 #: src/components/CardPreview.vue
 #: src/utils/cardCreatedToast.js
 msgid "Open"
@@ -6072,6 +6070,10 @@ msgstr "Status"
 msgid "Step due date"
 msgstr "Fälligkeitsdatum des Schritts"
 
+#: src/components/CardDetail.vue
+msgid "Still open"
+msgstr "Noch offen"
+
 #: src/components/BoardSettingsModal.vue
 msgid "Stop the timer"
 msgstr "Timer stoppen"
@@ -6641,6 +6643,10 @@ msgstr "Verwende die Schaltfläche „Karte hinzufügen\", um Karten von beliebi
 #: src/components/ProjectShareDialog.vue
 msgid "User"
 msgstr "Benutzer"
+
+#: src/components/BoardSettingsModal.vue
+msgid "Value name"
+msgstr "Name des Werts"
 
 #: src/components/BoardSettingsModal.vue
 msgid "Value of {label}"

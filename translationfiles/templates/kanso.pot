@@ -1738,7 +1738,6 @@ msgstr ""
 msgid "comment"
 msgstr ""
 
-#: src/components/BoardSettingsModal.vue
 #: src/components/SearchBox.vue
 msgid "Comment"
 msgstr ""
@@ -4814,7 +4813,6 @@ msgstr ""
 msgid "open"
 msgstr ""
 
-#: src/components/CardDetail.vue
 #: src/components/CardPreview.vue
 #: src/utils/cardCreatedToast.js
 msgid "Open"
@@ -6071,6 +6069,10 @@ msgstr ""
 msgid "Step due date"
 msgstr ""
 
+#: src/components/CardDetail.vue
+msgid "Still open"
+msgstr ""
+
 #: src/components/BoardSettingsModal.vue
 msgid "Stop the timer"
 msgstr ""
@@ -6639,6 +6641,10 @@ msgstr ""
 #: src/components/BoardSettingsModal.vue
 #: src/components/ProjectShareDialog.vue
 msgid "User"
+msgstr ""
+
+#: src/components/BoardSettingsModal.vue
+msgid "Value name"
 msgstr ""
 
 #: src/components/BoardSettingsModal.vue
